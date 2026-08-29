@@ -1,0 +1,34 @@
+{
+  "records": [
+    {
+      "vendor": "demos",
+      "vendorDecorId": "demos_dub_artisan_001",
+      "vendorSku": null,
+      "displayName": "Dub Artisan",
+      "slug": "dub-artisan",
+      "materialType": "wood",
+      "decorFamily": "oak",
+      "colorFamily": "natural",
+      "surfaceHint": "matte",
+      "targetInternalMaterialId": "wood_oak_natural",
+      "surfaceProfile": "wood_standard_matte",
+      "tileSizeMeters": 0.4,
+      "grainDirectionDefault": "vertical",
+      "colorTransform": {
+        "mode": "tint_multiply",
+        "baseColorHex": "#b98a55",
+        "tintStrength": 0.35,
+        "hueShiftDegrees": 0.0,
+        "saturationScale": 1.0,
+        "valueScale": 1.0,
+        "contrastScale": 1.0
+      },
+      "roughnessMultiplier": 1.0,
+      "bumpMultiplier": 1.0,
+      "mappingStatus": "mapped",
+      "confidence": 0.75,
+      "source": "manual_mapping",
+      "notes": "Approximate visual mapping. No Demos texture used."
+    }
+  ]
+}

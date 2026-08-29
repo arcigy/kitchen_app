@@ -17,10 +17,10 @@ export function createCatalogModuleDefinitionFromPackage(
   args?: { enabled?: boolean; packageHash?: string; catalog?: Pick<ClientCatalog, "priceList"> }
 ): ClientModuleDefinition {
   const geometry = modulePackage.geometry.mode === "trusted-runtime" ? modulePackage.geometry : null;
-  const defaultWidth = numberDefault(modulePackage, "width") ?? numberDefault(modulePackage, "lengthX");
-  const defaultDepth = numberDefault(modulePackage, "depth") ?? numberDefault(modulePackage, "lengthZ");
+  const defaultWidth = numberDefault(modulePackage, "width") ?? numberDefault(modulePackage, "lengthX") ?? numberDefault(modulePackage, "lengthx");
+  const defaultDepth = numberDefault(modulePackage, "depth") ?? numberDefault(modulePackage, "lengthZ") ?? numberDefault(modulePackage, "lengthz");
   return {
-    id: modulePackage.module.moduleType,
+    id: modulePackage.module.modulePackageId,
     moduleType: modulePackage.module.moduleType,
     modulePackageId: modulePackage.module.modulePackageId,
     packageVersion: modulePackage.module.version,

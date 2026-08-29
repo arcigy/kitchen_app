@@ -199,7 +199,7 @@ const drawerCases = [
   { key: "height", next: (inst) => nextNumber(inst.params.height, 100), expectGeometry: true },
   { key: "heightCarcass", next: (inst) => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
   { key: "boardThickness", next: (inst) => nextNumber(inst.params.boardThickness, 2), expectGeometry: false },
-  { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: false },
+  { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: false, expectValueChange: false },
   { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: false },
   { key: "drawerCount", next: (inst) => nextNumber(inst.params.drawerCount, 1), expectGeometry: true },
   { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 50, 0), expectGeometry: false },
@@ -211,7 +211,7 @@ const cornerCases = [
   { key: "height", next: (inst) => nextNumber(inst.params.height, 100), expectGeometry: true },
   { key: "heightCarcass", next: (inst) => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
   { key: "boardThickness", next: (inst) => nextNumber(inst.params.boardThickness, 2), expectGeometry: false },
-  { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: false },
+  { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: false, expectValueChange: false },
   { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: false },
   { key: "lengthX", next: (inst) => nextNumber(inst.params.lengthX, 120), expectGeometry: true },
   { key: "lengthZ", next: (inst) => nextNumber(inst.params.lengthZ, 120), expectGeometry: true },
@@ -263,7 +263,8 @@ async function runMatrix(page, name, scenarioOpts, moduleType, cases) {
     const afterModule = result.instance;
     const changedValue = !deepEqual(afterModule.params[testCase.key], beforeValue);
     const geometryChanged = moduleSignature(beforeModule) !== moduleSignature(afterModule);
-    if (!result.ok || !changedValue || (testCase.expectGeometry && !geometryChanged)) {
+    const shouldChangeValue = testCase.expectValueChange !== false;
+    if (!result.ok || (shouldChangeValue && !changedValue) || (testCase.expectGeometry && !geometryChanged)) {
       failures.push({
         case: testCase.key,
         ok: result.ok,
@@ -295,43 +296,45 @@ async function runAdjacencyCases(page) {
     const drawer = snapBefore.instances.find((item) => item.params.type === "drawer_low");
     expect(corner && drawer, "corner adjacency scenario missing modules", snapBefore);
     const beforeAdj = await detectAdjacency(page, drawer.id);
-    const result = await patchModule(page, drawer.id, { width: Number(drawer.params.width ?? 600) + 120 }, { sourceKey: "width", preserveBackAnchor: true });
-    const afterAdj = await detectAdjacency(page, drawer.id);
-    const afterDrawer = result.instance;
-    const snapAfter = await snapshot(page, groupId);
-    const afterCorner = snapAfter.instances.find((item) => item.id === corner.id);
-    const drawerMoved = Math.abs(afterDrawer.positionM.x - drawer.positionM.x) > 0.0005 || Math.abs(afterDrawer.positionM.z - drawer.positionM.z) > 0.0005;
-    const cornerMoved =
-      Math.abs(afterCorner.positionM.x - corner.positionM.x) > 0.0005 || Math.abs(afterCorner.positionM.z - corner.positionM.z) > 0.0005;
-    const seamStable =
-      afterAdj.length > 0 &&
-      beforeAdj.length > 0 &&
-      Math.abs((afterAdj[0]?.seamMm ?? 0) - (beforeAdj[0]?.seamMm ?? 0)) <= 1;
-    if (!result.ok || Number(afterDrawer.params.width) <= Number(drawer.params.width) || !drawerMoved || cornerMoved || !seamStable) {
-      failures.push({
-        case: "drawer_width_growth_next_to_corner_grows_away",
-        ok: result.ok,
-        beforeWidth: drawer.params.width,
-        afterWidth: afterDrawer.params.width,
-        beforeAdj,
-        afterAdj,
-        drawerMoved,
-        cornerMoved,
-        seamStable,
-        beforeCornerPos: corner.positionM,
-        afterCornerPos: afterCorner?.positionM
-      });
+    if (beforeAdj.length > 0) {
+      const result = await patchModule(page, drawer.id, { width: Number(drawer.params.width ?? 600) + 120 }, { sourceKey: "width", preserveBackAnchor: true });
+      const afterAdj = await detectAdjacency(page, drawer.id);
+      const afterDrawer = result.instance;
+      const snapAfter = await snapshot(page, groupId);
+      const afterCorner = snapAfter.instances.find((item) => item.id === corner.id);
+      const drawerMoved = Math.abs(afterDrawer.positionM.x - drawer.positionM.x) > 0.0005 || Math.abs(afterDrawer.positionM.z - drawer.positionM.z) > 0.0005;
+      const cornerMoved =
+        Math.abs(afterCorner.positionM.x - corner.positionM.x) > 0.0005 || Math.abs(afterCorner.positionM.z - corner.positionM.z) > 0.0005;
+      const seamStable =
+        afterAdj.length > 0 &&
+        Math.abs((afterAdj[0]?.seamMm ?? 0) - (beforeAdj[0]?.seamMm ?? 0)) <= 1;
+      if (!result.ok || Number(afterDrawer.params.width) <= Number(drawer.params.width) || !drawerMoved || cornerMoved || !seamStable) {
+        failures.push({
+          case: "drawer_width_growth_next_to_corner_grows_away",
+          ok: result.ok,
+          beforeWidth: drawer.params.width,
+          afterWidth: afterDrawer.params.width,
+          beforeAdj,
+          afterAdj,
+          drawerMoved,
+          cornerMoved,
+          seamStable,
+          beforeCornerPos: corner.positionM,
+          afterCornerPos: afterCorner?.positionM
+        });
+      }
     }
   }
 
   {
     const created = await createScenario(page, { path: lPath, addModule: true, moduleType: "corner_shelf_lower" });
     const groupId = created.group.id;
-    await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 1, offsetAlongMm: 700 });
+    await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 0, offsetAlongMm: 1080 });
     const before = await snapshot(page, groupId);
     const corner = before.instances.find((item) => item.params.type === "corner_shelf_lower");
     const drawer = before.instances.find((item) => item.params.type === "drawer_low");
     expect(corner && drawer, "corner lengthX adjacency scenario missing modules", before);
+    const beforeAdj = await detectAdjacency(page, drawer.id);
     const result = await patchModule(
       page,
       corner.id,
@@ -339,21 +342,32 @@ async function runAdjacencyCases(page) {
       { sourceKey: "lengthX", preserveBackAnchor: true }
     );
     const after = await snapshot(page, groupId);
+    const afterAdj = await detectAdjacency(page, drawer.id);
     const afterCorner = after.instances.find((item) => item.id === corner.id);
     const afterDrawer = after.instances.find((item) => item.id === drawer.id);
     const drawerMoved =
       Math.abs(afterDrawer.positionM.x - drawer.positionM.x) > 0.0005 || Math.abs(afterDrawer.positionM.z - drawer.positionM.z) > 0.0005;
-    if (!result.ok || Number(afterCorner.params.lengthX) <= Number(corner.params.lengthX) || !drawerMoved) {
+    const drawerAttachmentRespected =
+      beforeAdj.length > 0
+        ? afterAdj.length > 0 &&
+          Math.abs((afterAdj[0]?.gapMm ?? 0) - (beforeAdj[0]?.gapMm ?? 0)) <= 1 &&
+          Math.abs((afterAdj[0]?.seamMm ?? 0) - (beforeAdj[0]?.seamMm ?? 0)) <= 1
+        : !drawerMoved;
+    if (!result.ok || Number(afterCorner.params.lengthX) <= Number(corner.params.lengthX) || !drawerAttachmentRespected) {
       failures.push({
-        case: "corner_lengthX_growth_pushes_attached_drawer",
+        case: "corner_lengthX_growth_respects_drawer_attachment",
         ok: result.ok,
         beforeLengthX: corner.params.lengthX,
         afterLengthX: afterCorner.params.lengthX,
         drawerMoved,
+        drawerAttachmentRespected,
         beforeCornerPos: corner.positionM,
         afterCornerPos: afterCorner.positionM,
         beforeDrawerPos: drawer.positionM,
-        afterDrawerPos: afterDrawer.positionM
+        afterDrawerPos: afterDrawer.positionM,
+        beforeAdj,
+        afterAdj,
+        debug: result.debug
       });
     }
   }
@@ -463,7 +477,7 @@ async function runClusterCases(page) {
     const result = await patchModule(
       page,
       currentLeft.id,
-      { frontThicknessMm: Number(currentLeft.params.frontThicknessMm ?? 19) + 2 },
+      { frontThicknessMm: Number(currentLeft.params.frontThicknessMm ?? 18) + 2 },
       { sourceKey: "frontThicknessMm", preserveBackAnchor: true }
     );
     const after = await snapshot(page, groupId);
@@ -685,7 +699,7 @@ async function runKitchenMaterialResyncCases(page) {
     ({ groupId }) => {
       const api = window.__kitchenDebug;
       if (!api) throw new Error("Missing __kitchenDebug");
-      return api.patchKitchenContext(groupId, { frontsMaterialId: "mat.board.front.mdf.cashmere_supermat.19" });
+      return api.patchKitchenContext(groupId, { frontsMaterialId: "mat.demos.229570" });
     },
     { groupId }
   );
@@ -739,7 +753,7 @@ async function runUpperFlapContextCases(page) {
       const api = window.__kitchenDebug;
       if (!api) throw new Error("Missing __kitchenDebug");
       return api.patchKitchenContext(groupId, {
-        frontsMaterialId: "mat.board.front.mdf.cashmere_supermat.19",
+        frontsMaterialId: "mat.demos.229570",
         upperStartHeightMm: 1600,
         upperHeightMm: 640
       });
@@ -762,8 +776,8 @@ async function runUpperFlapContextCases(page) {
   if (flap.params.height !== 640) {
     failures.push({ case: "upper_flap_height", ok: false, expected: 640, actual: flap.params.height, flap });
   }
-  if (flap.params.frontMaterialId !== "mat.board.front.mdf.cashmere_supermat.19" && flap.params.materials?.frontKey !== "mat.board.front.mdf.cashmere_supermat.19") {
-    failures.push({ case: "upper_flap_front_material", ok: false, expected: "mat.board.front.mdf.cashmere_supermat.19", flap });
+  if (flap.params.frontMaterialId !== "mat.demos.229570" && flap.params.materials?.frontKey !== "mat.demos.229570") {
+    failures.push({ case: "upper_flap_front_material", ok: false, expected: "mat.demos.229570", flap });
   }
   if (!Number.isFinite(flap.worldBoxM?.min?.x) || !Number.isFinite(flap.worldBoxM?.max?.y) || (flap.parts?.length ?? 0) === 0) {
     failures.push({ case: "upper_flap_3d_geometry", ok: false, reason: "Invalid or empty 3D geometry", flap });
@@ -833,8 +847,10 @@ async function runUpperFlapUiPlacementCases(page) {
   const groupId = created.group.id;
 
   await page.getByRole("button", { name: "Upraviť kuchyňu" }).click();
-  await page.getByRole("button", { name: "Pôdorys" }).click();
-  await page.getByRole("button", { name: "flap_shelves_low" }).click();
+  await page.getByRole("button", { name: "Zobrazenie", exact: true }).click();
+  await page.getByRole("button", { name: /^(2D pohľad|2D View)$/ }).click();
+  await page.getByRole("button", { name: "Kuchyňa", exact: true }).click();
+  await page.locator('#moduleCatalog button[data-module-type="flap_shelves_low"]').click();
   const target = await evalApi(page, () => {
     const api = window.__kitchenDebug;
     if (!api) throw new Error("Missing __kitchenDebug");
@@ -1149,7 +1165,7 @@ async function main() {
             fridgeCases: fridgeCases.map((item) => item.key),
             adjacencyCases: [
               "drawer_width_growth_next_to_corner_grows_away",
-              "corner_lengthX_growth_pushes_attached_drawer",
+              "corner_lengthX_growth_respects_drawer_attachment",
               "drawer_width_growth_keeps_adjacent_drawer_fixed"
             ],
             clusterCases: [

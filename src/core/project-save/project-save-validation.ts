@@ -2,6 +2,10 @@ import type { ProjectSaveFile } from "./project-save-types";
 import { CURRENT_PROJECT_SAVE_VERSION } from "./project-save-types";
 import { assertValidProjectMetadata } from "../project/project-validation";
 import { assertNoMissingCriticalProjectSerializers } from "./project-save-serializers";
+import { validateProjectAppState } from "./project-app-state-validation";
+import { validateProjectMaterialAssignmentsState } from "../project-materials/project-material-validation";
+import { isProjectMarginSettingsState } from "../project-margins/project-margin-types";
+import { validateProjectMarginSettingsState } from "../project-margins/project-margin-validation";
 
 export type ProjectSaveValidationScope = {
   clientId?: string;
@@ -33,15 +37,43 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function areStructurallyEqual(left: unknown, right: unknown, seen = new WeakMap<object, object>()): boolean {
+  if (Object.is(left, right)) return true;
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+  if (Array.isArray(left) !== Array.isArray(right)) return false;
+  if (seen.get(left) === right) return true;
+  seen.set(left, right);
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length && left.every((value, index) => areStructurallyEqual(value, right[index], seen));
+  }
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  return leftKeys.length === rightKeys.length && leftKeys.every(
+    (key) => Object.prototype.hasOwnProperty.call(rightRecord, key) && areStructurallyEqual(leftRecord[key], rightRecord[key], seen)
+  );
+}
+
 export function validateProjectSaveFile(save: ProjectSaveFile, scope: ProjectSaveValidationScope = {}): void {
   assertNoMissingCriticalProjectSerializers();
   if (!isObject(save)) throw new Error("Project save must be an object.");
   if (save.format !== "kitchen-app-project") throw new Error("Unsupported project save format.");
   if (save.saveFormatVersion > CURRENT_PROJECT_SAVE_VERSION) throw new Error("Project save version is newer than this app supports.");
   if (save.saveFormatVersion < 1) throw new Error("Project save version is invalid.");
+  if (save.saveFormatVersion < CURRENT_PROJECT_SAVE_VERSION) throw new Error("Project save must be migrated before validation.");
   if (scope.clientId && save.clientId !== scope.clientId) throw new Error("Project save belongs to a different client.");
   if (scope.projectId && save.projectId !== scope.projectId) throw new Error("Project save projectId does not match route.");
   if (save.project.clientId !== save.clientId || save.project.projectId !== save.projectId) throw new Error("Project save metadata does not match save scope.");
+  if (save.integrity.saveRevision !== undefined && (!Number.isSafeInteger(save.integrity.saveRevision) || save.integrity.saveRevision < 1)) {
+    throw new Error("Project save revision is invalid.");
+  }
+  if (save.integrity.lastWrite !== undefined) {
+    const sha256 = /^[0-9a-f]{64}$/;
+    if (!sha256.test(save.integrity.lastWrite.keyHash) || !sha256.test(save.integrity.lastWrite.requestHash)) {
+      throw new Error("Project save idempotency receipt is invalid.");
+    }
+  }
   assertValidProjectMetadata(save.project);
   if (!Array.isArray(save.phases) || save.phases.length === 0) throw new Error("Project save must include phases.");
   const phaseIds = new Set<string>();
@@ -50,6 +82,10 @@ export function validateProjectSaveFile(save: ProjectSaveFile, scope: ProjectSav
     if (phaseIds.has(phase.phaseId)) throw new Error("Project phase ids must be unique.");
     phaseIds.add(phase.phaseId);
     if (!Array.isArray(phase.moduleInstances)) throw new Error("Project phase moduleInstances must be an array.");
+    validateProjectMaterialAssignmentsState(phase.materialAssignments, `save.phases.${phase.phaseId}.materialAssignments`);
+    if (isProjectMarginSettingsState(phase.quoteSettings)) {
+      validateProjectMarginSettingsState(phase.quoteSettings, `save.phases.${phase.phaseId}.quoteSettings`);
+    }
   }
   if (!phaseIds.has(save.activePhaseId)) throw new Error("activePhaseId must exist in phases.");
   if (!save.catalogSnapshot || !Array.isArray(save.catalogSnapshot.usedMaterialIds)) throw new Error("Project save must include catalogSnapshot.");
@@ -57,5 +93,20 @@ export function validateProjectSaveFile(save: ProjectSaveFile, scope: ProjectSav
   if (!isObject(layout)) throw new Error("Project save must include layout serializer data.");
   if (!("windows" in layout) || !Array.isArray(layout.windows)) throw new Error("Project save must include windows serializer data.");
   if (!("doors" in layout) || !Array.isArray(layout.doors)) throw new Error("Project save must include doors serializer data.");
+  validateProjectAppState(save.appState);
+  validateProjectMaterialAssignmentsState(save.appState.materialAssignments, "save.appState.materialAssignments");
+  const activePhase = save.phases.find((phase) => phase.phaseId === save.activePhaseId)!;
+  if (!areStructurallyEqual(save.appState.materialAssignments, activePhase.materialAssignments)) {
+    throw new Error("Project save active phase materialAssignments must match appState.materialAssignments.");
+  }
+  const appMarginsRecognized = isProjectMarginSettingsState(save.appState.quoteSettings);
+  const phaseMarginsRecognized = isProjectMarginSettingsState(activePhase.quoteSettings);
+  if (appMarginsRecognized) validateProjectMarginSettingsState(save.appState.quoteSettings, "save.appState.quoteSettings");
+  if (appMarginsRecognized !== phaseMarginsRecognized) {
+    throw new Error("Project save active phase quoteSettings must match appState.quoteSettings.");
+  }
+  if (appMarginsRecognized && !areStructurallyEqual(save.appState.quoteSettings, activePhase.quoteSettings)) {
+    throw new Error("Project save active phase quoteSettings must match appState.quoteSettings.");
+  }
   assertPlainSerializable(save);
 }

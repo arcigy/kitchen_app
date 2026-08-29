@@ -1,10 +1,22 @@
 import type { AuthenticatedClientSession } from "../core/client/client-types";
+import { getCurrentLanguage, setCurrentLanguage, t } from "../i18n";
+import { createButtonElement, createInputElement } from "./propsPanelElements";
 
 type AuthApiResponse = {
   ok: boolean;
   session?: AuthenticatedClientSession;
   error?: string;
 };
+
+type LoginResult =
+  | { ok: true; session: AuthenticatedClientSession }
+  | { ok: false; message: string };
+
+export function resolveLoginFailureMessage(status: number | null): string {
+  if (status === null) return t("The sign-in server is unavailable. Start the local environment with npm run dev.");
+  if (status === 401 || status === 429) return t("Incorrect sign-in details.");
+  return t("Sign-in failed on the server. Try again or restart the local environment.");
+}
 
 function isClientSession(value: unknown): value is AuthenticatedClientSession {
   if (!value || typeof value !== "object") return false;
@@ -58,49 +70,102 @@ async function readServerSession(): Promise<AuthenticatedClientSession | null> {
 }
 
 async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSession> {
+  setCurrentLanguage(getCurrentLanguage());
   root.innerHTML = "";
   root.className = "auth-shell";
 
   const panel = document.createElement("main");
   panel.className = "auth-panel";
 
-  const title = document.createElement("h1");
-  title.textContent = "Arcigy Kitchen";
+  const visual = document.createElement("section");
+  visual.className = "auth-visual";
+  visual.setAttribute("aria-hidden", "true");
+  visual.innerHTML = `
+    <div class="auth-brand-card">
+      <span>A</span>
+      <div>
+        <strong>Arcigy Kitchen</strong>
+        <small>${t("Project workspace")}</small>
+      </div>
+    </div>
+    <div class="auth-preview-window">
+      <div class="auth-preview-top">
+        <i></i><i></i><i></i>
+      </div>
+      <div class="auth-preview-body">
+        <div class="auth-preview-sidebar"></div>
+        <div class="auth-preview-canvas">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="auth-preview-props"></div>
+      </div>
+    </div>
+    <div class="auth-visual-meta">
+      <strong>${t("Arcigy organisation")}</strong>
+      <span>${t("Projects, versions and activity are linked to a specific team member.")}</span>
+    </div>
+  `;
 
-  const subtitle = document.createElement("p");
-  subtitle.textContent = "Prihlaste sa do zakaznickeho pracoviska.";
+  const content = document.createElement("section");
+  content.className = "auth-content";
+
+  const heading = document.createElement("div");
+  heading.className = "auth-heading";
+  heading.innerHTML = `
+    <span>${t("Sign in")}</span>
+    <h1>${t("Welcome back")}</h1>
+    <p>${t("Enter your company credentials to continue to the Arcigy workspace.")}</p>
+  `;
 
   const form = document.createElement("form");
   form.className = "auth-form";
 
+  const companyLabel = document.createElement("label");
+  const companyText = document.createElement("span");
+  companyText.textContent = t("Company");
+  const companyInput = createInputElement("text", "", {
+    autocomplete: "organization",
+    name: "company",
+    placeholder: t("Enter company"),
+    required: true
+  });
+  companyLabel.append(companyText, companyInput);
+
   const usernameLabel = document.createElement("label");
-  usernameLabel.textContent = "Pouzivatel";
-  const usernameInput = document.createElement("input");
-  usernameInput.name = "username";
-  usernameInput.autocomplete = "username";
-  usernameInput.required = true;
-  usernameInput.value = "arcigy";
-  usernameLabel.appendChild(usernameInput);
+  const usernameText = document.createElement("span");
+  usernameText.textContent = t("User");
+  const usernameInput = createInputElement("text", "", {
+    autocomplete: "username",
+    name: "username",
+    placeholder: t("Enter username"),
+    required: true
+  });
+  usernameLabel.append(usernameText, usernameInput);
 
   const passwordLabel = document.createElement("label");
-  passwordLabel.textContent = "Heslo";
-  const passwordInput = document.createElement("input");
-  passwordInput.name = "password";
-  passwordInput.type = "password";
-  passwordInput.autocomplete = "current-password";
-  passwordInput.required = true;
-  passwordLabel.appendChild(passwordInput);
+  const passwordText = document.createElement("span");
+  passwordText.textContent = t("Password");
+  const passwordInput = createInputElement("password", "", {
+    autocomplete: "current-password",
+    name: "password",
+    placeholder: t("Enter password"),
+    required: true
+  });
+  passwordLabel.append(passwordText, passwordInput);
 
   const error = document.createElement("div");
   error.className = "auth-error";
+  error.id = "auth-error";
   error.setAttribute("role", "alert");
 
-  const submit = document.createElement("button");
-  submit.type = "submit";
-  submit.textContent = "Prihlasit";
+  const submit = createButtonElement(t("Sign in to workspace"), { type: "submit" });
 
-  form.append(usernameLabel, passwordLabel, error, submit);
-  panel.append(title, subtitle, form);
+  form.setAttribute("aria-describedby", error.id);
+  form.append(companyLabel, usernameLabel, passwordLabel, error, submit);
+  content.append(heading, form);
+  panel.append(visual, content);
   root.appendChild(panel);
   passwordInput.focus();
 
@@ -110,33 +175,35 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
       error.textContent = "";
       submit.disabled = true;
 
-      void login(usernameInput.value, passwordInput.value).then((session) => {
-        if (!session) {
-          error.textContent = "Nespravne prihlasovacie udaje.";
+      void login(companyInput.value, usernameInput.value, passwordInput.value).then((result) => {
+        if (!result.ok) {
+          error.textContent = result.message;
           submit.disabled = false;
           passwordInput.select();
           return;
         }
 
         root.className = "";
-        resolve(session);
+        resolve(result.session);
       });
     });
   });
 }
 
-async function login(username: string, password: string): Promise<AuthenticatedClientSession | null> {
+async function login(company: string, username: string, password: string): Promise<LoginResult> {
   try {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ company, username, password })
     });
-    if (!response.ok) return null;
+    if (!response.ok) return { ok: false, message: resolveLoginFailureMessage(response.status) };
     const data = await readAuthResponse(response);
-    return data.ok && data.session ? data.session : null;
+    return data.ok && data.session
+      ? { ok: true, session: data.session }
+      : { ok: false, message: resolveLoginFailureMessage(response.status) };
   } catch {
-    return null;
+    return { ok: false, message: resolveLoginFailureMessage(null) };
   }
 }

@@ -6,6 +6,21 @@ import sys
 import bpy
 from mathutils import Vector
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+BLENDER_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "blender", "scripts")
+if os.path.isdir(BLENDER_SCRIPTS_DIR) and BLENDER_SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, BLENDER_SCRIPTS_DIR)
+
+try:
+    from material_loader import create_material_from_manifest, create_material_from_payload
+    from physical_uv import PHYSICAL_UV_LAYER, apply_physical_box_uv
+except Exception as _material_loader_error:
+    create_material_from_manifest = None
+    create_material_from_payload = None
+    PHYSICAL_UV_LAYER = "physical_meters"
+    apply_physical_box_uv = None
+
 
 def _argv_after_double_dash(argv):
     if "--" not in argv:
@@ -15,7 +30,7 @@ def _argv_after_double_dash(argv):
 
 
 def _read_json(path):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8-sig") as f:
         return json.load(f)
 
 
@@ -25,10 +40,53 @@ def _as_vec3(v, fallback):
     return Vector(fallback)
 
 
+def _is_interior_app_profile(render_profile):
+    return isinstance(render_profile, dict) and render_profile.get("preset") in ["interior_app", "interior_clay"]
+
+
+def _resolution_from_profile(render_profile, preview):
+    key = "previewResolution" if preview else "finalResolution"
+    if isinstance(render_profile, dict):
+        value = render_profile.get(key)
+        if (
+            isinstance(value, list)
+            and len(value) == 2
+            and all(isinstance(x, (int, float)) and math.isfinite(x) for x in value)
+        ):
+            return (max(320, min(4096, int(value[0]))), max(240, min(4096, int(value[1]))))
+    return (1024, 1024) if preview else (1600, 1200)
+
+
 def _ensure_dir(path):
     d = os.path.dirname(os.path.abspath(path))
     if d and not os.path.isdir(d):
         os.makedirs(d, exist_ok=True)
+
+
+def _base_object_name(name):
+    if not isinstance(name, str):
+        return ""
+    if len(name) > 4 and name[-4] == "." and name[-3:].isdigit():
+        return name[:-4]
+    return name
+
+
+def _is_export_helper_object(name):
+    n = _base_object_name(str(name or "")).lower()
+    if not n:
+        return False
+    if n.startswith(("pick_", "outline_", "measure_", "debug_", "helper_")):
+        return True
+    helper_tokens = [
+        "pick",
+        "selection",
+        "plansymbol",
+        "planfill",
+        "placementpreview",
+        "previewlines",
+        "dimensionedit",
+    ]
+    return any(token in n for token in helper_tokens)
 
 
 def _reset_scene():
@@ -40,10 +98,13 @@ def _reset_scene():
     return scene
 
 
-def _set_render_defaults(scene, preview, color_mgmt_spec=None):
+def _set_render_defaults(scene, preview, color_mgmt_spec=None, render_profile=None):
+    interior_app = _is_interior_app_profile(render_profile)
+    res_x, res_y = _resolution_from_profile(render_profile, preview)
+
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
-    scene.cycles.samples = 32 if preview else 256
+    scene.cycles.samples = (48 if preview else 192) if interior_app else (32 if preview else 256)
     try:
         scene.cycles.use_adaptive_sampling = True
         scene.cycles.adaptive_threshold = 0.01 if preview else 0.005
@@ -62,8 +123,8 @@ def _set_render_defaults(scene, preview, color_mgmt_spec=None):
         scene.cycles.transparent_max_bounces = 8
     except Exception:
         pass
-    scene.render.resolution_x = 1024
-    scene.render.resolution_y = 1024
+    scene.render.resolution_x = res_x
+    scene.render.resolution_y = res_y
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = False
 
@@ -170,16 +231,120 @@ def _world_setup(scene, hdri_path, strength, rotation_deg=0.0):
                 print(f"[warn] Failed to load HDRI: {p}: {e}")
 
     if not hdri_ok:
-        bg_env.inputs["Color"].default_value = (0.85, 0.85, 0.85, 1.0)
-        bg_cam.inputs["Color"].default_value = (0.85, 0.85, 0.85, 1.0)
+        sky_ok = False
+        try:
+            sky = nodes.new(type="ShaderNodeTexSky")
+            sky.sky_type = "NISHITA"
+            sky.sun_elevation = math.radians(34.0)
+            sky.sun_rotation = math.radians(float(rotation_deg))
+            links.new(sky.outputs["Color"], bg_env.inputs["Color"])
+            links.new(sky.outputs["Color"], bg_cam.inputs["Color"])
+            sky_ok = True
+        except Exception:
+            pass
+        if not sky_ok:
+            bg_env.inputs["Color"].default_value = (0.72, 0.82, 0.95, 1.0)
+            bg_cam.inputs["Color"].default_value = (0.72, 0.82, 0.95, 1.0)
         # Keep a readable baseline even without HDRI, but don't overpower the SUN.
         s = float(bg_env.inputs["Strength"].default_value)
-        bg_env.inputs["Strength"].default_value = max(0.25, min(0.6, s))
-        bg_cam.inputs["Strength"].default_value = max(0.25, min(0.6, float(bg_cam.inputs["Strength"].default_value)))
+        bg_env.inputs["Strength"].default_value = max(0.45, min(0.9, s))
+        bg_cam.inputs["Strength"].default_value = max(0.45, min(0.9, float(bg_cam.inputs["Strength"].default_value)))
 
 
 def _ensure_material_cache():
     return {}
+
+
+def _hash_material_request(request):
+    try:
+        return json.dumps(request, sort_keys=True, separators=(",", ":"))
+    except Exception:
+        return str(request)
+
+
+def _material_from_manifest_request(cache, request):
+    if create_material_from_manifest is None and create_material_from_payload is None:
+        print(f"[warn] material_loader.py unavailable, using legacy material fallback: {_material_loader_error}")
+        return None
+    if not isinstance(request, dict) or not (isinstance(request.get("materialId"), str) or (isinstance(request.get("vendor"), str) and isinstance(request.get("vendorDecorId"), str))):
+        return None
+    key = ("manifest", _hash_material_request(request))
+    if key in cache:
+        return cache[key]
+    try:
+        material_id = request.get("materialId") or request.get("vendorDecorId")
+        profile = request.get("surfaceProfile")
+        h = abs(hash(key[1])) % 100000000
+        mat_name = f"{material_id}__{profile or 'default'}__{h:08d}"
+        if create_material_from_payload is not None:
+            mat = create_material_from_payload(request, material_name=mat_name, project_root=PROJECT_ROOT)
+        else:
+            mat = create_material_from_manifest(
+                material_id=material_id,
+                surface_profile=profile,
+                base_color=request.get("baseColor"),
+                tile_size_meters=request.get("tileSizeMeters"),
+                uv_scale=request.get("uvScale"),
+                rotation_degrees=float(request.get("rotation", 0.0)),
+                grain_direction=request.get("grainDirection"),
+                texture_strength=request.get("textureStrength"),
+                reflectivity=request.get("reflectivity"),
+                material_name=mat_name,
+                project_root=PROJECT_ROOT,
+            )
+        cache[key] = mat
+        return mat
+    except Exception as e:
+        print(f"[warn] Failed to create manifest material for {request.get('materialId')}: {e}")
+        return None
+
+
+def _transparent_app_glass_material(cache, spec):
+    base = spec.get("baseColor") if isinstance(spec, dict) else None
+    if isinstance(base, list) and len(base) == 3 and all(isinstance(x, (int, float)) for x in base):
+        color = (
+            max(0.0, min(1.0, float(base[0]))),
+            max(0.0, min(1.0, float(base[1]))),
+            max(0.0, min(1.0, float(base[2]))),
+        )
+    else:
+        color = (0.82, 0.92, 1.0)
+
+    roughness = spec.get("roughness") if isinstance(spec, dict) else None
+    rough = max(0.0, min(1.0, float(roughness))) if isinstance(roughness, (int, float)) and math.isfinite(roughness) else 0.02
+
+    key = ("app_glass", color, rough)
+    if key in cache:
+        return cache[key]
+
+    mat = bpy.data.materials.new(name="App transparent glass")
+    mat.use_nodes = True
+    mat.blend_method = "BLEND"
+    mat.diffuse_color = (color[0], color[1], color[2], 0.14)
+    mat.use_screen_refraction = True
+    mat.show_transparent_back = True
+
+    nt = mat.node_tree
+    nodes = nt.nodes
+    links = nt.links
+    nodes.clear()
+
+    out = nodes.new(type="ShaderNodeOutputMaterial")
+    transparent = nodes.new(type="ShaderNodeBsdfTransparent")
+    glossy = nodes.new(type="ShaderNodeBsdfGlossy")
+    mix = nodes.new(type="ShaderNodeMixShader")
+
+    transparent.inputs["Color"].default_value = (color[0], color[1], color[2], 1.0)
+    glossy.inputs["Color"].default_value = (color[0], color[1], color[2], 1.0)
+    glossy.inputs["Roughness"].default_value = max(0.005, rough)
+    mix.inputs["Fac"].default_value = 0.04
+
+    links.new(transparent.outputs["BSDF"], mix.inputs[1])
+    links.new(glossy.outputs["BSDF"], mix.inputs[2])
+    links.new(mix.outputs["Shader"], out.inputs["Surface"])
+
+    cache[key] = mat
+    return mat
 
 
 def _get_bsdf_input(bsdf, key_options):
@@ -508,7 +673,7 @@ def _mesh_from_spec(name, geo_spec):
     return mesh
 
 
-def _add_object(scene, obj_spec, mat_cache):
+def _add_object(scene, obj_spec, mat_cache, render_profile=None):
     name = str(obj_spec.get("name") or "Object")
     geo_spec = obj_spec.get("geometry") if isinstance(obj_spec, dict) else None
     mesh = _mesh_from_spec(name, geo_spec)
@@ -530,12 +695,34 @@ def _add_object(scene, obj_spec, mat_cache):
         tags = []
     tags = [t for t in tags if isinstance(t, str)]
 
+    lower_name = name.lower()
+    is_glass = "glass" in tags or "glass" in lower_name or "sklo" in lower_name
     mat_spec = obj_spec.get("material") if isinstance(obj_spec, dict) else None
-    mat = _material_from_spec(mat_cache, mat_spec if isinstance(mat_spec, dict) else {}, tags)
+    material_request = mat_spec.get("materialRequest") if isinstance(mat_spec, dict) else None
+    if isinstance(material_request, dict) and apply_physical_box_uv is not None:
+        if not apply_physical_box_uv(obj, PHYSICAL_UV_LAYER, material_request.get("grainDirection")):
+            print(f"[warn] Failed to create physical_meters UV for {name}; material will use Blender UV fallback")
+    mat = _material_from_manifest_request(mat_cache, material_request)
+    if mat is not None:
+        pass
+    elif is_glass:
+        mat = _transparent_app_glass_material(mat_cache, mat_spec if isinstance(mat_spec, dict) else {})
+    else:
+        mat = _material_from_spec(mat_cache, mat_spec if isinstance(mat_spec, dict) else {}, tags)
     if obj.data.materials:
         obj.data.materials[0] = mat
     else:
         obj.data.materials.append(mat)
+
+    if is_glass:
+        obj.visible_shadow = False
+        try:
+            obj.cycles_visibility.shadow = False
+            obj.cycles_visibility.diffuse = False
+            obj.cycles_visibility.glossy = True
+            obj.cycles_visibility.transmission = False
+        except Exception:
+            pass
 
     # Give the studio room physical thickness so it renders properly (and window cutouts become real openings).
     if "room" in tags:
@@ -569,12 +756,10 @@ def _add_object(scene, obj_spec, mat_cache):
 
 
 def _hide_preview_helpers(scene):
-    hide_prefixes = ("pick_", "outline_", "measure_", "debug_", "helper_")
-    hide_names = {"windowPick"}
     for obj in list(scene.objects):
-        n = obj.name or ""
-        if n in hide_names or any(n.startswith(p) for p in hide_prefixes):
+        if _is_export_helper_object(obj.name):
             obj.hide_render = True
+            obj.hide_viewport = True
 
 
 def _open_studio_room(scene):
@@ -626,6 +811,106 @@ def _setup_camera(scene, camera_spec):
     scene.camera = cam_obj
 
 
+def _scene_content_center(scene):
+    lo = None
+    hi = None
+    for obj in scene.objects:
+        if obj.type != "MESH" or _is_export_helper_object(obj.name):
+            continue
+        if "glass" in _base_object_name(obj.name).lower():
+            continue
+        for corner in obj.bound_box:
+            p = obj.matrix_world @ Vector(corner)
+            if lo is None:
+                lo = p.copy()
+                hi = p.copy()
+            else:
+                lo.x = min(lo.x, p.x)
+                lo.y = min(lo.y, p.y)
+                lo.z = min(lo.z, p.z)
+                hi.x = max(hi.x, p.x)
+                hi.y = max(hi.y, p.y)
+                hi.z = max(hi.z, p.z)
+    if lo is None or hi is None:
+        return Vector((0.0, 0.0, 0.0))
+    return (lo + hi) * 0.5
+
+
+def _resolved_window_openings(windows, scene, camera_spec):
+    scene_center = _scene_content_center(scene)
+    fallback_target = _as_vec3(camera_spec.get("target") if isinstance(camera_spec, dict) else None, scene_center)
+    openings = []
+
+    for window_spec in windows:
+        opening = window_spec.get("opening") if isinstance(window_spec, dict) else None
+        if not isinstance(opening, dict):
+            continue
+
+        center = _as_vec3(opening.get("center"), (0.0, 0.0, 0.0))
+        inward = _as_vec3(opening.get("inwardNormal"), (0.0, 0.0, -1.0))
+        if inward.length < 1e-6:
+            inward = fallback_target - center
+        if inward.length < 1e-6:
+            inward = Vector((0.0, 0.0, -1.0))
+        inward.normalize()
+
+        toward_room = scene_center - center
+        toward_room.z = 0.0
+        inward_xy = Vector((inward.x, inward.y, 0.0))
+        if toward_room.length > 1e-6 and inward_xy.length > 1e-6 and inward_xy.dot(toward_room) < 0.0:
+            inward = -inward
+            inward.normalize()
+
+        width = float(opening.get("width")) if isinstance(opening.get("width"), (int, float)) else 1.0
+        height = float(opening.get("height")) if isinstance(opening.get("height"), (int, float)) else 1.0
+        resolved = dict(opening)
+        resolved["center"] = [float(center.x), float(center.y), float(center.z)]
+        resolved["inwardNormal"] = [float(inward.x), float(inward.y), float(inward.z)]
+        resolved["width"] = max(0.05, min(20.0, width))
+        resolved["height"] = max(0.05, min(20.0, height))
+        openings.append({"window": window_spec, "opening": resolved, "area": resolved["width"] * resolved["height"]})
+
+    return openings
+
+
+def _primary_opening(openings):
+    if not openings:
+        return None
+    return max(openings, key=lambda item: item.get("area", 0.0)).get("opening")
+
+
+def _setup_passive_fill(scene, render_profile):
+    return
+
+
+def _single_sun_direction(light_spec, primary_opening):
+    inward = None
+    if isinstance(primary_opening, dict):
+        inward = _as_vec3(primary_opening.get("inwardNormal"), (0.0, 0.0, -1.0))
+        if inward.length > 1e-6:
+            inward.normalize()
+
+    direction = None
+    if isinstance(light_spec, dict) and isinstance(light_spec.get("sunDirection"), list) and len(light_spec.get("sunDirection")) == 3:
+        direction = _as_vec3(light_spec.get("sunDirection"), (0.0, 0.0, 0.0))
+    if direction is None or direction.length < 1e-6:
+        direction = inward.copy() if inward is not None else Vector((-0.3, -0.9, -0.35))
+
+    direction_xy = Vector((direction.x, direction.y, 0.0))
+    inward_xy = Vector((inward.x, inward.y, 0.0)) if inward is not None else Vector((0.0, 0.0, 0.0))
+    if direction_xy.length > 1e-6 and inward_xy.length > 1e-6 and direction_xy.dot(inward_xy) < 0.0:
+        direction.x *= -1.0
+        direction.y *= -1.0
+
+    if direction.z > -0.28:
+        direction.z = -0.28
+
+    if direction.length < 1e-6:
+        direction = Vector((-0.3, -0.9, -0.35))
+    direction.normalize()
+    return direction
+
+
 def _setup_sun(scene, light_spec, window_opening=None):
     sun_data = bpy.data.lights.new(name="Sun", type="SUN")
     sun_obj = bpy.data.objects.new(name="Sun", object_data=sun_data)
@@ -633,16 +918,15 @@ def _setup_sun(scene, light_spec, window_opening=None):
 
     strength = 3.0
     angle_deg = 0.8
-    direction = Vector((-0.3, -0.9, -0.2))
+    direction = _single_sun_direction(light_spec, window_opening)
     if isinstance(light_spec, dict):
         if isinstance(light_spec.get("sunStrength"), (int, float)):
             strength = float(max(0.0, light_spec.get("sunStrength")))
         if isinstance(light_spec.get("sunAngle"), (int, float)):
             angle_deg = float(max(0.001, light_spec.get("sunAngle")))
-        direction = _as_vec3(light_spec.get("sunDirection"), (-0.3, -0.9, -0.2))
 
     if direction.length < 1e-6:
-        direction = Vector((-0.3, -0.9, -0.2))
+        direction = Vector((-0.3, -0.9, -0.35))
     direction.normalize()
 
     sun_data.energy = strength
@@ -666,10 +950,10 @@ def _setup_sun(scene, light_spec, window_opening=None):
     sun_obj.location = loc
 
 
-def _setup_window_portal(scene, window_spec):
+def _setup_window_portal(scene, window_spec, opening=None, render_profile=None):
     if not isinstance(window_spec, dict):
         return
-    opening = window_spec.get("opening")
+    opening = opening if isinstance(opening, dict) else window_spec.get("opening")
     if not isinstance(opening, dict):
         return
 
@@ -684,14 +968,19 @@ def _setup_window_portal(scene, window_spec):
     width = max(0.05, min(20.0, width))
     height = max(0.05, min(20.0, height))
 
-    light_data = bpy.data.lights.new(name="WindowPortal", type="AREA")
-    light_obj = bpy.data.objects.new(name="WindowPortal", object_data=light_data)
+    light_data = bpy.data.lights.new(name="WindowSkyFill", type="AREA")
+    light_obj = bpy.data.objects.new(name="WindowSkyFill", object_data=light_data)
     scene.collection.objects.link(light_obj)
 
     light_data.shape = "RECTANGLE"
     light_data.size = width
     light_data.size_y = height
     light_data.energy = 0.0
+    if _is_interior_app_profile(render_profile):
+        daylight = window_spec.get("daylightIntensity")
+        daylight = float(daylight) if isinstance(daylight, (int, float)) and math.isfinite(daylight) else 1.0
+        area = max(0.5, width * height)
+        light_data.energy = max(18.0, min(160.0, 18.0 * max(0.25, daylight) * area))
 
     # Place slightly outside and face inward.
     light_obj.location = center - inward * 0.02
@@ -719,7 +1008,8 @@ def main():
     scene = _reset_scene()
 
     cm = payload.get("colorManagement") if isinstance(payload, dict) else None
-    _set_render_defaults(scene, preview_out is not None, cm)
+    render_profile = payload.get("renderProfile") if isinstance(payload, dict) else None
+    _set_render_defaults(scene, False, cm, render_profile)
 
     env = payload.get("environment") if isinstance(payload, dict) else None
     hdri_path = env.get("hdriPath") if isinstance(env, dict) else None
@@ -733,10 +1023,14 @@ def main():
             if isinstance(v, (int, float)) and math.isfinite(v):
                 hdri_rot = float(v)
                 break
+    world_strength = float(hdri_strength) if isinstance(hdri_strength, (int, float)) else 0.35
+    if _is_interior_app_profile(render_profile):
+        world_strength = min(world_strength, 0.055 if hdri_path else 0.12)
+
     _world_setup(
         scene,
         hdri_path,
-        float(hdri_strength) if isinstance(hdri_strength, (int, float)) else 0.35,
+        world_strength,
         hdri_rot,
     )
     if isinstance(scene.world, bpy.types.World) and scene.world.use_nodes:
@@ -765,27 +1059,6 @@ def main():
     if not isinstance(lighting_spec, dict):
         lighting_spec = {}
 
-    needs_dir = True
-    if isinstance(lighting_spec.get("sunDirection"), list) and len(lighting_spec.get("sunDirection")) == 3:
-        needs_dir = False
-    if needs_dir and len(windows) >= 1:
-        opening = windows[0].get("opening") if isinstance(windows[0], dict) else None
-        inward = _as_vec3(opening.get("inwardNormal") if isinstance(opening, dict) else None, (-0.3, -0.9, -0.2))
-        if inward.length > 1e-6:
-            inward.normalize()
-            lighting_spec = dict(lighting_spec)
-            lighting_spec["sunDirection"] = [float(inward.x), float(inward.y), float(inward.z)]
-
-    first_opening = None
-    if len(windows) >= 1 and isinstance(windows[0], dict):
-        opening = windows[0].get("opening")
-        if isinstance(opening, dict):
-            first_opening = opening
-
-    _setup_sun(scene, lighting_spec, first_opening)
-    for w in windows:
-        _setup_window_portal(scene, w)
-
     mat_cache = _ensure_material_cache()
     objs = payload.get("objects") if isinstance(payload, dict) else []
     if not isinstance(objs, list):
@@ -794,8 +1067,10 @@ def main():
     for o in objs:
         if not isinstance(o, dict):
             continue
+        if _is_export_helper_object(o.get("name")):
+            continue
         try:
-            _add_object(scene, o, mat_cache)
+            _add_object(scene, o, mat_cache, render_profile)
         except Exception as e:
             n = o.get("name") if isinstance(o, dict) else "Object"
             print(f"[warn] Skipping object {n}: {e}")
@@ -803,10 +1078,28 @@ def main():
     _hide_preview_helpers(scene)
     _open_studio_room(scene)
 
+    resolved_openings = _resolved_window_openings(windows, scene, payload.get("camera") if isinstance(payload, dict) else {})
+    first_opening = _primary_opening(resolved_openings)
+
+    if _is_interior_app_profile(render_profile) and resolved_openings:
+        try:
+            nodes = scene.world.node_tree.nodes
+            bg_cam = nodes.get("WorldBG_Cam")
+            if bg_cam is not None:
+                    bg_cam.inputs["Strength"].default_value = max(0.35, float(bg_cam.inputs["Strength"].default_value))
+        except Exception:
+            pass
+
+    _setup_sun(scene, lighting_spec, first_opening)
+    for item in resolved_openings:
+        _setup_window_portal(scene, item.get("window"), item.get("opening"), render_profile)
+    _setup_passive_fill(scene, render_profile)
+
     _ensure_dir(blend_out)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(blend_out))
 
     if preview_out:
+        _set_render_defaults(scene, True, cm, render_profile)
         _ensure_dir(preview_out)
         scene.render.filepath = os.path.abspath(preview_out)
         scene.render.image_settings.file_format = "PNG"

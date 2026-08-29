@@ -125,6 +125,7 @@ export function normalizeDrawerLowParams(
   normalized.sideGap = Math.max(0, Math.round(getNumber(normalized.sideGap, getNumber(MODULE_DEFAULTS.sideGap, 2))));
   normalized.topGap = Math.max(0, Math.round(getNumber(normalized.topGap, getNumber(MODULE_DEFAULTS.topGap, 2))));
   normalized.bottomGap = Math.max(0, Math.round(getNumber(normalized.bottomGap, getNumber(MODULE_DEFAULTS.bottomGap, 2))));
+  normalized.drawerBackReserveMm = Math.max(0, getNumber(normalized.drawerBackReserveMm, getNumber(MODULE_DEFAULTS.drawerBackReserveMm, 10)));
   normalized.backGrooveDepthMm = clamp(
     Math.round(getNumber(normalized.backGrooveDepthMm, getNumber(MODULE_DEFAULTS.backGrooveDepthMm, 8))),
     0,

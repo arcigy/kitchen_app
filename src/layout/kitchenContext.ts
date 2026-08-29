@@ -5,6 +5,7 @@ export interface KitchenContext {
   name: string
 
   // Base modules - dimensions
+  wallHeightMm: number           // full room wall height for tall and full-height kitchen layouts
   heightMm: number              // module height without plinth
   worktopDepthMm: number        // real worktop depth
   worktopFrontOffsetMm: number  // worktop front overhang
@@ -26,6 +27,11 @@ export interface KitchenContext {
   upperDepthMm: number
   upperHeightMm: number
 
+  // Tall modules deliberately have their own group dimensions.  Older saved
+  // contexts are upgraded by resolveContext using the historical wall/depth values.
+  tallDepthMm: number
+  tallHeightMm: number
+
   // Doors and panels
   doorOverlayMm: number
   backPanelThicknessMm: number
@@ -46,8 +52,8 @@ export interface KitchenContext {
 }
 
 const FALLBACK_KITCHEN_DEFAULTS = {
-  carcassMaterialId: "mat.board.body.dtd.grey.18",
-  frontMaterialId: "mat.board.front.veneer.oak_natural.19",
+  carcassMaterialId: "mat.board.body.dtd.white.18",
+  frontMaterialId: "mat.board.front.mdf.white_supermat.18",
   worktopMaterialId: "mat.board.worktop.laminate_oak.38",
   backPanelMaterialId: "mat.board.back.hdf.grey.6",
   drawerBottomMaterialId: "mat.board.drawer_bottom.hdf.white.8",
@@ -70,6 +76,7 @@ export function makeDefaultKitchenContext(catalog?: Pick<ClientCatalog, "kitchen
   return {
     name: 'Kuchy\u0148a 1',
 
+    wallHeightMm: 2600,
     heightMm,
     worktopDepthMm,
     worktopFrontOffsetMm,
@@ -87,6 +94,8 @@ export function makeDefaultKitchenContext(catalog?: Pick<ClientCatalog, "kitchen
     upperStartHeightMm: 1400,
     upperDepthMm: 320,
     upperHeightMm: 720,
+    tallDepthMm: worktopDepthMm - worktopFrontOffsetMm - worktopBackOffsetMm,
+    tallHeightMm: 2600,
 
     doorOverlayMm: 18,
     backPanelThicknessMm: defaults.defaultBackPanelThicknessMm ?? FALLBACK_KITCHEN_DEFAULTS.defaultBackPanelThicknessMm,
@@ -107,6 +116,7 @@ export function makeDefaultKitchenContext(catalog?: Pick<ClientCatalog, "kitchen
 
 // Call after changing worktopDepth, frontOffset, backOffset, or height.
 export function resolveContext(ctx: KitchenContext): KitchenContext {
+  const legacy = ctx as Partial<KitchenContext>;
   return {
     ...ctx,
     handleComponentId:
@@ -115,6 +125,12 @@ export function resolveContext(ctx: KitchenContext): KitchenContext {
         : FALLBACK_KITCHEN_DEFAULTS.defaultHandleComponentId,
     moduleDepthMm: ctx.worktopDepthMm - ctx.worktopFrontOffsetMm - ctx.worktopBackOffsetMm,
     moduleHeightMm: ctx.heightMm - ctx.worktopThicknessMm,
+    tallDepthMm: typeof legacy.tallDepthMm === "number" && legacy.tallDepthMm > 0
+      ? legacy.tallDepthMm
+      : ctx.worktopDepthMm - ctx.worktopFrontOffsetMm - ctx.worktopBackOffsetMm,
+    tallHeightMm: typeof legacy.tallHeightMm === "number" && legacy.tallHeightMm > 0
+      ? legacy.tallHeightMm
+      : ctx.wallHeightMm,
   }
 }
 
@@ -125,6 +141,8 @@ export function validateContext(ctx: KitchenContext): string[] {
     warnings.push('name is empty')
   if (ctx.heightMm <= 0)
     warnings.push(`heightMm is ${ctx.heightMm}mm - must be greater than 0`)
+  if (ctx.wallHeightMm <= ctx.heightMm)
+    warnings.push(`wallHeightMm (${ctx.wallHeightMm}) must be greater than base heightMm (${ctx.heightMm})`)
   if (ctx.worktopDepthMm <= 0)
     warnings.push(`worktopDepthMm is ${ctx.worktopDepthMm}mm - must be greater than 0`)
   if (ctx.worktopFrontOffsetMm < 0)
@@ -153,6 +171,10 @@ export function validateContext(ctx: KitchenContext): string[] {
     warnings.push(`upperDepthMm is ${ctx.upperDepthMm}mm - must be greater than 0`)
   if (ctx.upperHeightMm <= 0)
     warnings.push(`upperHeightMm is ${ctx.upperHeightMm}mm - must be greater than 0`)
+  if (ctx.tallDepthMm <= 0)
+    warnings.push(`tallDepthMm is ${ctx.tallDepthMm}mm - must be greater than 0`)
+  if (ctx.tallHeightMm <= 0)
+    warnings.push(`tallHeightMm is ${ctx.tallHeightMm}mm - must be greater than 0`)
   if (ctx.doorOverlayMm < 0)
     warnings.push(`doorOverlayMm is ${ctx.doorOverlayMm}mm - cannot be negative`)
   if (ctx.backPanelThicknessMm < 0)

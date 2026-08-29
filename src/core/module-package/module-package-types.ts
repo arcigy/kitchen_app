@@ -25,6 +25,52 @@ export type ModulePackageMetadata = {
   tags?: string[];
 };
 
+/**
+ * Stable, package-owned semantics for Kitchen Group modules.  The contract is
+ * deliberately separate from placement rules: placement describes where a
+ * module may be put, while this describes which shared Kitchen Group values it
+ * owns and how its dimensional reference planes are interpreted.
+ */
+export type KitchenModuleProductKind =
+  | "cabinet"
+  | "worktop"
+  | "panel"
+  | "shelf"
+  | "appliance"
+  | "accessory"
+  | "hardware";
+
+export type KitchenModuleRole = "low" | "top" | "tall";
+
+export type KitchenModuleTopology = "rectangular" | "corner-symmetric" | "corner-asymmetric";
+
+export type KitchenModulePlacementMode = "wall" | "corner" | "free-standing";
+
+export type KitchenModuleCapability =
+  | "backs"
+  | "fronts"
+  | "drawers"
+  | "shelves"
+  | "plinth"
+  | "worktop"
+  | "handles"
+  | "hinges"
+  | "runners"
+  | "openable";
+
+export type KitchenModuleContract = {
+  version: 1;
+  productKind: KitchenModuleProductKind;
+  role?: KitchenModuleRole;
+  topology: KitchenModuleTopology;
+  placementMode: KitchenModulePlacementMode;
+  capabilities: KitchenModuleCapability[];
+  /** A named geometry contract prevents a historical package snapshot from silently changing shape. */
+  geometryContractVersion: 1 | 2;
+  /** Parameters which are intentionally package-local rather than shared Kitchen Group parameters. */
+  localParameterKeys?: string[];
+};
+
 export type ModuleCompatibility = {
   minAppVersion?: string;
   maxAppVersion?: string;
@@ -46,6 +92,7 @@ export type ModuleParameterDefinition = {
   unit?: "mm" | "cm" | "m" | "percent" | "pcs";
   options?: { label: string; value: string }[];
   group?: string;
+  uiVisibility?: "user" | "technical" | "internal";
   affects: ModuleParameterAffects;
 };
 
@@ -90,7 +137,6 @@ export type ModulePlacementRules = {
   };
   wall?: {
     mustAttachToWall?: boolean;
-    minWallLengthMm?: number;
   };
   clearance?: {
     leftMm?: number;
@@ -142,7 +188,7 @@ export type ModuleConstraintRules = {
 };
 
 export type ModuleGeometryPrimitive = {
-  primitiveType: "box" | "cylinder" | "plane";
+  primitiveType: "box" | "cylinder" | "plane" | "mesh";
   id: string;
   params: Record<string, unknown>;
 };
@@ -168,6 +214,7 @@ export type ModuleMaterialSlot = {
     | "catalog.kitchenDefaults.worktopMaterialId"
     | "catalog.kitchenDefaults.plinthMaterialId"
     | "catalog.kitchenDefaults.backPanelMaterialId"
+    | "catalog.kitchenDefaults.drawerBottomMaterialId"
     | "none";
   allowedMaterialTags?: string[];
   affects: Array<"geometry" | "visual" | "bom" | "pricing">;
@@ -180,12 +227,14 @@ export type ModuleMaterialSlots = {
 export type ModuleComponentSlot = {
   slotId: string;
   label: string;
-  componentType: "handle" | "hinge" | "runner" | "leg" | "rail" | "led" | "other";
+  componentType: "handle" | "hinge" | "runner" | "leg" | "plinth_clip" | "rail" | "led" | "other";
   required: boolean;
   defaultFrom?:
     | "catalog.kitchenDefaults.defaultHandleComponentId"
     | "catalog.kitchenDefaults.defaultHingeComponentId"
-    | "catalog.kitchenDefaults.defaultDrawerSystemComponentId";
+    | "catalog.kitchenDefaults.defaultDrawerSystemComponentId"
+    | "parameter.legComponentId"
+    | "parameter.clipComponentId";
   affects: Array<"geometry" | "bom" | "pricing" | "visual">;
 };
 
@@ -235,9 +284,9 @@ export type ModuleContextParameterSyncRule = {
   mode?: ModuleContextSyncMode;
 };
 
-export type ModuleContextMaterialFamily = "body" | "front" | "back" | "drawer_box" | "drawer_bottom" | "worktop" | "shelf";
+export type ModuleContextMaterialFamily = "corpus" | "body" | "front" | "back" | "drawer_box" | "drawer_bottom" | "worktop" | "shelf";
 
-export type ModuleContextMaterialAlias = "body" | "front" | "back" | "drawer_bottom" | "worktop" | "shelf";
+export type ModuleContextMaterialAlias = "corpus" | "body" | "front" | "back" | "drawer_bottom" | "worktop" | "shelf";
 
 export type ModuleContextMaterialSyncRule = {
   targetSlot?: string;
@@ -288,6 +337,52 @@ export type ModuleBehaviorDefinition = {
   contextBindings?: ModuleContextBinding[];
 };
 
+export type ModuleInternalEditSubmoduleTool =
+  | "drawer"
+  | "shelf"
+  | "door"
+  | "oven"
+  | "microwave"
+  | "sink"
+  | "dishwasher"
+  | "fridge"
+  | "fridge_freezer"
+  | "cooktop";
+
+export type ModuleInternalEditBoardOperation =
+  | "delete_board"
+  | "move_board"
+  | "resize_board"
+  | "trim_board"
+  | "extend_board";
+
+export type ModuleInternalEditToolStatus = "available" | "planned";
+
+export type ModuleInternalEditSubmoduleRule = {
+  tool: ModuleInternalEditSubmoduleTool;
+  label: string;
+  status: ModuleInternalEditToolStatus;
+  insertionMode: "vertical_slot" | "cabinet_opening" | "worktop_cutout" | "surface_mount";
+  allowedWhen?: string[];
+  note: string;
+};
+
+export type ModuleInternalEditBoardRule = {
+  operation: ModuleInternalEditBoardOperation;
+  status: ModuleInternalEditToolStatus;
+  allowedMaterialGroups?: string[];
+  note: string;
+};
+
+export type ModuleInternalEditingDefinition = {
+  enabled: boolean;
+  hostKind: "none" | "composed_tall" | "base_cabinet" | "worktop_surface" | "fixed_parametric";
+  defaultEditor?: "slot_stack" | "surface_insert" | "board_level";
+  submoduleTools: ModuleInternalEditSubmoduleRule[];
+  boardOperations: ModuleInternalEditBoardRule[];
+  note: string;
+};
+
 export type ModuleUiDefinition = {
   icon?: string;
   previewImage?: string;
@@ -298,7 +393,7 @@ export type ModuleUiDefinition = {
   }>;
   controls: Array<{
     parameterKey: string;
-    controlType: "number" | "select" | "checkbox" | "materialPicker" | "componentPicker";
+    controlType: "number" | "text" | "select" | "checkbox" | "materialPicker" | "componentPicker";
     groupId?: string;
     order?: number;
     visibleWhen?: unknown;
@@ -329,10 +424,37 @@ export type ModulePackageAssetManifest = {
   files: ModulePackageAsset[];
 };
 
+export type ModuleParameterPresetRatioParameter = {
+  parameterKey: string;
+  countParameter: string;
+  ratios: number[];
+  order?: "bottom-up" | "top-down";
+  indexedParameterPrefix?: string;
+  indexedParameterSuffix?: string;
+};
+
+export type ModuleParameterPreset = {
+  presetId: string;
+  label: string;
+  description?: string;
+  note: string;
+  tags?: string[];
+  sourceLabels?: string[];
+  parameterValues: Record<string, unknown>;
+  ratioParameters?: ModuleParameterPresetRatioParameter[];
+};
+
+export type ModuleParameterPresetSet = {
+  freeParameterKeys: string[];
+  presets: ModuleParameterPreset[];
+};
+
 export type FurnQuoteModulePackage = {
   format: typeof MODULE_PACKAGE_FORMAT;
   packageVersion: number;
   module: ModulePackageMetadata;
+  /** Required for newly authored Kitchen packages; absent only on legacy packages awaiting repair. */
+  kitchenContract?: KitchenModuleContract;
   parameters: ModuleParameterSchema;
   placement: ModulePlacementRules;
   constraints: ModuleConstraintRules;
@@ -341,9 +463,11 @@ export type FurnQuoteModulePackage = {
   materials: ModuleMaterialSlots;
   components: ModuleComponentSlots;
   behavior?: ModuleBehaviorDefinition;
+  internalEditing?: ModuleInternalEditingDefinition;
   bom?: ModuleBomRules;
   pricing?: ModulePricingRules;
   ui: ModuleUiDefinition;
+  parameterPresets?: ModuleParameterPresetSet;
   exports?: ModuleExportMetadata;
   manufacturing?: ModuleManufacturingMetadata;
   assets: ModulePackageAssetManifest;

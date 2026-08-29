@@ -2,23 +2,8 @@ import * as THREE from "three";
 import type { Camera, Group, Object3D } from "three";
 import type { BoardFamily, MaterialDefinition } from "../core/catalog/catalog-types";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
-
-type TopbarApi = {
-  clear: () => void;
-  addRow: (args?: { title?: string; className?: string }) => HTMLElement;
-  addGroup: (title?: string, args?: { row?: HTMLElement }) => HTMLElement;
-  addSpacer: (args?: { row?: HTMLElement }) => void;
-  toolButton: (
-    toolsEl: HTMLElement,
-    args: { title: string; iconSvg: string; label?: string; variant?: "success" | "danger"; onClick?: () => void }
-  ) => HTMLButtonElement;
-};
-
-type PropsApi = {
-  setTitle: (title: string) => void;
-  section: () => HTMLElement;
-  row: (sectionEl: HTMLElement, label: string, inputEl: HTMLElement) => HTMLElement;
-};
+import type { EditorPropsApi, EditorTopbarApi } from "../app/editorModeApis";
+import { parseWardrobeDimensionEdit, type WardrobeDimensionEdit } from "./wardrobeDimensionEditMetadata";
 
 type WardrobePartKind = "vertical" | "horizontal" | "back";
 type WardrobeJointPriority = "horizontal" | "vertical";
@@ -60,10 +45,17 @@ type WardrobeGroup = {
   selectedPartId: string | null;
 };
 
-type WardrobeDimensionEdit =
-  | { kind: "verticalGap"; aPartId: string; bPartId: string }
-  | { kind: "horizontalGap"; aPartId: string; bPartId: string }
-  | { kind: "partDepth"; partId: string };
+export type WardrobeEditSaveState = {
+  activeGroupId: string | null;
+  groups: Array<{
+    id: string;
+    name: string;
+    params: WardrobeParams;
+    parts: Array<Omit<WardrobePart, "meshes">>;
+    nextPartIndex: number;
+    selectedPartId: string | null;
+  }>;
+};
 
 type WardrobeJointEdit = { kind: "jointPriorityToggle" };
 
@@ -73,8 +65,8 @@ type CreateWardrobeEditModeArgs = {
   layoutRoot: Group;
   viewerEl: HTMLElement;
   getCamera: () => Camera;
-  tb: TopbarApi;
-  props: PropsApi;
+  tb: EditorTopbarApi;
+  props: EditorPropsApi;
   icons: {
     board: string;
     back: string;
@@ -85,6 +77,7 @@ type CreateWardrobeEditModeArgs = {
   setToolSelect: () => void;
   cancelPlacementIfActive: () => void;
   disposeObject3D: (obj: Object3D) => void;
+  recordActivity?: (label: string) => void;
   buildClassicTopbar: () => void;
   restoreStandardTopbar: () => void;
   refreshProps: () => void;
@@ -143,6 +136,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
 
   const findActiveGroup = () => groups.find((group) => group.id === activeGroupId) ?? null;
   const findPart = (group: WardrobeGroup, partId: string | null) => group.parts.find((part) => part.id === partId) ?? null;
+  const recordChange = (label: string) => args.recordActivity?.(label);
   const getPartFamily = (group: WardrobeGroup, part: WardrobePart): BoardFamily => {
     if (part.kind === "back") return "back";
     const sameKind = group.parts
@@ -717,6 +711,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
     group.parts.push(part);
     rebuildParts(group);
     setSelectedPart(group, part.id);
+    recordChange("Wardrobe board added");
   };
 
   const numberInput = (value: number, onCommit: (next: number, refresh: boolean) => void) => {
@@ -799,6 +794,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
         part.materialId = nextMaterialId;
         part.thicknessMm = resolveThickness(args.catalog, nextMaterialId, family, thicknessMm);
         rebuildParts(group);
+        recordChange("Wardrobe board updated");
         args.refreshProps();
       })
     );
@@ -808,6 +804,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
       thicknessSelect(materialId, family, thicknessMm, (nextThickness) => {
         part.thicknessMm = nextThickness;
         rebuildParts(group);
+        recordChange("Wardrobe board updated");
         args.refreshProps();
       })
     );
@@ -823,6 +820,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
           part.xMm = -group.params.widthMm / 2 + Math.max(0, next) + getPartThicknessMm(group, part) / 2;
           part.customPosition = true;
           rebuildParts(group);
+          if (refresh) recordChange("Wardrobe board moved");
           if (refresh) args.refreshProps();
         })
       );
@@ -833,6 +831,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
           part.xMm = group.params.widthMm / 2 - Math.max(0, next) - getPartThicknessMm(group, part) / 2;
           part.customPosition = true;
           rebuildParts(group);
+          if (refresh) recordChange("Wardrobe board moved");
           if (refresh) args.refreshProps();
         })
       );
@@ -847,6 +846,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
           part.yMm = Math.max(0, next) + getPartThicknessMm(group, part) / 2;
           part.customPosition = true;
           rebuildParts(group);
+          if (refresh) recordChange("Wardrobe board moved");
           if (refresh) args.refreshProps();
         })
       );
@@ -857,6 +857,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
           part.yMm = group.params.heightMm - Math.max(0, next) - getPartThicknessMm(group, part) / 2;
           part.customPosition = true;
           rebuildParts(group);
+          if (refresh) recordChange("Wardrobe board moved");
           if (refresh) args.refreshProps();
         })
       );
@@ -870,6 +871,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
           part.depthMm = clamp(Math.max(1, next), 1, group.params.depthMm);
           part.customDepth = true;
           rebuildParts(group);
+          if (refresh) recordChange("Wardrobe board depth updated");
           if (refresh) args.refreshProps();
         })
       );
@@ -890,6 +892,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
         numberInput(group.params[key], (next, refresh) => {
           group.params[key] = Math.max(1, next);
           rebuildParts(group);
+          if (refresh) recordChange("Wardrobe size updated");
           if (refresh) args.refreshProps();
         })
       );
@@ -905,6 +908,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
         group.params.corpusMaterialId = materialId;
         group.params.corpusThicknessMm = resolveThickness(args.catalog, materialId, "body", group.params.corpusThicknessMm);
         rebuildParts(group);
+        recordChange("Wardrobe corpus updated");
         args.refreshProps();
       })
     );
@@ -914,6 +918,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
       thicknessSelect(group.params.corpusMaterialId, "body", group.params.corpusThicknessMm, (thicknessMm) => {
         group.params.corpusThicknessMm = thicknessMm;
         rebuildParts(group);
+        recordChange("Wardrobe corpus updated");
         args.refreshProps();
       })
     );
@@ -924,6 +929,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
         group.params.backMaterialId = materialId;
         group.params.backThicknessMm = resolveThickness(args.catalog, materialId, "back", group.params.backThicknessMm);
         rebuildParts(group);
+        recordChange("Wardrobe back updated");
         args.refreshProps();
       })
     );
@@ -933,6 +939,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
       thicknessSelect(group.params.backMaterialId, "back", group.params.backThicknessMm, (thicknessMm) => {
         group.params.backThicknessMm = thicknessMm;
         rebuildParts(group);
+        recordChange("Wardrobe back updated");
         args.refreshProps();
       })
     );
@@ -943,6 +950,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
         group.params.innerMaterialId = materialId;
         group.params.innerThicknessMm = resolveThickness(args.catalog, materialId, "shelf", group.params.innerThicknessMm);
         rebuildParts(group);
+        recordChange("Wardrobe inner boards updated");
         args.refreshProps();
       })
     );
@@ -952,6 +960,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
       thicknessSelect(group.params.innerMaterialId, "shelf", group.params.innerThicknessMm, (thicknessMm) => {
         group.params.innerThicknessMm = thicknessMm;
         rebuildParts(group);
+        recordChange("Wardrobe inner boards updated");
         args.refreshProps();
       })
     );
@@ -961,6 +970,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
       jointPrioritySelect(group.params.innerJointPriority, (priority) => {
         group.params.innerJointPriority = priority;
         rebuildParts(group);
+        recordChange("Wardrobe joint priority updated");
         args.refreshProps();
       })
     );
@@ -1017,15 +1027,6 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
     });
   };
 
-  const parseDimensionEdit = (value: unknown): WardrobeDimensionEdit | null => {
-    if (!value || typeof value !== "object") return null;
-    const edit = value as Partial<WardrobeDimensionEdit>;
-    if (edit.kind === "verticalGap" && "aPartId" in edit && "bPartId" in edit) return edit as WardrobeDimensionEdit;
-    if (edit.kind === "horizontalGap" && "aPartId" in edit && "bPartId" in edit) return edit as WardrobeDimensionEdit;
-    if (edit.kind === "partDepth" && "partId" in edit) return edit as WardrobeDimensionEdit;
-    return null;
-  };
-
   const parseJointEdit = (value: unknown): WardrobeJointEdit | null => {
     if (!value || typeof value !== "object") return null;
     const edit = value as Partial<WardrobeJointEdit>;
@@ -1035,6 +1036,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
   const toggleInnerJointPriority = (group: WardrobeGroup) => {
     group.params.innerJointPriority = group.params.innerJointPriority === "horizontal" ? "vertical" : "horizontal";
     rebuildParts(group);
+    recordChange("Wardrobe joint priority updated");
     args.refreshProps();
   };
 
@@ -1082,6 +1084,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
     }
 
     rebuildParts(group);
+    recordChange("Wardrobe dimension updated");
     args.refreshProps();
   };
 
@@ -1165,8 +1168,8 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
 
     const dimensionHit = raycaster
       .intersectObjects(group.dimensionsRoot.children, true)
-      .find((hit) => parseDimensionEdit(hit.object.userData.wardrobeDimensionEdit));
-    const dimensionEdit = parseDimensionEdit(dimensionHit?.object.userData.wardrobeDimensionEdit);
+      .find((hit) => parseWardrobeDimensionEdit(hit.object.userData.wardrobeDimensionEdit));
+    const dimensionEdit = parseWardrobeDimensionEdit(dimensionHit?.object.userData.wardrobeDimensionEdit);
     if (dimensionEdit) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -1228,6 +1231,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
     const firstVertical = group.parts.find((part) => part.kind === "vertical") ?? null;
     if (firstVertical) setSelectedPart(group, firstVertical.id);
     mountWardrobeProps();
+    recordChange("Wardrobe added");
   };
 
   const exitCommon = () => {
@@ -1269,6 +1273,7 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
       if (index >= 0) group.parts.splice(index, 1);
       group.selectedPartId = null;
       rebuildParts(group);
+      recordChange("Wardrobe board deleted");
       args.refreshProps();
       return true;
     }
@@ -1280,13 +1285,89 @@ export function createWardrobeEditMode(args: CreateWardrobeEditModeArgs) {
     if (index >= 0) groups.splice(index, 1);
     activeGroupId = null;
     args.restoreStandardTopbar();
+    recordChange("Wardrobe deleted");
     args.refreshProps();
     return true;
   };
 
+  const clearGroups = () => {
+    for (const group of groups.splice(0, groups.length)) {
+      args.layoutRoot.remove(group.root);
+      disposeDimensions(group);
+      args.disposeObject3D(group.root);
+    }
+    activeGroupId = null;
+  };
+
+  const createWardrobe = () => {
+    enterNew();
+    const group = findActiveGroup();
+    return group ? { id: group.id, name: group.name, partIds: group.parts.map((part) => part.id) } : null;
+  };
+
+  const addPartToGroup = (groupId: string, kind: WardrobePartKind) => {
+    const group = groups.find((item) => item.id === groupId) ?? null;
+    if (!group) return null;
+    activeGroupId = group.id;
+    addPart(kind);
+    const part = findPart(group, group.selectedPartId);
+    return part ? { id: part.id, kind: part.kind } : null;
+  };
+
+  const getSaveState = (): WardrobeEditSaveState => ({
+    activeGroupId,
+    groups: groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      params: structuredClone(group.params),
+      parts: group.parts.map(({ meshes: _meshes, ...part }) => structuredClone(part)),
+      nextPartIndex: group.nextPartIndex,
+      selectedPartId: group.selectedPartId
+    }))
+  });
+
+  const restoreSaveState = (state: unknown) => {
+    clearGroups();
+    const saved = state as Partial<WardrobeEditSaveState> | null | undefined;
+    if (Array.isArray(saved?.groups)) {
+      for (const savedGroup of saved.groups) {
+        if (!savedGroup || typeof savedGroup.id !== "string" || !savedGroup.params) continue;
+        const dimensionsRoot = new THREE.Group();
+        dimensionsRoot.name = "wardrobe-dimensions";
+        const group: WardrobeGroup = {
+          id: savedGroup.id,
+          name: typeof savedGroup.name === "string" && savedGroup.name.trim() ? savedGroup.name : "Wardrobe",
+          root: new THREE.Group(),
+          dimensionsRoot,
+          params: structuredClone(savedGroup.params),
+          parts: Array.isArray(savedGroup.parts)
+            ? savedGroup.parts.map((part) => ({ ...structuredClone(part), meshes: [] }))
+            : [],
+          nextPartIndex: Number.isFinite(savedGroup.nextPartIndex) ? Number(savedGroup.nextPartIndex) : 1,
+          selectedPartId: typeof savedGroup.selectedPartId === "string" ? savedGroup.selectedPartId : null
+        };
+        group.root.name = group.name;
+        group.root.add(dimensionsRoot);
+        args.layoutRoot.add(group.root);
+        groups.push(group);
+        rebuildParts(group);
+      }
+    }
+    activeGroupId = typeof saved?.activeGroupId === "string" && groups.some((group) => group.id === saved.activeGroupId)
+      ? saved.activeGroupId
+      : null;
+    if (activeGroupId) buildWardrobeTopbar();
+    else args.restoreStandardTopbar();
+    args.refreshProps();
+  };
+
   return {
+    addPartToGroup,
+    createWardrobe,
     enterNew,
     deleteSelected,
+    getSaveState,
+    restoreSaveState,
     getVisibilityTargets() {
       return groups.flatMap((group) =>
         group.parts.map((part) => ({

@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import type { ClientCatalog, ComponentType } from "../../core/catalog/catalog-types";
+import type { ClientCatalog, ComponentType, MaterialDefinition } from "../../core/catalog/catalog-types";
+import { createMaterialRequestFromCatalogMaterial } from "../../core/catalog/material-render-request";
 import type { PortableMaterialsSnapshot } from "../runtime/portableCommercial";
 import { getPortableMaterialsSnapshotSelections } from "../runtime/portableCommercial";
 import {
@@ -17,6 +18,7 @@ type PreviewMaterial = {
   roughness: number;
   metalness: number;
   thicknessMm?: number | null;
+  catalogMaterial?: MaterialDefinition;
 };
 
 type PartSizeMm = {
@@ -45,9 +47,23 @@ function createMeshMaterial(preview: PreviewMaterial) {
   });
 }
 
-function applyPartMetadata(mesh: THREE.Mesh, sizeMm: PartSizeMm, paramKeys: string[]) {
+function tagsForPart(partName: string): string[] {
+  if (/front/i.test(partName)) return ["module", "front", "door", "wood"];
+  if (/back/i.test(partName)) return ["module", "back"];
+  if (/shelf/i.test(partName)) return ["module", "shelf", "wood"];
+  if (/plinth|kick/i.test(partName)) return ["module", "plinth"];
+  return ["module", "body", "wood"];
+}
+
+function applyPartMetadata(mesh: THREE.Mesh, sizeMm: PartSizeMm, paramKeys: string[], preview?: PreviewMaterial, partName = mesh.name) {
   mesh.userData.selectable = true;
   mesh.userData.paramKeys = [...paramKeys];
+  mesh.userData.tags = tagsForPart(partName);
+  if (preview?.catalogMaterial) {
+    mesh.userData.catalogMaterialId = preview.catalogMaterial.id;
+    mesh.userData.catalogMaterialName = preview.catalogMaterial.displayName;
+    mesh.userData.materialRequest = createMaterialRequestFromCatalogMaterial(preview.catalogMaterial);
+  }
   mesh.userData.dimensionsMm = {
     width: sizeMm.width,
     height: sizeMm.height,
@@ -71,7 +87,7 @@ function addBoxPart(args: {
   const mesh = new THREE.Mesh(geometry, createMeshMaterial(args.preview));
   mesh.name = args.name;
   mesh.position.set(toMeters(args.positionMm.x), toMeters(args.positionMm.y), toMeters(args.positionMm.z));
-  applyPartMetadata(mesh, args.sizeMm, args.paramKeys);
+  applyPartMetadata(mesh, args.sizeMm, args.paramKeys, args.preview, args.name);
   args.group.add(mesh);
   return mesh;
 }
@@ -108,7 +124,9 @@ function addCylinderPart(args: {
       : args.axis === "y"
         ? { width: args.diameterMm, height: args.lengthMm, depth: args.diameterMm }
         : { width: args.diameterMm, height: args.diameterMm, depth: args.lengthMm },
-    args.paramKeys
+    args.paramKeys,
+    args.preview,
+    args.name
   );
   args.group.add(mesh);
   return mesh;
@@ -179,7 +197,8 @@ function resolveBoardPreview(
     colorHex: selectedMaterial.preview.colorHex,
     roughness: selectedMaterial.preview.roughness,
     metalness: selectedMaterial.preview.metalness,
-    thicknessMm: slotThicknesses[boardSlot] ?? selectedMaterial.defaultThicknessMm
+    thicknessMm: slotThicknesses[boardSlot] ?? selectedMaterial.defaultThicknessMm,
+    catalogMaterial: selectedMaterial
   };
 }
 
@@ -348,7 +367,7 @@ export function buildSwingShelvesLowParametric(
   const heightCarcassMm = Math.max(80, Math.round(getNumber(params.heightCarcass, totalHeightMm - worktopThicknessMm)));
   const totalDepthMm = Math.max(200, Math.round(getNumber(params.depth, 560)));
 
-  const frontThicknessMm = resolveBoardThickness("door_front_z", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.frontThicknessMm, 19)), catalogContext);
+  const frontThicknessMm = resolveBoardThickness("door_front_z", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.frontThicknessMm, 18)), catalogContext);
   const boardThicknessMm = resolveBoardThickness("leftSide", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.boardThickness, 18)), catalogContext);
   const shelfThicknessMm = resolveBoardThickness("shelf-1-x", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.shelfThickness, boardThicknessMm)), catalogContext);
   const backThicknessMm = resolveBoardThickness("back", params as Record<string, unknown>, materialsSnapshot, Math.round(getNumber(params.backThickness, 6)), catalogContext);

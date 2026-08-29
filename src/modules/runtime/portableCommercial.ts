@@ -27,7 +27,7 @@ export type PortablePricingLookup = {
 
 export type PortableQuoteBomItem = {
   id: string;
-  itemType: "board" | "edge_band" | "hardware";
+  itemType: "board" | "edge_band" | "hardware" | "lighting";
   category: string;
   name: string;
   description: string;
@@ -56,6 +56,10 @@ export type PortableQuoteBomItem = {
   sourcePartIds?: string[];
   notes?: string[];
   validationErrors?: string[];
+  /** Stable demand discriminator, for example `front-height:400` for drawer runners. */
+  variantKey?: string;
+  /** User-facing label for the demand discriminator. */
+  variantLabel?: string;
   pricingGroup?: "boards" | "edge_bands" | "hardware";
   pricingQuantityBase?: number | null;
   unitPrice?: number | null;
@@ -973,7 +977,8 @@ export function calculateCommercialPricingFromQuoteBom(args: {
     if (
       (nextItem.itemType === "board" && (nextItem.pricingBasis !== "sheet_area" || nextItem.pricingUnit !== "m2")) ||
       (nextItem.itemType === "edge_band" && (nextItem.pricingBasis !== "linear_length" || nextItem.pricingUnit !== "lm")) ||
-      (nextItem.itemType === "hardware" && (nextItem.pricingBasis !== "piece" || nextItem.pricingUnit !== "pcs"))
+      (nextItem.itemType === "hardware" && (nextItem.pricingBasis !== "piece" || nextItem.pricingUnit !== "pcs")) ||
+      (nextItem.itemType === "lighting" && (nextItem.pricingBasis !== "sheet_area" || nextItem.pricingUnit !== "m2"))
     ) {
       itemErrors.push(`Item ${nextItem.id} has inconsistent pricing basis or unit.`);
     }

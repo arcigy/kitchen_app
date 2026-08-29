@@ -10,6 +10,19 @@ type DoorInstanceControllerContext = {
   updateDoorTransform: (inst: DoorInstance) => void;
 };
 
+const markIfcDoor = (object: THREE.Object3D, doorId: string, objectType = "door") => {
+  object.userData.kind = object.userData.kind ?? "door";
+  object.userData.doorId = doorId;
+  object.userData.ifc = {
+    className: "IfcDoor",
+    predefinedType: "DOOR",
+    elementId: doorId,
+    objectType,
+    name: `Door ${doorId}`
+  };
+  object.userData.tags = Array.from(new Set([...(Array.isArray(object.userData.tags) ? object.userData.tags : []), "door", "ifc", "IfcDoor"]));
+};
+
 export function createDoorInstanceController(ctx: DoorInstanceControllerContext) {
   const defaultParams = (defaultWall: WallId, wallId: string | null): DoorParams => ({
     wall: defaultWall,
@@ -21,7 +34,11 @@ export function createDoorInstanceController(ctx: DoorInstanceControllerContext)
     offsetFromInteriorMm: 20,
     panelThicknessMm: 42,
     swingDirection: "left",
+    swingSide: "inward",
     swingAngleDeg: 90,
+    handleType: "lever",
+    handleOffsetMm: 85,
+    handleHeightMm: 1050,
     materialId: getDoorMaterialOption(null).id
   });
 
@@ -31,29 +48,28 @@ export function createDoorInstanceController(ctx: DoorInstanceControllerContext)
 
     const root = new THREE.Group();
     root.name = `doorRoot_${id}`;
-    root.userData.doorId = id;
+    markIfcDoor(root, id, "assembly");
 
     const frame = new THREE.Group();
     frame.name = "doorFrame";
-    frame.userData.doorId = id;
+    markIfcDoor(frame, id, "frame");
     root.add(frame);
 
     const plan = new THREE.Group();
     plan.name = "doorPlanSymbol";
     plan.visible = false;
-    plan.userData.doorId = id;
+    markIfcDoor(plan, id, "plan_symbol");
     root.add(plan);
 
     const selection = new THREE.Group();
     selection.name = "doorSelection";
     selection.visible = false;
-    selection.userData.doorId = id;
+    markIfcDoor(selection, id, "selection_overlay");
     root.add(selection);
 
     const pick = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.02), new THREE.MeshBasicMaterial({ visible: false }));
     pick.name = "doorPick";
-    pick.userData.kind = "door";
-    pick.userData.doorId = id;
+    markIfcDoor(pick, id, "pick_proxy");
     pick.userData.viewDisplaySkipEdges = true;
     pick.userData.viewDisplaySkipMaterialRestore = true;
     root.add(pick);
@@ -65,7 +81,7 @@ export function createDoorInstanceController(ctx: DoorInstanceControllerContext)
     outline.name = "doorOutline";
     outline.renderOrder = 57;
     outline.visible = false;
-    outline.userData.doorId = id;
+    markIfcDoor(outline, id, "outline");
     root.add(outline);
 
     const inst: DoorInstance = { id, params, root, frame, plan, selection, pick, outline };
@@ -95,7 +111,11 @@ export function createDoorInstanceController(ctx: DoorInstanceControllerContext)
     p.offsetFromInteriorMm = nonNegativeMm(p.offsetFromInteriorMm, 20);
     p.panelThicknessMm = positiveMm(p.panelThicknessMm, 42);
     p.swingDirection = p.swingDirection === "right" ? "right" : "left";
+    p.swingSide = p.swingSide === "outward" ? "outward" : "inward";
     p.swingAngleDeg = Math.max(1, Math.min(180, Math.round(Number(p.swingAngleDeg) || 90)));
+    p.handleType = p.handleType === "none" || p.handleType === "knob" || p.handleType === "bar" ? p.handleType : "lever";
+    p.handleOffsetMm = nonNegativeMm(p.handleOffsetMm, 85);
+    p.handleHeightMm = nonNegativeMm(p.handleHeightMm, 1050);
     p.materialId = getDoorMaterialOption(p.materialId).id;
     return p;
   };

@@ -1,0 +1,26 @@
+{
+  "records": [
+    {
+      "vendor": "demos",
+      "vendorDecorId": "demos_oak_natural_001",
+      "vendorSku": null,
+      "displayName": "Dub Natural",
+      "slug": "dub-natural",
+      "materialType": "wood",
+      "decorFamily": "oak",
+      "colorFamily": "natural",
+      "surfaceHint": "matte",
+      "baseColorSource": "relative/or/absolute/path/to/source_texture.jpg",
+      "normalSource": null,
+      "roughnessSource": null,
+      "fallbackAsset": null,
+      "tileSizeMeters": 0.4,
+      "grainDirectionDefault": "vertical",
+      "colorSource": "texture",
+      "baseColorTint": null,
+      "tintStrength": 0.0,
+      "source": "manual_import",
+      "notes": ""
+    }
+  ]
+}

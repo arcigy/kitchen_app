@@ -44,10 +44,6 @@ export function validateModulePlacement(args: {
   if (rules.requiresFloor && !layoutContext.hasFloor) {
     errors.push({ code: "placement.floor_required", message: `${modulePackage.module.displayName} requires a floor anchor.` });
   }
-  if (rules.wall?.minWallLengthMm !== undefined && (layoutContext.wall?.lengthMm ?? 0) < rules.wall.minWallLengthMm) {
-    errors.push({ code: "placement.wall_too_short", message: `Wall must be at least ${rules.wall.minWallLengthMm} mm.` });
-  }
-
   const needsCorner = rules.requiresCorner || rules.corner?.required || rules.requiredAnchors?.includes("corner");
   if (needsCorner && !layoutContext.corner?.exists) {
     errors.push({ code: "placement.corner_required", message: `${modulePackage.module.displayName} requires a corner.` });

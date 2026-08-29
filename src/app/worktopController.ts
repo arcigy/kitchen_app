@@ -1,13 +1,21 @@
 import * as THREE from "three";
 import type { AppState } from "../layout/appState";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
-import type { FloorBoundaryPoint, KitchenWorktopInstance, KitchenWorktopParams } from "./localTypes";
+import type { FloorBoundaryPoint, KitchenWorktopInstance, KitchenWorktopParams, LayoutInstance } from "./localTypes";
 import type { PlanSnapResult } from "./planSnap";
+import { getModulePlanPolygon } from "./planSnap";
 import { disposeObject3D } from "../core/dispose";
 import { commitHistory } from "../layout/historyManager";
-import { sanitizeKitchenWorktopPath } from "../layout/worktopGeometry";
+import { isKitchenCornerModule, usesKitchenWorktopBinding } from "../layout/kitchenModuleRules";
+import {
+  offsetClosedKitchenWorktopPolygon,
+  sanitizeKitchenWorktopPath,
+  type KitchenWorktopCoveragePolygon
+} from "../layout/worktopGeometry";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import {
   cloneKitchenWorktopParams,
+  getKitchenWorktopMaterialMetadata,
   kitchenWorktopOutlineColor,
   makeKitchenWorktopBackGuideGeometry,
   makeKitchenWorktopGeometry,
@@ -53,6 +61,9 @@ export type WorktopControllerContext = {
   getSelectedKind: () => string | null;
   getSelectedWallId: () => string | null;
   catalog: ClientCatalog;
+  instances?: LayoutInstance[];
+  getModuleLocalBackCenter?: (inst: LayoutInstance) => THREE.Vector3;
+  syncKitchenRunEndClosures?: (groupId: string, backOffsetMm?: number) => boolean;
 };
 
 export function createWorktopController(ctx: WorktopControllerContext) {
@@ -70,19 +81,66 @@ export function createWorktopController(ctx: WorktopControllerContext) {
   const makeCurrentKitchenWorktopBackGuideGeometry = (params: KitchenWorktopParams) =>
     makeKitchenWorktopBackGuideGeometry(params, getKitchenWorktopBackGuidePath(params));
 
+  const getKitchenGroupFrontOffsetM = (groupId: string) => {
+    const group = S.kitchenGroups?.find((item) => item.id === groupId) ?? null;
+    const value = group?.ctx.worktopFrontOffsetMm ?? S.kitchenCtx?.worktopFrontOffsetMm ?? 0;
+    return Math.max(0, Number(value) || 0) / 1000;
+  };
+
+  const getWorktopCoveragePolygons = (inst: KitchenWorktopInstance): KitchenWorktopCoveragePolygon[] => {
+    if (!ctx.instances || !ctx.getModuleLocalBackCenter) return [];
+    const frontOffsetM = getKitchenGroupFrontOffsetM(inst.kitchenGroupId);
+    const polygons: KitchenWorktopCoveragePolygon[] = [];
+    for (const moduleInst of ctx.instances) {
+      if (moduleInst.kitchenGroupId !== inst.kitchenGroupId) continue;
+      if (moduleInst.kitchenPlacement?.worktopId !== inst.id) continue;
+      const params = moduleInst.params as Record<string, unknown>;
+      if (!usesKitchenWorktopBinding(params) || !isKitchenCornerModule(params)) continue;
+      const polygon = getModulePlanPolygon(moduleInst, ctx.getModuleLocalBackCenter);
+      if (polygon.length < 3) continue;
+      polygons.push(frontOffsetM > 0 ? offsetClosedKitchenWorktopPolygon(polygon, frontOffsetM) : polygon);
+    }
+    return polygons;
+  };
+
+  const applyWorktopMaterialMetadata = (mesh: THREE.Mesh, materialId: string) => {
+    mesh.userData.tags = ["worktop"];
+    const metadata = getKitchenWorktopMaterialMetadata(materialId, ctx.catalog);
+    if (!metadata) {
+      delete mesh.userData.catalogMaterialId;
+      delete mesh.userData.catalogMaterialName;
+      delete mesh.userData.materialRequest;
+      return;
+    }
+    mesh.userData.catalogMaterialId = metadata.catalogMaterialId;
+    mesh.userData.catalogMaterialName = metadata.catalogMaterialName;
+    mesh.userData.materialRequest = metadata.materialRequest;
+  };
+
   function rebuildKitchenWorktop(inst: KitchenWorktopInstance) {
+    const previousMaterialId = typeof inst.mesh.userData.catalogMaterialId === "string" ? inst.mesh.userData.catalogMaterialId : "";
     inst.params = cloneKitchenWorktopParams(inst.params);
     inst.params.path = sanitizeKitchenWorktopPath(inst.params.path);
     inst.params.depthMm = Math.max(1, Math.round(inst.params.depthMm));
+    if (inst.params.segmentDepthsMm) {
+      inst.params.segmentDepthsMm = Array.from(
+        { length: Math.max(0, inst.params.path.length - 1) },
+        (_, index) => Math.max(1, Math.round(inst.params.segmentDepthsMm?.[index] ?? inst.params.depthMm))
+      );
+    }
     inst.params.thicknessMm = Math.max(1, Math.round(inst.params.thicknessMm));
     inst.params.heightMm = Math.round(inst.params.heightMm);
     inst.params.overhangSideMm = Math.max(0, Math.round(inst.params.overhangSideMm));
 
     inst.mesh.geometry.dispose();
-    inst.mesh.geometry = makeKitchenWorktopGeometry(inst.params);
-    const prevMaterial = inst.mesh.material as THREE.Material;
-    inst.mesh.material = makeKitchenWorktopMaterial(inst.params.materialId, { catalog: ctx.catalog });
-    prevMaterial.dispose();
+    const coveragePolygons = getWorktopCoveragePolygons(inst);
+    inst.mesh.geometry = makeKitchenWorktopGeometry(inst.params, { coveragePolygons });
+    if (previousMaterialId !== inst.params.materialId) {
+      const prevMaterial = inst.mesh.material as THREE.Material;
+      inst.mesh.material = makeKitchenWorktopMaterial(inst.params.materialId, { catalog: ctx.catalog });
+      applyWorktopMaterialMetadata(inst.mesh, inst.params.materialId);
+      prevMaterial.dispose();
+    }
     inst.mesh.position.y = inst.params.heightMm / 1000;
     inst.mesh.castShadow = true;
     inst.mesh.receiveShadow = true;
@@ -91,9 +149,11 @@ export function createWorktopController(ctx: WorktopControllerContext) {
 
     const flattenWorktopOutline = !(ctx.getViewMode() === "2d" && ctx.getActiveViewerTab() !== "floorplan");
     inst.outline.geometry.dispose();
-    inst.outline.geometry = makeKitchenWorktopOutlineGeometry(inst.params, flattenWorktopOutline);
+    inst.outline.geometry = makeKitchenWorktopOutlineGeometry(inst.params, flattenWorktopOutline, { coveragePolygons });
     const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
-    outlineMaterial.color.setHex(kitchenWorktopOutlineColor(inst.params.materialId, ctx.catalog));
+    if (previousMaterialId !== inst.params.materialId) {
+      outlineMaterial.color.setHex(kitchenWorktopOutlineColor(inst.params.materialId, ctx.catalog));
+    }
     inst.outline.position.set(0, inst.params.heightMm / 1000 + (flattenWorktopOutline ? 0.0015 : 0), 0);
     inst.outline.visible = ctx.getViewMode() === "2d";
     const meshMaterial = inst.mesh.material as THREE.MeshStandardMaterial;
@@ -101,6 +161,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     meshMaterial.opacity = ctx.getViewMode() === "2d" ? 0.35 : 1;
     meshMaterial.depthWrite = ctx.getViewMode() !== "2d";
     inst.root.updateMatrixWorld(true);
+    ctx.syncKitchenRunEndClosures?.(inst.kitchenGroupId);
   }
 
   function createKitchenWorktop(
@@ -120,19 +181,21 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     root.userData.worktopId = id;
     root.userData.kitchenGroupId = kitchenGroupId;
 
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.001, 0.001, 0.001), makeKitchenWorktopMaterial(params.materialId, { catalog: ctx.catalog }));
+    const nextParams = cloneKitchenWorktopParams(params);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.001, 0.001, 0.001), makeKitchenWorktopMaterial(nextParams.materialId, { catalog: ctx.catalog }));
     mesh.name = `kitchenWorktopMesh_${id}`;
     mesh.renderOrder = 16;
     mesh.frustumCulled = false;
     mesh.userData.kind = "kitchenWorktop";
     mesh.userData.worktopId = id;
     mesh.userData.kitchenGroupId = kitchenGroupId;
+    applyWorktopMaterialMetadata(mesh, nextParams.materialId);
     root.add(mesh);
 
     const outline = new THREE.Line(
       new THREE.BufferGeometry(),
       new THREE.LineBasicMaterial({
-        color: kitchenWorktopOutlineColor(params.materialId, ctx.catalog),
+        color: kitchenWorktopOutlineColor(nextParams.materialId, ctx.catalog),
         transparent: true,
         opacity: 0.92,
         depthTest: false,
@@ -150,7 +213,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     const inst: KitchenWorktopInstance = {
       id,
       kitchenGroupId,
-      params: cloneKitchenWorktopParams(params),
+      params: nextParams,
       root,
       mesh,
       outline
@@ -171,6 +234,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     layoutRoot.remove(worktop.root);
     disposeObject3D(worktop.root);
     kitchenWorktops.splice(index, 1);
+    ctx.syncKitchenRunEndClosures?.(worktop.kitchenGroupId);
     if (!opts?.skipHistory) commitHistory(S);
   }
 
@@ -178,6 +242,10 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     nextWorktops: Array<{ id: string; kitchenGroupId: string; params: KitchenWorktopParams }>,
     nextCounter?: number
   ) {
+    const affectedGroupIds = new Set([
+      ...kitchenWorktops.map((worktop) => worktop.kitchenGroupId),
+      ...nextWorktops.map((worktop) => worktop.kitchenGroupId)
+    ]);
     for (const worktop of kitchenWorktops.splice(0, kitchenWorktops.length)) {
       layoutRoot.remove(worktop.root);
       disposeObject3D(worktop.root);
@@ -189,6 +257,9 @@ export function createWorktopController(ctx: WorktopControllerContext) {
         skipHistory: true
       });
     }
+    for (const groupId of affectedGroupIds) {
+      ctx.syncKitchenRunEndClosures?.(groupId);
+    }
   }
 
   const makeKitchenWorktopParamsFromPath = (path: FloorBoundaryPoint[]): KitchenWorktopParams => ({
@@ -199,7 +270,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     thicknessMm: S.kitchenCtx.worktopThicknessMm,
     heightMm: S.kitchenCtx.heightMm,
     overhangSideMm: S.kitchenCtx.worktopOverhangSideMm,
-    materialId: S.kitchenCtx.worktopMaterialId
+    materialId: ""
   });
 
   const updateKitchenWorktopPreview = () => {
@@ -331,8 +402,7 @@ export function createWorktopController(ctx: WorktopControllerContext) {
     wallTypedHud.textContent = "";
     wallTypedHud.style.display = "none";
     if (!opts?.silent) {
-      setUnderlayStatus("");
-      mountProps();
+      reportEditorToolEntryStatus({ setUnderlayStatus, mountProps }, "");
     }
   };
 
@@ -357,19 +427,21 @@ export function createWorktopController(ctx: WorktopControllerContext) {
         skipHistory: true
       });
     }
+    ctx.syncKitchenRunEndClosures?.(groupId);
     if (!opts?.skipHistory) commitHistory(S);
   };
 
-  const rebuildKitchenGroupWorktops = (groupId: string, ctx = S.kitchenCtx) => {
+  const rebuildKitchenGroupWorktops = (groupId: string, kitchenCtx = S.kitchenCtx) => {
     for (const worktop of kitchenWorktops) {
       if (worktop.kitchenGroupId !== groupId) continue;
-      worktop.params.depthMm = ctx.worktopDepthMm;
-      worktop.params.thicknessMm = ctx.worktopThicknessMm;
-      worktop.params.heightMm = ctx.heightMm;
-      worktop.params.overhangSideMm = ctx.worktopOverhangSideMm;
-      worktop.params.materialId = ctx.worktopMaterialId;
+      worktop.params.depthMm = kitchenCtx.worktopDepthMm;
+      worktop.params.thicknessMm = kitchenCtx.worktopThicknessMm;
+      worktop.params.heightMm = kitchenCtx.heightMm;
+      worktop.params.overhangSideMm = kitchenCtx.worktopOverhangSideMm;
+      worktop.params.materialId = "";
       rebuildKitchenWorktop(worktop);
     }
+    ctx.syncKitchenRunEndClosures?.(groupId, kitchenCtx.worktopBackOffsetMm);
   };
 
   return {

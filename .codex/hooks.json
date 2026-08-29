@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .codex\\hooks\\graphify-query-first.ps1",
+            "timeout": 5,
+            "statusMessage": "Checking Graphify context"
+          }
+        ]
+      }
+    ]
+  }
+}

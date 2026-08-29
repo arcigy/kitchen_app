@@ -8,6 +8,9 @@ import { resolveAssociativeMeasureWorld } from "./measureAssociative";
 import { distance3dMm } from "./measure3d";
 import { planarDistanceMm } from "./sharedUtils";
 import { shiftPolylinePoint, shiftPolylineSegment } from "./alignTool";
+import { refreshModuleKitchenPlacement, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { refreshSelectionHighlights } from "./selectionController";
+import { isObjectInLockedAlignLock } from "./alignLocks";
 import type { AlignPickedLine, FloorInstance, KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 
 type MeasureSelectionActionsContext = {
@@ -39,6 +42,7 @@ type MeasureSelectionActionsContext = {
   rebuildFloor: (floor: FloorInstance) => void;
   rebuildKitchenWorktop: (worktop: KitchenWorktopInstance) => void;
   applyKitchenPlacementBinding: (inst: LayoutInstance, binding: NonNullable<LayoutInstance["kitchenPlacement"]>, backOffsetMm: number) => boolean;
+  syncKitchenRunEndClosures: (groupId: string, backOffsetMm?: number) => boolean;
   findKitchenWorktop: (id: string) => KitchenWorktopInstance | null;
   updateSelectionHighlights: () => void;
   updateLayoutPanel: () => void;
@@ -91,6 +95,7 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
   const translateWallByMeasure = (wallId: string, dxMm: number, dzMm: number) => {
     const wall = ctx.walls.find((item) => item.id === wallId) ?? null;
     if (!wall) return false;
+    if (isObjectInLockedAlignLock(ctx.S.alignLocks, "wall", wallId)) return false;
     const oldA = { ...wall.params.aMm };
     const oldB = { ...wall.params.bMm };
     wall.params.aMm = { x: wall.params.aMm.x + dxMm, z: wall.params.aMm.z + dzMm };
@@ -114,7 +119,9 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
   const translateModuleByMeasure = (instanceId: string, dxMm: number, dzMm: number) => {
     const inst = ctx.findInstance(instanceId);
     if (!inst) return false;
+    if (isObjectInLockedAlignLock(ctx.S.alignLocks, "module", instanceId)) return false;
     const prevPos = inst.root.position.clone();
+    const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
     inst.root.position.x += dxMm / 1000;
     inst.root.position.z += dzMm / 1000;
     const valid =
@@ -126,11 +133,36 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
       inst.root.position.copy(prevPos);
       return false;
     }
-    if (inst.kitchenGroupId) {
-      const group = ctx.S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
-      inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
+    const kitchenGroupId = inst.kitchenGroupId;
+    const backOffsetMm = kitchenGroupId
+      ? resolveKitchenPlacementBackOffset({
+          kitchenGroupId,
+          kitchenGroups: ctx.S.kitchenGroups,
+          defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm
+        })
+      : ctx.S.kitchenCtx.worktopBackOffsetMm;
+    refreshModuleKitchenPlacement({
+      instance: inst,
+      kitchenGroups: ctx.S.kitchenGroups,
+      defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
+      inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
+    });
+    if (prevKitchenPlacement && !inst.kitchenPlacement) {
+      inst.root.position.copy(prevPos);
+      inst.kitchenPlacement = prevKitchenPlacement;
+      inst.root.updateMatrixWorld(true);
+      return false;
     }
+    if (
+      inst.kitchenPlacement &&
+      !ctx.applyKitchenPlacementBinding(inst, inst.kitchenPlacement, backOffsetMm)
+    ) {
+      inst.root.position.copy(prevPos);
+      inst.kitchenPlacement = prevKitchenPlacement;
+      inst.root.updateMatrixWorld(true);
+      return false;
+    }
+    if (kitchenGroupId) ctx.syncKitchenRunEndClosures(kitchenGroupId, backOffsetMm);
     return true;
   };
 
@@ -139,7 +171,7 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
     if (!floor) return false;
     floor.params.boundary = floor.params.boundary.map((point) => ({ x: point.x + dxMm, z: point.z + dzMm }));
     ctx.rebuildFloor(floor);
-    ctx.updateSelectionHighlights();
+    refreshSelectionHighlights(ctx);
     return true;
   };
 
@@ -161,8 +193,11 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
   };
 
   const reapplyKitchenGroupPlacementBindings = (groupId: string) => {
-    const group = ctx.S.kitchenGroups.find((item) => item.id === groupId) ?? null;
-    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
+    const backOffsetMm = resolveKitchenPlacementBackOffset({
+      kitchenGroupId: groupId,
+      kitchenGroups: ctx.S.kitchenGroups,
+      defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm
+    });
     for (const inst of ctx.instances) {
       if (inst.kitchenGroupId !== groupId) continue;
       const binding = inst.kitchenPlacement ?? ctx.inferKitchenPlacementBinding(inst, groupId, backOffsetMm);
@@ -175,6 +210,7 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
     if (picked.targetKind !== "worktop" || !picked.worktopId || picked.segmentIndex == null) return false;
     const worktop = ctx.findKitchenWorktop(picked.worktopId);
     if (!worktop) return false;
+    if (isObjectInLockedAlignLock(ctx.S.alignLocks, "worktop", picked.worktopId)) return false;
     const prevPath = structuredClone(worktop.params.path);
     const groupId = worktop.kitchenGroupId;
     const pointIndex = picked.lineRole === "endB" ? picked.segmentIndex + 1 : picked.segmentIndex;
@@ -189,7 +225,7 @@ export function createMeasureSelectionActions(ctx: MeasureSelectionActionsContex
     }
     ctx.rebuildKitchenWorktop(worktop);
     reapplyKitchenGroupPlacementBindings(groupId);
-    ctx.updateSelectionHighlights();
+    refreshSelectionHighlights(ctx);
     ctx.updateLayoutPanel();
     return true;
   };

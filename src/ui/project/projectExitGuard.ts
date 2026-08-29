@@ -1,0 +1,117 @@
+import type { ProjectActions } from "../../app/project/projectActions";
+import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
+import { createButtonElement } from "../domElements";
+import { showToast } from "../toast";
+
+type ExitChoice = "save" | "discard" | "cancel";
+
+export function createProjectExitDialogElement(onChoose: (choice: ExitChoice) => void) {
+  const overlay = document.createElement("div");
+  overlay.className = "project-exit-overlay";
+  const dialog = document.createElement("section");
+  dialog.className = "project-exit-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-label", "Zatvorit projekt");
+  const title = document.createElement("strong");
+  title.textContent = "Zatvorit projekt?";
+  const copy = document.createElement("p");
+  copy.textContent = "Pred odchodom z workspace si vyber, ci sa ma projekt ulozit.";
+  const actions = document.createElement("div");
+  const cancelButton = createProjectExitButton("cancel", "Zrusit", onChoose);
+  const discardButton = createProjectExitButton("discard", "Zavriet bez ulozenia", onChoose);
+  const saveButton = createProjectExitButton("save", "Ulozit a zavriet", onChoose);
+  actions.append(cancelButton, discardButton, saveButton);
+  dialog.append(title, copy, actions);
+  overlay.appendChild(dialog);
+  return { overlay, saveButton };
+}
+
+function createProjectExitButton(choice: ExitChoice, label: string, onChoose: (choice: ExitChoice) => void) {
+  const button = createButtonElement(label);
+  button.dataset.projectExit = choice;
+  button.addEventListener("click", () => onChoose(choice));
+  return button;
+}
+
+function openExitDialog(): Promise<ExitChoice> {
+  return new Promise((resolve) => {
+    const finish = (choice: ExitChoice) => {
+      overlay.remove();
+      resolve(choice);
+    };
+    const { overlay, saveButton } = createProjectExitDialogElement(finish);
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) finish("cancel");
+    });
+    overlay.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") finish("cancel");
+    });
+
+    document.body.appendChild(overlay);
+    saveButton.focus();
+  });
+}
+
+export function createProjectExitGuard(
+  actions: ProjectActions,
+  openProjectManager: () => void,
+  options: {
+    formatSavedMessage?: (save: ProjectSaveFile, fallback: string) => string;
+    onDiscard?: () => void | Promise<void>;
+    onLeave?: (choice: Exclude<ExitChoice, "cancel">) => void | Promise<void>;
+  } = {}
+) {
+  let saveInProgress = false;
+
+  const saveWithLock = async (successMessage = "Projekt je ulozeny.") => {
+    if (saveInProgress) {
+      showToast("Projekt sa prave uklada. Pockaj na dokoncenie.", "info");
+      return false;
+    }
+    saveInProgress = true;
+    document.body.classList.add("project-save-blocking");
+    showToast("Ukladam projekt...", "info");
+    try {
+      const save = await actions.save();
+      showToast(options.formatSavedMessage?.(save, successMessage) ?? successMessage, "success");
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error), "error");
+      return false;
+    } finally {
+      saveInProgress = false;
+      document.body.classList.remove("project-save-blocking");
+    }
+  };
+
+  const leaveProject = async () => {
+    if (saveInProgress) {
+      showToast("Projekt sa prave uklada. Odchod bude mozny az po ulozeni.", "info");
+      return;
+    }
+    const choice = await openExitDialog();
+    if (choice === "cancel") return;
+    if (choice === "save") {
+      const saved = await saveWithLock("Projekt je ulozeny. Zatvaram workspace.");
+      if (!saved) return;
+    }
+    await options.onLeave?.(choice);
+    if (choice === "discard") await options.onDiscard?.();
+    openProjectManager();
+  };
+
+  const beforeUnload = (event: BeforeUnloadEvent) => {
+    if (!saveInProgress) return;
+    event.preventDefault();
+    event.returnValue = "";
+  };
+  window.addEventListener("beforeunload", beforeUnload);
+
+  return {
+    saveWithLock,
+    leaveProject,
+    dispose: () => window.removeEventListener("beforeunload", beforeUnload)
+  };
+}

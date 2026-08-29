@@ -1,109 +1,456 @@
 import * as THREE from "three";
-import type { LayoutInstance, SectionInstance, WallInstance, WallParams } from "./localTypes";
+import type { DoorParams, KitchenWorktopInstance, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallParams, WindowParams } from "./localTypes";
+import type { AppState } from "../layout/appState";
+import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
+import { refreshModuleKitchenPlacement, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { refreshSelectionHighlights, resolveSelectedIds } from "./selectionController";
+import { hasLockedAlignModule, hasLockedAlignWall } from "./alignLocks";
 
-type TransformControllerContext = Record<string, any> & {
+type MmPoint = { x: number; z: number };
+type OpeningInstance<TParams extends WindowParams | DoorParams> = { id: string; params: TParams };
+
+export type TransformSelectionIds = {
+  wallIds: string[];
+  instIds: string[];
+  sectionIds: string[];
+  windowIds: string[];
+  doorIds: string[];
+};
+
+export function resolveTransformSelectionIds(args: {
+  kind: TransformKind;
+  selectedWallIds: Set<string>;
+  selectedInstanceIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedWallId: string | null;
+  selectedInstanceId: string | null;
+  selectedSectionId: string | null;
+  windowInst?: { id: string } | null;
+  doorInst?: { id: string } | null;
+}): TransformSelectionIds {
+  const wallIds = resolveSelectedIds({
+    selectedIds: args.selectedWallIds,
+    selectedKind: args.selectedKind,
+    selectedId: args.selectedWallId,
+    singleKind: "wall"
+  });
+  const instIds = resolveSelectedIds({
+    selectedIds: args.selectedKind === "kitchenGroup" ? new Set<string>() : args.selectedInstanceIds,
+    selectedKind: args.selectedKind,
+    selectedId: args.selectedInstanceId,
+    singleKind: "module"
+  });
+  const sectionIds = args.selectedKind === "section" && args.selectedSectionId ? [args.selectedSectionId] : [];
+  const windowIds = args.kind === "move" && args.selectedKind === "window" && args.windowInst ? [args.windowInst.id] : [];
+  const doorIds = args.kind === "move" && args.selectedKind === "door" && args.doorInst ? [args.doorInst.id] : [];
+  return { wallIds, instIds, sectionIds, windowIds, doorIds };
+}
+
+export function resolveMovedOpeningCenterMm(args: {
+  delta: THREE.Vector3;
+  start: WindowParams | DoorParams;
+  wall: WallInstance | null;
+}) {
+  if (!args.start.wallId || !args.wall) return null;
+  const ax = args.wall.params.aMm.x;
+  const az = args.wall.params.aMm.z;
+  const bx = args.wall.params.bMm.x;
+  const bz = args.wall.params.bMm.z;
+  const lengthMm = Math.hypot(bx - ax, bz - az);
+  if (lengthMm < 1) return null;
+  const dirX = (bx - ax) / lengthMm;
+  const dirZ = (bz - az) / lengthMm;
+  const alongMm = Math.round(args.delta.x * dirX * 1000 + args.delta.z * dirZ * 1000);
+  const unclampedCenterMm = args.start.centerMm + alongMm;
+  const halfWidthMm = Math.max(0, args.start.widthMm / 2);
+  const minCenterMm = halfWidthMm;
+  const maxCenterMm = lengthMm - halfWidthMm;
+  return maxCenterMm >= minCenterMm
+    ? Math.round(Math.min(maxCenterMm, Math.max(minCenterMm, unclampedCenterMm)))
+    : Math.round(lengthMm / 2);
+}
+
+export function resolveMovedSectionParams(
+  start: SectionInstance["params"],
+  deltaMm: { dxMm: number; dzMm: number }
+): SectionInstance["params"] {
+  return {
+    ...start,
+    aMm: { x: start.aMm.x + deltaMm.dxMm, z: start.aMm.z + deltaMm.dzMm },
+    bMm: { x: start.bMm.x + deltaMm.dxMm, z: start.bMm.z + deltaMm.dzMm }
+  };
+}
+
+export function isTransformModuleMoveValid(args: {
+  instances: LayoutInstance[];
+  selectedInstanceIds: string[];
+  ignoreIds: Set<string>;
+  findInstance: (id: string) => LayoutInstance | null | undefined;
+  instanceFitsRoom: (instance: LayoutInstance) => boolean;
+  anyOverlapIgnoring: (instance: LayoutInstance, ignoreIds: Set<string>) => boolean;
+  anyOverlap: (instance: LayoutInstance, selectedId: string | null) => boolean;
+  moduleOverlapsWalls: (instance: LayoutInstance) => boolean;
+  moduleOverlapsKitchenWorktops: (instance: LayoutInstance) => boolean;
+}) {
+  for (const id of args.selectedInstanceIds) {
+    const inst = args.findInstance(id);
+    if (!inst) continue;
+    const inRoom = args.instanceFitsRoom(inst);
+    const overlaps = args.anyOverlapIgnoring(inst, args.ignoreIds);
+    if (!inRoom || overlaps || args.moduleOverlapsWalls(inst) || args.moduleOverlapsKitchenWorktops(inst)) return false;
+  }
+
+  for (const inst of args.instances) {
+    if (
+      !args.instanceFitsRoom(inst) ||
+      args.anyOverlap(inst, null) ||
+      args.moduleOverlapsWalls(inst) ||
+      args.moduleOverlapsKitchenWorktops(inst)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export function updateMovedModuleKitchenPlacements(args: {
+  selectedInstanceIds: string[];
+  kitchenCtx: KitchenContext;
+  kitchenGroups: Array<{ id: string; ctx: KitchenContext }>;
+  findInstance: (id: string) => LayoutInstance | null | undefined;
+  inferKitchenPlacementBinding: (
+    instance: LayoutInstance,
+    kitchenGroupId: string,
+    backOffsetMm: number
+  ) => LayoutInstance["kitchenPlacement"];
+}) {
+  for (const id of args.selectedInstanceIds) {
+    const inst = args.findInstance(id);
+    if (!inst) continue;
+    if (!inst.kitchenPlacement) continue;
+    refreshModuleKitchenPlacement({
+      instance: inst,
+      kitchenGroups: args.kitchenGroups,
+      defaultWorktopBackOffsetMm: args.kitchenCtx.worktopBackOffsetMm,
+      inferKitchenPlacementBinding: args.inferKitchenPlacementBinding
+    });
+  }
+}
+
+export function resetTransformStateForClear(transformState: TransformState) {
+  transformState.kind = null;
+  transformState.step = null;
+  transformState.stickyMove = false;
+  transformState.moveSnapDisabled = false;
+  transformState.base = null;
+  transformState.pivot = null;
+  transformState.typed = "";
+  transformState.lastAngleSign = 1;
+  transformState.selectedWallIds = [];
+  transformState.selectedInstanceIds = [];
+  transformState.selectedSectionIds = [];
+  transformState.selectedWindowIds = [];
+  transformState.selectedDoorIds = [];
+  transformState.startWalls.clear();
+  transformState.startInstances.clear();
+  transformState.startInstanceAdjacency.clear();
+  transformState.startSections.clear();
+  transformState.startWindows.clear();
+  transformState.startDoors.clear();
+  transformState.startPointerAngle = 0;
+  transformState.lastValidDelta.set(0, 0, 0);
+  transformState.lastValidAngle = 0;
+}
+
+export type TransformStartGuardContext = Pick<
+  TransformControllerContext,
+  | "mode"
+  | "viewMode"
+  | "layoutTool"
+  | "measureState"
+  | "dragState"
+  | "windowDragState"
+  | "doorDragState"
+  | "wallEditHud"
+  | "marquee"
+  | "underlayCal"
+>;
+
+export function canStartTransformFromSelection(ctx: TransformStartGuardContext) {
+  if (ctx.mode !== "layout" || ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
+  if (ctx.measureState.enabled) return false;
+  if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
+  if (ctx.underlayCal.active) return false;
+  return true;
+}
+
+export type TransformStartSnapshotContext = Pick<
+  TransformControllerContext,
+  | "walls"
+  | "instances"
+  | "sections"
+  | "windows"
+  | "doors"
+  | "transformState"
+  | "instanceWorldBox"
+  | "detectModuleAdjacency"
+  | "cloneSectionParams"
+>;
+
+export function captureTransformStartState(ctx: TransformStartSnapshotContext, selectedInstanceIds: string[]) {
+  for (const w of ctx.walls) ctx.transformState.startWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
+  for (const inst of ctx.instances) {
+    ctx.transformState.startInstances.set(inst.id, {
+      pos: inst.root.position.clone(),
+      rotY: inst.root.rotation.y,
+      kitchenPlacement: inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null
+    });
+  }
+  for (const inst of ctx.instances) {
+    if (!selectedInstanceIds.includes(inst.id)) continue;
+    const box = ctx.instanceWorldBox(inst);
+    let neighborId: string | null = null;
+    for (const other of ctx.instances) {
+      if (other.id === inst.id) continue;
+      if (inst.kitchenGroupId && other.kitchenGroupId !== inst.kitchenGroupId) continue;
+      const link = ctx.detectModuleAdjacency(box, ctx.instanceWorldBox(other), other.id);
+      if (link) {
+        neighborId = other.id;
+        break;
+      }
+    }
+    ctx.transformState.startInstanceAdjacency.set(inst.id, neighborId);
+  }
+  for (const section of ctx.sections) ctx.transformState.startSections.set(section.id, ctx.cloneSectionParams(section.params));
+  for (const window of ctx.windows ?? []) ctx.transformState.startWindows.set(window.id, JSON.parse(JSON.stringify(window.params)) as WindowParams);
+  for (const door of ctx.doors ?? []) ctx.transformState.startDoors.set(door.id, JSON.parse(JSON.stringify(door.params)) as DoorParams);
+}
+
+export type TransformNoSelectionMoveEntryContext = {
+  clearTransform: () => void;
+  mountProps: () => void;
+  moveSnapDisabled: boolean;
+  setUnderlayStatus: (message: string) => void;
+  stickyMove: boolean;
+  transformState: TransformState;
+};
+
+export function enterMoveSelectElementsWithoutSelection(ctx: TransformNoSelectionMoveEntryContext) {
+  ctx.clearTransform();
+  ctx.transformState.kind = "move";
+  ctx.transformState.step = "selectElements";
+  ctx.transformState.stickyMove = ctx.stickyMove;
+  ctx.transformState.moveSnapDisabled = ctx.moveSnapDisabled;
+  reportEditorToolEntryStatus(ctx,
+    ctx.stickyMove ? "Move: vyber objekt, ktory chces posunut. Klikni Move znova pre vypnutie. N = volny pohyb." : "Move (M): vyber objekty, potom Enter. N = volny pohyb."
+  );
+}
+
+export type TransformResolvedSelectionStateArgs = {
+  kind: TransformKind;
+  moveSnapDisabled: boolean;
+  selectionIds: TransformSelectionIds;
+  stickyMove: boolean;
+  transformState: TransformState;
+};
+
+export function initializeTransformStateFromSelection(args: TransformResolvedSelectionStateArgs) {
+  args.transformState.kind = args.kind;
+  args.transformState.step = args.kind === "move" ? "pickBase" : "pickPivot";
+  args.transformState.stickyMove = args.stickyMove;
+  args.transformState.moveSnapDisabled = args.moveSnapDisabled;
+  args.transformState.selectedWallIds = args.selectionIds.wallIds;
+  args.transformState.selectedInstanceIds = args.selectionIds.instIds;
+  args.transformState.selectedSectionIds = args.selectionIds.sectionIds;
+  args.transformState.selectedWindowIds = args.selectionIds.windowIds;
+  args.transformState.selectedDoorIds = args.selectionIds.doorIds;
+}
+
+export type TransformSelectedStartCompletionContext = {
+  kind: TransformKind;
+  mountProps: () => void;
+  setUnderlayStatus: (message: string) => void;
+};
+
+export function completeSelectedTransformStart(ctx: TransformSelectedStartCompletionContext) {
+  reportEditorToolEntryStatus(ctx, ctx.kind === "move" ? "Move (M): zvol pociatocny bod. Snapping je aktivny. N = volny pohyb." : "Rotate (R): click pivot point...");
+}
+
+export type TransformControllerContext = {
   walls: WallInstance[];
   instances: LayoutInstance[];
+  kitchenWorktops: KitchenWorktopInstance[];
   sections: SectionInstance[];
+  windows?: Array<OpeningInstance<WindowParams>>;
+  doors?: Array<OpeningInstance<DoorParams>>;
   S: {
     kitchenCtx: KitchenContext;
     kitchenGroups: Array<{ id: string; ctx: KitchenContext }>;
+    alignLocks?: AppState["alignLocks"];
   };
+  mode: "build" | "layout";
+  viewMode: "2d" | "3d";
+  layoutTool: string;
+  measureState: { enabled: boolean };
+  dragState: { active: boolean };
+  windowDragState: { active: boolean };
+  doorDragState?: { active: boolean };
+  wallEditHud: { drag: unknown };
+  marquee: { active: boolean };
+  underlayCal: { active: boolean };
+  selectedWallIds: Set<string>;
+  selectedInstanceIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedWallId: string | null;
+  selectedInstanceId: string | null;
+  selectedSectionId: string | null;
+  windowInst?: OpeningInstance<WindowParams> | null;
+  doorInst?: OpeningInstance<DoorParams> | null;
+  pinnedWallIds: Set<string>;
+  wallJoinTolMm: number;
+  transformState: TransformState;
+  setUnderlayStatus: (message: string) => void;
+  clearToolHud: () => void;
+  mountProps: () => void;
+  rebuildWall: (wall: WallInstance) => void;
+  rebuildWallPlanMesh: () => void;
+  updateLayoutPanel: () => void;
+  updateSelectionHighlights: () => void;
+  cloneSectionParams: (params: SectionInstance["params"]) => SectionInstance["params"];
+  updateSectionVisual: (section: SectionInstance) => void;
+  updateWindowTransform(window: OpeningInstance<WindowParams>): void;
+  updateDoorTransform(door: OpeningInstance<DoorParams>): void;
+  instanceWorldBox: (instance: LayoutInstance) => THREE.Box3;
+  detectModuleAdjacency: (box: THREE.Box3, otherBox: THREE.Box3, otherId: string) => unknown;
+  mmDist: (a: MmPoint, b: MmPoint) => number;
+  findInstance: (id: string) => LayoutInstance | null | undefined;
+  applyWallConstraints: (instance: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
+  snapPositionDetailed: (
+    instance: LayoutInstance,
+    desired: THREE.Vector3,
+    opts: { ignoreIds?: Set<string>; stickyNeighborId?: string | null }
+  ) => { position: THREE.Vector3 };
+  autoOrientModuleToRoomWallIfSnapped: (instance: LayoutInstance, ignoreIds?: Set<string>) => void;
+  nudgePinnedModuleChain: (instance: LayoutInstance, delta: THREE.Vector3) => void;
+  instanceFitsRoom: (instance: LayoutInstance) => boolean;
+  anyOverlapIgnoring: (instance: LayoutInstance, ignoreIds: Set<string>) => boolean;
+  anyOverlap: (instance: LayoutInstance, selectedId: string | null) => boolean;
+  moduleOverlapsWalls: (instance: LayoutInstance) => boolean;
+  moduleOverlapsKitchenWorktops: (instance: LayoutInstance) => boolean;
+  applyKitchenPlacementBinding: (
+    instance: LayoutInstance,
+    binding: NonNullable<LayoutInstance["kitchenPlacement"]>,
+    backOffsetMm: number
+  ) => boolean;
+  getKitchenGuideSegmentInfo: (
+    worktop: KitchenWorktopInstance,
+    segmentIndex: number,
+    backOffsetMm: number
+  ) => { start: THREE.Vector3; dir: THREE.Vector3; length: number } | null;
+  inferKitchenPlacementBinding: (
+    instance: LayoutInstance,
+    kitchenGroupId: string,
+    backOffsetMm: number
+  ) => LayoutInstance["kitchenPlacement"];
+  fromMmPoint: (point: MmPoint) => THREE.Vector3;
+  toMmPoint: (point: THREE.Vector3) => MmPoint;
 };
 
 export function createTransformController(ctx: TransformControllerContext) {
-  const clearTransform = (opts?: { restore?: boolean; status?: string | null }) => {
+  const clearTransform = (opts?: TransformClearOptions) => {
+    const preserveMoveSnapDisabled =
+      !!opts?.continueMove && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
+
+    ctx.clearToolHud();
+
     if (opts?.restore) {
-      for (const w of ctx.walls) {
-        const p = ctx.transformState.startWalls.get(w.id);
-        if (p) w.params = JSON.parse(JSON.stringify(p)) as WallParams;
-        ctx.rebuildWall(w);
-      }
-      ctx.rebuildWallPlanMesh();
-      for (const inst of ctx.instances) {
-        const s = ctx.transformState.startInstances.get(inst.id);
-        if (s) {
-          inst.root.position.copy(s.pos);
-          inst.root.rotation.y = s.rotY;
-        }
-      }
-      for (const section of ctx.sections) {
-        const s = ctx.transformState.startSections.get(section.id);
-        if (!s) continue;
-        section.params = ctx.cloneSectionParams(s);
-        ctx.updateSectionVisual(section);
-      }
+      restoreTransformStartState();
       ctx.updateLayoutPanel();
-      ctx.updateSelectionHighlights();
+      refreshSelectionHighlights(ctx);
       ctx.mountProps();
     }
 
-    ctx.transformState.kind = null;
-    ctx.transformState.step = null;
-    ctx.transformState.base = null;
-    ctx.transformState.pivot = null;
-    ctx.transformState.typed = "";
-    ctx.transformState.lastAngleSign = 1;
-    ctx.transformState.selectedWallIds = [];
-    ctx.transformState.selectedInstanceIds = [];
-    ctx.transformState.selectedSectionIds = [];
-    ctx.transformState.startWalls.clear();
-    ctx.transformState.startInstances.clear();
-    ctx.transformState.startInstanceAdjacency.clear();
-    ctx.transformState.startSections.clear();
-    ctx.transformState.startPointerAngle = 0;
-    ctx.transformState.lastValidDelta.set(0, 0, 0);
-    ctx.transformState.lastValidAngle = 0;
-    if (opts?.status) ctx.setUnderlayStatus(opts.status);
+    resetTransformStateForClear(ctx.transformState);
+
+    if (opts?.continueMove) {
+      ctx.transformState.kind = "move";
+      ctx.transformState.step = "selectElements";
+      ctx.transformState.stickyMove = true;
+      ctx.transformState.moveSnapDisabled = preserveMoveSnapDisabled;
+    }
+
+    const status = opts?.status ?? (opts?.continueMove ? "Move: select next element. Click Move again to exit." : null);
+    if (status) ctx.setUnderlayStatus(status);
   };
 
-  const startTransformFromSelection = (kind: "move" | "rotate") => {
-    if (ctx.mode !== "layout" || ctx.viewMode !== "2d" || ctx.layoutTool !== "select") return false;
-    if (ctx.measureState.enabled) return false;
-    if (ctx.dragState.active || ctx.windowDragState.active || ctx.doorDragState?.active || ctx.wallEditHud.drag || ctx.marquee.active) return false;
-    if (ctx.underlayCal.active) return false;
+  const startTransformFromSelection = (kind: TransformKind, opts: StartTransformOptions = {}) => {
+    if (kind === "move" && opts.toggle && ctx.transformState.kind === "move" && ctx.transformState.stickyMove) {
+      const restore = ctx.transformState.step === "pickTarget" && !!ctx.transformState.base;
+      clearTransform({ restore, status: "Move: off." });
+      ctx.mountProps();
+      return true;
+    }
 
-    const wallIds = ctx.selectedWallIds.size > 0 ? Array.from(ctx.selectedWallIds) : ctx.selectedKind === "wall" && ctx.selectedWallId ? [ctx.selectedWallId] : [];
-    const instIds =
-      ctx.selectedInstanceIds.size > 0
-        ? Array.from(ctx.selectedInstanceIds)
-        : ctx.selectedKind === "module" && ctx.selectedInstanceId
-          ? [ctx.selectedInstanceId]
-          : [];
-    const sectionIds = ctx.selectedKind === "section" && ctx.selectedSectionId ? [ctx.selectedSectionId] : [];
+    if (!canStartTransformFromSelection(ctx)) return false;
+
+    const stickyMove = kind === "move" && (opts.sticky ?? ctx.transformState.stickyMove);
+    const moveSnapDisabled = kind === "move" && ctx.transformState.kind === "move" && !!ctx.transformState.moveSnapDisabled;
+
+    const selectionIds = resolveTransformSelectionIds({
+      kind,
+      selectedWallIds: ctx.selectedWallIds,
+      selectedInstanceIds: ctx.selectedInstanceIds,
+      selectedKind: ctx.selectedKind,
+      selectedWallId: ctx.selectedWallId,
+      selectedInstanceId: ctx.selectedInstanceId,
+      selectedSectionId: ctx.selectedSectionId,
+      windowInst: ctx.windowInst,
+      doorInst: ctx.doorInst
+    });
+    const { wallIds, instIds, sectionIds, windowIds, doorIds } = selectionIds;
     if (kind === "rotate" && sectionIds.length > 0 && wallIds.length + instIds.length === 0) return false;
-    if (wallIds.length + instIds.length + sectionIds.length === 0) return false;
+    if (kind === "move" && hasLockedAlignModule(instIds, ctx.S.alignLocks)) {
+      ctx.setUnderlayStatus("Move: selected module is locked by Align. Unlock the joint first.");
+      ctx.mountProps();
+      return false;
+    }
+    if (kind === "move" && hasLockedAlignWall(wallIds, ctx.S.alignLocks)) {
+      ctx.setUnderlayStatus("Move: selected wall is locked by Align. Unlock the joint first.");
+      ctx.mountProps();
+      return false;
+    }
+    if (wallIds.length + instIds.length + sectionIds.length + windowIds.length + doorIds.length === 0) {
+      if (kind !== "move") return false;
+      enterMoveSelectElementsWithoutSelection({
+        clearTransform,
+        mountProps: ctx.mountProps,
+        moveSnapDisabled,
+        setUnderlayStatus: ctx.setUnderlayStatus,
+        stickyMove,
+        transformState: ctx.transformState
+      });
+      return true;
+    }
 
     clearTransform();
-    ctx.transformState.kind = kind;
-    ctx.transformState.step = kind === "move" ? "pickBase" : "pickPivot";
-    ctx.transformState.selectedWallIds = wallIds;
-    ctx.transformState.selectedInstanceIds = instIds;
-    ctx.transformState.selectedSectionIds = sectionIds;
+    initializeTransformStateFromSelection({
+      kind,
+      moveSnapDisabled,
+      selectionIds,
+      stickyMove,
+      transformState: ctx.transformState
+    });
 
-    // Capture start state (includes non-selected walls/modules so we can restore cleanly during preview).
-    for (const w of ctx.walls) ctx.transformState.startWalls.set(w.id, JSON.parse(JSON.stringify(w.params)) as WallParams);
-    for (const inst of ctx.instances) ctx.transformState.startInstances.set(inst.id, { pos: inst.root.position.clone(), rotY: inst.root.rotation.y });
-    for (const inst of ctx.instances) {
-      if (!instIds.includes(inst.id)) continue;
-      const box = ctx.instanceWorldBox(inst);
-      let neighborId: string | null = null;
-      for (const other of ctx.instances) {
-        if (other.id === inst.id) continue;
-        if (inst.kitchenGroupId && other.kitchenGroupId !== inst.kitchenGroupId) continue;
-        const link = ctx.detectModuleAdjacency(box, ctx.instanceWorldBox(other), other.id);
-        if (link) {
-          neighborId = other.id;
-          break;
-        }
-      }
-      ctx.transformState.startInstanceAdjacency.set(inst.id, neighborId);
-    }
-    for (const section of ctx.sections) ctx.transformState.startSections.set(section.id, ctx.cloneSectionParams(section.params));
+    captureTransformStartState(ctx, instIds);
 
-    ctx.setUnderlayStatus(kind === "move" ? "Move (M): click base point..." : "Rotate (R): click pivot point...");
-    ctx.mountProps();
+    completeSelectedTransformStart({
+      kind,
+      mountProps: ctx.mountProps,
+      setUnderlayStatus: ctx.setUnderlayStatus
+    });
     return true;
   };
 
@@ -119,6 +466,7 @@ export function createTransformController(ctx: TransformControllerContext) {
       if (s) {
         inst.root.position.copy(s.pos);
         inst.root.rotation.y = s.rotY;
+        if ("kitchenPlacement" in s) inst.kitchenPlacement = s.kitchenPlacement ? structuredClone(s.kitchenPlacement) : null;
       }
     }
     for (const section of ctx.sections) {
@@ -126,6 +474,18 @@ export function createTransformController(ctx: TransformControllerContext) {
       if (!s) continue;
       section.params = ctx.cloneSectionParams(s);
       ctx.updateSectionVisual(section);
+    }
+    for (const window of ctx.windows ?? []) {
+      const s = ctx.transformState.startWindows.get(window.id);
+      if (!s) continue;
+      window.params = JSON.parse(JSON.stringify(s)) as WindowParams;
+      ctx.updateWindowTransform(window);
+    }
+    for (const door of ctx.doors ?? []) {
+      const s = ctx.transformState.startDoors.get(door.id);
+      if (!s) continue;
+      door.params = JSON.parse(JSON.stringify(s)) as DoorParams;
+      ctx.updateDoorTransform(door);
     }
   };
 
@@ -170,85 +530,62 @@ export function createTransformController(ctx: TransformControllerContext) {
       translateWallsByAnchors(dxMm, dzMm);
     }
 
+    const moveOpeningAlongHostWall = (params: WindowParams | DoorParams, start: WindowParams | DoorParams) => {
+      const wall = ctx.walls.find((item: WallInstance) => item.id === start.wallId) ?? null;
+      const centerMm = resolveMovedOpeningCenterMm({ delta, start, wall });
+      if (centerMm === null) return false;
+      params.centerMm = centerMm;
+      return true;
+    };
+
+    for (const id of ctx.transformState.selectedWindowIds) {
+      const window = (ctx.windows ?? []).find((item: { id: string }) => item.id === id) ?? null;
+      const start = ctx.transformState.startWindows.get(id);
+      if (!window || !start) continue;
+      window.params = JSON.parse(JSON.stringify(start)) as WindowParams;
+      if (moveOpeningAlongHostWall(window.params, start)) ctx.updateWindowTransform(window);
+    }
+
+    for (const id of ctx.transformState.selectedDoorIds) {
+      const door = (ctx.doors ?? []).find((item: { id: string }) => item.id === id) ?? null;
+      const start = ctx.transformState.startDoors.get(id);
+      if (!door || !start) continue;
+      door.params = JSON.parse(JSON.stringify(start)) as DoorParams;
+      if (moveOpeningAlongHostWall(door.params, start)) ctx.updateDoorTransform(door);
+    }
+
     for (const id of ctx.transformState.selectedSectionIds) {
       const section = ctx.sections.find((item) => item.id === id) ?? null;
       const start = ctx.transformState.startSections.get(id);
       if (!section || !start) continue;
-      section.params.aMm = { x: start.aMm.x + dxMm, z: start.aMm.z + dzMm };
-      section.params.bMm = { x: start.bMm.x + dxMm, z: start.bMm.z + dzMm };
+      section.params = resolveMovedSectionParams(start, { dxMm, dzMm });
       ctx.updateSectionVisual(section);
     }
 
     const ignore = new Set<string>(ctx.transformState.selectedInstanceIds);
 
-    // Move modules as a group (no module-to-module snapping here; target snapping comes from cursor snap).
-    let ok = true;
-    for (const id of ctx.transformState.selectedInstanceIds) {
-      const inst = ctx.findInstance(id);
-      const st = ctx.transformState.startInstances.get(id);
-      if (!inst || !st) continue;
-      const desired = st.pos.clone().add(delta);
-      const desiredInRoom = ctx.applyWallConstraints(inst, desired);
-      const snapped =
-        ctx.transformState.selectedInstanceIds.length === 1
-          ? ctx.snapPositionDetailed(inst, desiredInRoom, {
-              ignoreIds: ignore,
-              stickyNeighborId: ctx.transformState.startInstanceAdjacency.get(id) ?? null
-            }).position
-          : desiredInRoom;
-      inst.root.position.copy(snapped);
-      ctx.autoOrientModuleToRoomWallIfSnapped(inst, ignore);
-      if (ctx.transformState.selectedInstanceIds.length === 1) {
-        const actualDelta = inst.root.position.clone().sub(st.pos);
-        ctx.nudgePinnedModuleChain(inst, actualDelta);
-      }
-    }
-    for (const id of ctx.transformState.selectedInstanceIds) {
-      const inst = ctx.findInstance(id);
-      if (!inst) continue;
-      const inRoom = ctx.instanceFitsRoom(inst);
-      const overlaps = ctx.anyOverlapIgnoring(inst, ignore);
-      if (!inRoom || overlaps || ctx.moduleOverlapsWalls(inst) || ctx.moduleOverlapsKitchenWorktops(inst)) {
-        ok = false;
-        break;
-      }
-    }
-
-    if (ok) {
-      for (const inst of ctx.instances) {
-        if (
-          !ctx.instanceFitsRoom(inst) ||
-          ctx.anyOverlap(inst, null) ||
-          ctx.moduleOverlapsWalls(inst) ||
-          ctx.moduleOverlapsKitchenWorktops(inst)
-        ) {
-          ok = false;
-          break;
-        }
-      }
-    }
-
-    if (ok) {
-      for (const id of ctx.transformState.selectedInstanceIds) {
-        const inst = ctx.findInstance(id);
-        if (!inst?.kitchenGroupId) continue;
-        const group = ctx.S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-        const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
-        inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
-      }
-      ctx.transformState.lastValidDelta.copy(delta);
-      ctx.updateLayoutPanel();
-    } else {
-      restoreTransformStartState();
-      const d = ctx.transformState.lastValidDelta;
-      const dxMm2 = Math.round(d.x * 1000);
-      const dzMm2 = Math.round(d.z * 1000);
-      if (dxMm2 !== 0 || dzMm2 !== 0) translateWallsByAnchors(dxMm2, dzMm2);
+    const moveSelectedModulesByDelta = (moduleDelta: THREE.Vector3) => {
       for (const id of ctx.transformState.selectedInstanceIds) {
         const inst = ctx.findInstance(id);
         const st = ctx.transformState.startInstances.get(id);
         if (!inst || !st) continue;
-        const desired = st.pos.clone().add(d);
+        const startKitchenPlacement = st.kitchenPlacement ?? null;
+        if (startKitchenPlacement && inst.kitchenGroupId) {
+          const backOffsetMm = resolveKitchenPlacementBackOffset({
+            kitchenGroupId: inst.kitchenGroupId,
+            kitchenGroups: ctx.S.kitchenGroups,
+            defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm
+          });
+          const binding = structuredClone(startKitchenPlacement);
+          if ((binding.kind ?? "segment") === "segment") {
+            const worktop = ctx.kitchenWorktops.find((item) => item.id === binding.worktopId) ?? null;
+            const guide = worktop ? ctx.getKitchenGuideSegmentInfo(worktop, binding.segmentIndex, backOffsetMm) : null;
+            if (guide) binding.offsetAlongM = startKitchenPlacement.offsetAlongM + moduleDelta.dot(guide.dir);
+          }
+          ctx.applyKitchenPlacementBinding(inst, binding, backOffsetMm);
+          continue;
+        }
+        const desired = st.pos.clone().add(moduleDelta);
         const desiredInRoom = ctx.applyWallConstraints(inst, desired);
         const snapped =
           ctx.transformState.selectedInstanceIds.length === 1
@@ -264,7 +601,45 @@ export function createTransformController(ctx: TransformControllerContext) {
           ctx.nudgePinnedModuleChain(inst, actualDelta);
         }
       }
+    };
+
+    // Move modules as a group (no module-to-module snapping here; target snapping comes from cursor snap).
+    moveSelectedModulesByDelta(delta);
+
+    const restoreLastValidMoveDelta = () => {
+      restoreTransformStartState();
+      const d = ctx.transformState.lastValidDelta;
+      const dxMm2 = Math.round(d.x * 1000);
+      const dzMm2 = Math.round(d.z * 1000);
+      if (dxMm2 !== 0 || dzMm2 !== 0) translateWallsByAnchors(dxMm2, dzMm2);
+      moveSelectedModulesByDelta(d);
       ctx.updateLayoutPanel();
+    };
+
+    const ok = isTransformModuleMoveValid({
+      instances: ctx.instances,
+      selectedInstanceIds: ctx.transformState.selectedInstanceIds,
+      ignoreIds: ignore,
+      findInstance: ctx.findInstance,
+      instanceFitsRoom: ctx.instanceFitsRoom,
+      anyOverlapIgnoring: ctx.anyOverlapIgnoring,
+      anyOverlap: ctx.anyOverlap,
+      moduleOverlapsWalls: ctx.moduleOverlapsWalls,
+      moduleOverlapsKitchenWorktops: ctx.moduleOverlapsKitchenWorktops
+    });
+
+    if (ok) {
+      updateMovedModuleKitchenPlacements({
+        selectedInstanceIds: ctx.transformState.selectedInstanceIds,
+        kitchenCtx: ctx.S.kitchenCtx,
+        kitchenGroups: ctx.S.kitchenGroups,
+        findInstance: ctx.findInstance,
+        inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
+      });
+      ctx.transformState.lastValidDelta.copy(delta);
+      ctx.updateLayoutPanel();
+    } else {
+      restoreLastValidMoveDelta();
     }
   };
 
@@ -328,14 +703,26 @@ export function createTransformController(ctx: TransformControllerContext) {
     const ignore = new Set<string>(ctx.transformState.selectedInstanceIds);
     let ok = true;
 
-    for (const id of ctx.transformState.selectedInstanceIds) {
-      const inst = ctx.findInstance(id);
-      const st = ctx.transformState.startInstances.get(id);
-      if (!inst || !st) continue;
-      const nextPos = rotatePointAround(st.pos, pivot, ang);
-      inst.root.rotation.y = st.rotY + ang;
-      inst.root.position.copy(ctx.applyWallConstraints(inst, nextPos));
-    }
+    const applyRotatedModulePositions = (rotationAngle: number) => {
+      for (const id of ctx.transformState.selectedInstanceIds) {
+        const inst = ctx.findInstance(id);
+        const st = ctx.transformState.startInstances.get(id);
+        if (!inst || !st) continue;
+        const nextPos = rotatePointAround(st.pos, pivot, rotationAngle);
+        inst.root.rotation.y = st.rotY + rotationAngle;
+        inst.root.position.copy(ctx.applyWallConstraints(inst, nextPos));
+      }
+    };
+
+    const restoreLastValidRotateAngle = () => {
+      const lastValidAngle = ctx.transformState.lastValidAngle;
+      restoreTransformStartState();
+      rotateWallsByAnchors(pivot, lastValidAngle);
+      applyRotatedModulePositions(lastValidAngle);
+      ctx.updateLayoutPanel();
+    };
+
+    applyRotatedModulePositions(ang);
 
     for (const id of ctx.transformState.selectedInstanceIds) {
       const inst = ctx.findInstance(id);
@@ -362,20 +749,19 @@ export function createTransformController(ctx: TransformControllerContext) {
       ctx.transformState.lastValidAngle = ang;
       ctx.updateLayoutPanel();
     } else {
-      // Keep last valid
-      restoreTransformStartState();
-      rotateWallsByAnchors(pivot, ctx.transformState.lastValidAngle);
-      for (const id of ctx.transformState.selectedInstanceIds) {
-        const inst = ctx.findInstance(id);
-        const st = ctx.transformState.startInstances.get(id);
-        if (!inst || !st) continue;
-        const nextPos = rotatePointAround(st.pos, pivot, ctx.transformState.lastValidAngle);
-        inst.root.rotation.y = st.rotY + ctx.transformState.lastValidAngle;
-        inst.root.position.copy(ctx.applyWallConstraints(inst, nextPos));
-      }
-      ctx.updateLayoutPanel();
+      restoreLastValidRotateAngle();
     }
   };
 
-  return { clearTransform, startTransformFromSelection, restoreTransformStartState, translateWallsByAnchors, applyMoveDelta, rotatePointAround, rotateWallsByAnchors, applyRotateAngle };
+  const setRotatePivot = (pivot: THREE.Vector3) => {
+    if (ctx.transformState.kind !== "rotate" || ctx.transformState.step !== "pickPivot") return false;
+    ctx.transformState.pivot = pivot.clone();
+    ctx.transformState.step = "rotating";
+    ctx.transformState.typed = "";
+    ctx.transformState.lastValidAngle = 0;
+    ctx.transformState.startPointerAngle = 0;
+    return true;
+  };
+
+  return { clearTransform, startTransformFromSelection, restoreTransformStartState, translateWallsByAnchors, applyMoveDelta, rotatePointAround, rotateWallsByAnchors, setRotatePivot, applyRotateAngle };
 }

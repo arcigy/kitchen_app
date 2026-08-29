@@ -32,6 +32,19 @@ type WindowInstanceControllerContext = {
   updateWindowTransform: (inst: WindowInstance) => void;
 };
 
+const markIfcWindow = (object: THREE.Object3D, windowId: string, objectType = "window") => {
+  object.userData.kind = object.userData.kind ?? "window";
+  object.userData.windowId = windowId;
+  object.userData.ifc = {
+    className: "IfcWindow",
+    predefinedType: "WINDOW",
+    elementId: windowId,
+    objectType,
+    name: `Window ${windowId}`
+  };
+  object.userData.tags = Array.from(new Set([...(Array.isArray(object.userData.tags) ? object.userData.tags : []), "window", "ifc", "IfcWindow"]));
+};
+
 export function createWindowInstanceController(ctx: WindowInstanceControllerContext) {
   const defaultParams = (defaultWall: WallId, wallId: string | null): WindowParams => ({
     wall: defaultWall,
@@ -45,6 +58,12 @@ export function createWindowInstanceController(ctx: WindowInstanceControllerCont
     sashWidthMm: 48,
     sashProfileDepthMm: 56,
     frameProfileDepthMm: 72,
+    swingDirection: "left",
+    swingSide: "inward",
+    swingAngleDeg: 90,
+    handleType: "lever",
+    handleOffsetMm: 24,
+    handleHeightMm: 450,
     materialId: getWindowMaterialOption(null).id
   });
 
@@ -56,29 +75,28 @@ export function createWindowInstanceController(ctx: WindowInstanceControllerCont
 
     const root = new THREE.Group();
     root.name = `windowRoot_${id}`;
-    root.userData.windowId = id;
+    markIfcWindow(root, id, "assembly");
 
     const frame = new THREE.Group();
     frame.name = "windowFrame";
-    frame.userData.windowId = id;
+    markIfcWindow(frame, id, "frame");
     root.add(frame);
 
     const plan = new THREE.Group();
     plan.name = "windowPlanSymbol";
     plan.visible = false;
-    plan.userData.windowId = id;
+    markIfcWindow(plan, id, "plan_symbol");
     root.add(plan);
 
     const selection = new THREE.Group();
     selection.name = "windowSelection";
     selection.visible = false;
-    selection.userData.windowId = id;
+    markIfcWindow(selection, id, "selection_overlay");
     root.add(selection);
 
     const pick = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.02), new THREE.MeshBasicMaterial({ visible: false }));
     pick.name = "windowPick";
-    pick.userData.kind = "window";
-    pick.userData.windowId = id;
+    markIfcWindow(pick, id, "pick_proxy");
     pick.userData.viewDisplaySkipEdges = true;
     pick.userData.viewDisplaySkipMaterialRestore = true;
     root.add(pick);
@@ -90,7 +108,7 @@ export function createWindowInstanceController(ctx: WindowInstanceControllerCont
     outline.name = "windowOutline";
     outline.renderOrder = 57;
     outline.visible = false;
-    outline.userData.windowId = id;
+    markIfcWindow(outline, id, "outline");
     root.add(outline);
 
     const inst: WindowInstance = { id, params, root, frame, plan, selection, pick, outline };
@@ -122,6 +140,16 @@ export function createWindowInstanceController(ctx: WindowInstanceControllerCont
     p.sashWidthMm = nonNegativeMm(p.sashWidthMm, 48);
     p.sashProfileDepthMm = positiveMm(p.sashProfileDepthMm, 56);
     p.frameProfileDepthMm = positiveMm(p.frameProfileDepthMm, 72);
+    p.swingDirection = p.swingDirection === "right" ? "right" : "left";
+    p.swingSide = p.swingSide === "outward" ? "outward" : "inward";
+    p.swingAngleDeg = Math.max(1, Math.min(180, positiveMm(p.swingAngleDeg, 90)));
+    p.handleType = p.handleType === "none" || p.handleType === "knob" || p.handleType === "bar" ? p.handleType : "lever";
+    p.handleOffsetMm = nonNegativeMm(p.handleOffsetMm, 24);
+    const handleInsetMm = 20;
+    const minHandleOffsetMm = Math.min(Math.round(p.sashWidthMm / 2), handleInsetMm);
+    const maxHandleOffsetMm = Math.max(minHandleOffsetMm, p.sashWidthMm - handleInsetMm);
+    p.handleOffsetMm = Math.min(Math.max(p.handleOffsetMm, minHandleOffsetMm), maxHandleOffsetMm);
+    p.handleHeightMm = nonNegativeMm(p.handleHeightMm, 450);
     p.materialId = getWindowMaterialOption(p.materialId).id;
     return p;
   };

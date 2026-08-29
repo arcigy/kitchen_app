@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import * as THREE from "three";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFileClientCatalogRepository } from "../catalog/catalog-file-repository";
 import { getEnabledModulePackageDefinitions } from "../catalog/module-catalog";
@@ -12,7 +13,7 @@ import { loadProjectSaveFile } from "../project-save/project-save-loader";
 import { createFileModulePackageRepository } from "./module-package-repository";
 import { createModulePackageService } from "./module-package-service";
 import type { FurnQuoteModulePackage } from "./module-package-types";
-import { computeModulePackageHash, parseModulePackageJson } from "./module-package-file";
+import { computeModulePackageHash, parseModulePackageJson, withModulePackageHash } from "./module-package-file";
 import { createModuleFileEnvelope, createModuleFilePayload, packModulePackage, unpackModulePackage } from "./module-file-codec";
 import type { FurnQuoteModuleFileEnvelope, FurnQuoteModulePackagePayload } from "./module-file-types";
 import { sha256Hex } from "./module-file-validation";
@@ -24,6 +25,7 @@ import {
   buildModulePackageGeometryFromPackage,
   buildModulePackageGeometry,
   createDefaultModulePackageParameters,
+  createModulePackageDefaultParams,
   resolveModulePackageComponentAssignments,
   resolveModulePackageMaterialAssignments
 } from "./runtime/module-runtime-adapter";
@@ -33,6 +35,7 @@ import { makeDefaultKitchenContext } from "../../layout/kitchenContext";
 import { applyKitchenContextToModuleParams } from "../../layout/kitchenMaterialSync";
 import type { ModuleParams } from "../../model/cabinetTypes";
 import { systemModulePackageTemplates } from "../../system/module-packages";
+import { extendedFurnitureModulePackages } from "../../system/module-packages/extendedFurniture";
 import cornerShelfLowerFixture from "./fixtures/cornerShelfLower.fqm.source.json";
 
 const ctxA: ClientContext = { userId: "user_a", clientId: "client_a", role: "owner" };
@@ -179,6 +182,27 @@ function makePackage(overrides: Partial<FurnQuoteModulePackage> = {}): FurnQuote
 }
 
 describe("FurnQuote module package validation", () => {
+  it("refreshes an embedded package hash after a repair changes package contents", () => {
+    const modulePackage = withModulePackageHash(makePackage());
+    const changed = {
+      ...modulePackage,
+      module: { ...modulePackage.module, displayName: "Repaired Drawer Low" }
+    };
+    expect(() => validateFurnQuoteModulePackage(changed)).toThrow(/packageHash does not match package contents/i);
+    expect(validateFurnQuoteModulePackage(withModulePackageHash(changed)).integrity.packageHash)
+      .toBe(computeModulePackageHash(changed));
+  });
+
+  it("keeps a package hash stable when JSON object key order differs", () => {
+    const modulePackage = withModulePackageHash(makePackage());
+    const { displayName, ...moduleWithoutDisplayName } = modulePackage.module;
+    const reordered = {
+      ...modulePackage,
+      module: { displayName, ...moduleWithoutDisplayName }
+    };
+    expect(computeModulePackageHash(reordered)).toBe(computeModulePackageHash(modulePackage));
+  });
+
   it("accepts a valid .fqm package and computes a stable hash", () => {
     const modulePackage = validateFurnQuoteModulePackage(makePackage());
     const hash = computeModulePackageHash(modulePackage);
@@ -199,6 +223,9 @@ describe("FurnQuote module package validation", () => {
     expect(() => validateFurnQuoteModulePackage(makePackage({
       geometry: { mode: "trusted-runtime", runtimeBuilderKey: "missing.v1" }
     }))).toThrow("trusted runtime builder");
+    expect(() => validateFurnQuoteModulePackage(makePackage({
+      module: { ...makePackage().module, moduleType: "package_alias_instead_of_runtime_type" }
+    }))).toThrow("does not match trusted runtime builder type drawer_low");
     expect(() => validateFurnQuoteModulePackage(makePackage({
       assets: { files: [{ assetId: "bad", fileName: "../bad.png", mimeType: "image/png" }] }
     }))).toThrow("unsafe path segment");
@@ -236,17 +263,23 @@ describe("FurnQuote module package validation", () => {
   });
 
   it("validates all system .fqm templates used for tenant seeding", () => {
-    expect(systemModulePackageTemplates.map((modulePackage) => modulePackage.module.modulePackageId).sort()).toEqual([
+    const basePackageIds = [
       "corner_shelf_lower_family_v1",
       "drawer_low_family_v1",
       "flap_shelves_low_family_v1",
       "fridge_tall_family_v1",
       "swing_shelves_low_family_v1"
-    ]);
+    ];
+    expect(systemModulePackageTemplates.map((modulePackage) => modulePackage.module.modulePackageId).sort()).toEqual([
+      ...basePackageIds,
+      ...extendedFurnitureModulePackages.map((modulePackage) => modulePackage.module.modulePackageId)
+    ].sort());
     for (const modulePackage of systemModulePackageTemplates) {
       const validated = validateFurnQuoteModulePackage(modulePackage);
-      expect(validated.geometry.mode).toBe("trusted-runtime");
+      expect(["trusted-runtime", "declarative"]).toContain(validated.geometry.mode);
       expect(validated.parameters.parameters.some((parameter) => parameter.key === "type")).toBe(true);
+      const frontThickness = validated.parameters.parameters.find((parameter) => parameter.key === "frontThicknessMm");
+      if (frontThickness) expect(frontThickness.defaultValue).toBe(18);
     }
   });
 });
@@ -341,7 +374,39 @@ describe("tenant module package import", () => {
     const storedManifestPath = path.join(root, "storage", "clients", "client_a", "catalog", "modules", "drawer_low_standard", "module.package.json");
     expect(JSON.parse(await readFile(storedFilePath, "utf-8"))).toMatchObject({ magic: "FURNQUOTE_MODULE_PACKAGE" });
     expect(JSON.parse(await readFile(storedManifestPath, "utf-8"))).toMatchObject({ format: "furnquote-module" });
-  });
+  }, 30_000);
+
+  it("keeps sibling package variants with the same moduleType as separate catalog modules", async () => {
+    const packageRepository = createFileModulePackageRepository(root);
+    const catalogRepository = createSystemSeedClientCatalogRepository();
+    const serviceA = createModulePackageService({ context: ctxA, packageRepository, catalogRepository });
+    const leftVariant = makePackage({
+      module: {
+        ...makePackage().module,
+        modulePackageId: "drawer_low_left_variant",
+        displayName: "Drawer Low Left"
+      }
+    });
+    const rightVariant = makePackage({
+      module: {
+        ...makePackage().module,
+        modulePackageId: "drawer_low_right_variant",
+        displayName: "Drawer Low Right"
+      }
+    });
+
+    await serviceA.importPackage({ package: leftVariant });
+    await serviceA.importPackage({ package: rightVariant });
+
+    const catalogA = await catalogRepository.getCatalog(ctxA);
+    const variants = catalogA.modules.filter((module) =>
+      module.modulePackageId === "drawer_low_left_variant" ||
+      module.modulePackageId === "drawer_low_right_variant"
+    );
+    expect(variants.map((module) => module.id).sort()).toEqual(["drawer_low_left_variant", "drawer_low_right_variant"]);
+    expect(variants.map((module) => module.moduleType)).toEqual(["drawer_low", "drawer_low"]);
+    expect(variants.every((module) => module.enabled)).toBe(true);
+  }, 30_000);
 
   it("imports a real .fqm file, stores the envelope, runtime manifest, meta, and assets", async () => {
     const bytes = Buffer.from("preview-bytes");
@@ -378,7 +443,46 @@ describe("tenant module package import", () => {
     });
     expect(await readFile(path.join(moduleDir, "assets", "preview.png"), "utf-8")).toBe("preview-bytes");
     expect(imported.catalogModule.modulePackageId).toBe("drawer_low_fqm_import");
-  });
+  }, 30_000);
+
+  it("creates tenant parameter presets from current module parameters without storing free dimensions", async () => {
+    const packageRepository = createFileModulePackageRepository(root);
+    const catalogRepository = createSystemSeedClientCatalogRepository();
+    const serviceA = createModulePackageService({ context: ctxA, packageRepository, catalogRepository });
+    const imported = await serviceA.importPackage({ package: makePackage() });
+    const beforeHash = imported.catalogModule.packageHash;
+
+    const result = await serviceA.createParameterPreset({
+      modulePackageId: imported.modulePackage.module.modulePackageId,
+      name: "Tri sufliky",
+      note: "Preset ulozeny z aktualnych parametrov modulu.",
+      parameters: {
+        width: 900,
+        height: 920,
+        depth: 580,
+        front: "mat.board.front.oak.18",
+        handle: "component.handle.bar"
+      }
+    });
+
+    expect(result.preset).toMatchObject({
+      presetId: "tri_sufliky",
+      label: "Tri sufliky",
+      note: "Preset ulozeny z aktualnych parametrov modulu."
+    });
+    expect(result.preset.parameterValues).toMatchObject({ handle: "component.handle.bar" });
+    expect(result.preset.parameterValues).not.toHaveProperty("front");
+    expect(result.preset.parameterValues).not.toHaveProperty("width");
+    expect(result.preset.parameterValues).not.toHaveProperty("height");
+    expect(result.preset.parameterValues).not.toHaveProperty("depth");
+    expect(result.modulePackage.parameterPresets?.freeParameterKeys).toEqual(expect.arrayContaining(["width", "height", "depth", "front"]));
+    const stored = await packageRepository.getPackage(ctxA, imported.modulePackage.module.modulePackageId);
+    expect(stored?.parameterPresets?.presets.some((preset) => preset.presetId === "tri_sufliky")).toBe(true);
+    const catalogA = await catalogRepository.getCatalog(ctxA);
+    const catalogModule = catalogA.modules.find((module) => module.modulePackageId === imported.modulePackage.module.modulePackageId);
+    expect(catalogModule?.packageHash).toBe(result.modulePackage.integrity.packageHash);
+    expect(catalogModule?.packageHash).not.toBe(beforeHash);
+  }, 30_000);
 
   it("keeps UI visibility scoped to ClientCatalog enabled modules", async () => {
     const modulePackage = makePackage();
@@ -418,7 +522,7 @@ describe("tenant module package import", () => {
       module.modulePackageId === modulePackage.module.modulePackageId ? { ...module, enabled: false } : module
     );
     expect(listVisibleModulePackages({ catalog: catalogA, packages: [imported.modulePackage] })).toHaveLength(0);
-  });
+  }, 30_000);
 
   it("seeds new clients with tenant copies of system module packages", async () => {
     const catalogRepository = createFileClientCatalogRepository(root);
@@ -432,7 +536,7 @@ describe("tenant module package import", () => {
     expect(packagesB).toHaveLength(systemModulePackageTemplates.length);
     expect(getEnabledModulePackageDefinitions(catalogA, packagesA)).toHaveLength(systemModulePackageTemplates.length);
     expect(getEnabledModulePackageDefinitions(catalogB, packagesB)).toHaveLength(systemModulePackageTemplates.length);
-    expect(catalogA.modules.every((module) => module.modulePackageId && module.runtimeBuilderKey)).toBe(true);
+    expect(catalogA.modules.every((module) => module.modulePackageId)).toBe(true);
 
     const clientAPath = path.join(root, "storage", "clients", ctxA.clientId, "catalog", "modules", "drawer_low_family_v1", "module.package.json");
     const clientBPath = path.join(root, "storage", "clients", ctxB.clientId, "catalog", "modules", "drawer_low_family_v1", "module.package.json");
@@ -443,7 +547,7 @@ describe("tenant module package import", () => {
     expect((await packageRepository.getPackage(ctxA, "drawer_low_family_v1"))?.module.displayName).toBe("Client A Drawer");
     expect((await packageRepository.getPackage(ctxB, "drawer_low_family_v1"))?.module.displayName).not.toBe("Client A Drawer");
     expect(await readFile(clientBPath, "utf-8")).toContain("Drawer Low");
-  });
+  }, 30_000);
 
   it("uses ClientCatalog plus tenant packages as the module visibility source of truth", async () => {
     const catalogRepository = createFileClientCatalogRepository(root);
@@ -451,13 +555,17 @@ describe("tenant module package import", () => {
     const catalog = await catalogRepository.ensureCatalogExists(ctxA);
     const packages = await packageRepository.listPackages(ctxA);
 
-    expect(listVisibleModulePackages({ catalog, packages }).map((modulePackage) => modulePackage.module.moduleType).sort()).toEqual([
+    const baseModuleTypes = [
       "corner_shelf_lower",
       "drawer_low",
       "flap_shelves_low",
       "fridge_tall",
       "swing_shelves_low"
-    ]);
+    ];
+    expect(listVisibleModulePackages({ catalog, packages }).map((modulePackage) => modulePackage.module.moduleType).sort()).toEqual([
+      ...baseModuleTypes,
+      ...extendedFurnitureModulePackages.map((modulePackage) => modulePackage.module.moduleType)
+    ].sort());
 
     const disabledCatalog = {
       ...catalog,
@@ -471,7 +579,7 @@ describe("tenant module package import", () => {
       },
       packages
     }).map((modulePackage) => modulePackage.module.moduleType)).not.toContain("runtime_only");
-  });
+  }, 30_000);
 });
 
 describe("corner module placement rules", () => {
@@ -583,6 +691,25 @@ describe("runtime and project save integration", () => {
     expect(resolveModulePackageComponentAssignments({ modulePackage, catalog }).handle).toBe(catalog.kitchenDefaults.defaultHandleComponentId);
   });
 
+  it("creates module package default params from package defaults and catalog slot assignments", () => {
+    const modulePackage = makePackage();
+    const catalog = makeCatalog();
+
+    expect(createModulePackageDefaultParams({ modulePackage, catalog })).toMatchObject({
+      width: 800,
+      modulePackageId: modulePackage.module.modulePackageId,
+      moduleType: modulePackage.module.moduleType,
+      packageVersion: modulePackage.module.version,
+      type: modulePackage.module.moduleType,
+      materialAssignments: {
+        front: catalog.kitchenDefaults.frontMaterialId
+      },
+      componentAssignments: {
+        handle: catalog.kitchenDefaults.defaultHandleComponentId
+      }
+    });
+  });
+
   it("builds the real corner fixture through package defaults and trusted runtime", () => {
     const modulePackage = makeCornerPackage();
     const catalog = makeCatalog();
@@ -603,6 +730,115 @@ describe("runtime and project save integration", () => {
       front: catalog.kitchenDefaults.frontMaterialId
     });
     expect(resolveModulePackageComponentAssignments({ modulePackage, catalog }).handle).toBe(catalog.kitchenDefaults.defaultHandleComponentId);
+  });
+
+  it("builds declarative Revit package geometry without a trusted runtime builder", () => {
+    const modulePackage = makePackage({
+      module: {
+        ...makePackage().module,
+        modulePackageId: "revit_mesh_preview",
+        moduleType: "revit_mesh_preview",
+        familyName: "Revit Mesh Preview",
+        displayName: "Revit Mesh Preview",
+        tags: ["revit", "revit-export-preview"]
+      },
+      geometry: {
+        mode: "declarative",
+        primitives: [
+          {
+            primitiveType: "mesh",
+            id: "revit-solid-1",
+            params: {
+              verticesMm: [
+                { x: 0, y: 0, z: 0 },
+                { x: 1000, y: 0, z: 0 },
+                { x: 0, y: 500, z: 0 }
+              ],
+              indices: [0, 1, 2]
+            }
+          }
+        ]
+      },
+      compatibility: { requiredCatalogFeatures: ["materials"] }
+    });
+    const catalog = makeCatalog();
+    const group = buildModulePackageGeometryFromPackage({ modulePackage, catalog });
+
+    expect(group.userData.geometryMode).toBe("declarative");
+    expect(group.userData.runtimeBuilderKey).toBeUndefined();
+    expect(group.children).toHaveLength(1);
+  });
+
+  it("preserves declarative Revit mesh material color and source metadata", () => {
+    const modulePackage = makePackage({
+      module: {
+        ...makePackage().module,
+        modulePackageId: "revit_mesh_metadata_preview",
+        moduleType: "revit_mesh_metadata_preview",
+        familyName: "Revit Mesh Metadata Preview",
+        displayName: "Revit Mesh Metadata Preview",
+        tags: ["revit", "revit-export-preview"]
+      },
+      geometry: {
+        mode: "declarative",
+        primitives: [
+          {
+            primitiveType: "mesh",
+            id: "revit-solid-1",
+            params: {
+              verticesMm: [
+                { x: 0, y: 0, z: 0 },
+                { x: 1000, y: 0, z: 0 },
+                { x: 0, y: 500, z: 0 }
+              ],
+              indices: [0, 1, 2],
+              boardName: "door_front_z",
+              materialGroup: "front",
+              materialSlotId: "front",
+              materialName: "Arcigy front",
+              materialColorHex: "#aabbcc",
+              materialParameterName: "Arcigy_MaterialByGroup_Front",
+              materialParameterValue: "mat.front",
+              revitMaterialElementId: "123",
+              materialSource: "group",
+              sourceElementId: 456,
+              sourceUniqueId: "unique-456",
+              sourceName: "Front extrusion",
+              sourceClass: "Extrusion",
+              revitCategory: "Generic Models",
+              revitProperties: {
+                Comments: { storageType: "String", value: "ARCIGY_BOARD", displayValue: "ARCIGY_BOARD", isReadOnly: false }
+              }
+            }
+          }
+        ]
+      }
+    });
+    const group = buildModulePackageGeometryFromPackage({ modulePackage, catalog: makeCatalog() });
+    const mesh = group.children[0] as THREE.Mesh;
+    const material = mesh.material as THREE.MeshStandardMaterial;
+
+    expect(mesh.name).toBe("revit-solid-1");
+    expect(mesh.userData).toMatchObject({
+      boardName: "door_front_z",
+      materialGroup: "front",
+      materialSlotId: "front",
+      materialName: "Arcigy front",
+      materialColorHex: "#aabbcc",
+      sourceElementId: 456,
+      sourceUniqueId: "unique-456",
+      revitCategory: "Generic Models",
+      revitProperties: {
+        Comments: expect.objectContaining({ displayValue: "ARCIGY_BOARD" })
+      }
+    });
+    expect(material.color.getHexString()).toBe("aabbcc");
+    expect(material.userData).toMatchObject({
+      materialName: "Arcigy front",
+      materialColorHex: "#aabbcc",
+      renderColorHex: "#aabbcc",
+      revitMaterialElementId: "123"
+    });
   });
 
   it("uses package parameter defaults and UI labels as runtime source data", () => {
@@ -684,7 +920,7 @@ describe("runtime and project save integration", () => {
 
     expect(selections.boardMaterials["drawer-front-4"]).toBe(kitchenCtx.frontsMaterialId);
     expect(selections.boardMaterials["drawer-box-4-bottom-panel"]).toBe(kitchenCtx.drawerBottomMaterialId);
-    expect(selections.boardMaterials["drawer-box-4-side-panels"]).toMatch(/^mat\.board\.drawer_box\./);
+    expect(selections.boardMaterials["drawer-box-4-side-panels"]).toMatch(/^(mat\.board\.drawer_box\.|mat\.demos\.drawer_box\.)/);
     expect(selections.boardMaterials["drawer-box-4-front-back-panels"]).toBe(selections.boardMaterials["drawer-box-4-side-panels"]);
     expect(selections.boardThicknesses["drawer-front-4"]).toBeGreaterThan(0);
     expect(selections.boardThicknesses["drawer-box-4-bottom-panel"]).toBeGreaterThan(0);

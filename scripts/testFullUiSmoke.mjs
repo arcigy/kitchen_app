@@ -13,9 +13,16 @@ function assert(condition, message, context) {
 async function clickButton(page, predicateSource) {
   return await page.evaluate((src) => {
     const predicate = new Function("title", "text", `return (${src})(title, text);`);
-    const button = [...document.querySelectorAll("button")].find((item) =>
-      predicate((item.getAttribute("title") || "").toLowerCase(), (item.textContent || "").toLowerCase())
-    );
+    const button = [...document.querySelectorAll("button")].find((item) => {
+      const rect = item.getBoundingClientRect();
+      const style = window.getComputedStyle(item);
+      const visible = rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      return (
+        visible &&
+        !item.disabled &&
+        predicate((item.getAttribute("title") || "").toLowerCase(), (item.textContent || "").toLowerCase())
+      );
+    });
     if (!button) return false;
     button.click();
     return true;
@@ -40,7 +47,7 @@ async function main() {
   await installAuthSession(page);
   const consoleErrors = [];
   page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+    if (message.type() === "error") consoleErrors.push(`${message.text()} (${message.location().url || "unknown-url"})`);
   });
 
   try {
@@ -54,10 +61,31 @@ async function main() {
     }));
     assert(boot.title === "Arcigy Kitchen Layout" && boot.hasDebug, "Boot/debug check failed", boot);
 
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("error"));
+      window.dispatchEvent(new Event("unhandledrejection"));
+      const until = performance.now() + 75;
+      while (performance.now() < until) {
+        // Deliberately exercise the Long Tasks observer without reading any page data.
+      }
+    });
+    await page.waitForFunction(async () => {
+      const metrics = await fetch("/metrics").then((response) => response.text());
+      return (
+        metrics.includes('arcigy_browser_runtime_errors_total{signal="js_error"} 1') &&
+        metrics.includes('arcigy_browser_runtime_errors_total{signal="unhandled_rejection"} 1') &&
+        /arcigy_browser_long_task_duration_seconds_count [1-9]\d*/.test(metrics) &&
+        /arcigy_browser_memory_used_bytes_count [1-9]\d*/.test(metrics)
+      );
+    }, null, { timeout: 15000 });
+    const runtimeMetrics = await page.evaluate(() => fetch("/metrics").then((response) => response.text()));
+    assert(!/client_arcigy_demo|user_arcigy_owner|projectId|private-project/.test(runtimeMetrics), "Browser metrics exposed customer identifiers", runtimeMetrics);
+
     assert(await clickTopbarTab(page, ["Kitchen", "Kuchyňa"]), "Kitchen tab not found");
     const kitchenTab = await page.evaluate(() => {
       const rows = document.querySelector(".topbar-rows");
       const row = rows?.querySelector(".topbar");
+      const catalog = document.querySelector("#moduleCatalog");
       const children = [...(row?.children ?? [])].map((el) => ({
         title: (el.querySelector(".topbar-group-title")?.textContent || "").trim().toLowerCase(),
         flex: el instanceof HTMLElement ? el.style.flex : ""
@@ -66,16 +94,81 @@ async function main() {
       const toolTitles = [...(rows?.querySelectorAll("button") ?? [])].map((button) =>
         (button.getAttribute("title") || button.textContent || "").trim().toLowerCase()
       );
-      return { children, text, toolTitles };
+      const catalogButtons = [...(catalog?.querySelectorAll("button") ?? [])].map((button) => ({
+        text: (button.textContent || "").trim().toLowerCase(),
+        disabled: button.disabled
+      }));
+      const catalogRect = catalog?.getBoundingClientRect();
+      const viewerRect = document.querySelector("#viewer")?.getBoundingClientRect();
+      const genericCards = [...(catalog?.querySelectorAll(".module-catalog-card:not(.module-catalog-card-vendor)") ?? [])];
+      const cardRects = genericCards.map((card) => {
+        const rect = card.getBoundingClientRect();
+        return {
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          top: Math.round(rect.top)
+        };
+      });
+      const iconRects = genericCards.map((card) => {
+        const rect = card.querySelector(".module-catalog-card-icon")?.getBoundingClientRect();
+        return { width: Math.round(rect?.width ?? 0), height: Math.round(rect?.height ?? 0) };
+      });
+      const labelMetrics = genericCards.map((card) => {
+        const label = card.querySelector(".module-catalog-card-label");
+        return {
+          clientHeight: label?.clientHeight ?? 0,
+          clientWidth: label?.clientWidth ?? 0,
+          scrollHeight: label?.scrollHeight ?? 0,
+          scrollWidth: label?.scrollWidth ?? 0
+        };
+      });
+      const maxCardsPerRow = Math.max(
+        0,
+        ...Object.values(
+          cardRects.reduce((groups, rect) => {
+            groups[rect.top] = (groups[rect.top] ?? 0) + 1;
+            return groups;
+          }, {})
+        )
+      );
+      return {
+        cardRects,
+        catalogButtons,
+        catalogHidden: catalog?.hasAttribute("hidden") ?? true,
+        catalogWidth: catalogRect?.width ?? 0,
+        catalogText: (catalog?.textContent || "").toLowerCase(),
+        children,
+        iconRects,
+        labelMetrics,
+        maxCardsPerRow,
+        text,
+        toolTitles,
+        viewerWidth: viewerRect?.width ?? 0
+      };
     });
-    const worktopsIndex = kitchenTab.children.findIndex((child) => /worktops|pracovn/.test(child.title));
     assert(
-      (/worktops|pracovn/.test(kitchenTab.text) || kitchenTab.toolTitles.some((title) => /worktop|pracovn/.test(title))) &&
+      !kitchenTab.toolTitles.some((title) => /worktop|pracovn|drawer|cabinet|skrinka|polic/.test(title)) &&
         !kitchenTab.toolTitles.some((title) => title === "kitchen" || title === "kuchyňa"),
-      "Kitchen tab is not broken into direct tools",
+      "Kitchen modules or worktops are still in the topbar",
       kitchenTab
     );
-    assert(worktopsIndex > 0 && !kitchenTab.children[worktopsIndex - 1]?.flex, "Worktop button is separated from kitchen tools", kitchenTab);
+    assert(!kitchenTab.catalogHidden && /modul/.test(kitchenTab.catalogText), "Kitchen module catalog is not visible", kitchenTab);
+    assert(kitchenTab.catalogWidth >= 280 && kitchenTab.catalogWidth <= 360 && kitchenTab.viewerWidth > kitchenTab.catalogWidth * 2, "Kitchen module catalog layout is stretched", kitchenTab);
+    assert(
+      kitchenTab.maxCardsPerRow === 3 &&
+        kitchenTab.cardRects.every((rect) => rect.width >= 80 && rect.height >= 116) &&
+        kitchenTab.iconRects.every((rect) => rect.height >= 72) &&
+        kitchenTab.labelMetrics.every((label) => label.scrollHeight <= label.clientHeight + 1 && label.scrollWidth <= label.clientWidth + 1),
+      "Kitchen module catalog cards do not preserve the larger three-column preview and full readable label contract",
+      kitchenTab
+    );
+    assert(
+      kitchenTab.catalogButtons.some((button) => /nov/.test(button.text) && !button.disabled) &&
+        kitchenTab.catalogButtons.some((button) => /pracovn/.test(button.text) && button.disabled) &&
+        kitchenTab.catalogButtons.some((button) => /skrinka|corner|modul|chlad/.test(button.text) && button.disabled),
+      "Kitchen module catalog does not start with disabled module/worktop actions",
+      kitchenTab
+    );
     assert(await clickButton(page, `(title, text) => title.includes("new group") || title.includes("nov") && title.includes("skup")`), "New kitchen group button not found");
     const hasAcceptGroup = await page.evaluate(() => {
       const titles = [...document.querySelectorAll(".topbar-rows button")].map((button) =>
@@ -119,6 +212,20 @@ async function main() {
     );
     assert(addSwing.instances?.length >= 2, "Adding second kitchen module failed", { count: addSwing.instances?.length });
 
+    const addTemporary = await page.evaluate(
+      (id) => window.__kitchenDebug.addKitchenModule(id, { type: "drawer_low", segmentIndex: 0, offsetAlongMm: 2300 }),
+      scenario.group.id
+    );
+    const temporaryId = addTemporary.instances?.at(-1)?.id;
+    assert(temporaryId && addTemporary.instances.length >= 3, "Adding temporary kitchen module failed", addTemporary);
+    const afterDelete = await page.evaluate((id) => window.__kitchenDebug.deleteModule(id), temporaryId);
+    assert(
+      afterDelete.instances?.length === addSwing.instances.length &&
+        !afterDelete.instances.some((instance) => instance.id === temporaryId),
+      "Deleting kitchen module failed",
+      { temporaryId, beforeCount: addTemporary.instances?.length, afterDelete }
+    );
+
     const floor = await page.evaluate(() =>
       window.__kitchenDebug.createFloor({
         name: "QA floor",
@@ -149,6 +256,16 @@ async function main() {
 
     const snap = await page.evaluate(() => window.__kitchenDebug.planSnap({ x: 5, z: 0 }));
     assert(snap?.kind && snap.kind !== "none", "Plan snap failed", snap);
+    const column = await page.evaluate(() =>
+      window.__kitchenDebug.createColumn({ xMm: 4200, zMm: 2600, widthMm: 400, depthMm: 600, shape: "rectangular" })
+    );
+    const columnSnap = await page.evaluate(() => window.__kitchenDebug.planSnap({ x: 4210, z: 2605 }));
+    assert(column?.id && columnSnap?.owner === "column" && columnSnap.kind === "midpoint", "Column plan snap failed", { column, columnSnap });
+    const section = await page.evaluate(() =>
+      window.__kitchenDebug.createSection({ name: "QA Section", aMm: { x: 5200, z: 2800 }, bMm: { x: 6200, z: 2800 }, mirrored: false })
+    );
+    const sectionSnap = await page.evaluate(() => window.__kitchenDebug.planSnap({ x: 5205, z: 2800 }));
+    assert(section?.id && sectionSnap?.owner === "section" && sectionSnap.kind === "endpoint", "Section plan snap failed", { section, sectionSnap });
 
     await page.evaluate(() => {
       window.__qaCopiedText = null;
@@ -182,16 +299,21 @@ async function main() {
     const menuOk = await page.evaluate(() => (document.querySelector(".app-menu-root")?.textContent || "").toLowerCase().includes("json"));
     assert(menuOk, "File menu missing JSON entries");
     await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.querySelector(".app-menu-root"), null, { timeout: 5000 });
 
-    assert(await clickButton(page, `(title, text) => title.includes("katal")`), "Pricing catalog button not found");
-    await page.waitForFunction(() => document.body.textContent.toLowerCase().includes("materi"), null, { timeout: 10000 });
-    await clickButton(page, `(title, text) => text.includes("zavrie")`);
+    const pricingCatalogButton = page.locator('button[title*="katal" i], button[title*="catalog" i]').first();
+    assert(await pricingCatalogButton.count(), "Pricing catalog button not found");
+    await pricingCatalogButton.click();
+    await page.waitForSelector(".pricing-catalog-modal", { timeout: 10000 });
+    const pricingCatalogText = await page.locator(".pricing-catalog-modal").textContent();
+    assert(pricingCatalogText?.toLowerCase().includes("materi"), "Pricing catalog modal missing materials section", pricingCatalogText);
+    await page.locator(".pricing-catalog-modal__close").click();
 
     assert(await clickButton(page, `(title, text) => title.includes("kus") || text.includes("kus") || title === "bom"`), "BOM button not found");
     assert((await page.locator(".bom-modal").count()) === 1, "BOM modal did not open");
     await page.locator(".bom-modal__close").click();
 
-    assert(await clickTopbarTab(page, ["Modify", "Upraviť", "UpraviĹĄ"]), "Modify tab not found");
+    assert(await clickTopbarTab(page, ["Modify", "Upraviť"]), "Modify tab not found");
     assert(
       await clickButton(page, `(title, text) => title === "dimension" || title.includes("kot") || title.includes("kót") || text.includes("kot") || text.includes("kót")`),
       "Dimension button not found"
@@ -209,10 +331,12 @@ async function main() {
           baseUrl,
           checks: [
             "boot",
+            "privacy-safe-browser-runtime-metrics",
             "debug-api",
             "create-kitchen-scenario",
             "patch-module-params",
             "add-module",
+            "delete-module",
             "create-floor",
             "create-walls",
             "create-measure",

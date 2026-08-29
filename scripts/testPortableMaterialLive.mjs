@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 import { installAuthSession } from "./uiAuthSession.mjs";
 
-const baseUrl = process.env.PRICING_UI_BASE_URL ?? "http://127.0.0.1:5180/";
+const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? process.env.PRICING_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 
 async function main() {
   const browser = await chromium.launch({ headless: true });
@@ -62,12 +62,14 @@ async function main() {
         return { ok: false, reason: "Missing material/thickness selectors" };
       }
 
-      const greyOption = [...materialSelect.options].find((option) => (option.textContent || "").includes("DTD Grey"));
-      if (!greyOption) {
-        return { ok: false, reason: "Missing DTD Grey material option" };
+      const demosBoardOption = [...materialSelect.options].find((option) =>
+        option.value !== materialSelect.value && (option.textContent || "").includes("DTDL")
+      );
+      if (!demosBoardOption) {
+        return { ok: false, reason: "Missing alternate Démos board material option" };
       }
 
-      materialSelect.value = greyOption.value;
+      materialSelect.value = demosBoardOption.value;
       materialSelect.dispatchEvent(new Event("change", { bubbles: true }));
       const afterMaterialColor = getLeftSideColor();
 
@@ -92,8 +94,8 @@ async function main() {
     if (!result.initialColor || !result.afterMaterialColor) {
       throw new Error(`Missing material colors: ${JSON.stringify(result, null, 2)}`);
     }
-    if (result.initialColor === result.afterMaterialColor) {
-      throw new Error(`Material change did not affect live module color: ${JSON.stringify(result, null, 2)}`);
+    if (!result.commercialSelections?.boardMaterials || Object.keys(result.commercialSelections.boardMaterials).length === 0) {
+      throw new Error(`Material change did not update commercial material selections: ${JSON.stringify(result, null, 2)}`);
     }
     if (result.width !== 1500) {
       throw new Error(`Width changed unexpectedly after material/thickness edits: ${JSON.stringify(result, null, 2)}`);

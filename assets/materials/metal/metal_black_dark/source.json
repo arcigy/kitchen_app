@@ -1,0 +1,21 @@
+{
+  "id": "metal_black_dark",
+  "source": "ambientCG",
+  "assetId": "Metal046B",
+  "requestedAssetId": "Metal046B",
+  "matchedAssetId": "Metal046B",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Metal046B_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": false,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": true,
+    "opacity": false
+  },
+  "notes": []
+}

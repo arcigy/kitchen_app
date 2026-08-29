@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { GrainAlong, OverlapRow } from "../ui/createPartPanel";
+import { computeMeshVolumeOverlaps } from "../geometry/meshOverlap";
+import { SNAP_DISTANCE_M } from "./snapToolProfiles";
 
 export function copyM16(out: Float32Array, m: THREE.Matrix4) {
   const e = m.elements;
@@ -34,8 +36,11 @@ export function pickSurfacePoint(raycaster: THREE.Raycaster, meshes: THREE.Mesh[
   return { point: h.point.clone(), object: h.object as THREE.Mesh };
 }
 
-export function snapPointXZ(point: THREE.Vector3, mesh: THREE.Mesh): { point: THREE.Vector3; kind: "free" | "edge" | "corner" } {
-  const threshold = 0.015;
+export function snapPointXZ(
+  point: THREE.Vector3,
+  mesh: THREE.Mesh,
+  threshold: number = SNAP_DISTANCE_M.legacySurfaceMeasure
+): { point: THREE.Vector3; kind: "free" | "edge" | "corner" } {
   const box = new THREE.Box3().setFromObject(mesh);
 
   const cornerCount = 4;
@@ -204,60 +209,21 @@ export function computeOverlaps(root: THREE.Object3D): OverlapRow[] {
     return true;
   });
 
-  const boxes = meshes.map((m) => ({ m, box: new THREE.Box3().setFromObject(m) }));
-  const eps = 0.0005;
-  const out: OverlapRow[] = [];
-
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      const a = boxes[i];
-      const b = boxes[j];
-
-      const aAllow = (a.m.userData?.allowOverlapWith as string[] | undefined) ?? [];
-      const bAllow = (b.m.userData?.allowOverlapWith as string[] | undefined) ?? [];
-      const allowed = aAllow.includes(b.m.name) || bAllow.includes(a.m.name);
-      const reason =
-        (a.m.userData?.allowOverlapReason as string | undefined) ?? (b.m.userData?.allowOverlapReason as string | undefined);
-
-      const minX = Math.max(a.box.min.x, b.box.min.x);
-      const minY = Math.max(a.box.min.y, b.box.min.y);
-      const minZ = Math.max(a.box.min.z, b.box.min.z);
-      const maxX = Math.min(a.box.max.x, b.box.max.x);
-      const maxY = Math.min(a.box.max.y, b.box.max.y);
-      const maxZ = Math.min(a.box.max.z, b.box.max.z);
-
-      const sx = maxX - minX;
-      const sy = maxY - minY;
-      const sz = maxZ - minZ;
-
-      if (sx <= eps || sy <= eps || sz <= eps) continue;
-
-      const overlapMm = { x: sx * 1000, y: sy * 1000, z: sz * 1000 };
-      const intersectionMm = {
-        min: { x: minX * 1000, y: minY * 1000, z: minZ * 1000 },
-        max: { x: maxX * 1000, y: maxY * 1000, z: maxZ * 1000 }
-      };
-      const aBoxMm = {
-        min: { x: a.box.min.x * 1000, y: a.box.min.y * 1000, z: a.box.min.z * 1000 },
-        max: { x: a.box.max.x * 1000, y: a.box.max.y * 1000, z: a.box.max.z * 1000 }
-      };
-      const bBoxMm = {
-        min: { x: b.box.min.x * 1000, y: b.box.min.y * 1000, z: b.box.min.z * 1000 },
-        max: { x: b.box.max.x * 1000, y: b.box.max.y * 1000, z: b.box.max.z * 1000 }
-      };
-      out.push({
-        a: a.m.name,
-        b: b.m.name,
-        status: allowed ? "allowed" : "error",
-        reason: allowed ? reason ?? "whitelisted overlap" : undefined,
-        overlapMm,
-        intersectionMm,
-        aBoxMm,
-        bBoxMm,
-        volumeMm3: overlapMm.x * overlapMm.y * overlapMm.z
-      });
-    }
-  }
+  const meshByName = new Map(meshes.map((mesh) => [mesh.name, mesh]));
+  const out: OverlapRow[] = computeMeshVolumeOverlaps(meshes, { toleranceMm: 2 }).map((overlap) => {
+    const a = meshByName.get(overlap.a);
+    const b = meshByName.get(overlap.b);
+    const aAllow = (a?.userData?.allowOverlapWith as string[] | undefined) ?? [];
+    const bAllow = (b?.userData?.allowOverlapWith as string[] | undefined) ?? [];
+    const allowed = aAllow.includes(overlap.b) || bAllow.includes(overlap.a);
+    const reason =
+      (a?.userData?.allowOverlapReason as string | undefined) ?? (b?.userData?.allowOverlapReason as string | undefined);
+    return {
+      ...overlap,
+      status: allowed ? "allowed" : "error",
+      reason: allowed ? reason ?? "whitelisted overlap" : undefined
+    };
+  });
 
   out.sort((x, y) => (x.status === y.status ? y.volumeMm3 - x.volumeMm3 : x.status === "error" ? -1 : 1));
   return out.slice(0, 40);

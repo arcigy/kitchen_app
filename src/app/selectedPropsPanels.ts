@@ -2,7 +2,7 @@ import type { AppState } from "../layout/appState";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
-import { createModulePackageControls, findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
+import { createResolvedModuleControls, findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
 import type { UnderlaySource } from "../ui/loadUnderlay";
 import type { MeasureSelectionTarget } from "./measureEditing";
 import type { PropertiesPanelApi } from "./toolPropsPanels";
@@ -22,8 +22,20 @@ import type {
   WindowInstance,
   WindowParams
 } from "./localTypes";
-import { DOOR_MATERIAL_OPTIONS } from "./doorMaterials";
+import { DOOR_MATERIAL_OPTIONS, getDoorMaterialOption } from "./doorMaterials";
+import { appendOpeningHandleRows, appendOpeningMaterialRow, appendOpeningNumberRows, appendOpeningSwingRows } from "./openingPropsPanelControls";
 import { WINDOW_MATERIAL_OPTIONS } from "./windowMaterials";
+import { mmDist, wallEndpointWhich } from "./wallGeometryHelpers";
+import { refreshSelectionHighlights } from "./selectionController";
+import { createButtonElement, createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement } from "./propsPanelElements";
+import { createReplacementModuleParams, listCompatibleModuleTypeOptions } from "./moduleTypeReplacement";
+import { createModuleTypePicker } from "./moduleTypePicker";
+import {
+  applyWallTypeToParams,
+  CUSTOM_WALL_TYPE_ID,
+  resolveWallTypeId,
+  WALL_TYPE_PRESETS
+} from "./wallTypes";
 
 type MaterialOption = { id: string | number; name: string };
 type FloorDefaults = Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
@@ -42,6 +54,7 @@ type WallPropsContext = {
   props: PropertiesPanelApi;
   selectedWallIds: Set<string>;
   walls: WallInstance[];
+  wallJoinTolMm: number;
   showNoProps: () => void;
   commitHistory: CommitHistory;
   S: AppState;
@@ -105,6 +118,7 @@ type WindowPropsContext = {
   commitHistory: CommitHistory;
   S: AppState;
   mountProps: MountProps;
+  recordActivity?: (label: string) => void;
 };
 
 type WindowPlacementPropsContext = {
@@ -121,6 +135,7 @@ type DoorPropsContext = {
   commitHistory: CommitHistory;
   S: AppState;
   mountProps: MountProps;
+  recordActivity?: (label: string) => void;
 };
 
 type DoorPlacementPropsContext = {
@@ -189,11 +204,6 @@ type ModulePropsContext = {
   findInstance: (id: string) => LayoutInstance | null;
   showNoProps: () => void;
   props: PropertiesPanelApi;
-  pinnedInstanceIds: Set<string>;
-  instanceFitsRoom: (inst: LayoutInstance) => boolean;
-  anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
-  moduleOverlapsWalls: (inst: LayoutInstance) => boolean;
-  moduleOverlapsKitchenWorktops: (inst: LayoutInstance) => boolean;
   commitHistory: CommitHistory;
   S: AppState;
   mountProps: MountProps;
@@ -202,10 +212,12 @@ type ModulePropsContext = {
   clientCatalog: ClientCatalog;
   rebuildInstance: (inst: LayoutInstance, opts?: RebuildInstanceOptions) => boolean;
   appendLinkedMeasureInputs: AppendLinkedMeasureInputs;
+  renderModuleCatalogIconSvg?: (modulePackage: FurnQuoteModulePackage) => string;
+  mountModuleCommercialProperties?: (host: HTMLElement, instanceId: string) => void;
 };
 
 export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
-  const { props, selectedWallIds, walls, showNoProps, commitHistory, S, mountProps, rebuildWall, rebuildWallPlanMesh, appendLinkedMeasureInputs } = ctx;
+  const { props, selectedWallIds, walls, wallJoinTolMm, showNoProps, commitHistory, S, mountProps, rebuildWall, rebuildWallPlanMesh, appendLinkedMeasureInputs } = ctx;
     const selectedWalls =
       selectedWallIds.size > 1
         ? [...selectedWallIds]
@@ -235,38 +247,78 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       mountProps();
     };
 
+    const rebuildJoinState = () => {
+      for (const wall of walls) rebuildWall(wall);
+      rebuildWallPlanMesh();
+      commitHistory(S);
+      mountProps();
+    };
+
+    const endpointPoint = (wall: WallInstance, end: "a" | "b") => (end === "a" ? wall.params.aMm : wall.params.bMm);
+    const connectedAtEnd = (wall: WallInstance, end: "a" | "b") => {
+      const p = endpointPoint(wall, end);
+      return walls
+        .filter((other) => other.id !== wall.id)
+        .map((other) => ({ wall: other, end: wallEndpointWhich(other, p, wallJoinTolMm) }))
+        .filter(
+          (item): item is { wall: WallInstance; end: "a" | "b" } =>
+            !!item.end && mmDist(endpointPoint(item.wall, item.end), p) <= wallJoinTolMm
+        );
+    };
+    const joinEnd = (wall: WallInstance, end: "a" | "b") => wall.params.joinEnds?.[end] ?? {};
+    const joinEnabled = (wall: WallInstance, end: "a" | "b") => joinEnd(wall, end).enabled !== false;
+    const joinPriority = (wall: WallInstance, end: "a" | "b") => joinEnd(wall, end).priority ?? 0;
+    const ensureJoinEnd = (wall: WallInstance, end: "a" | "b") => {
+      wall.params.joinEnds ??= {};
+      wall.params.joinEnds[end] ??= {};
+      return wall.params.joinEnds[end]!;
+    };
+
+    const resolvedTypeIds = selectedWalls.map((wall) => resolveWallTypeId(wall.params));
+    const wallTypeMixed = resolvedTypeIds.some((typeId) => typeId !== resolvedTypeIds[0]);
+    const typeSelect = createSelectElement(wallTypeMixed ? "" : (resolvedTypeIds[0] ?? ""), [
+      ...(wallTypeMixed ? [{ value: "", label: "(rozne)" }] : []),
+      { value: CUSTOM_WALL_TYPE_ID, label: "Vlastna" },
+      ...WALL_TYPE_PRESETS.map((preset) => ({ value: preset.id, label: preset.name }))
+    ]);
+    props.row(s, "Typ steny", typeSelect);
+
     const thickness = multiVal(selectedWalls, "thicknessMm");
-    const th = document.createElement("input");
-    th.type = "number";
-    th.step = "1";
-    th.placeholder = thickness.mixed ? "(rôzne)" : "";
-    th.value = thickness.mixed ? "" : String(thickness.value);
+    const th = createInputElement("number", thickness.mixed ? "" : String(thickness.value), {
+      step: "1",
+      placeholder: thickness.mixed ? "(rôzne)" : ""
+    });
     props.row(s, "Hrúbka (mm)", th);
 
     const height = multiVal(selectedWalls, "heightMm");
-    const heightInput = document.createElement("input");
-    heightInput.type = "number";
-    heightInput.step = "1";
-    heightInput.placeholder = height.mixed ? "(rôzne)" : "";
-    heightInput.value = height.mixed ? "" : String(height.value);
+    const heightInput = createInputElement("number", height.mixed ? "" : String(height.value), {
+      step: "1",
+      placeholder: height.mixed ? "(rôzne)" : ""
+    });
     props.row(s, "Výška (mm)", heightInput);
 
     const justification = multiVal(selectedWalls, "justification");
-    const just = document.createElement("select");
-    just.innerHTML = `
-      ${justification.mixed ? `<option value="">(rôzne)</option>` : ""}
-      <option value="center">Center</option>
-      <option value="interior">Finish face: interior</option>
-      <option value="exterior">Finish face: exterior</option>
-    `;
-    just.value = justification.mixed ? "" : String(justification.value ?? "center");
+    const just = createSelectElement(justification.mixed ? "" : String(justification.value ?? "center"), [
+      ...(justification.mixed ? [{ value: "", label: "(rôzne)" }] : []),
+      { value: "center", label: "Center" },
+      { value: "interior", label: "Finish face: interior" },
+      { value: "exterior", label: "Finish face: exterior" }
+    ]);
     props.row(s, "Justification", just);
 
+    typeSelect.addEventListener("change", () => {
+      if (!typeSelect.value) return;
+      applyToSelectedWalls((wall) => {
+        const preset = applyWallTypeToParams(wall.params, typeSelect.value);
+        if (preset) wall.heightMm = wall.params.heightMm;
+      });
+    });
     th.addEventListener("change", () => {
       const next = Number(th.value);
       if (!Number.isFinite(next)) return;
       applyToSelectedWalls((wall) => {
         wall.params.thicknessMm = Math.max(10, Math.round(next));
+        wall.params.typeId = CUSTOM_WALL_TYPE_ID;
       });
     });
     heightInput.addEventListener("change", () => {
@@ -274,6 +326,7 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       if (!Number.isFinite(next)) return;
       applyToSelectedWalls((wall) => {
         wall.params.heightMm = Math.max(1, Math.round(next));
+        wall.params.typeId = CUSTOM_WALL_TYPE_ID;
         wall.heightMm = wall.params.heightMm;
       });
     });
@@ -282,20 +335,15 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       applyToSelectedWalls((wall) => {
         wall.params.justification =
           just.value === "interior" ? "interior" : just.value === "exterior" ? "exterior" : "center";
+        wall.params.typeId = CUSTOM_WALL_TYPE_ID;
       });
     });
 
     if (isMulti) return;
 
-    const flip = document.createElement("button");
-    flip.type = "button";
-    flip.textContent = "Flip exterior";
+    const flip = createButtonElement("Flip exterior");
     flip.style.height = "34px";
     props.row(s, "Exterior", flip);
-    const mat = document.createElement("select");
-    mat.innerHTML = `<option value="default">Default</option>`;
-    mat.value = firstWall.params.materialId;
-    props.row(s, "Material", mat);
     const len = document.createElement("div");
     len.className = "muted";
     const dx = firstWall.params.bMm.x - firstWall.params.aMm.x;
@@ -305,48 +353,97 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
     flip.addEventListener("click", () => {
       firstWall.params.exteriorSign = (firstWall.params.exteriorSign ?? 1) === 1 ? -1 : 1;
       applyToSelectedWalls((wall) => {
-        if (wall.id === firstWall.id) wall.params.exteriorSign = firstWall.params.exteriorSign;
+        if (wall.id === firstWall.id) {
+          wall.params.exteriorSign = firstWall.params.exteriorSign;
+          wall.params.typeId = CUSTOM_WALL_TYPE_ID;
+        }
       });
     });
-    mat.addEventListener("change", () => {
-      firstWall.params.materialId = mat.value || "default";
-      commitHistory(S);
-    });
+
+    const joinsLabel = document.createElement("div");
+    joinsLabel.className = "muted";
+    joinsLabel.textContent = "Spoje stien";
+    joinsLabel.style.marginTop = "10px";
+    s.appendChild(joinsLabel);
+
+    for (const end of ["a", "b"] as const) {
+      const connected = connectedAtEnd(firstWall, end);
+      const control = document.createElement("div");
+      control.style.display = "grid";
+      control.style.gap = "6px";
+
+      const status = document.createElement("div");
+      status.className = "muted";
+      const enabled = joinEnabled(firstWall, end);
+      const selectedPriority = joinPriority(firstWall, end);
+      const neighborMaxPriority = connected.length > 0 ? Math.max(...connected.map((item) => joinPriority(item.wall, item.end))) : 0;
+      const role =
+        connected.length === 0
+          ? "bez napojenia"
+          : !enabled
+            ? "spoj vypnuty"
+            : selectedPriority > neighborMaxPriority
+              ? "tato stena pokracuje"
+              : selectedPriority < neighborMaxPriority
+                ? "tato stena sa napaja"
+                : "auto poradie";
+      status.textContent = connected.length > 0 ? `${role} · ${connected.map((item) => item.wall.id).join(", ")}` : role;
+      control.appendChild(status);
+
+      const buttons = document.createElement("div");
+      buttons.style.display = "flex";
+      buttons.style.gap = "6px";
+      buttons.style.flexWrap = "wrap";
+
+      const makeMain = createButtonElement("Tato stena pokracuje");
+      makeMain.disabled = connected.length === 0;
+      makeMain.addEventListener("click", () => {
+        const priorities = [joinPriority(firstWall, end), ...connected.map((item) => joinPriority(item.wall, item.end))];
+        const join = ensureJoinEnd(firstWall, end);
+        join.enabled = true;
+        join.priority = Math.max(0, ...priorities) + 1;
+        rebuildJoinState();
+      });
+      buttons.appendChild(makeMain);
+
+      const toggle = createButtonElement(enabled ? "Vypnut spoj" : "Povolit spoj");
+      toggle.disabled = connected.length === 0;
+      toggle.addEventListener("click", () => {
+        const join = ensureJoinEnd(firstWall, end);
+        join.enabled = !enabled;
+        rebuildJoinState();
+      });
+      buttons.appendChild(toggle);
+
+      control.appendChild(buttons);
+      props.row(s, `Spoj ${end.toUpperCase()}`, control);
+    }
 
     appendLinkedMeasureInputs(s, { kind: "wall", wallId: firstWall.id });
 
 }
 
 export function mountFloorPropsPanel(ctx: FloorPropsContext, floor: FloorInstance) {
-  const { props, getAllMaterials, floorDefault, rebuildFloor, updateSelectionHighlights, commitHistory, S, enterFloorBoundaryEdit, appendLinkedMeasureInputs } = ctx;
+  const { props, getAllMaterials, floorDefault, rebuildFloor, commitHistory, S, enterFloorBoundaryEdit, appendLinkedMeasureInputs } = ctx;
     props.setTitle(`Podlaha (${floor.id})`);
     const s = props.section();
 
-    const name = document.createElement("input");
-    name.type = "text";
-    name.value = floor.params.name;
+    const name = createInputElement("text", floor.params.name);
     props.row(s, "Názov", name);
 
-    const height = document.createElement("input");
-    height.type = "number";
-    height.step = "1";
-    height.value = String(floor.params.heightMm);
+    const height = createInputElement("number", String(floor.params.heightMm), { step: "1" });
     props.row(s, "Výška úrovne (mm)", height);
 
-    const thickness = document.createElement("input");
-    thickness.type = "number";
-    thickness.step = "1";
-    thickness.value = String(floor.params.thicknessMm);
+    const thickness = createInputElement("number", String(floor.params.thicknessMm), { step: "1" });
     props.row(s, "Hrúbka (mm)", thickness);
 
-    const mat = document.createElement("select");
-    mat.innerHTML = getAllMaterials().map((material: { id: string | number; name: string }) => `<option value="${material.id}">${material.name}</option>`).join("");
-    mat.value = floor.params.materialId ?? floorDefault.materialId;
+    const mat = createSelectElement(
+      floor.params.materialId ?? floorDefault.materialId,
+      getAllMaterials().map((material: { id: string | number; name: string }) => ({ value: material.id, label: material.name }))
+    );
     props.row(s, "Materiál", mat);
 
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.textContent = "Edit Boundary Line";
+    const edit = createButtonElement("Edit Boundary Line");
     edit.style.marginTop = "10px";
     s.appendChild(edit);
 
@@ -360,7 +457,7 @@ export function mountFloorPropsPanel(ctx: FloorPropsContext, floor: FloorInstanc
       thickness.value = String(floor.params.thicknessMm);
       mat.value = floor.params.materialId;
       rebuildFloor(floor);
-      updateSelectionHighlights();
+      refreshSelectionHighlights(ctx);
       commitHistory(S);
     };
 
@@ -378,8 +475,7 @@ export function mountSectionToolPropsPanel(ctx: SectionToolContext) {
   const { props, sectionDraw, drawOrthoEnabled } = ctx;
     props.setTitle("Section");
     const s = props.section();
-    const info = document.createElement("div");
-    info.className = "muted";
+    const info = createMutedText("");
     info.textContent = sectionDraw.a
       ? `Klikni druhý bod. Ortho ${drawOrthoEnabled ? "ON" : "OFF"}, Shift = bez axis snap, Space = zrkadliť smer. Aktuálne: ${sectionDraw.mirrored ? "mirrored" : "default"}.`
       : "Klikni prvý bod section line. Po druhom bode sa section vytvorí a otvorí.";
@@ -394,20 +490,16 @@ export function mountSectionPropsPanel(ctx: SectionPropsContext, id: string) {
     props.setTitle(`Section (${section.id})`);
     const s = props.section();
 
-    const name = document.createElement("input");
-    name.type = "text";
-    name.value = section.params.name;
+    const name = createInputElement("text", section.params.name);
     props.row(s, "Name", name);
 
-    const info = document.createElement("div");
-    info.className = "muted";
+    const info = createMutedText("");
     info.style.marginTop = "8px";
     const basis = getSectionBasis(section.params);
     info.textContent = `A: ${section.params.aMm.x}, ${section.params.aMm.z} mm | B: ${section.params.bMm.x}, ${section.params.bMm.z} mm | Dĺžka: ${basis ? Math.round(basis.length * 1000) : 0} mm`;
     s.appendChild(info);
 
-    const dir = document.createElement("div");
-    dir.className = "muted";
+    const dir = createMutedText("");
     dir.style.marginTop = "6px";
     dir.textContent = `Smer: ${section.params.mirrored ? "Mirrored" : "Default"}`;
     s.appendChild(dir);
@@ -453,8 +545,7 @@ export function mountColumnPlacementPropsPanel(ctx: ColumnPlacementPropsContext)
   const { props, params, onChange, mountProps } = ctx;
   props.setTitle("Stlp - vlozenie");
   const s = props.section();
-  const info = document.createElement("div");
-  info.className = "muted";
+  const info = createMutedText("");
   info.textContent = "Nastav parametre a klikni miesto v podoryse. Esc zrusi vkladanie.";
   s.appendChild(info);
   appendColumnParameterRows(
@@ -481,18 +572,14 @@ function appendColumnParameterRows(
     apply(commit, patch, remount);
   };
 
-  const name = document.createElement("input");
-  name.type = "text";
-  name.value = params.name;
+  const name = createInputElement("text", params.name);
   props.row(s, "Nazov", name);
 
-  const shape = document.createElement("select");
-  shape.innerHTML = `
-    <option value="square">Stvorcovy</option>
-    <option value="rectangular">Obdlznikovy</option>
-    <option value="round">Kruhovy</option>
-  `;
-  shape.value = params.shape;
+  const shape = createSelectElement(params.shape, [
+    { value: "square", label: "Stvorcovy" },
+    { value: "rectangular", label: "Obdlznikovy" },
+    { value: "round", label: "Kruhovy" }
+  ]);
   props.row(s, "Prierez", shape);
 
   const addNumberRow = (
@@ -500,10 +587,7 @@ function appendColumnParameterRows(
     key: keyof Pick<ColumnParams, "xMm" | "zMm" | "widthMm" | "depthMm" | "diameterMm" | "heightMm">,
     onRead?: (next: number) => Partial<ColumnParams>
   ) => {
-    const input = document.createElement("input");
-    input.type = "number";
-    input.step = "1";
-    input.value = String(Math.round(Number(params[key] ?? 0)));
+    const input = createInputElement("number", String(Math.round(Number(params[key] ?? 0))), { step: "1" });
     props.row(s, label, input);
     const restoreValue = () => {
       input.value = String(Math.round(Number(params[key] ?? 0)));
@@ -559,27 +643,21 @@ function appendColumnParameterRows(
     addNumberRow("Hlbka (mm)", "depthMm");
   }
 
-  const justifyX = document.createElement("select");
-  justifyX.innerHTML = `
-    <option value="left">Left</option>
-    <option value="center">Center</option>
-    <option value="right">Right</option>
-  `;
-  justifyX.value = params.justifyX ?? "center";
+  const justifyX = createSelectElement(params.justifyX ?? "center", [
+    { value: "left", label: "Left" },
+    { value: "center", label: "Center" },
+    { value: "right", label: "Right" }
+  ]);
   props.row(s, "Justification X", justifyX);
 
-  const justifyY = document.createElement("select");
-  justifyY.innerHTML = `
-    <option value="up">Up</option>
-    <option value="center">Center</option>
-    <option value="down">Down</option>
-  `;
-  justifyY.value = params.justifyY ?? "center";
+  const justifyY = createSelectElement(params.justifyY ?? "center", [
+    { value: "up", label: "Up" },
+    { value: "center", label: "Center" },
+    { value: "down", label: "Down" }
+  ]);
   props.row(s, "Justification Y", justifyY);
 
-  const material = document.createElement("select");
-  material.innerHTML = `<option value="default">Default</option>`;
-  material.value = params.materialId || "default";
+  const material = createSelectElement(params.materialId || "default", [{ value: "default", label: "Default" }]);
   props.row(s, "Material", material);
 
   name.addEventListener("change", () => {
@@ -612,69 +690,46 @@ function appendWindowParameterRows(
   apply: (commit: boolean, patch: Partial<WindowParams>) => void,
   options: { includeCenter: boolean }
 ) {
-  const numberRow = (
-    label: string,
-    key: keyof Pick<
-      WindowParams,
-      | "widthMm"
-      | "heightMm"
-      | "sillHeightMm"
-      | "centerMm"
-      | "frameWidthMm"
-      | "offsetFromInteriorMm"
-      | "sashWidthMm"
-      | "sashProfileDepthMm"
-      | "frameProfileDepthMm"
-    >
-  ) => {
-    const input = document.createElement("input");
-    input.type = "number";
-    input.step = "1";
-    input.value = String(Math.round(Number(params[key] ?? 0)));
-    props.row(section, label, input);
-    const read = () => {
-      const next = Number(input.value);
-      if (!Number.isFinite(next)) return false;
-      params[key] = Math.round(next) as never;
-      return true;
-    };
-    input.addEventListener("input", () => {
-      if (read()) apply(false, { [key]: params[key] } as Partial<WindowParams>);
-    });
-    input.addEventListener("change", () => {
-      if (read()) apply(true, { [key]: params[key] } as Partial<WindowParams>);
-    });
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && read()) apply(true, { [key]: params[key] } as Partial<WindowParams>);
-    });
-  };
+  appendOpeningNumberRows(
+    props,
+    section,
+    params,
+    [
+      { label: "Sirka (mm)", key: "widthMm" },
+      { label: "Vyska (mm)", key: "heightMm" },
+      { label: "Sill height (mm)", key: "sillHeightMm" },
+      ...(options.includeCenter ? [{ label: "Poloha na stene (mm)", key: "centerMm" as const }] : []),
+      { label: "Sirka ramu (mm)", key: "frameWidthMm" },
+      { label: "Odsadenie od vnutornej plochy (mm)", key: "offsetFromInteriorMm" },
+      { label: "Sirka kridla (mm)", key: "sashWidthMm" },
+      { label: "Vyska prierezu kridla (mm)", key: "sashProfileDepthMm" },
+      { label: "Vyska prierezu ramu (mm)", key: "frameProfileDepthMm" }
+    ],
+    apply
+  );
 
-  numberRow("Sirka (mm)", "widthMm");
-  numberRow("Vyska (mm)", "heightMm");
-  numberRow("Sill height (mm)", "sillHeightMm");
-  if (options.includeCenter) numberRow("Poloha na stene (mm)", "centerMm");
-  numberRow("Sirka ramu (mm)", "frameWidthMm");
-  numberRow("Odsadenie od vnutornej plochy (mm)", "offsetFromInteriorMm");
-  numberRow("Sirka kridla (mm)", "sashWidthMm");
-  numberRow("Vyska prierezu kridla (mm)", "sashProfileDepthMm");
-  numberRow("Vyska prierezu ramu (mm)", "frameProfileDepthMm");
-
-  const material = document.createElement("select");
-  material.innerHTML = WINDOW_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
-  material.value = params.materialId;
-  material.addEventListener("change", () => {
-    params.materialId = material.value;
-    apply(true, { materialId: material.value });
+  appendOpeningSwingRows(props, section, params, apply, {
+    controlsRow: "Sipky",
+    directionRow: "Otvaranie",
+    sideRow: "Smer",
+    handednessButton: "Prehodit lave/prave okno",
+    sideButton: "Prehodit otvaranie dovnutra/von",
+    handednessToLeft: "Prehodit na lave okno",
+    handednessToRight: "Prehodit na prave okno",
+    sideToInward: "Prehodit otvaranie dovnutra",
+    sideToOutward: "Prehodit otvaranie von"
   });
-  props.row(section, "Material", material);
+
+  appendOpeningHandleRows(props, section, params, apply);
+
+  appendOpeningMaterialRow(props, section, params, WINDOW_MATERIAL_OPTIONS, apply);
 }
 
 export function mountWindowPlacementPropsPanel(ctx: WindowPlacementPropsContext) {
   const { props, params } = ctx;
   props.setTitle("Okno - vlozenie");
   const s = props.section();
-  const info = document.createElement("div");
-  info.className = "muted";
+  const info = createMutedText("");
   info.textContent = "Najprv nastav parametre, potom klikni presne miesto na stene.";
   s.appendChild(info);
   appendWindowParameterRows(
@@ -697,8 +752,7 @@ export function mountWindowPropsPanel(ctx: WindowPropsContext) {
   const params = windowInst.params;
   const wall = params.wallId ? ctx.walls.find((item) => item.id === params.wallId) ?? null : null;
 
-  const wallInfo = document.createElement("div");
-  wallInfo.className = "muted";
+  const wallInfo = createMutedText("");
   wallInfo.textContent = wall ? `Stena: ${wall.id}` : "Okno nie je vlozene v kreslenej stene.";
   s.appendChild(wallInfo);
 
@@ -710,6 +764,7 @@ export function mountWindowPropsPanel(ctx: WindowPropsContext) {
       ctx.updateWindowTransform(windowInst);
       if (commit) {
         ctx.commitHistory(ctx.S);
+        ctx.recordActivity?.("Window updated");
         ctx.mountProps();
       }
     },
@@ -724,72 +779,48 @@ function appendDoorParameterRows(
   apply: (commit: boolean, patch: Partial<DoorParams>) => void,
   options: { includeCenter: boolean }
 ) {
-  const numberRow = (
-    label: string,
-    key: keyof Pick<
-      DoorParams,
-      "widthMm" | "heightMm" | "centerMm" | "frameWidthMm" | "offsetFromInteriorMm" | "panelThicknessMm" | "swingAngleDeg"
-    >
-  ) => {
-    const input = document.createElement("input");
-    input.type = "number";
-    input.step = "1";
-    input.value = String(Math.round(Number(params[key] ?? 0)));
-    props.row(section, label, input);
-    const read = () => {
-      const next = Number(input.value);
-      if (!Number.isFinite(next)) return false;
-      params[key] = Math.round(next) as never;
-      return true;
-    };
-    input.addEventListener("input", () => {
-      if (read()) apply(false, { [key]: params[key] } as Partial<DoorParams>);
-    });
-    input.addEventListener("change", () => {
-      if (read()) apply(true, { [key]: params[key] } as Partial<DoorParams>);
-    });
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && read()) apply(true, { [key]: params[key] } as Partial<DoorParams>);
-    });
-  };
+  appendOpeningNumberRows(
+    props,
+    section,
+    params,
+    [
+      { label: "Sirka (mm)", key: "widthMm" },
+      { label: "Vyska (mm)", key: "heightMm" },
+      ...(options.includeCenter ? [{ label: "Poloha na stene (mm)", key: "centerMm" as const }] : []),
+      { label: "Sirka ramu (mm)", key: "frameWidthMm" },
+      { label: "Odsadenie kridla (mm)", key: "offsetFromInteriorMm" },
+      { label: "Hrubka kridla (mm)", key: "panelThicknessMm" },
+      { label: "Uhol otvorenia", key: "swingAngleDeg" }
+    ],
+    apply
+  );
 
-  numberRow("Sirka (mm)", "widthMm");
-  numberRow("Vyska (mm)", "heightMm");
-  if (options.includeCenter) numberRow("Poloha na stene (mm)", "centerMm");
-  numberRow("Sirka ramu (mm)", "frameWidthMm");
-  numberRow("Odsadenie od vnutornej plochy (mm)", "offsetFromInteriorMm");
-  numberRow("Hrubka kridla (mm)", "panelThicknessMm");
-  numberRow("Uhol otvorenia", "swingAngleDeg");
-
-  const swing = document.createElement("select");
-  swing.innerHTML = `
-    <option value="left">Lave</option>
-    <option value="right">Prave</option>
-  `;
-  swing.value = params.swingDirection;
-  swing.addEventListener("change", () => {
-    params.swingDirection = swing.value === "right" ? "right" : "left";
-    apply(true, { swingDirection: params.swingDirection });
+  appendOpeningSwingRows(props, section, params, apply, {
+    controlsRow: "Sipky",
+    directionRow: "Otvaranie",
+    sideRow: "Smer",
+    handednessButton: "Prehodit lave/prave dvere",
+    sideButton: "Prehodit otvaranie dovnutra/von",
+    handednessToLeft: "Prehodit na lave dvere",
+    handednessToRight: "Prehodit na prave dvere",
+    sideToInward: "Prehodit otvaranie dovnutra",
+    sideToOutward: "Prehodit otvaranie von",
+    includeButtonAriaLabel: true
   });
-  props.row(section, "Otvaranie", swing);
 
-  const material = document.createElement("select");
-  material.innerHTML = DOOR_MATERIAL_OPTIONS.map((option) => `<option value="${option.id}">${option.name}</option>`).join("");
-  material.value = params.materialId;
-  material.addEventListener("change", () => {
-    params.materialId = material.value;
-    apply(true, { materialId: material.value });
+  appendOpeningHandleRows(props, section, params, apply);
+
+  appendOpeningMaterialRow(props, section, params, DOOR_MATERIAL_OPTIONS, apply, {
+    normalize: (value) => getDoorMaterialOption(value).id
   });
-  props.row(section, "Material", material);
 }
 
 export function mountDoorPlacementPropsPanel(ctx: DoorPlacementPropsContext) {
   const { props, params } = ctx;
   props.setTitle("Dvere - vlozenie");
   const s = props.section();
-  const info = document.createElement("div");
-  info.className = "muted";
-  info.textContent = "Najprv nastav parametre, potom klikni presne miesto na stene. Space otaca dvere.";
+  const info = createMutedText("");
+  info.textContent = "Najprv nastav parametre, potom klikni presne miesto na stene. Space lave/prave, Shift+Space dnu/von.";
   s.appendChild(info);
   appendDoorParameterRows(
     props,
@@ -811,8 +842,7 @@ export function mountDoorPropsPanel(ctx: DoorPropsContext) {
   const params = doorInst.params;
   const wall = params.wallId ? ctx.walls.find((item) => item.id === params.wallId) ?? null : null;
 
-  const wallInfo = document.createElement("div");
-  wallInfo.className = "muted";
+  const wallInfo = createMutedText("");
   wallInfo.textContent = wall ? `Stena: ${wall.id}` : "Dvere nie su vlozene v kreslenej stene.";
   s.appendChild(wallInfo);
 
@@ -824,6 +854,7 @@ export function mountDoorPropsPanel(ctx: DoorPropsContext) {
       ctx.updateDoorTransform(doorInst);
       if (commit) {
         ctx.commitHistory(ctx.S);
+        ctx.recordActivity?.("Door updated");
         ctx.mountProps();
       }
     },
@@ -838,21 +869,16 @@ export function mountFloorBoundaryPropsPanel(ctx: FloorBoundaryPropsContext) {
     const params = floorEdit.params;
     if (!params) return;
 
-    const height = document.createElement("input");
-    height.type = "number";
-    height.step = "1";
-    height.value = String(params.heightMm);
+    const height = createInputElement("number", String(params.heightMm), { step: "1" });
     props.row(s, "Výška úrovne (mm)", height);
 
-    const thickness = document.createElement("input");
-    thickness.type = "number";
-    thickness.step = "1";
-    thickness.value = String(params.thicknessMm);
+    const thickness = createInputElement("number", String(params.thicknessMm), { step: "1" });
     props.row(s, "Hrúbka (mm)", thickness);
 
-    const mat = document.createElement("select");
-    mat.innerHTML = getAllMaterials().map((material: { id: string | number; name: string }) => `<option value="${material.id}">${material.name}</option>`).join("");
-    mat.value = params.materialId ?? floorDefault.materialId;
+    const mat = createSelectElement(
+      params.materialId ?? floorDefault.materialId,
+      getAllMaterials().map((material: { id: string | number; name: string }) => ({ value: material.id, label: material.name }))
+    );
     props.row(s, "Materiál", mat);
 
     const info = document.createElement("div");
@@ -891,73 +917,43 @@ export function mountUnderlayPropsPanel(ctx: UnderlayPropsContext) {
     props.setTitle("Underlay");
     const s = props.section();
 
-    const file = document.createElement("input");
-    file.type = "file";
-    file.accept = ".png,.pdf,image/png,application/pdf";
+    const file = createFileInputElement(".png,.pdf,image/png,application/pdf");
     props.row(s, "Upload", file);
 
-    const opacity = document.createElement("input");
-    opacity.type = "range";
-    opacity.min = "0";
-    opacity.max = "1";
-    opacity.step = "0.01";
-    opacity.value = String(underlayState.opacity);
+    const opacity = createRangeElement(String(underlayState.opacity), { min: "0", max: "1", step: "0.01" });
     props.row(s, "Opacity", opacity);
     S.underlayOpacityEl = opacity;
 
-    const scale = document.createElement("input");
-    scale.type = "number";
-    scale.step = "0.01";
-    scale.value = String(underlayState.scale);
+    const scale = createInputElement("number", String(underlayState.scale), { step: "0.01" });
     props.row(s, "Scale", scale);
     setUnderlayScaleEl(scale);
     S.underlayScaleEl = scale;
 
-    const rot = document.createElement("input");
-    rot.type = "number";
-    rot.step = "1";
-    rot.value = String(underlayState.rotationDeg);
+    const rot = createInputElement("number", String(underlayState.rotationDeg), { step: "1" });
     props.row(s, "Rotation °", rot);
     S.underlayRotEl = rot;
 
-    const offX = document.createElement("input");
-    offX.type = "number";
-    offX.step = "1";
-    offX.value = String(underlayState.offsetMm.x);
+    const offX = createInputElement("number", String(underlayState.offsetMm.x), { step: "1" });
     props.row(s, "Offset X", offX);
     setUnderlayOffXEl(offX);
     S.underlayOffXEl = offX;
 
-    const offZ = document.createElement("input");
-    offZ.type = "number";
-    offZ.step = "1";
-    offZ.value = String(underlayState.offsetMm.z);
+    const offZ = createInputElement("number", String(underlayState.offsetMm.z), { step: "1" });
     props.row(s, "Offset Z", offZ);
     setUnderlayOffZEl(offZ);
     S.underlayOffZEl = offZ;
 
-    const known = document.createElement("input");
-    known.type = "number";
-    known.step = "1";
-    known.value = String(underlayCal.knownMm);
+    const known = createInputElement("number", String(underlayCal.knownMm), { step: "1" });
     props.row(s, "Calibrate mm", known);
 
-    const pinned = document.createElement("input");
-    pinned.type = "checkbox";
-    pinned.checked = underlayState.pinned;
+    const pinned = createCheckboxElement(underlayState.pinned);
     props.row(s, "Pinned", pinned);
 
     const actions = document.createElement("div");
     actions.className = "actions";
-    const calibrateBtn = document.createElement("button");
-    calibrateBtn.type = "button";
-    calibrateBtn.textContent = "Calibrate";
-    const resetScaleBtn = document.createElement("button");
-    resetScaleBtn.type = "button";
-    resetScaleBtn.textContent = "Reset scale";
-    const clearBtn = document.createElement("button");
-    clearBtn.type = "button";
-    clearBtn.textContent = "Remove";
+    const calibrateBtn = createButtonElement("Calibrate");
+    const resetScaleBtn = createButtonElement("Reset scale");
+    const clearBtn = createButtonElement("Remove");
     clearBtn.style.borderColor = "#3a1f23";
     clearBtn.style.background = "#1a0f12";
     clearBtn.style.color = "#ff6b6b";
@@ -1060,69 +1056,54 @@ export function mountUnderlayPropsPanel(ctx: UnderlayPropsContext) {
 }
 
 export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
-  const { findInstance, showNoProps, props, pinnedInstanceIds, instanceFitsRoom, anyOverlap, moduleOverlapsWalls, moduleOverlapsKitchenWorktops, commitHistory, S, mountProps, modulePackages, args, rebuildInstance, appendLinkedMeasureInputs } = ctx;
+  const { findInstance, showNoProps, props, commitHistory, S, mountProps, modulePackages, args, rebuildInstance, appendLinkedMeasureInputs } = ctx;
     const inst = findInstance(id);
     if (!inst) return showNoProps();
-    props.setTitle(`Module (${inst.id})`);
+    const modulePackage = findModulePackageForParams(modulePackages, inst.params);
+    props.setTitle("Modul");
     const s = props.section();
-    const type = document.createElement("div");
-    type.className = "muted";
-    type.textContent = `Type: ${inst.params.type}`;
-    s.appendChild(type);
-    const pos = document.createElement("div");
-    pos.className = "muted";
-    pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
-    s.appendChild(pos);
 
-    const rowHost = document.createElement("div");
-    rowHost.style.marginTop = "10px";
-    s.appendChild(rowHost);
-
-    const rot = document.createElement("input");
-    rot.type = "number";
-    rot.step = "1";
-    rot.value = String(Math.round((inst.root.rotation.y * 180) / Math.PI));
-    props.row(rowHost, "Rotation (deg)", rot);
-
-    const pinned = document.createElement("input");
-    pinned.type = "checkbox";
-    pinned.checked = pinnedInstanceIds.has(inst.id);
-    props.row(rowHost, "Pinned", pinned);
-
-    const applyRot = () => {
-      const n = Number(String(rot.value).trim().replace(",", "."));
-      if (!Number.isFinite(n)) return;
-      const deg = ((n % 360) + 360) % 360;
-      const next = (deg * Math.PI) / 180;
-      const prevRot = inst.root.rotation.y;
-      inst.root.rotation.y = next;
-      const inRoom = instanceFitsRoom(inst);
-      const overlaps = anyOverlap(inst, null) || moduleOverlapsWalls(inst) || moduleOverlapsKitchenWorktops(inst);
-      if (!inRoom || overlaps) {
-        inst.root.rotation.y = prevRot;
-        rot.value = String(Math.round((prevRot * 180) / Math.PI));
-        return;
-      }
-      commitHistory(S);
-      mountProps();
-    };
-
-    rot.addEventListener("change", applyRot);
-    rot.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") applyRot();
-      if (ev.key === "Escape") {
-        ev.preventDefault();
-        rot.value = String(Math.round((inst.root.rotation.y * 180) / Math.PI));
-        rot.select();
-      }
-    });
-
-    pinned.addEventListener("change", () => {
-      if (pinned.checked) pinnedInstanceIds.add(inst.id);
-      else pinnedInstanceIds.delete(inst.id);
-      commitHistory(S);
-      mountProps();
-    });
+    if (modulePackage) {
+      const compatibleOptions = listCompatibleModuleTypeOptions({
+        currentPackage: modulePackage,
+        modulePackages,
+        catalog: ctx.clientCatalog
+      });
+      const typePicker = createModuleTypePicker({
+        currentPackageId: modulePackage.module.modulePackageId,
+        options: compatibleOptions,
+        renderFallback: ctx.renderModuleCatalogIconSvg,
+        onSelect: (target) => {
+          const previousParams = structuredClone(inst.params);
+          inst.params = createReplacementModuleParams({
+            currentParams: previousParams,
+            currentPackage: modulePackage,
+            targetPackage: target.modulePackage,
+            catalog: ctx.clientCatalog
+          });
+          let accepted = false;
+          try {
+            accepted = rebuildInstance(inst, {
+              previousParams,
+              preserveBackAnchor: true,
+              sourceKey: "moduleType"
+            });
+          } catch {
+            const failure = document.createElement("div");
+            failure.className = "muted";
+            failure.textContent = "Modul sa nepodarilo zmeniť. Pôvodný modul zostal zachovaný.";
+            s.appendChild(failure);
+          }
+          if (!accepted) {
+            inst.params = previousParams;
+            return;
+          }
+          commitHistory(S);
+          mountProps();
+        }
+      });
+      s.appendChild(typePicker);
+    }
 
     const editorHost = document.createElement("div");
     editorHost.style.marginTop = "10px";
@@ -1137,26 +1118,149 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
       });
       if (!accepted) return false;
       commitHistory(S);
-      pos.textContent = `Pozícia: ${Math.round(inst.root.position.x * 1000)}×${Math.round(inst.root.position.z * 1000)} mm`;
       mountProps();
       return true;
     };
 
-    const modulePackage = findModulePackageForParams(modulePackages, inst.params);
     if (!modulePackage) {
       const missing = document.createElement("div");
       missing.className = "muted";
       missing.textContent = `Module package missing for ${inst.params.type}.`;
       editorHost.appendChild(missing);
     } else {
-      createModulePackageControls(editorHost, modulePackage, inst.params, {
+      createResolvedModuleControls(editorHost, modulePackage, inst.params, {
         ...worktopArgs,
         onChange,
         textInputCommitMode: "explicit",
-        commitBoundary: args.propertiesEl
+        commitBoundary: args.propertiesEl,
+        createParameterPreset: async ({ modulePackage: activePackage, parameters, name, note }) => {
+          const response = await fetch(`/api/modules/${encodeURIComponent(activePackage.module.modulePackageId)}/parameter-presets`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, note, parameters })
+          });
+          const payload = await response.json().catch(() => null) as {
+            ok?: boolean;
+            error?: string;
+            modulePackage?: FurnQuoteModulePackage;
+            catalogModule?: ClientCatalog["modules"][number];
+            preset?: { presetId?: string };
+          } | null;
+          if (!response.ok || !payload?.ok || !payload.modulePackage || !payload.preset?.presetId) {
+            throw new Error(payload?.error || "Preset save failed.");
+          }
+          Object.assign(activePackage, payload.modulePackage);
+          if (payload.catalogModule) {
+            const moduleIndex = ctx.clientCatalog.modules.findIndex((module) =>
+              module.modulePackageId === payload.catalogModule?.modulePackageId ||
+              module.moduleType === payload.catalogModule?.moduleType
+            );
+            if (moduleIndex >= 0) ctx.clientCatalog.modules[moduleIndex] = payload.catalogModule;
+            else ctx.clientCatalog.modules.push(payload.catalogModule);
+          }
+          inst.params.packageHash = payload.modulePackage.integrity.packageHash;
+          return { modulePackage: payload.modulePackage, presetId: payload.preset.presetId };
+        }
       });
     }
 
     appendLinkedMeasureInputs(s, { kind: "module", instanceId: inst.id });
 
+    if (ctx.mountModuleCommercialProperties) {
+      const commercialHost = document.createElement("div");
+      commercialHost.className = "module-commercial-props-host";
+      s.appendChild(commercialHost);
+      ctx.mountModuleCommercialProperties(commercialHost, inst.id);
+    }
+
+}
+
+export function mountMultiModulePropsPanel(ctx: ModulePropsContext, ids: Iterable<string>) {
+  const { findInstance, showNoProps, props, commitHistory, S, mountProps, modulePackages, args, rebuildInstance } = ctx;
+  const selected = Array.from(ids)
+    .map((id) => findInstance(id))
+    .filter((inst): inst is LayoutInstance => Boolean(inst));
+  if (selected.length === 0) return showNoProps();
+  if (selected.length === 1) return mountModulePropsPanel(ctx, selected[0].id);
+
+  props.setTitle(`Modules (${selected.length})`);
+  const section = props.section();
+  const info = document.createElement("div");
+  info.className = "muted";
+  info.textContent = selected.map((inst) => inst.id).join(", ");
+  section.appendChild(info);
+
+  const packageByInstance = new Map<LayoutInstance, FurnQuoteModulePackage | null>();
+  for (const inst of selected) packageByInstance.set(inst, findModulePackageForParams(modulePackages, inst.params));
+  const firstPackage = packageByInstance.get(selected[0]) ?? null;
+  const samePackage = !!firstPackage && selected.every((inst) => packageByInstance.get(inst)?.module.modulePackageId === firstPackage.module.modulePackageId);
+
+  const editorHost = document.createElement("div");
+  editorHost.style.marginTop = "10px";
+  section.appendChild(editorHost);
+
+  if (!samePackage || !firstPackage) {
+    const mixed = document.createElement("div");
+    mixed.className = "muted";
+    mixed.textContent = "Vybrane moduly nemaju rovnaky parameter package. Spolocna editacia parametrov je dostupna pre rovnaky typ modulu.";
+    editorHost.appendChild(mixed);
+    return;
+  }
+
+  const aggregate = structuredClone(selected[0].params) as Record<string, unknown>;
+  const mixedKeys = new Set<string>();
+  for (const parameter of firstPackage.parameters.parameters) {
+    const firstValue = selected[0].params[parameter.key];
+    const isMixed = selected.some((inst) => inst.params[parameter.key] !== firstValue);
+    if (!isMixed) {
+      aggregate[parameter.key] = firstValue;
+      continue;
+    }
+    mixedKeys.add(parameter.key);
+    if (parameter.type === "boolean") aggregate[parameter.key] = false;
+    else aggregate[parameter.key] = "";
+  }
+
+  const worktopArgs = { getWorktopThicknessMm: () => 0, clientCatalog: ctx.clientCatalog };
+  const onChange = (_previousParams?: ModuleParams, sourceKey?: string) => {
+    if (!sourceKey) return false;
+    const nextValue = aggregate[sourceKey];
+    const previous = selected.map((inst) => ({ inst, params: structuredClone(inst.params) }));
+    for (const inst of selected) {
+      (inst.params as Record<string, unknown>)[sourceKey] = nextValue;
+      const accepted = rebuildInstance(inst, {
+        previousParams: previous.find((item) => item.inst === inst)?.params,
+        preserveBackAnchor: true,
+        sourceKey
+      });
+      if (!accepted) {
+        for (const item of previous) {
+          item.inst.params = item.params;
+          rebuildInstance(item.inst, { skipLayoutValidation: true });
+        }
+        return false;
+      }
+    }
+    commitHistory(S);
+    mountProps();
+    return true;
+  };
+
+  createResolvedModuleControls(editorHost, firstPackage, aggregate, {
+    ...worktopArgs,
+    onChange,
+    textInputCommitMode: "explicit",
+    commitBoundary: args.propertiesEl
+  });
+
+  for (const key of mixedKeys) {
+    const parameter = firstPackage.parameters.parameters.find((item) => item.key === key) ?? null;
+    const label = parameter ? parameter.label : key;
+    const rows = Array.from(editorHost.querySelectorAll<HTMLElement>(".module-package-control"));
+    const row = rows.find((item) => item.textContent?.includes(label) || item.textContent?.includes(key));
+    const input = row?.querySelector<HTMLInputElement | HTMLSelectElement>("input, select") ?? null;
+    if (!input) continue;
+    if (input instanceof HTMLInputElement && input.type !== "checkbox") input.placeholder = "rozdielne";
+    input.title = "rozdielne";
+  }
 }

@@ -1,0 +1,21 @@
+{
+  "id": "wood_dark_smooth",
+  "source": "ambientCG",
+  "assetId": "Wood067",
+  "requestedAssetId": "Wood067",
+  "matchedAssetId": "Wood067",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Wood067_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

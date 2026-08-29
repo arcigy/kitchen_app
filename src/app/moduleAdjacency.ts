@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { SNAP_DISTANCE_M } from "./snapToolProfiles";
 
 type BoxLike = { min: { x: number; z: number }; max: { x: number; z: number } };
 
@@ -23,9 +24,9 @@ export type ModuleSnapCandidate = {
   link: ModuleAdjacencyLink;
 };
 
-const DEFAULT_SNAP_DIST_M = 0.08;
-const DEFAULT_MIN_OVERLAP_M = 0.05;
-const DEFAULT_VISUAL_TOL_M = 0.008;
+const DEFAULT_SNAP_DIST_M = SNAP_DISTANCE_M.moduleAdjacency;
+const DEFAULT_MIN_OVERLAP_M = SNAP_DISTANCE_M.moduleAdjacencyMinOverlap;
+const DEFAULT_VISUAL_TOL_M = SNAP_DISTANCE_M.moduleAdjacencyVisualTolerance;
 
 function makeLink(axis: "x" | "z", seam: number, overlapMin: number, overlapMax: number, otherId: string) {
   const mid = (overlapMin + overlapMax) * 0.5;
@@ -136,7 +137,7 @@ export function buildModuleSnapCandidates(args: {
   snapDistanceM?: number;
 }) {
   const stickyNeighborId = args.stickyNeighborId ?? null;
-  const detachDistanceM = args.detachDistanceM ?? 0.14;
+  const detachDistanceM = args.detachDistanceM ?? SNAP_DISTANCE_M.moduleAdjacencyDetach;
   const candidates: ModuleSnapCandidate[] = [];
 
   for (const other of args.others) {

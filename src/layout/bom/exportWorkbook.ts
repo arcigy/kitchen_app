@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import * as XLSX from "xlsx";
+import { convertPriceCurrency, type PriceCurrency } from "../../core/pricing/currency";
 import type { PortableQuoteBomItem } from "../../modules/runtime/portableCommercial";
 import type { ProjectPricingView, WorktopFormulaView } from "./projectPricing";
 import type { ProjectQuoteSummary } from "./projectQuote";
@@ -251,7 +252,7 @@ function resolvePriceSource(item: PortableQuoteBomItem): PriceSourceRow {
   };
 }
 
-function buildPriceSourceRows(entries: ProjectPricingView[]) {
+function buildPriceSourceRows(entries: ProjectPricingView[], currency: PriceCurrency) {
   const sourceMap = new Map<string, PriceSourceRow>();
   for (const entry of entries) {
     for (const item of entry.result.pricing.items) {
@@ -266,7 +267,10 @@ function buildPriceSourceRows(entries: ProjectPricingView[]) {
       if (!existing.label && source.label) existing.label = source.label;
     }
   }
-  return [...sourceMap.values()].sort((left, right) =>
+  return [...sourceMap.values()].map((source) => ({
+    ...source,
+    unitPrice: money(convertPriceCurrency(source.unitPrice, "EUR", currency))
+  })).sort((left, right) =>
     left.category.localeCompare(right.category) ||
     left.label.localeCompare(right.label) ||
     left.catalogId.localeCompare(right.catalogId)
@@ -456,6 +460,7 @@ function buildModuleSheet(args: {
   entry: ProjectPricingView;
   sheetName: string;
   priceRefs: Map<string, PriceSourceRefs>;
+  currency: PriceCurrency;
 }): BuiltSheet & { refs: ModuleSheetRefs } {
   const { entry, priceRefs } = args;
   const builder = new SheetBuilder();
@@ -471,7 +476,7 @@ function buildModuleSheet(args: {
     { value: typeLabel, style: "metaValue" },
     "",
     { value: "Praca", style: "metaLabel" },
-    { value: entry.result.pricing.laborCostFixed, style: "currency" },
+    { value: convertPriceCurrency(entry.result.pricing.laborCostFixed, "EUR", args.currency), style: "currency" },
     "",
     { value: "Vzorec ceny", style: "metaLabel" },
     { value: "fakturovane mnozstvo x jednotkova cena", style: "metaValue" }
@@ -649,7 +654,11 @@ function buildModuleSheet(args: {
   };
 }
 
-function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleSheetRefs }>, summary: ProjectQuoteSummary): BuiltSheet {
+function buildOverviewSheet(
+  moduleSheets: Array<{ name: string; refs: ModuleSheetRefs }>,
+  summary: ProjectQuoteSummary,
+  currency: PriceCurrency
+): BuiltSheet {
   const builder = new SheetBuilder();
   builder.cols = [{ wch: 28 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 16 }];
 
@@ -672,15 +681,15 @@ function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleShee
   builder.merge(summaryTitleRow, 0, summaryTitleRow, 3);
   const materialsRow = builder.addRow([
     { value: "Material spolu", style: "summaryLabel" },
-    { value: summary.materialCost, style: "summaryCurrency" }
+    { value: convertPriceCurrency(summary.materialCost, "EUR", currency), style: "summaryCurrency" }
   ]);
   const moduleLaborRow = builder.addRow([
     { value: "Modulova praca", style: "summaryLabel" },
-    { value: summary.moduleLaborCost, style: "summaryCurrency" }
+    { value: convertPriceCurrency(summary.moduleLaborCost, "EUR", currency), style: "summaryCurrency" }
   ]);
   const extraLaborRow = builder.addRow([
     { value: "Dodatocna praca projektu", style: "summaryLabel" },
-    { value: summary.additionalLaborCost, style: "summaryCurrency" }
+    { value: convertPriceCurrency(summary.additionalLaborCost, "EUR", currency), style: "summaryCurrency" }
   ]);
   const totalLaborRow = builder.addRow([
     { value: "Praca spolu", style: "summaryLabel" },
@@ -690,13 +699,13 @@ function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleShee
     { value: "Medzisucet pred marzou", style: "summaryLabel" },
     { value: formulaNumber(`B${materialsRow}+B${totalLaborRow}`), style: "summaryCurrency" }
   ]);
-  const marginPercentRow = builder.addRow([
-    { value: "Marza %", style: "summaryLabel" },
+  builder.addRow([
+    { value: "Kombinovana marza %", style: "summaryLabel" },
     { value: summary.marginPercent, style: "decimal" }
   ]);
   const marginAmountRow = builder.addRow([
     { value: "Marza", style: "summaryLabel" },
-    { value: formulaNumber(`B${subtotalRow}*(B${marginPercentRow}/100)`), style: "summaryCurrency" }
+    { value: convertPriceCurrency(summary.marginAmount, "EUR", currency), style: "summaryCurrency" }
   ]);
   const finalOfferRow = builder.addRow([
     { value: "Vysledok Create Sheet / ponuka", style: "totalLabel" },
@@ -704,7 +713,7 @@ function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleShee
   ]);
   const appResultRow = builder.addRow([
     { value: "Vysledok app BOM", style: "summaryLabel" },
-    { value: summary.finalPrice, style: "summaryCurrency" }
+    { value: convertPriceCurrency(summary.finalPrice, "EUR", currency), style: "summaryCurrency" }
   ]);
   const deltaRow = builder.addRow([
     { value: "Rozdiel app vs sheet", style: "summaryLabel" },
@@ -759,12 +768,13 @@ function buildOverviewSheet(moduleSheets: Array<{ name: string; refs: ModuleShee
   };
 }
 
-function buildStylesXml() {
+function buildStylesXml(currency: PriceCurrency) {
+  const currencySuffix = currency === "CZK" ? " Kč" : " €";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <numFmts count="2">
     <numFmt numFmtId="164" formatCode="#,##0.0000"/>
-    <numFmt numFmtId="165" formatCode="#,##0.00&quot; €&quot;"/>
+    <numFmt numFmtId="165" formatCode="#,##0.00&quot;${currencySuffix}&quot;"/>
   </numFmts>
   <fonts count="5">
     <font><sz val="11"/><color rgb="1F2937"/><name val="Aptos"/><family val="2"/></font>
@@ -858,9 +868,9 @@ function ensureWorkbookRecalc(xml: string) {
   return xml.replace("</workbook>", `${calcPr}</workbook>`);
 }
 
-function applyWorkbookTheme(data: ArrayBuffer, sheets: BuiltSheet[]) {
+function applyWorkbookTheme(data: ArrayBuffer, sheets: BuiltSheet[], currency: PriceCurrency) {
   const archive = unzipSync(new Uint8Array(data));
-  archive["xl/styles.xml"] = strToU8(buildStylesXml());
+  archive["xl/styles.xml"] = strToU8(buildStylesXml(currency));
   archive["xl/workbook.xml"] = strToU8(ensureWorkbookRecalc(strFromU8(archive["xl/workbook.xml"])));
 
   sheets.forEach((sheet, index) => {
@@ -888,11 +898,15 @@ function downloadWorkbook(blobName: string, bytes: Uint8Array) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export function exportProjectPricingWorkbook(entries: ProjectPricingView[], summary: ProjectQuoteSummary) {
+export function exportProjectPricingWorkbook(
+  entries: ProjectPricingView[],
+  summary: ProjectQuoteSummary,
+  currency: PriceCurrency = "EUR"
+): { fileName: string; sheetNames: string[]; downloadStarted: true } {
   const usedNames = new Set<string>();
   const overviewName = sanitizeSheetName("Prehlad", usedNames);
   const priceSheetName = sanitizeSheetName("Cennik", usedNames);
-  const priceSources = buildPriceSourceRows(entries);
+  const priceSources = buildPriceSourceRows(entries, currency);
   const priceSheet = buildPriceSourceSheet(priceSheetName, priceSources);
 
   const moduleSheets = entries.map((entry) => {
@@ -900,11 +914,12 @@ export function exportProjectPricingWorkbook(entries: ProjectPricingView[], summ
     return buildModuleSheet({
       entry,
       sheetName,
-      priceRefs: priceSheet.refs
+      priceRefs: priceSheet.refs,
+      currency
     });
   });
 
-  const overviewSheet = buildOverviewSheet(moduleSheets, summary);
+  const overviewSheet = buildOverviewSheet(moduleSheets, summary, currency);
   overviewSheet.name = overviewName;
 
   const workbook = XLSX.utils.book_new();
@@ -925,7 +940,9 @@ export function exportProjectPricingWorkbook(entries: ProjectPricingView[], summ
     bookType: "xlsx",
     cellStyles: true
   });
-  const styledWorkbook = applyWorkbookTheme(data, orderedSheets);
+  const styledWorkbook = applyWorkbookTheme(data, orderedSheets, currency);
   const date = new Date().toISOString().slice(0, 10);
-  downloadWorkbook(`kusovnik-${date}.xlsx`, styledWorkbook);
+  const fileName = `kusovnik-${date}.xlsx`;
+  downloadWorkbook(fileName, styledWorkbook);
+  return { fileName, sheetNames: orderedSheets.map((sheet) => sheet.name), downloadStarted: true };
 }

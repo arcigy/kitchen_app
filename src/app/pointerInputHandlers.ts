@@ -1,17 +1,250 @@
 import * as THREE from "three";
 import type {
+  AlignPickedLine,
   ColumnInstance,
   DoorInstance,
   FloorInstance,
+  FloorBoundaryPoint,
+  FloorBoundarySegment,
   LayoutInstance,
+  KitchenPlacementBinding,
+  PickedLine2D,
   WallInstance,
   WindowInstance
 } from "./localTypes";
-import type { PlanSnapBinding } from "./planSnap";
+import type { PlanSnapBinding, PlanSnapOwner, PlanSnapResult } from "./planSnap";
 import type { KitchenContext } from "../layout/kitchenContext";
-import type { MeasureState } from "./measureTools";
+import type { AppState, ColumnParams, LayoutTool, SelectedKind, WallParams } from "../layout/appState";
+import type { PlacementHelpers } from "../layout/placementManager";
+import type { MeasureState, MarqueeState, WallEditHud } from "./measureTools";
+import type { AssociativeMeasureKind } from "./measureAssociative";
+import type { TechnicalDimensionRecord } from "./technicalDimensions";
+import type { PointerTransformState, StartTransformOptions, TransformClearOptions, TransformKind } from "./transformStateTypes";
+import { continueMoveAfterObjectSelection } from "./moveToolSelectionFlow";
+import { pointerClientPointInRect, setPointerNdcFromEvent } from "./pointerCoordinateHelpers";
+import type { CanvasContextTarget } from "./editorContextMenuController";
+import {
+  finishTrimNoChange,
+  finishTrimSuccess,
+  handleAlignToolClick,
+  handleDimensionToolClick,
+  handleMissingTrimTarget,
+  handlePinnedTrimTarget,
+  handleTrimNoPick,
+  handleTrimTargetPick
+} from "./pointerEditorToolClickHelpers";
+import { updateAlignTrimToolPointerMoveHover, updateDimensionToolPointerMoveHover } from "./pointerEditorToolHoverHelpers";
+import { intersectRayPlane } from "./pointerRaycastHelpers";
+import { updatePointerTypedHud } from "./pointerTypedHudHelpers";
+import { resolveTrimCornerEdit, resolveTrimSingleWallEdit } from "./pointerTrimGeometryHelpers";
+import { createDimensionEditInput, parseDimensionMillimeters, showDimensionInputForPointerEvent } from "./pointerDimensionInputControls";
+import {
+  SNAP_DISTANCE_PX,
+  SNAP_KIND_SCORE,
+  SNAP_PRIORITY_MOVE_OBJECT_LINES,
+  SNAP_PRIORITY_MOVE_OBJECT_POINTS,
+  SNAP_PRIORITY_MOVE_TARGET
+} from "./snapToolProfiles";
+import {
+  collectLineMoveKeypoints,
+  collectModuleMoveKeypoints,
+  collectMoveObjectSnapResults,
+  collectOpeningMoveKeypointsForWall,
+  constrainMoveDeltaToAxis,
+  isOpeningMoveWithinSmartSnapBounds,
+  isSelectedMoveSnapBinding,
+  openingMoveBoundsForWall,
+  prepareMoveDeltaForSnapMode,
+  snapBindingWallId
+} from "./pointerMoveSnapHelpers";
+import { applyOpeningSwingControlEdit, handleOpeningSelectionControlClick } from "./pointerOpeningSwingControls";
+import {
+  beginPointerMarquee,
+  boundsContainedInRect,
+  boundsOverlapsRect,
+  cancelPendingPointerMarqueeHit,
+  finishActivePointerMarquee,
+  finishPendingPointerMarquee,
+  type ScreenRect,
+  updatePointerMarqueePointerMove
+} from "./pointerMarqueeSelection";
+import {
+  executeFallbackPickSelection,
+  handleFloorplanSelection,
+  handleEmptyFallbackPickSelection,
+  resolveFloorplanModulePickCandidates,
+} from "./pointerFloorplanSelection";
+import { pickVisibleSelectionUserDataValue } from "./pointerSelectionVisibility";
+import { pickFloorplanFloorBoundary } from "./pointerFloorplanFloorPick";
+import { pickFloorplanOpening } from "./pointerFloorplanOpeningPick";
+import { pickFloorplanWallId as pickResolvedFloorplanWallId, resolveFloorplanWallPick } from "./pointerFloorplanWallPick";
+import {
+  handleLegacySurfaceMeasurePointClick,
+  handleMeasurePointClick,
+  updateLegacySurfaceMeasurePointerMoveHover,
+  updateMeasure2DPointerMoveHover,
+  updateMeasure3DPointerMoveHover
+} from "./pointerMeasureClickHelpers";
+import { handleSectionDrawPointClick, updateSectionDrawPointerMoveHover } from "./pointerSectionDrawClickHelpers";
+import { handleKitchenWorktopDrawPointClick, updateKitchenWorktopDrawPointerMoveHover } from "./pointerKitchenWorktopDrawClickHelpers";
+import { handleWallDrawEndClick, handleWallDrawStartClick, updateActiveWallDrawPointerMoveHover, updateWallToolPointerMoveHover } from "./pointerWallDrawClickHelpers";
+import type { createLedStripDrawController } from "./ledStripDrawController";
+import type { SelectionHighlightTarget } from "./layoutVisuals";
+import {
+  finishWallEditHudDragPointerUp,
+  updateWallEditHudDragPointerMove
+} from "./wallEditDragController";
+import { finishFloorBoundaryEditDragPointerUp, handleFloorBoundaryEditPointerDown, updateFloorBoundaryEditPointerMove } from "./floorBoundaryEdit";
+import { handleUnderlayCalibrationPointerDown } from "./pointerUnderlayCalibration";
+import { beginUnderlayDragPointerDown, finishUnderlayDragPointerUp, updateUnderlayDragPointerMove } from "./pointerUnderlayDrag";
+import {
+  handleColumnPlacementPreviewPointerMove,
+  handleFloorplanPlacementClick,
+  handlePlacementCommitPointerDown,
+  handlePlacementPreviewPointerMove,
+  handleSelectOpeningPlacementPreviewPointerMove
+} from "./pointerPlacementFlow";
+import { handleTransformClickPointerDown } from "./pointerTransformClickFlow";
+import { handleTransformPointerMovePreview } from "./pointerTransformPreviewFlow";
+import {
+  beginDoorDragFromPick,
+  beginWindowDragFromPick,
+  handleOpeningDragPointerMove,
+  type PointerOpeningDragState
+} from "./pointerOpeningDragBegin";
+import { updateModuleDragFromGroundHit, type PointerModuleDragState } from "./pointerModuleDrag";
+import { finishPointerDragState } from "./pointerDragFinish";
+import { buildModuleMarqueeScreenBounds, buildWallMarqueeScreenPolygon, collectMarqueeHitIds } from "./pointerMarqueeHitGeometry";
+import { clearNonFloorplanFloorSelection } from "./selectionController";
 
-type PointerInputHandlersContext = Record<string, any> & {
+export type KitchenGroupEditTarget = {
+  groupId: string;
+  focusInstanceId: string | null;
+};
+
+export type KitchenDoubleClickAction =
+  | { type: "open-group"; target: KitchenGroupEditTarget }
+  | { type: "open-module-editor"; instanceId: string }
+  | null;
+
+export function resolveKitchenGroupEditTarget(args: {
+  moduleGroupId: string | null | undefined;
+  moduleInstanceId: string | null | undefined;
+  worktopGroupId: string | null | undefined;
+  isKnownGroup: (groupId: string) => boolean;
+}): KitchenGroupEditTarget | null {
+  const moduleGroupId = args.moduleGroupId ?? null;
+  const moduleInstanceId = args.moduleInstanceId ?? null;
+  if (moduleGroupId && moduleInstanceId && args.isKnownGroup(moduleGroupId)) {
+    return { groupId: moduleGroupId, focusInstanceId: moduleInstanceId };
+  }
+  const worktopGroupId = args.worktopGroupId ?? null;
+  if (worktopGroupId && args.isKnownGroup(worktopGroupId)) {
+    return { groupId: worktopGroupId, focusInstanceId: null };
+  }
+  return null;
+}
+
+export function resolveKitchenDoubleClickAction(args: {
+  target: KitchenGroupEditTarget | null;
+  kitchenEditMode: boolean;
+  activeKitchenGroupId: string | null | undefined;
+  moduleEditorActive: boolean;
+}): KitchenDoubleClickAction {
+  if (!args.target) return null;
+  if (!args.kitchenEditMode) return { type: "open-group", target: args.target };
+  if (args.moduleEditorActive) return null;
+  if (args.target.groupId !== args.activeKitchenGroupId) return null;
+  if (!args.target.focusInstanceId) return null;
+  return { type: "open-module-editor", instanceId: args.target.focusInstanceId };
+}
+
+export function shouldStartLayoutMarqueeSelection(args: {
+  button: number;
+  floorEditActive: boolean;
+  isColumnPlacementActive: boolean;
+  isDoorPlacementActive: boolean;
+  isWindowPlacementActive: boolean;
+  layoutTool: string;
+  measureEnabled: boolean;
+  mode: string;
+  placementActive: boolean;
+  transformActive: boolean;
+}) {
+  return (
+    args.mode === "layout" &&
+    args.layoutTool === "select" &&
+    !args.isWindowPlacementActive &&
+    !args.isDoorPlacementActive &&
+    !args.isColumnPlacementActive &&
+    !args.floorEditActive &&
+    !args.transformActive &&
+    !args.placementActive &&
+    !args.measureEnabled &&
+    args.button === 0
+  );
+}
+
+type FloorEditState = {
+  active: boolean;
+  drag:
+    | null
+    | { pointerId: number; kind: "vertex"; startPoint: { x: number; z: number }; startSegments: Array<{ a: { x: number; z: number }; b: { x: number; z: number } }> }
+    | { pointerId: number; kind: "segment"; segmentIndex: number; startWorld: { x: number; z: number }; startSegments: Array<{ a: { x: number; z: number }; b: { x: number; z: number } }> };
+  error: string;
+  first: { x: number; z: number } | null;
+  hover: { x: number; z: number } | null;
+  ortho: boolean;
+  selectedSegmentIndex: number | null;
+  selectedVertex: { segmentIndex: number; endpoint: "a" | "b" } | null;
+  segments: Array<{ a: { x: number; z: number }; b: { x: number; z: number } }>;
+  tool: "line" | "rectangle" | "circle" | "pickLines";
+};
+
+type PointerDrawSnapOverlay = {
+  hide: () => void;
+  showWorld: (
+    point: THREE.Vector3,
+    camera: THREE.Camera,
+    rect: DOMRect,
+    kind: Exclude<PlanSnapResult["kind"], "none">,
+    opts?: { stable?: boolean }
+  ) => void;
+};
+
+type PointerDimensionState = {
+  hover: AlignPickedLine | null;
+  picked: AlignPickedLine[];
+  preview: unknown[];
+};
+
+type PickedFloorEditElement =
+  | { kind: "vertex"; ref: { segmentIndex: number; endpoint: "a" | "b" } }
+  | { kind: "segment"; segmentIndex: number };
+
+type PointerPlanSnapOptions = {
+  perpendicularFrom?: THREE.Vector3 | null;
+  kindPriority?: Array<Exclude<PlanSnapResult["kind"], "none">>;
+  sticky?: PlanSnapResult | null;
+  stickyThresholdPx?: number;
+  preferNearest?: boolean;
+  cycleIndex?: number;
+  ignoreBinding?: (binding: PlanSnapBinding | null | undefined, owner?: PlanSnapOwner) => boolean;
+};
+
+type PointerMeasureAxisAssist = { point: THREE.Vector3; distancePx: number };
+type PointerMeasureAxisAssist3D = { axis: "x" | "y" | "z"; point: THREE.Vector3; distancePx: number };
+type PointerMeasure3DSnap = { point: THREE.Vector3; kind: "free" | "edge" | "corner" };
+type PointerPointSnapXZ = { point: THREE.Vector3; kind: "free" | "edge" | "corner" };
+type PointerSurfacePick = { point: THREE.Vector3; object: THREE.Mesh };
+type PointerWallAxisPoint = { t: number; closest: FloorBoundaryPoint; distMm: number };
+type PointerSectionDrawPoint = {
+  point: THREE.Vector3;
+  kind: PlanSnapResult["kind"];
+  axisLocked: boolean;
+};
+
+type PointerInputHandlersDataContext = {
   renderer: THREE.WebGLRenderer;
   walls: WallInstance[];
   windows: WindowInstance[];
@@ -19,17 +252,346 @@ type PointerInputHandlersContext = Record<string, any> & {
   columns: ColumnInstance[];
   instances: LayoutInstance[];
   floors: FloorInstance[];
-  getSelectableMeshes: (root: THREE.Object3D) => THREE.Mesh[];
-  S: {
+  S: AppState & {
     activeKitchenGroupId: string | null;
     kitchenCtx: KitchenContext;
     kitchenGroups: Array<{ id: string; ctx: KitchenContext }>;
     kitchenEditMode: boolean;
   };
+  activeViewerTab: string;
+  addFloorEditSegment: (a: FloorBoundaryPoint, b: FloorBoundaryPoint) => void;
+  addMeasurement: (
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    aBinding: PlanSnapBinding,
+    bBinding: PlanSnapBinding,
+    options?: { kind?: AssociativeMeasureKind; distanceMm?: number }
+  ) => unknown;
+  addWall: (a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) => WallInstance | null;
+  alignState: { ref: AlignPickedLine | null; hover: AlignPickedLine | null; lastA: AlignPickedLine | null; lastB: AlignPickedLine | null; lastUntilMs: number };
+  anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
+  appendKitchenWorktopPoint: (point: FloorBoundaryPoint) => boolean;
+  applyAlignBetweenPickedLines: (ref: AlignPickedLine, picked: AlignPickedLine) => { ok: boolean; reason: string };
+  args: { viewerEl: HTMLElement; measureReadoutEl: HTMLElement };
+  cabinetGroup: THREE.Object3D | null;
+  applyMeasureAxisAssist: (
+    firstPoint: THREE.Vector3 | null,
+    point: THREE.Vector3,
+    camera: THREE.Camera,
+    rect: DOMRect,
+    thresholdPx?: number
+  ) => PointerMeasureAxisAssist | null;
+  applyMeasureAxisAssist3D: (
+    firstPoint: THREE.Vector3 | null,
+    point: THREE.Vector3,
+    camera: THREE.Camera,
+    rect: DOMRect,
+    thresholdPx?: number
+  ) => PointerMeasureAxisAssist3D | null;
+  applyWallConstraints: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
+  applyMoveDelta: (delta: THREE.Vector3) => void;
+  applyRotateAngle: (angleRad: number) => void;
+  areAlignLinesParallel: (a: AlignPickedLine, b: AlignPickedLine) => boolean;
+  axisLockPoint3D: (a: THREE.Vector3, b: THREE.Vector3) => THREE.Vector3;
+  axisLockXZ: (a: THREE.Vector3, b: THREE.Vector3) => THREE.Vector3;
+  autoOrientModuleToRoomWallIfSnapped: (instance: LayoutInstance, ignoreIds?: Set<string>) => void;
+  autoJoinAtMmPoint: (point: FloorBoundaryPoint) => void;
+  beginKitchenWorktopSelection: (worktopId: string, ev: PointerEvent, pointMm?: { x: number; z: number }) => boolean;
+  findSelectableFloorplanWorktopAtPoint: (pointMm: { x: number; z: number }) => string | null;
+  beginModuleSelection: (selectableId: string, ev: PointerEvent) => boolean;
+  updateSelectionHover: (target: SelectionHighlightTarget | null) => void;
+  bindingFromPlanSnap: (snapped: PlanSnapResult | null, fallbackPoint: THREE.Vector3) => PlanSnapBinding;
+  cam: () => THREE.Camera;
+  clearDoorPlacementPreview: () => void;
+  clearTransform: (options?: TransformClearOptions) => void;
+  clearWindowLightIfMissing: () => void;
+  clearWindowPlacementPreview: () => void;
+  cloneFloorSegments: (segments: FloorBoundarySegment[]) => FloorBoundarySegment[];
+  commitHistory: (state: AppState) => void;
+  commitPlacement: (state: AppState, helpers: PlacementHelpers) => boolean;
+  commitSectionDraw: (bMm: FloorBoundaryPoint) => boolean;
+  dimensionState: PointerDimensionState;
+  doorDragState: PointerOpeningDragState;
+  doorInst: DoorInstance | null;
+  dragState: PointerModuleDragState;
+  drawOrthoEnabled: boolean;
+  drawSnapOverlay: PointerDrawSnapOverlay;
+  floorEdit: FloorEditState;
+  distance3dMm: (a: THREE.Vector3, b: THREE.Vector3) => number;
+  distPxPointToSeg: (px: number, py: number, ax: number, ay: number, bx: number, by: number) => number;
+  floorOrthoPoint: (start: FloorBoundaryPoint, raw: FloorBoundaryPoint) => FloorBoundaryPoint;
+  floorPointEq: (a: FloorBoundaryPoint, b: FloorBoundaryPoint, tolMm?: number) => boolean;
+  floorPointToWorld: (point: FloorBoundaryPoint, y?: number) => THREE.Vector3;
+  formatMm: (value: THREE.Vector3) => string;
+  findInstance: (id: string) => LayoutInstance | null;
+  findKitchenWorktop: (id: string) => { id: string; kitchenGroupId: string } | null;
+  findSelectableFloorplanModuleAtPoint: (pointMm: { x: number; z: number }, mousePx: { x: number; y: number }, rect: DOMRect) => string | null;
+  fromMmPoint: (point: FloorBoundaryPoint) => THREE.Vector3;
+  groundPlane: THREE.Plane;
+  hudHoverLine: THREE.Mesh;
+  hudWallEndAlignmentGuide: THREE.Line;
+  hudPickLine1: THREE.Mesh;
+  hudPickLine2: THREE.Mesh;
+  kitchenMode: {
+    enterExisting?: (groupId: string, focusInstanceId?: string | null) => void;
+    enterModuleEditor?: (instanceId: string) => boolean;
+    filterSelectableInstanceId: (id: string | null) => string | null;
+    findKitchenGroup?: (groupId: string) => { id: string } | null;
+    isTallModuleEditorActive?: () => boolean;
+    getActiveTallEditorInstanceId?: () => string | null;
+    selectTallSubmoduleFromObject?: (instanceId: string | null, object: THREE.Object3D | null | undefined, options?: { additive?: boolean }) => boolean;
+    selectTallSubmodulesFromObjects?: (instanceId: string | null, objects: THREE.Object3D[], options?: { additive?: boolean }) => boolean;
+    getTallSubmoduleHighlightTargetFromObject?: (instanceId: string, object: THREE.Object3D | null | undefined) => SelectionHighlightTarget | null;
+    clearTallSubmoduleSelection?: () => void;
+  } | null;
+  getLayoutMeasureMeshes3d: () => THREE.Mesh[];
+  getSelectableMeshes: (root: THREE.Object3D) => THREE.Mesh[];
+  getAllInstanceGeometryMeshes: () => THREE.Mesh[];
+  getColumnIdFromObject: (object: THREE.Object3D | null | undefined) => string | null;
+  getDoorIdFromObject: (object: THREE.Object3D | null | undefined) => string | null;
+  getColumnPickMeshes: () => THREE.Mesh[];
+  getInstanceGeometryMeshes: (instance: LayoutInstance) => THREE.Mesh[];
+  getInstanceIdFromObject: (object: THREE.Object3D | null | undefined) => string | null;
+  getKitchenWorktopGeometryMeshes: () => THREE.Mesh[];
+  getMeasure3DSnapTargetObject: (object: THREE.Object3D | null | undefined) => THREE.Object3D | null;
+  getSectionIdFromObject: (object: THREE.Object3D | null | undefined) => string | null;
+  getSectionPickMeshes: () => THREE.Mesh[];
+  getWorktopIdFromObject: (object: THREE.Object3D | null | undefined) => string | null;
+  hasUnderlaySource?: () => boolean;
+  kitchenWorktopDraw: {
+    active: boolean;
+    typedMm: string;
+    hoverPoint: FloorBoundaryPoint | null;
+    lastPointerPx: { x: number; y: number };
+    points: FloorBoundaryPoint[];
+    previewRoot: unknown;
+  };
+  layoutRoot: THREE.Object3D;
+  ledStripDrawController?: ReturnType<typeof createLedStripDrawController>;
+  layoutTool: LayoutTool;
+  marquee: MarqueeState;
+  marqueeEl: HTMLElement;
+  measureState: MeasureState;
+  mode: AppState["mode"];
+  openQuickActionMenu?: (x: number, y: number) => void;
+  hudLineThicknessM: (rect: DOMRect) => number;
+  isColumnPlacementActive: () => boolean;
+  isModuleAlignLocked: (id: string) => boolean;
+  isDoorPlacementActive: () => boolean;
+  isObjectPickable: (object: THREE.Object3D | null | undefined) => boolean;
+  isVisibilityTargetPickable: (key: string | null | undefined) => boolean;
+  isWindowPlacementActive: () => boolean;
+  inferKitchenPlacementBinding: (instance: LayoutInstance, groupId: string, backOffsetMm: number) => KitchenPlacementBinding | null;
+  syncKitchenRunEndClosures?: (groupId: string, backOffsetMm?: number) => boolean;
+  insertColumnAtPoint: (pointMm: FloorBoundaryPoint) => boolean;
+  insertDoorAtWallPoint: (wallId: string, pointMm: FloorBoundaryPoint) => boolean;
+  insertWindowAtWallPoint: (wallId: string, pointMm: FloorBoundaryPoint) => boolean;
+  lineLineIntersectionXZ: (p1: THREE.Vector3, d1: THREE.Vector3, p2: THREE.Vector3, d2: THREE.Vector3) => THREE.Vector3 | null;
+  keepStickyPlanSnap: (
+    rawPoint: THREE.Vector3,
+    sticky: PlanSnapResult | null,
+    camera: THREE.Camera,
+    rect: DOMRect,
+    thresholdPx?: number
+  ) => PlanSnapResult | null;
+  makeWallPreviewMesh: (a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) => THREE.Mesh;
+  makeFloorCirclePoints: (center: FloorBoundaryPoint, edge: FloorBoundaryPoint, segments?: number) => FloorBoundaryPoint[];
+  moveFloorEditSegment: (
+    startSegments: FloorBoundarySegment[],
+    segmentIndex: number,
+    startWorld: FloorBoundaryPoint,
+    nextWorld: FloorBoundaryPoint
+  ) => void;
+  moveFloorEditVertex: (startSegments: FloorBoundarySegment[], startPoint: FloorBoundaryPoint, nextPoint: FloorBoundaryPoint) => void;
+  moduleOverlapsKitchenWorktops: (instance: LayoutInstance) => boolean;
+  moduleOverlapsWalls: (instance: LayoutInstance) => boolean;
+  mountWindowControls: () => void;
+  moveWallEndpointAndConnected: (wall: WallInstance, which: "a" | "b", dxMm: number, dzMm: number) => boolean;
+  nudgePinnedModuleChain: (instance: LayoutInstance, delta: THREE.Vector3) => Array<{ id: string; prev: THREE.Vector3 }>;
+  planarDistanceMm: (a: THREE.Vector3, b: THREE.Vector3) => number;
+  pinnedInstanceIds: Set<string>;
+  pinnedWallIds: Set<string>;
+  placement: AppState["placement"];
+  placementHelpers: PlacementHelpers;
+  pointerNdc: THREE.Vector2;
+  raycaster: THREE.Raycaster;
+  sectionDraw: { active?: boolean; a: unknown; axisLocked: boolean; hoverPoint: unknown; previewRoot?: unknown };
+  selectPlanSnap: PlanSnapResult | null;
+  selectedColumnId: string | null;
+  selectedFloorId: string | null;
+  selectedInstanceId: string | null;
+  selectedInstanceIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedKitchenGroupId: string | null;
+  selectedSectionId: string | null;
+  selectedUnderlayBox: THREE.BoxHelper | null;
+  selectedWallId: string | null;
+  selectedWallIds: Set<string>;
+  clearPreview: () => void;
+  clearToolHud: () => void;
+  clearWallDrawState: () => void;
+  hideHoverCursor: () => void;
+  mountProps: () => void;
+  rebuildGhost: (state: AppState, helpers: PlacementHelpers, point: THREE.Vector3) => void;
+  scheduleRebuildGhost: (state: AppState, helpers: PlacementHelpers, point: THREE.Vector3) => void;
+  rebuildWall: (wall: WallInstance) => void;
+  rebuildWallPlanMesh: () => void;
+  pickDimensionLineAt?: (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => AlignPickedLine | null;
+  pickSurfacePoint: (raycaster: THREE.Raycaster, meshes: THREE.Mesh[]) => PointerSurfacePick | null;
+  pickWallLine2D: (raw: THREE.Vector3, rect: DOMRect, camera: THREE.Camera, maxPx?: number) => PickedLine2D | null;
+  pointInPolygonXZ: (point: FloorBoundaryPoint, polygon: FloorBoundaryPoint[]) => boolean;
+  pointOnWallAxisMm: (wall: WallInstance, point: FloorBoundaryPoint) => PointerWallAxisPoint;
+  renderFloorBoundaryEdit: () => void;
+  resolveKitchenWorktopDrawSnap: (rawPoint: THREE.Vector3, rect: DOMRect) => PlanSnapResult | null;
+  resolveMeasurePlanSnap: (hitPoint: THREE.Vector3, rect: DOMRect, normalMode: boolean) => PlanSnapResult;
+  resolveSectionDrawPoint: (rawPoint: THREE.Vector3, rect: DOMRect, allowAxis?: boolean) => PointerSectionDrawPoint;
+  scheduleKitchenWorktopPreviewUpdate: () => void;
+  setFirstPointMarker: (point: THREE.Vector3 | null) => void;
+  setInstanceSelected: (id: string | null) => void;
+  setSelectedColumn: (id: string | null) => void;
+  setSelectedDoor: () => void;
+  setSelectedFloor: (id: string | null) => void;
+  setSelectedModule: (id: string | null) => void;
+  setSelectedSection: (id: string | null) => void;
+  setSelectedUnderlay: () => void;
+  setSelectedWall: (id: string | null) => void;
+  setToolSelect: () => void;
+  setSelectedWindow: () => void;
+  setUnderlayStatus: (message: string) => void;
+  selectMesh: (mesh: THREE.Mesh | null) => void;
+  setWallEndpointAndConnectedMm: (wall: WallInstance, which: "a" | "b", nextPoint: FloorBoundaryPoint) => boolean;
+  setWallEndpointsAndConnectedMm: (edits: Array<{ wall: WallInstance; which: "a" | "b"; next: FloorBoundaryPoint }>) => boolean;
+  showWallSnapMarkersFor: (wallId: string | null) => void;
+  snapAxisXZ: (a: THREE.Vector3, b: THREE.Vector3, enabled: boolean) => THREE.Vector3;
+  snapPoint2D: (
+    raw: THREE.Vector3,
+    rect: DOMRect,
+    camera: THREE.Camera,
+    maxPx?: number,
+    options?: PointerPlanSnapOptions
+  ) => PlanSnapResult;
+  snapPoint3D: (
+    point: THREE.Vector3,
+    target: THREE.Object3D,
+    camera: THREE.Camera,
+    rect: DOMRect,
+    thresholdPx?: number
+  ) => PointerMeasure3DSnap;
+  snapPointXZ: (point: THREE.Vector3, mesh: THREE.Mesh, threshold?: number) => PointerPointSnapXZ;
+  snapPosition: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
+  startTransformFromSelection: (kind: TransformKind, opts?: StartTransformOptions) => boolean;
+  syncSelectionState: () => void;
+  updateAllSectionVisuals: () => void;
+  updateColumnPlacementPreview: (pointMm: { x: number; z: number } | null) => boolean;
+  updateDoorPlacementPreview: (wallId: string | null, pointMm: { x: number; z: number } | null) => boolean;
+  updateDoorTransform: (door: DoorInstance) => void;
+  updateHoverCursor: (point: THREE.Vector2, kind: MeasureState["hoverSnap"]) => void;
+  updateHudDashedLine: (line: THREE.Line, a: THREE.Vector3, b: THREE.Vector3) => void;
+  updateHudLine: (mesh: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3, thicknessM: number) => void;
+  updateLayoutPanel: () => void;
+  updateMeasureHoverFromPlanPoint: (hitPoint: THREE.Vector3, rect: DOMRect, normalMode: boolean) => void;
+  updatePreview: (
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    rect: DOMRect,
+    distanceMm?: number,
+    options?: { kind?: AssociativeMeasureKind }
+  ) => void;
+  updateSectionDrawPreview: () => void;
+  updateSelectionHighlights: () => void;
+  toFreePlanBinding: (point: THREE.Vector3) => PlanSnapBinding;
+  toMmPoint: (point: THREE.Vector3) => FloorBoundaryPoint;
+  updateUnderlayTransform: () => void;
+  updateWallMeshWithJustification: (
+    mesh: THREE.Mesh,
+    refA: THREE.Vector3 | null,
+    refB: THREE.Vector3 | null,
+    thicknessMm: number,
+    justification: "center" | "interior" | "exterior",
+    exteriorSign: 1 | -1,
+    heightMm?: number
+  ) => void;
+  updateWindowPlacementPreview: (wallId: string | null, pointMm: { x: number; z: number } | null) => boolean;
+  updateWindowTransform: (window: WindowInstance) => void;
+  worldToFloorPoint: (point: THREE.Vector3) => FloorBoundaryPoint;
+  worldToScreen: (world: THREE.Vector3, camera: THREE.Camera, rect: DOMRect) => THREE.Vector2;
+  technicalDimensions: {
+    buildFromPickedLines: (picked: AlignPickedLine[], hitPoint: THREE.Vector3, mode: string) => TechnicalDimensionRecord[];
+    commitDimensions: (dimensions: TechnicalDimensionRecord[]) => void;
+    isLinePicked: (line: AlignPickedLine) => boolean;
+    resetDraft: () => void;
+  };
+  pickAlignLineAt: (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => AlignPickedLine | null;
+  pickCompatibleAlignLineAt: (reference: AlignPickedLine, hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => AlignPickedLine | null;
+  pickFloorEditElement: (mouse: { x: number; y: number }, rect: DOMRect) => PickedFloorEditElement | null;
+  transformState: PointerTransformState;
+  trimState: {
+    hover: AlignPickedLine | null;
+    lastCutter: AlignPickedLine | null;
+    lastTarget: AlignPickedLine | null;
+    lastUntilMs: number;
+    step: string;
+    targetClick: THREE.Vector3 | null;
+    targetPick: AlignPickedLine | null;
+    targetWallId: string | null;
+  };
+  underlayCal: { active: boolean; first: THREE.Vector3 | null; knownMm: number; mode: "calibrate" | "reference" };
+  underlayDragState: { active: boolean; pointerId: number | null; startOffsetMm: { x: number; z: number }; startWorld: THREE.Vector3 };
+  underlayMesh: THREE.Object3D & { visible: boolean };
+  underlayOffXEl: HTMLInputElement | null;
+  underlayOffZEl: HTMLInputElement | null;
+  underlayScaleEl: HTMLInputElement | null;
+  underlayState: { offsetMm: { x: number; z: number }; pinned: boolean; scale: number };
+  viewMode: AppState["viewMode"];
+  viewNavigation: {
+    handlePointerDown: (ev: PointerEvent) => boolean;
+    handlePointerMove: (ev: PointerEvent) => boolean;
+    handlePointerUp: (ev: PointerEvent) => boolean;
+  };
+  wallDefault: Pick<WallParams, "exteriorSign" | "heightMm" | "justification" | "thicknessMm">;
+  wallDefs: Record<string, { axis: "x" | "z"; plane: THREE.Plane }>;
+  wallDraw: {
+    active: boolean;
+    a: THREE.Vector3 | null;
+    chainStart: THREE.Vector3 | null;
+    freeMm?: boolean;
+    hoverB: THREE.Vector3 | null;
+    lastPointerPx: { x: number; y: number };
+    preview: THREE.Mesh | null;
+    segments: number;
+    typedMm: string;
+  };
+  wallDrawSnap: PlanSnapResult | null;
+  wallEditHud: WallEditHud;
+  wallSolvedOutlines: Map<string, Array<{ x: number; z: number }>>;
+  wallTypedHud: HTMLElement;
+  windowDragState: PointerOpeningDragState;
+  windowInst: WindowInstance | null;
 };
+
+type PointerInputHandlersContext = PointerInputHandlersDataContext;
+
+const isWallDrawFreeMm = (wallDraw: { freeMm?: boolean }) => wallDraw.freeMm === true;
 
 type WindowDimensionParam = "widthMm" | "heightMm" | "sillHeightMm";
 type DoorDimensionParam = "widthMm" | "heightMm";
+type DoorSwingControlAction = "toggleHandedness" | "toggleSwingSide";
+type WindowSwingControlAction = "toggleHandedness" | "toggleSwingSide";
+
+type MoveKeyPoint = {
+  point: THREE.Vector3;
+  label: string;
+  axis?: THREE.Vector3 | null;
+  hostWallId?: string | null;
+};
+
+type MoveObjectSnap = {
+  delta: THREE.Vector3;
+  snap: PlanSnapResult;
+  source: THREE.Vector3;
+  target: THREE.Vector3;
+  label: string;
+};
 
 export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   const isPickableObject = (object: THREE.Object3D | null | undefined) =>
@@ -38,113 +600,603 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     !ctx.isVisibilityTargetPickable || ctx.isVisibilityTargetPickable(key);
   const hasLoadedUnderlay = () => !ctx.hasUnderlaySource || ctx.hasUnderlaySource();
   const pickableObjects = <T extends THREE.Object3D>(objects: T[]) => objects.filter((object) => isPickableObject(object));
+  const hasTallSubmodulePickData = (object: THREE.Object3D | null | undefined) => {
+    let current: THREE.Object3D | null | undefined = object;
+    while (current) {
+      if (typeof current.userData?.selectableSubmoduleId === "string" && current.userData.selectableSubmoduleId.trim()) return true;
+      current = current.parent;
+    }
+    return false;
+  };
+  const makeNoSnapResult = (point: THREE.Vector3) => ({ point, kind: "none" } satisfies PlanSnapResult);
+  const syncKitchenDragBindings = (instanceId: string | null) => {
+    if (!instanceId) return;
+    const moved = ctx.findInstance(instanceId);
+    const groupId = moved?.kitchenGroupId ?? null;
+    if (!groupId) return;
+    const group = ctx.S.kitchenGroups.find((item: { id: string }) => item.id === groupId) ?? null;
+    const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
+    for (const inst of ctx.instances) {
+      if (inst.kitchenGroupId !== groupId) continue;
+      inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, groupId, backOffsetMm);
+    }
+    ctx.syncKitchenRunEndClosures?.(groupId, backOffsetMm);
+  };
+  const updateRaycasterFromPointer = (ev: Pick<PointerEvent, "clientX" | "clientY">, rect: DOMRect) => {
+    setPointerNdcFromEvent(ctx.pointerNdc, ev, rect);
+    ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
+  };
+  /** Detail/elevation tabs are orthographic: project LED edits onto their visible plane, never onto the floor. */
+  const getLedEditHitPoint = () => {
+    if (ctx.activeViewerTab === "floorplan") return intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+    const led = ctx.ledStripDrawController;
+    const activePoint = led?.state.points.at(-1) ?? null;
+    const selectedGroup = led?.state.selectedGroupId
+      ? ctx.S.ledStripGroups.find((group) => group.id === led.state.selectedGroupId) ?? null
+      : null;
+    const anchor = activePoint
+      ? new THREE.Vector3(activePoint.x / 1000, activePoint.y / 1000, activePoint.z / 1000)
+      : selectedGroup?.runs[0]?.points[0]
+        ? new THREE.Vector3(selectedGroup.runs[0].points[0].x / 1000, selectedGroup.runs[0].points[0].y / 1000, selectedGroup.runs[0].points[0].z / 1000)
+        : new THREE.Box3().setFromObject(ctx.layoutRoot).getCenter(new THREE.Vector3());
+    const normal = ctx.cam().getWorldDirection(new THREE.Vector3()).normalize();
+    return normal.lengthSq() > 1e-8
+      ? intersectRayPlane(ctx.raycaster, new THREE.Plane().setFromNormalAndCoplanarPoint(normal, anchor))
+      : null;
+  };
+  const resolveMoveSnap = (raw: THREE.Vector3, rect: DOMRect, perpendicularFrom?: THREE.Vector3 | null) => {
+    if (ctx.transformState.moveSnapDisabled) {
+      ctx.selectPlanSnap = null;
+      return makeNoSnapResult(raw);
+    }
+    const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), SNAP_DISTANCE_PX.moveTarget, {
+      perpendicularFrom: perpendicularFrom ?? null,
+      kindPriority: SNAP_PRIORITY_MOVE_TARGET,
+      sticky: ctx.selectPlanSnap,
+      ignoreBinding: isIgnoredMoveSnapBinding
+    });
+    const stickySnap = ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, SNAP_DISTANCE_PX.moveSticky);
+    const activeSnap =
+      snapped.kind !== "none"
+        ? snapped
+        : stickySnap && !isIgnoredMoveSnapBinding(stickySnap.binding)
+          ? stickySnap
+          : null;
+    ctx.selectPlanSnap = activeSnap;
+    return activeSnap;
+  };
+  const updateMoveSnapFeedback = (snap: PlanSnapResult | null, point: THREE.Vector3, rect: DOMRect) => {
+    if (snap?.kind && snap.kind !== "none") {
+      ctx.updateHoverCursor(ctx.worldToScreen(point, ctx.cam(), rect), snap.kind);
+      ctx.drawSnapOverlay.showWorld(point, ctx.cam(), rect, snap.kind);
+      if (snap.a && snap.b && ["edge", "axis", "midpoint", "perpendicular"].includes(snap.kind)) {
+        ctx.updateHudLine(ctx.hudHoverLine, snap.a, snap.b, ctx.hudLineThicknessM(rect) * 1.75);
+      } else {
+        ctx.hudHoverLine.visible = false;
+      }
+      return;
+    }
+    ctx.hideHoverCursor();
+    ctx.drawSnapOverlay.hide();
+    ctx.hudHoverLine.visible = false;
+  };
+  const isIgnoredMoveSnapBinding = (binding: PlanSnapBinding | null | undefined) => {
+    return isSelectedMoveSnapBinding(binding, {
+      wallIds: ctx.transformState.selectedWallIds,
+      instanceIds: ctx.transformState.selectedInstanceIds,
+      sectionIds: ctx.transformState.selectedSectionIds,
+      windowIds: ctx.transformState.selectedWindowIds,
+      doorIds: ctx.transformState.selectedDoorIds
+    });
+  };
+  const openingMoveBounds = (
+    params: { wallId?: string | null; centerMm: number; widthMm: number; frameWidthMm?: number },
+    delta: THREE.Vector3
+  ) => {
+    if (!params.wallId) return null;
+    const wall = ctx.walls.find((item) => item.id === params.wallId) ?? null;
+    return openingMoveBoundsForWall(params, delta, wall);
+  };
+  const isOpeningSmartSnapDeltaValid = (delta: THREE.Vector3) => {
+    const checkOpening = (params: { wallId?: string | null; centerMm: number; widthMm: number; frameWidthMm?: number }) => {
+      const bounds = openingMoveBounds(params, delta);
+      if (!bounds) return true;
+      return isOpeningMoveWithinSmartSnapBounds(params, bounds);
+    };
+
+    for (const id of ctx.transformState.selectedWindowIds as string[]) {
+      const start = ctx.transformState.startWindows.get(id);
+      if (start && !checkOpening(start)) return false;
+    }
+    for (const id of ctx.transformState.selectedDoorIds as string[]) {
+      const start = ctx.transformState.startDoors.get(id);
+      if (start && !checkOpening(start)) return false;
+    }
+    return true;
+  };
+  const collectMoveObjectSnapResultsForPoint = (
+    point: THREE.Vector3,
+    rect: DOMRect,
+    searchPx: number,
+    kindPriority: Array<Exclude<PlanSnapResult["kind"], "none">>
+  ) => {
+    return collectMoveObjectSnapResults((cycleIndex) => {
+      const options: {
+        kindPriority: Array<Exclude<PlanSnapResult["kind"], "none">>;
+        cycleIndex?: number;
+        ignoreBinding: (binding: PlanSnapBinding | null | undefined) => boolean;
+      } = {
+        kindPriority,
+        ignoreBinding: isIgnoredMoveSnapBinding
+      };
+      if (cycleIndex != null) options.cycleIndex = cycleIndex;
+      return ctx.snapPoint2D(point, rect, ctx.cam(), searchPx, options) as PlanSnapResult;
+    });
+  };
+  const collectOpeningMoveKeypoints = (
+    keypoints: MoveKeyPoint[],
+    params: { wallId?: string | null; centerMm: number; widthMm: number },
+    delta: THREE.Vector3,
+    label: string
+  ) => {
+    if (!params.wallId) return;
+    const wall = ctx.walls.find((item) => item.id === params.wallId) ?? null;
+    keypoints.push(...collectOpeningMoveKeypointsForWall(params, delta, label, wall));
+  };
+  const collectMoveKeypoints = (delta: THREE.Vector3) => {
+    const keypoints: MoveKeyPoint[] = [];
+
+    for (const id of ctx.transformState.selectedWallIds as string[]) {
+      const start = ctx.transformState.startWalls.get(id);
+      if (!start) continue;
+      keypoints.push(...collectLineMoveKeypoints(start, delta, `wall ${id}`));
+    }
+
+    for (const id of ctx.transformState.selectedInstanceIds as string[]) {
+      const inst = ctx.findInstance?.(id) ?? ctx.instances.find((item) => item.id === id) ?? null;
+      const start = ctx.transformState.startInstances.get(id);
+      if (!inst || !start) continue;
+      keypoints.push(...collectModuleMoveKeypoints(inst.localBox, start, delta, `module ${id}`));
+    }
+
+    for (const id of ctx.transformState.selectedWindowIds as string[]) {
+      const start = ctx.transformState.startWindows.get(id);
+      if (start) collectOpeningMoveKeypoints(keypoints, start, delta, `window ${id}`);
+    }
+    for (const id of ctx.transformState.selectedDoorIds as string[]) {
+      const start = ctx.transformState.startDoors.get(id);
+      if (start) collectOpeningMoveKeypoints(keypoints, start, delta, `door ${id}`);
+    }
+    for (const id of ctx.transformState.selectedSectionIds as string[]) {
+      const start = ctx.transformState.startSections.get(id);
+      if (!start) continue;
+      keypoints.push(...collectLineMoveKeypoints(start, delta, `section ${id}`));
+    }
+
+    return keypoints;
+  };
+  const resolveMoveObjectSnap = (delta: THREE.Vector3, rect: DOMRect): MoveObjectSnap | null => {
+    const keypoints = collectMoveKeypoints(delta);
+    if (keypoints.length === 0) return null;
+    const maxPx = ctx.transformState.moveSnapDisabled ? SNAP_DISTANCE_PX.moveObjectFree : SNAP_DISTANCE_PX.moveObject;
+    let best: { snap: MoveObjectSnap; score: number } | null = null;
+    const priorityGroups = [SNAP_PRIORITY_MOVE_OBJECT_POINTS, SNAP_PRIORITY_MOVE_OBJECT_LINES];
+
+    for (const keypoint of keypoints) {
+      for (const kindPriority of priorityGroups) {
+        const axis = keypoint.axis?.clone().setY(0) ?? null;
+        const axisSnap = !!axis && axis.lengthSq() > 1e-10;
+        const searchPx = axisSnap ? Math.max(maxPx * 2.25, maxPx + 24) : maxPx;
+        const snaps = collectMoveObjectSnapResultsForPoint(keypoint.point, rect, searchPx, kindPriority);
+
+        for (const snap of snaps) {
+          let adjustment = snap.point.clone().sub(keypoint.point).setY(0);
+          if (axisSnap && axis) {
+            const normalizedAxis = axis.clone().normalize();
+            adjustment = normalizedAxis.multiplyScalar(adjustment.dot(normalizedAxis));
+          }
+          if (adjustment.lengthSq() < 1e-8) continue;
+
+          const target = keypoint.point.clone().add(adjustment);
+          const sourceScreen = ctx.worldToScreen(keypoint.point, ctx.cam(), rect);
+          const targetScreen = ctx.worldToScreen(target, ctx.cam(), rect);
+          const snapScreen = ctx.worldToScreen(snap.point, ctx.cam(), rect);
+          const distancePx = Math.hypot(sourceScreen.x - targetScreen.x, sourceScreen.y - targetScreen.y);
+          if (distancePx > maxPx) continue;
+
+          const perpendicularPx = Math.hypot(targetScreen.x - snapScreen.x, targetScreen.y - snapScreen.y);
+          const sameHostWall = !!keypoint.hostWallId && snapBindingWallId(snap.binding) === keypoint.hostWallId;
+          const score =
+            distancePx * (SNAP_KIND_SCORE[snap.kind as Exclude<PlanSnapResult["kind"], "none">] ?? 1) +
+            (axisSnap ? perpendicularPx * (sameHostWall ? 0.08 : 0.2) : 0) +
+            (keypoint.hostWallId && !sameHostWall ? 2 : 0);
+          const candidate = {
+            delta: delta.clone().add(adjustment),
+            snap,
+            source: keypoint.point.clone(),
+            target,
+            label: keypoint.label
+          };
+          if (!isOpeningSmartSnapDeltaValid(candidate.delta)) continue;
+          if (!best || score < best.score) best = { snap: candidate, score };
+        }
+      }
+    }
+
+    return best?.snap ?? null;
+  };
+  const resolveMoveDeltaWithObjectSnap = (delta: THREE.Vector3, rect: DOMRect) => {
+    const objectSnap = resolveMoveObjectSnap(delta, rect);
+    if (!objectSnap) return { delta: prepareMoveDeltaForSnapMode(delta, ctx.transformState.moveSnapDisabled), objectSnap: null };
+    const snappedDelta = prepareMoveDeltaForSnapMode(objectSnap.delta, ctx.transformState.moveSnapDisabled);
+    return { delta: snappedDelta, objectSnap: { ...objectSnap, delta: snappedDelta } };
+  };
+  const armMoveTargetFromBase = (basePoint?: THREE.Vector3) => {
+    if (!basePoint || ctx.transformState.kind !== "move" || ctx.transformState.step !== "pickBase") return;
+    ctx.transformState.base = basePoint.clone();
+    ctx.transformState.step = "pickTarget";
+    ctx.transformState.typed = "";
+    ctx.transformState.lastValidDelta.set(0, 0, 0);
+    ctx.setUnderlayStatus("Move: zvol cielovy bod, alebo namier smer a napis vzdialenost v mm. Shift = os, N = volny pohyb.");
+  };
+  const continueMoveAfterSelection = (basePoint?: THREE.Vector3) => {
+    void basePoint;
+    return continueMoveAfterObjectSelection(ctx);
+  };
+  const hasMoveSelection = () =>
+    (ctx.selectedWallIds?.size ?? 0) > 0 ||
+    (ctx.selectedInstanceIds?.size ?? 0) > 0 ||
+    (ctx.selectedKind === "wall" && !!ctx.selectedWallId) ||
+    (ctx.selectedKind === "module" && !!ctx.selectedInstanceId) ||
+    (ctx.selectedKind === "section" && !!ctx.selectedSectionId) ||
+    (ctx.selectedKind === "window" && !!ctx.windowInst) ||
+    (ctx.selectedKind === "door" && !!ctx.doorInst);
+  const continueMoveWithCurrentSelection = (basePoint?: THREE.Vector3) => {
+    if (ctx.transformState.kind !== "move" || ctx.transformState.step !== "selectElements" || !ctx.transformState.stickyMove) return false;
+    if (!hasMoveSelection()) return false;
+    if (!ctx.startTransformFromSelection("move", { sticky: true })) return false;
+    armMoveTargetFromBase(basePoint);
+    return true;
+  };
+  const constrainMoveDelta = (delta: THREE.Vector3) => {
+    const firstWallId = ctx.transformState.selectedWallIds[0] as string | undefined;
+    const firstWall = firstWallId ? ctx.transformState.startWalls.get(firstWallId) : null;
+    return constrainMoveDeltaToAxis(delta, firstWall);
+  };
   const windowPlacementWallSnapPx = 34;
+  const floorplanWallHoverSnapPx = 6;
   const windowSelectionSnapPx = 20;
-  const pickFloorplanWallId = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) => {
-    let bestPoly: { id: string; px: number } | null = null;
-    const pW = { x: pMm.x / 1000, z: pMm.z / 1000 };
-    for (const [id, poly] of ctx.wallSolvedOutlines) {
-      if (!isPickableKey(`wall:${id}`)) continue;
-      if (poly.length < 3) continue;
-      if (!ctx.pointInPolygonXZ(pW, poly)) continue;
-      const w = ctx.walls.find((x) => x.id === id) ?? null;
-      const mid = w
-        ? new THREE.Vector3((w.params.aMm.x + w.params.bMm.x) / 2000, 0, (w.params.aMm.z + w.params.bMm.z) / 2000)
-        : new THREE.Vector3(pW.x, 0, pW.z);
-      const s = ctx.worldToScreen(mid, ctx.cam(), rect);
-      const px = Math.hypot(s.x - mouse.x, s.y - mouse.y);
-      if (!bestPoly || px < bestPoly.px) bestPoly = { id, px };
-    }
-    if (bestPoly) return bestPoly.id;
+  const pickFloorplanWallId = (
+    pMm: { x: number; z: number },
+    mouse: { x: number; y: number },
+    rect: DOMRect,
+    axisSnapPx = windowPlacementWallSnapPx
+  ) =>
+    pickResolvedFloorplanWallId({
+      axisSnapPx,
+      cam: ctx.cam(),
+      isWallPickable: (id) => isPickableKey(`wall:${id}`),
+      mouse,
+      pMm,
+      pointInPolygonXZ: ctx.pointInPolygonXZ,
+      pointOnWallAxisMm: ctx.pointOnWallAxisMm,
+      rect,
+      wallSolvedOutlines: ctx.wallSolvedOutlines,
+      walls: ctx.walls,
+      worldToScreen: ctx.worldToScreen
+    });
+  const pickFloorplanWindow = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) =>
+    pickFloorplanOpening({
+      cam: ctx.cam(),
+      distPxPointToSeg: ctx.distPxPointToSeg,
+      instances: ctx.windows,
+      isPickable: (id) => isPickableKey(`window:${id}`),
+      mouse,
+      pMm,
+      pointOnWallAxisMm: ctx.pointOnWallAxisMm,
+      rect,
+      selectionSnapPx: windowSelectionSnapPx,
+      walls: ctx.walls,
+      worldToScreen: ctx.worldToScreen
+    });
 
-    let best: { id: string; px: number } | null = null;
-    for (const w of ctx.walls) {
-      if (!isPickableKey(`wall:${w.id}`)) continue;
-      const closest = ctx.pointOnWallAxisMm(w, pMm);
-      if (!Number.isFinite(closest.distMm)) continue;
-      const cp = new THREE.Vector3(closest.closest.x / 1000, 0, closest.closest.z / 1000);
-      const s = ctx.worldToScreen(cp, ctx.cam(), rect);
-      const px = Math.hypot(s.x - mouse.x, s.y - mouse.y);
-      if (!best || px < best.px) best = { id: w.id, px };
+  const pickFloorplanDoor = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) =>
+    pickFloorplanOpening({
+      cam: ctx.cam(),
+      distPxPointToSeg: ctx.distPxPointToSeg,
+      instances: ctx.doors,
+      isPickable: (id) => isPickableKey(`door:${id}`),
+      mouse,
+      pMm,
+      pointOnWallAxisMm: ctx.pointOnWallAxisMm,
+      rect,
+      selectionSnapPx: windowSelectionSnapPx,
+      walls: ctx.walls,
+      worldToScreen: ctx.worldToScreen
+    });
+
+  const moduleHoverTarget = (id: string | null): SelectionHighlightTarget | null => {
+    if (!id) return null;
+    const selectableId = ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(id) : id;
+    if (!selectableId) return null;
+    const inst = ctx.findInstance(selectableId);
+    if (!ctx.S.kitchenEditMode && inst?.kitchenGroupId && ctx.S.kitchenGroups.some((group) => group.id === inst.kitchenGroupId)) {
+      return { kind: "kitchenGroup", id: inst.kitchenGroupId };
     }
-    return best && best.px <= windowPlacementWallSnapPx ? best.id : null;
-  };
-  const pickFloorplanWindow = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) => {
-    let best: { inst: WindowInstance; px: number } | null = null;
-    for (const inst of ctx.windows) {
-      const wallId = inst.params.wallId ?? null;
-      if (!wallId || !isPickableKey(`window:${inst.id}`)) continue;
-      const wall = ctx.walls.find((item) => item.id === wallId) ?? null;
-      if (!wall) continue;
-      const closest = ctx.pointOnWallAxisMm(wall, pMm);
-      if (!Number.isFinite(closest.distMm)) continue;
-      const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
-      const alongMm = closest.t * lengthMm;
-      const alongPadMm = Math.max(130, inst.params.widthMm * 0.08);
-      const lateralPadMm = Math.max(180, wall.params.thicknessMm * 1.4);
-      const aMm = Math.max(0, inst.params.centerMm - inst.params.widthMm / 2);
-      const bMm = Math.min(lengthMm, inst.params.centerMm + inst.params.widthMm / 2);
-      const ax = wall.params.aMm.x;
-      const az = wall.params.aMm.z;
-      const bx = wall.params.bMm.x;
-      const bz = wall.params.bMm.z;
-      const dirX = (bx - ax) / Math.max(1, lengthMm);
-      const dirZ = (bz - az) / Math.max(1, lengthMm);
-      const screenA = ctx.worldToScreen(new THREE.Vector3((ax + dirX * aMm) / 1000, 0, (az + dirZ * aMm) / 1000), ctx.cam(), rect);
-      const screenB = ctx.worldToScreen(new THREE.Vector3((ax + dirX * bMm) / 1000, 0, (az + dirZ * bMm) / 1000), ctx.cam(), rect);
-      const px = ctx.distPxPointToSeg(mouse.x, mouse.y, screenA.x, screenA.y, screenB.x, screenB.y);
-      const hit =
-        px <= windowSelectionSnapPx ||
-        (alongMm >= inst.params.centerMm - inst.params.widthMm / 2 - alongPadMm &&
-          alongMm <= inst.params.centerMm + inst.params.widthMm / 2 + alongPadMm &&
-          closest.distMm <= lateralPadMm);
-      if (hit && (!best || px < best.px)) best = { inst, px };
-    }
-    return best?.inst ?? null;
+    return { kind: "module", id: selectableId };
   };
 
-  const pickFloorplanDoor = (pMm: { x: number; z: number }, mouse: { x: number; y: number }, rect: DOMRect) => {
-    let best: { inst: DoorInstance; px: number } | null = null;
-    for (const inst of ctx.doors) {
-      const wallId = inst.params.wallId ?? null;
-      if (!wallId || !isPickableKey(`door:${inst.id}`)) continue;
-      const wall = ctx.walls.find((item) => item.id === wallId) ?? null;
-      if (!wall) continue;
-      const closest = ctx.pointOnWallAxisMm(wall, pMm);
-      if (!Number.isFinite(closest.distMm)) continue;
-      const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
-      const alongMm = closest.t * lengthMm;
-      const alongPadMm = Math.max(130, inst.params.widthMm * 0.08);
-      const lateralPadMm = Math.max(180, wall.params.thicknessMm * 1.4);
-      const aMm = Math.max(0, inst.params.centerMm - inst.params.widthMm / 2);
-      const bMm = Math.min(lengthMm, inst.params.centerMm + inst.params.widthMm / 2);
-      const ax = wall.params.aMm.x;
-      const az = wall.params.aMm.z;
-      const bx = wall.params.bMm.x;
-      const bz = wall.params.bMm.z;
-      const dirX = (bx - ax) / Math.max(1, lengthMm);
-      const dirZ = (bz - az) / Math.max(1, lengthMm);
-      const screenA = ctx.worldToScreen(new THREE.Vector3((ax + dirX * aMm) / 1000, 0, (az + dirZ * aMm) / 1000), ctx.cam(), rect);
-      const screenB = ctx.worldToScreen(new THREE.Vector3((ax + dirX * bMm) / 1000, 0, (az + dirZ * bMm) / 1000), ctx.cam(), rect);
-      const px = ctx.distPxPointToSeg(mouse.x, mouse.y, screenA.x, screenA.y, screenB.x, screenB.y);
-      const hit =
-        px <= windowSelectionSnapPx ||
-        (alongMm >= inst.params.centerMm - inst.params.widthMm / 2 - alongPadMm &&
-          alongMm <= inst.params.centerMm + inst.params.widthMm / 2 + alongPadMm &&
-          closest.distMm <= lateralPadMm);
-      if (hit && (!best || px < best.px)) best = { inst, px };
+  const worktopHoverTarget = (id: string | null): SelectionHighlightTarget | null => {
+    if (!id) return null;
+    const worktop = ctx.findKitchenWorktop(id);
+    if (!worktop) return null;
+    if (ctx.S.kitchenEditMode && worktop.kitchenGroupId !== ctx.S.activeKitchenGroupId) return null;
+    return worktop.kitchenGroupId && ctx.S.kitchenGroups.some((group) => group.id === worktop.kitchenGroupId)
+      ? { kind: "kitchenGroup", id: worktop.kitchenGroupId }
+      : { kind: "worktop", id };
+  };
+
+  const isKnownKitchenGroup = (groupId: string | null | undefined) => {
+    return !!groupId && !!(ctx.kitchenMode?.findKitchenGroup?.(groupId) ?? ctx.S.kitchenGroups.find((group) => group.id === groupId) ?? null);
+  };
+
+  const kitchenGroupIdForModule = (id: string | null | undefined) => {
+    if (!id) return null;
+    const groupId = ctx.findInstance(id)?.kitchenGroupId ?? null;
+    return isKnownKitchenGroup(groupId) ? groupId : null;
+  };
+
+  const kitchenGroupIdForWorktop = (id: string | null | undefined) => {
+    if (!id) return null;
+    const groupId = ctx.findKitchenWorktop(id)?.kitchenGroupId ?? null;
+    return isKnownKitchenGroup(groupId) ? groupId : null;
+  };
+
+  const kitchenGroupTargetForModule = (id: string | null | undefined) => {
+    return resolveKitchenGroupEditTarget({
+      moduleGroupId: kitchenGroupIdForModule(id),
+      moduleInstanceId: id,
+      worktopGroupId: null,
+      isKnownGroup: isKnownKitchenGroup
+    });
+  };
+
+  const kitchenGroupTargetForWorktop = (id: string | null | undefined) => {
+    return resolveKitchenGroupEditTarget({
+      moduleGroupId: null,
+      moduleInstanceId: null,
+      worktopGroupId: kitchenGroupIdForWorktop(id),
+      isKnownGroup: isKnownKitchenGroup
+    });
+  };
+
+  const targetFromPickedObject = (object: THREE.Object3D | null | undefined): SelectionHighlightTarget | null => {
+    if (!object) return null;
+    const windowId = getWindowIdFromObject(object);
+    if (windowId) return { kind: "window", id: windowId };
+    const doorId = getDoorIdFromObject(object);
+    if (doorId) return { kind: "door", id: doorId };
+    const directModuleId = ctx.getInstanceIdFromObject(object);
+    if (directModuleId) {
+      const submoduleTarget = ctx.kitchenMode?.getTallSubmoduleHighlightTargetFromObject?.(directModuleId, object) ?? null;
+      if (submoduleTarget) return submoduleTarget;
     }
-    return best?.inst ?? null;
+    const moduleTarget = moduleHoverTarget(directModuleId);
+    if (moduleTarget) return moduleTarget;
+    const worktopTarget = worktopHoverTarget(ctx.getWorktopIdFromObject(object));
+    if (worktopTarget) return worktopTarget;
+    const columnId = ctx.getColumnIdFromObject(object);
+    if (columnId) return { kind: "column", id: columnId };
+    const sectionId = ctx.getSectionIdFromObject(object);
+    if (sectionId) return { kind: "section", id: sectionId };
+    const wallId = (object.userData?.wallId as string | undefined) ?? null;
+    if (wallId) return { kind: "wall", id: wallId };
+    const floorId = (object.userData?.floorId as string | undefined) ?? null;
+    if (floorId) return { kind: "floor", id: floorId };
+    return null;
+  };
+
+  const getProjectedObjectBounds = (objects: THREE.Object3D[], rect: DOMRect) => {
+    const box = new THREE.Box3();
+    for (const object of objects) box.expandByObject(object);
+    if (box.isEmpty()) return null;
+    const corners = [
+      new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.max.z)
+    ].map((point) => ctx.worldToScreen(point, ctx.cam(), rect));
+    return {
+      minX: Math.min(...corners.map((point) => point.x)),
+      maxX: Math.max(...corners.map((point) => point.x)),
+      minY: Math.min(...corners.map((point) => point.y)),
+      maxY: Math.max(...corners.map((point) => point.y))
+    };
+  };
+
+  const collectTallSubmoduleObjectsInMarquee = (selectionRect: ScreenRect, rect: DOMRect) => {
+    const activeHostId = ctx.kitchenMode?.getActiveTallEditorInstanceId?.() ?? null;
+    const inst = activeHostId ? ctx.findInstance(activeHostId) : null;
+    if (!inst) return null;
+
+    const hits: THREE.Object3D[] = [];
+    const seenSlots = new Set<number>();
+    inst.module.traverse((object) => {
+      const rawId = object.userData?.selectableSubmoduleId;
+      if (typeof rawId !== "string" || !rawId.trim()) return;
+      if (object.parent?.userData?.selectableSubmoduleId === rawId) return;
+
+      const rawSlotIndex = object.userData?.hostSlotIndex;
+      const slotIndex = typeof rawSlotIndex === "number" && Number.isFinite(rawSlotIndex) ? Math.round(rawSlotIndex) : 0;
+      if (slotIndex <= 0 || seenSlots.has(slotIndex)) return;
+
+      const bounds = getProjectedObjectBounds([object], rect);
+      if (!bounds) return;
+      const isHit = ctx.marquee.mode === "contain"
+        ? boundsContainedInRect(bounds, selectionRect)
+        : boundsOverlapsRect(bounds, selectionRect);
+      if (!isHit) return;
+
+      seenSlots.add(slotIndex);
+      hits.push(object);
+    });
+
+    return { activeHostId, hits };
+  };
+
+  const resolveDetailModuleIdFromScreenBounds = (mouse: { x: number; y: number }, rect: DOMRect) => {
+    if (!(ctx.viewMode === "2d" && ctx.activeViewerTab !== "floorplan")) return null;
+    let best: { id: string; area: number; centerDistance: number } | null = null;
+    const tolerancePx = 4;
+
+    for (const inst of ctx.instances) {
+      if (!isPickableKey(`module:${inst.id}`)) continue;
+      if (ctx.kitchenMode && !ctx.kitchenMode.filterSelectableInstanceId(inst.id)) continue;
+      const bounds = getProjectedObjectBounds(ctx.getInstanceGeometryMeshes(inst), rect);
+      if (!bounds) continue;
+      if (
+        mouse.x < bounds.minX - tolerancePx ||
+        mouse.x > bounds.maxX + tolerancePx ||
+        mouse.y < bounds.minY - tolerancePx ||
+        mouse.y > bounds.maxY + tolerancePx
+      ) continue;
+      const area = Math.max(1, (bounds.maxX - bounds.minX) * (bounds.maxY - bounds.minY));
+      const centerDistance = Math.hypot(mouse.x - (bounds.minX + bounds.maxX) / 2, mouse.y - (bounds.minY + bounds.maxY) / 2);
+      if (!best || area < best.area || (area === best.area && centerDistance < best.centerDistance)) {
+        best = { id: inst.id, area, centerDistance };
+      }
+    }
+
+    return best?.id ?? null;
+  };
+
+  const resolveFloorplanHoverTarget = (ev: PointerEvent): SelectionHighlightTarget | null => {
+    const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+    if (!hitPoint) return null;
+    const pMm = ctx.toMmPoint(hitPoint);
+    const rect = ctx.renderer.domElement.getBoundingClientRect();
+    const mouse = pointerClientPointInRect(ev, rect);
+    if (ctx.S.kitchenEditMode) {
+      const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
+      const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+      const directModuleId = ctx.getInstanceIdFromObject(moduleHit);
+      if (directModuleId) {
+        const submoduleTarget = ctx.kitchenMode?.getTallSubmoduleHighlightTargetFromObject?.(directModuleId, moduleHit) ?? null;
+        if (submoduleTarget) return submoduleTarget;
+      }
+      const moduleTarget = moduleHoverTarget(directModuleId ?? (fallbackModuleId && isPickableKey(`module:${fallbackModuleId}`) ? fallbackModuleId : null));
+      if (moduleTarget) return moduleTarget;
+      const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+      const fallbackWorktopId = ctx.findSelectableFloorplanWorktopAtPoint(pMm);
+      return worktopHoverTarget(ctx.getWorktopIdFromObject(worktopHit) ?? (fallbackWorktopId && isPickableKey(`worktop:${fallbackWorktopId}`) ? fallbackWorktopId : null));
+    }
+    const pickedWindow = pickFloorplanWindow(pMm, mouse, rect);
+    if (pickedWindow) return { kind: "window", id: pickedWindow.id };
+    const pickedDoor = pickFloorplanDoor(pMm, mouse, rect);
+    if (pickedDoor) return { kind: "door", id: pickedDoor.id };
+    const sectionHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getSectionPickMeshes()), false)[0]?.object;
+    const sectionId = ctx.getSectionIdFromObject(sectionHit);
+    if (sectionId) return { kind: "section", id: sectionId };
+    const columnHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getColumnPickMeshes()), false)[0]?.object;
+    const columnId = ctx.getColumnIdFromObject(columnHit);
+    if (columnId) return { kind: "column", id: columnId };
+    const moduleHits = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false);
+    const moduleHit = moduleHits[0]?.object;
+    const tallSubmoduleModuleHit = ctx.S.kitchenEditMode && ctx.kitchenMode?.isTallModuleEditorActive?.()
+      ? moduleHits.find((hit) => hasTallSubmodulePickData(hit.object))?.object
+      : null;
+    const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+    const moduleTarget = moduleHoverTarget(ctx.getInstanceIdFromObject(moduleHit) ?? (fallbackModuleId && isPickableKey(`module:${fallbackModuleId}`) ? fallbackModuleId : null));
+    if (moduleTarget) return moduleTarget;
+    const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+    const fallbackWorktopId = ctx.findSelectableFloorplanWorktopAtPoint(pMm);
+    const worktopTarget = worktopHoverTarget(ctx.getWorktopIdFromObject(worktopHit) ?? (fallbackWorktopId && isPickableKey(`worktop:${fallbackWorktopId}`) ? fallbackWorktopId : null));
+    if (worktopTarget) return worktopTarget;
+    const floorId = pickFloorplanFloorBoundary({
+      cam: ctx.cam(),
+      distPxPointToSeg: ctx.distPxPointToSeg,
+      floors: ctx.floors,
+      floorPointToWorld: ctx.floorPointToWorld,
+      isFloorPickable: (id) => isPickableKey(`floor:${id}`),
+      mouse,
+      rect,
+      snapPx: 12,
+      worldToScreen: ctx.worldToScreen
+    });
+    if (floorId) return { kind: "floor", id: floorId };
+    const wallId = pickFloorplanWallId(pMm, mouse, rect, floorplanWallHoverSnapPx);
+    return wallId ? { kind: "wall", id: wallId } : null;
+  };
+
+  const resolveKitchenGroupTargetFromPointer = (ev: Pick<PointerEvent, "clientX" | "clientY">): KitchenGroupEditTarget | null => {
+    if (ctx.S.kitchenEditMode) return null;
+    const rect = ctx.renderer.domElement.getBoundingClientRect();
+    const mouse = pointerClientPointInRect(ev, rect);
+
+    if (ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan") {
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      if (!hitPoint) return null;
+      const pMm = ctx.toMmPoint(hitPoint);
+      const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
+      const moduleId = ctx.getInstanceIdFromObject(moduleHit) ?? ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+      const moduleTarget = kitchenGroupTargetForModule(moduleId);
+      if (moduleTarget) return moduleTarget;
+
+      const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+      return kitchenGroupTargetForWorktop(ctx.getWorktopIdFromObject(worktopHit) ?? ctx.findSelectableFloorplanWorktopAtPoint(pMm));
+    }
+
+    updateRaycasterFromPointer(ev, rect);
+    const picks: THREE.Object3D[] = [];
+    picks.push(...ctx.getAllInstanceGeometryMeshes());
+    picks.push(...ctx.getKitchenWorktopGeometryMeshes());
+    const first = ctx.raycaster.intersectObjects(pickableObjects(picks), false)[0]?.object;
+    const moduleId = ctx.getInstanceIdFromObject(first) ?? resolveDetailModuleIdFromScreenBounds(mouse, rect);
+    const moduleTarget = kitchenGroupTargetForModule(moduleId);
+    if (moduleTarget) return moduleTarget;
+    return kitchenGroupTargetForWorktop(ctx.getWorktopIdFromObject(first));
+  };
+
+  const resolve3dHoverTarget = (ev: PointerEvent): SelectionHighlightTarget | null => {
+    const rect = ctx.renderer.domElement.getBoundingClientRect();
+    const mouse = pointerClientPointInRect(ev, rect);
+    const picks: THREE.Object3D[] = [];
+    picks.push(...ctx.getAllInstanceGeometryMeshes());
+    picks.push(...ctx.getKitchenWorktopGeometryMeshes());
+    picks.push(...ctx.windows.map((inst) => inst.pick));
+    picks.push(...ctx.doors.map((inst) => inst.pick));
+    picks.push(...ctx.getColumnPickMeshes());
+    picks.push(...ctx.getSectionPickMeshes());
+    for (const wall of ctx.walls) picks.push(wall.mesh);
+    for (const floor of ctx.floors) picks.push(floor.mesh);
+    const first = ctx.raycaster.intersectObjects(pickableObjects(picks), false)[0]?.object;
+    const directTarget = targetFromPickedObject(first);
+    if (ctx.S.kitchenEditMode) {
+      if (ctx.kitchenMode?.isTallModuleEditorActive?.()) {
+        return directTarget?.kind === "submodule" ? directTarget : null;
+      }
+      const detailModuleTarget = moduleHoverTarget(resolveDetailModuleIdFromScreenBounds(mouse, rect));
+      if (directTarget?.kind === "submodule") return directTarget;
+      if (directTarget?.kind === "module" || directTarget?.kind === "kitchenGroup" || directTarget?.kind === "worktop") return directTarget;
+      return detailModuleTarget;
+    }
+    if (directTarget && directTarget.kind !== "wall" && directTarget.kind !== "floor") return directTarget;
+    return moduleHoverTarget(resolveDetailModuleIdFromScreenBounds(mouse, rect)) ?? directTarget;
   };
 
   const resolveColumnPlacementPoint = (raw: THREE.Vector3, rect: DOMRect) => {
-    const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), 24, {
+    const snapped = ctx.snapPoint2D(raw, rect, ctx.cam(), SNAP_DISTANCE_PX.columnPlacement, {
       sticky: ctx.selectPlanSnap
     });
     const activeSnap =
-      snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, 28);
+      snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(raw, ctx.selectPlanSnap, ctx.cam(), rect, SNAP_DISTANCE_PX.columnPlacementSticky);
     ctx.selectPlanSnap = activeSnap;
-    if (activeSnap) {
+    if (activeSnap && activeSnap.kind !== "none") {
       ctx.updateHoverCursor(ctx.worldToScreen(activeSnap.point, ctx.cam(), rect), activeSnap.kind);
       ctx.drawSnapOverlay.showWorld(activeSnap.point, ctx.cam(), rect, activeSnap.kind);
       return activeSnap.point;
@@ -191,207 +1243,138 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
   const ensureWindowDimensionInput = () => {
     if (windowDimensionInput) return windowDimensionInput;
-    const input = document.createElement("input");
-    input.id = "window-dimension-edit";
-    input.name = "window-dimension-edit";
-    input.type = "text";
-    input.inputMode = "numeric";
-    input.autocomplete = "off";
-    input.placeholder = "mm";
-    input.setAttribute("aria-label", "Window dimension in millimeters");
-    input.style.position = "absolute";
-    input.style.display = "none";
-    input.style.pointerEvents = "auto";
-    input.style.zIndex = "18";
-    input.style.width = "76px";
-    input.style.height = "22px";
-    input.style.borderRadius = "7px";
-    input.style.border = "1px solid rgba(36, 40, 54, 0.95)";
-    input.style.background = "#0f1117";
-    input.style.color = "#ffffff";
-    input.style.caretColor = "#ffffff";
-    input.style.padding = "0 6px";
-    input.style.fontSize = "12px";
-    input.style.outline = "none";
-    input.style.transform = "translate(-50%, -50%)";
-
-    const hide = () => {
-      input.style.display = "none";
-      activeWindowDimensionParam = null;
-    };
-    const parseMm = (raw: string) => {
-      const value = Number(String(raw).trim().replace(",", ".").replace(/[^0-9.\-]/g, ""));
-      return Number.isFinite(value) ? Math.round(value) : null;
-    };
-    const commit = () => {
-      const inst = ctx.windowInst;
-      const param = activeWindowDimensionParam;
-      if (!inst || !param) return;
-      const parsed = parseMm(input.value);
-      if (parsed == null) return;
-      inst.params[param] = param === "sillHeightMm" ? Math.max(0, parsed) : Math.max(1, parsed);
-      ctx.updateWindowTransform(inst);
-      ctx.setSelectedWindow();
-      ctx.mountProps();
-      ctx.commitHistory(ctx.S);
-    };
-
-    input.addEventListener("pointerdown", (ev) => {
-      ev.stopPropagation();
-    });
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") {
-        commit();
-        input.blur();
-        ev.preventDefault();
-      } else if (ev.key === "Escape") {
-        hide();
-        input.blur();
-        ev.preventDefault();
+    const host = ctx.args?.viewerEl ?? ctx.renderer.domElement.parentElement ?? document.body;
+    const input = createDimensionEditInput(document, host, {
+      id: "window-dimension-edit",
+      ariaLabel: "Window dimension in millimeters",
+      onHide: () => {
+        activeWindowDimensionParam = null;
+      },
+      onCommit: () => {
+        const inst = ctx.windowInst;
+        const param = activeWindowDimensionParam;
+        if (!inst || !param) return;
+        const parsed = parseDimensionMillimeters(input.value);
+        if (parsed == null) return;
+        inst.params[param] = param === "sillHeightMm" ? Math.max(0, parsed) : Math.max(1, parsed);
+        ctx.updateWindowTransform(inst);
+        ctx.setSelectedWindow();
+        ctx.mountProps();
+        ctx.commitHistory(ctx.S);
       }
     });
-    input.addEventListener("blur", hide);
-
-    const host = ctx.args?.viewerEl ?? ctx.renderer.domElement.parentElement ?? document.body;
-    host.appendChild(input);
     windowDimensionInput = input;
     return input;
   };
 
   const ensureDoorDimensionInput = () => {
     if (doorDimensionInput) return doorDimensionInput;
-    const input = document.createElement("input");
-    input.id = "door-dimension-edit";
-    input.name = "door-dimension-edit";
-    input.type = "text";
-    input.inputMode = "numeric";
-    input.autocomplete = "off";
-    input.placeholder = "mm";
-    input.setAttribute("aria-label", "Door dimension in millimeters");
-    input.style.position = "absolute";
-    input.style.display = "none";
-    input.style.pointerEvents = "auto";
-    input.style.zIndex = "18";
-    input.style.width = "76px";
-    input.style.height = "22px";
-    input.style.borderRadius = "7px";
-    input.style.border = "1px solid rgba(36, 40, 54, 0.95)";
-    input.style.background = "#0f1117";
-    input.style.color = "#ffffff";
-    input.style.caretColor = "#ffffff";
-    input.style.padding = "0 6px";
-    input.style.fontSize = "12px";
-    input.style.outline = "none";
-    input.style.transform = "translate(-50%, -50%)";
-
-    const hide = () => {
-      input.style.display = "none";
-      activeDoorDimensionParam = null;
-    };
-    const parseMm = (raw: string) => {
-      const value = Number(String(raw).trim().replace(",", ".").replace(/[^0-9.\-]/g, ""));
-      return Number.isFinite(value) ? Math.round(value) : null;
-    };
-    const commit = () => {
-      const inst = ctx.doorInst;
-      const param = activeDoorDimensionParam;
-      if (!inst || !param) return;
-      const parsed = parseMm(input.value);
-      if (parsed == null) return;
-      inst.params[param] = Math.max(1, parsed);
-      ctx.updateDoorTransform(inst);
-      ctx.setSelectedDoor();
-      ctx.mountProps();
-      ctx.commitHistory(ctx.S);
-    };
-
-    input.addEventListener("pointerdown", (ev) => {
-      ev.stopPropagation();
-    });
-    input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") {
-        commit();
-        input.blur();
-        ev.preventDefault();
-      } else if (ev.key === "Escape") {
-        hide();
-        input.blur();
-        ev.preventDefault();
+    const host = ctx.args?.viewerEl ?? ctx.renderer.domElement.parentElement ?? document.body;
+    const input = createDimensionEditInput(document, host, {
+      id: "door-dimension-edit",
+      ariaLabel: "Door dimension in millimeters",
+      onHide: () => {
+        activeDoorDimensionParam = null;
+      },
+      onCommit: () => {
+        const inst = ctx.doorInst;
+        const param = activeDoorDimensionParam;
+        if (!inst || !param) return;
+        const parsed = parseDimensionMillimeters(input.value);
+        if (parsed == null) return;
+        inst.params[param] = Math.max(1, parsed);
+        ctx.updateDoorTransform(inst);
+        ctx.setSelectedDoor();
+        ctx.mountProps();
+        ctx.commitHistory(ctx.S);
       }
     });
-    input.addEventListener("blur", hide);
-
-    const host = ctx.args?.viewerEl ?? ctx.renderer.domElement.parentElement ?? document.body;
-    host.appendChild(input);
     doorDimensionInput = input;
     return input;
   };
 
   const cancelPendingMarquee = (pointerId: number) => {
-    if (ctx.marquee.pending && ctx.marquee.pointerId === pointerId) {
-      ctx.marquee.hitSomething = true;
-      ctx.marquee.pending = false;
-      ctx.marquee.active = false;
-      ctx.marqueeEl.style.display = "none";
-    }
+    cancelPendingPointerMarqueeHit(ctx.marquee, ctx.marqueeEl, pointerId);
   };
 
-  const isVisibleThroughSelection = (object: THREE.Object3D) => {
-    const selection = ctx.windowInst?.selection ?? null;
-    let current: THREE.Object3D | null = object;
-    while (current) {
-      if (!current.visible) return false;
-      if (current === selection) return true;
-      current = current.parent;
-    }
-    return false;
+  const markPendingMarqueeHit = (pointerId: number) => {
+    if (!ctx.marquee.pending || ctx.marquee.pointerId !== pointerId) return false;
+    ctx.marquee.hitSomething = true;
+    return true;
   };
 
   const pickWindowDimensionParam = (): WindowDimensionParam | null => {
     const inst = ctx.windowInst;
     if (!inst || ctx.selectedKind !== "window" || !inst.selection.visible) return null;
     const hits = ctx.raycaster.intersectObject(inst.selection, true);
-    for (const hit of hits) {
-      const param = hit.object.userData.windowDimensionParam as WindowDimensionParam | undefined;
-      if (param && hit.object.userData.kind === "windowDimensionEdit" && isVisibleThroughSelection(hit.object)) return param;
-    }
-    return null;
-  };
-
-  const isVisibleThroughDoorSelection = (object: THREE.Object3D) => {
-    const selection = ctx.doorInst?.selection ?? null;
-    let current: THREE.Object3D | null = object;
-    while (current) {
-      if (!current.visible) return false;
-      if (current === selection) return true;
-      current = current.parent;
-    }
-    return false;
+    return pickVisibleSelectionUserDataValue<WindowDimensionParam>(hits, inst.selection, {
+      kind: "windowDimensionEdit",
+      valueKey: "windowDimensionParam"
+    });
   };
 
   const pickDoorDimensionParam = (): DoorDimensionParam | null => {
     const inst = ctx.doorInst;
     if (!inst || ctx.selectedKind !== "door" || !inst.selection.visible) return null;
     const hits = ctx.raycaster.intersectObject(inst.selection, true);
-    for (const hit of hits) {
-      const param = hit.object.userData.doorDimensionParam as DoorDimensionParam | undefined;
-      if (param && hit.object.userData.kind === "doorDimensionEdit" && isVisibleThroughDoorSelection(hit.object)) return param;
-    }
-    return null;
+    return pickVisibleSelectionUserDataValue<DoorDimensionParam>(hits, inst.selection, {
+      kind: "doorDimensionEdit",
+      valueKey: "doorDimensionParam"
+    });
+  };
+
+  const pickWindowSwingControlAction = (): WindowSwingControlAction | null => {
+    const inst = ctx.windowInst;
+    if (!inst || ctx.selectedKind !== "window" || !inst.selection.visible) return null;
+    const hits = ctx.raycaster.intersectObject(inst.selection, true);
+    return pickVisibleSelectionUserDataValue<WindowSwingControlAction>(hits, inst.selection, {
+      kind: "windowSwingControl",
+      valueKey: "windowSwingAction"
+    });
+  };
+
+  const applyWindowSwingControlAction = (action: WindowSwingControlAction) => {
+    return applyOpeningSwingControlEdit({
+      action,
+      instance: ctx.windowInst,
+      updateTransform: ctx.updateWindowTransform,
+      selectOpening: ctx.setSelectedWindow,
+      mountProps: ctx.mountProps,
+      commitHistory: () => ctx.commitHistory(ctx.S)
+    });
+  };
+
+  const pickDoorSwingControlAction = (): DoorSwingControlAction | null => {
+    const inst = ctx.doorInst;
+    if (!inst || ctx.selectedKind !== "door" || !inst.selection.visible) return null;
+    const hits = ctx.raycaster.intersectObject(inst.selection, true);
+    return pickVisibleSelectionUserDataValue<DoorSwingControlAction>(hits, inst.selection, {
+      kind: "doorSwingControl",
+      valueKey: "doorSwingAction"
+    });
+  };
+
+  const applyDoorSwingControlAction = (action: DoorSwingControlAction) => {
+    return applyOpeningSwingControlEdit({
+      action,
+      instance: ctx.doorInst,
+      updateTransform: ctx.updateDoorTransform,
+      selectOpening: ctx.setSelectedDoor,
+      mountProps: ctx.mountProps,
+      commitHistory: () => ctx.commitHistory(ctx.S)
+    });
   };
 
   const beginWindowDimensionEdit = (param: WindowDimensionParam, ev: PointerEvent) => {
     const inst = ctx.windowInst;
     if (!inst) return false;
     const input = ensureWindowDimensionInput();
-    const hostRect = (ctx.args?.viewerEl ?? ctx.renderer.domElement).getBoundingClientRect();
     activeWindowDimensionParam = param;
-    input.value = String(Math.round(inst.params[param]));
-    input.style.left = `${ev.clientX - hostRect.left}px`;
-    input.style.top = `${ev.clientY - hostRect.top}px`;
-    input.style.display = "block";
-    input.focus();
-    input.select();
+    showDimensionInputForPointerEvent(input, {
+      event: ev,
+      host: ctx.args?.viewerEl ?? ctx.renderer.domElement,
+      value: String(Math.round(inst.params[param]))
+    });
     return true;
   };
 
@@ -399,47 +1382,410 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     const inst = ctx.doorInst;
     if (!inst) return false;
     const input = ensureDoorDimensionInput();
-    const hostRect = (ctx.args?.viewerEl ?? ctx.renderer.domElement).getBoundingClientRect();
     activeDoorDimensionParam = param;
-    input.value = String(Math.round(inst.params[param]));
-    input.style.left = `${ev.clientX - hostRect.left}px`;
-    input.style.top = `${ev.clientY - hostRect.top}px`;
-    input.style.display = "block";
-    input.focus();
-    input.select();
+    showDimensionInputForPointerEvent(input, {
+      event: ev,
+      host: ctx.args?.viewerEl ?? ctx.renderer.domElement,
+      value: String(Math.round(inst.params[param]))
+    });
     return true;
   };
+
+  const isFloorplanSelectPointerDown = (ev: PointerEvent) =>
+    ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.layoutTool === "select" && ev.button === 0;
+
+  const handleFloorplanSelectPointerDown = (ev: PointerEvent) => {
+    if (!isFloorplanSelectPointerDown(ev)) return false;
+    const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+    if (!hitPoint) return true;
+
+    const pMm = ctx.toMmPoint(hitPoint);
+    const rect = ctx.renderer.domElement.getBoundingClientRect();
+    const mouse = pointerClientPointInRect(ev, rect);
+
+    if (
+      handleFloorplanPlacementClick({
+        cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
+        insertColumnAtPoint: () => {
+          const placementPoint = resolveColumnPlacementPoint(hitPoint, rect);
+          ctx.insertColumnAtPoint?.(ctx.toMmPoint(placementPoint));
+        },
+        insertDoorAtWallPoint: (wallId) => ctx.insertDoorAtWallPoint?.(wallId, pMm),
+        insertWindowAtWallPoint: (wallId) => ctx.insertWindowAtWallPoint?.(wallId, pMm),
+        isColumnPlacementActive: !!ctx.isColumnPlacementActive?.(),
+        isDoorPlacementActive: !!ctx.isDoorPlacementActive?.(),
+        isWindowPlacementActive: !!ctx.isWindowPlacementActive?.(),
+        pickWallId: () => pickFloorplanWallId(pMm, mouse, rect),
+        preventDefault: () => ev.preventDefault(),
+        setStatus: ctx.setUnderlayStatus,
+        stopPropagation: () => ev.stopPropagation()
+      })
+    ) {
+      return true;
+    }
+
+    const pickedWindow = pickFloorplanWindow(pMm, mouse, rect);
+    const pickedDoor = pickFloorplanDoor(pMm, mouse, rect);
+
+    const sectionHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getSectionPickMeshes()), false)[0]?.object;
+    const sectionId = ctx.getSectionIdFromObject(sectionHit);
+
+    const columnHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getColumnPickMeshes()), false)[0]?.object;
+    const columnId = ctx.getColumnIdFromObject(columnHit);
+
+    const moduleHits = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false);
+    const moduleHit = moduleHits[0]?.object;
+    const tallSubmoduleModuleHit = ctx.S.kitchenEditMode && ctx.kitchenMode?.isTallModuleEditorActive?.()
+      ? moduleHits.find((hit) => hasTallSubmodulePickData(hit.object))?.object
+      : null;
+    const moduleId = ctx.getInstanceIdFromObject(moduleHit);
+    const rawFallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+    const fallbackModuleId = ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(rawFallbackModuleId) : rawFallbackModuleId;
+    const modulePick = resolveFloorplanModulePickCandidates({
+      directModuleId: moduleId,
+      fallbackModuleId,
+      filterSelectableModuleId: ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId : undefined,
+      isFallbackModulePickable: (id) => isPickableKey(`module:${id}`)
+    });
+
+    const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+    const worktopId = ctx.getWorktopIdFromObject(worktopHit) ?? ctx.findSelectableFloorplanWorktopAtPoint(pMm);
+
+    if (ctx.S.kitchenEditMode) {
+      const directSelectableModuleId = modulePick.selectableModuleId ?? null;
+      if (ctx.kitchenMode?.isTallModuleEditorActive?.()) {
+        if (ctx.kitchenMode?.selectTallSubmoduleFromObject?.(directSelectableModuleId, tallSubmoduleModuleHit ?? moduleHit, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+          markPendingMarqueeHit(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return true;
+        }
+        ctx.kitchenMode?.clearTallSubmoduleSelection?.();
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
+      if (directSelectableModuleId && ctx.kitchenMode?.selectTallSubmoduleFromObject?.(directSelectableModuleId, moduleHit, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+        cancelPendingMarquee(ev.pointerId);
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
+      if (modulePick.selectableModuleId || modulePick.fallbackModuleId) ctx.kitchenMode?.clearTallSubmoduleSelection?.();
+      handleFloorplanSelection({
+        execution: {
+          beginModuleSelection: (id) => ctx.beginModuleSelection(id, ev),
+          beginWorktopSelection: (id) => ctx.beginKitchenWorktopSelection(id, ev, pMm),
+          cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
+          continueMoveAfterSelection,
+          hitPoint,
+          pickedDoor: null,
+          pickedWindow: null,
+          selectColumn: ctx.setSelectedColumn,
+          selectDoor: (door) => {
+            ctx.doorInst = door;
+            ctx.setSelectedDoor();
+          },
+          selectFloor: ctx.setSelectedFloor,
+          selectModule: ctx.setSelectedModule,
+          selectSection: ctx.setSelectedSection,
+          selectWall: ctx.setSelectedWall,
+          selectWindow: (window) => {
+            ctx.windowInst = window;
+            ctx.setSelectedWindow();
+          }
+        },
+        selection: {
+          axisWallId: null,
+          columnId: null,
+          fallbackModuleId: modulePick.fallbackModuleId,
+          fallbackModulePickable: modulePick.fallbackModulePickable,
+          floorId: null,
+          pickedDoor: false,
+          pickedWindow: false,
+          polygonWallId: null,
+          sectionId: null,
+          selectableModuleId: modulePick.selectableModuleId,
+          transformSelectElements: ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements",
+          worktopId
+        }
+      });
+      return true;
+    }
+
+    const floorId = pickFloorplanFloorBoundary({
+      cam: ctx.cam(),
+      distPxPointToSeg: ctx.distPxPointToSeg,
+      floors: ctx.floors,
+      floorPointToWorld: ctx.floorPointToWorld,
+      isFloorPickable: (id) => isPickableKey(`floor:${id}`),
+      mouse,
+      rect,
+      snapPx: 12,
+      worldToScreen: ctx.worldToScreen
+    });
+
+    const wallPick = resolveFloorplanWallPick({
+      axisSnapPx: 10,
+      cam: ctx.cam(),
+      isWallPickable: (id) => isPickableKey(`wall:${id}`),
+      mouse,
+      pMm,
+      pointInPolygonXZ: ctx.pointInPolygonXZ,
+      pointOnWallAxisMm: ctx.pointOnWallAxisMm,
+      rect,
+      wallSolvedOutlines: ctx.wallSolvedOutlines,
+      walls: ctx.walls,
+      worldToScreen: ctx.worldToScreen
+    });
+
+    return handleFloorplanSelection({
+      execution: {
+        beginModuleSelection: (id) => ctx.beginModuleSelection(id, ev),
+        beginWorktopSelection: (id) => ctx.beginKitchenWorktopSelection(id, ev, pMm),
+        cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
+        continueMoveAfterSelection,
+        hitPoint,
+        pickedDoor,
+        pickedWindow,
+        selectColumn: ctx.setSelectedColumn,
+        selectDoor: (door) => {
+          ctx.doorInst = door;
+          ctx.setSelectedDoor();
+        },
+        selectFloor: ctx.setSelectedFloor,
+        selectModule: ctx.setSelectedModule,
+        selectSection: ctx.setSelectedSection,
+        selectWall: ctx.setSelectedWall,
+        selectWindow: (window) => {
+          ctx.windowInst = window;
+          ctx.setSelectedWindow();
+        }
+      },
+      selection: {
+        axisWallId: wallPick.axisWallId,
+        columnId,
+        fallbackModuleId: modulePick.fallbackModuleId,
+        fallbackModulePickable: modulePick.fallbackModulePickable,
+        floorId,
+        pickedDoor: !!pickedDoor,
+        pickedWindow: !!pickedWindow,
+        polygonWallId: wallPick.polygonWallId,
+        sectionId,
+        selectableModuleId: modulePick.selectableModuleId,
+        transformSelectElements: ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements",
+        worktopId
+      }
+    });
+  };
+
+  const currentCanvasContextTarget = (): CanvasContextTarget | null => {
+    if (!ctx.selectedKind) return null;
+    if (ctx.selectedKind === "module") return { kind: "module", id: ctx.selectedInstanceId };
+    if (ctx.selectedKind === "kitchenGroup") return { kind: "kitchenGroup", id: ctx.selectedKitchenGroupId };
+    if (ctx.selectedKind === "wall") return { kind: "wall", id: ctx.selectedWallId };
+    if (ctx.selectedKind === "floor") return { kind: "floor", id: ctx.selectedFloorId };
+    if (ctx.selectedKind === "column") return { kind: "column", id: ctx.selectedColumnId };
+    if (ctx.selectedKind === "section") return { kind: "section", id: ctx.selectedSectionId };
+    if (ctx.selectedKind === "window") return { kind: "window", id: ctx.windowInst?.id ?? null };
+    if (ctx.selectedKind === "door") return { kind: "door", id: ctx.doorInst?.id ?? null };
+    return { kind: "underlay", id: "main" };
+  };
+
+  const contextPointerEvent = (ev: MouseEvent): PointerEvent => ev as PointerEvent;
+
+  const selectCanvasContextTarget = (target: CanvasContextTarget, ev: MouseEvent, pointMm?: { x: number; z: number }) => {
+    if (target.kind === "module" && target.id) {
+      if (!ctx.selectedInstanceIds.has(target.id)) ctx.beginModuleSelection(target.id, contextPointerEvent(ev));
+      return currentCanvasContextTarget() ?? target;
+    }
+    if (target.kind === "kitchenGroup") return currentCanvasContextTarget() ?? target;
+    if (target.kind === "wall" && target.id) {
+      if (!ctx.selectedWallIds.has(target.id)) ctx.setSelectedWall(target.id);
+    } else if (target.kind === "floor" && target.id) {
+      if (!(ctx.selectedKind === "floor" && ctx.selectedFloorId === target.id)) ctx.setSelectedFloor(target.id);
+    } else if (target.kind === "column" && target.id) {
+      if (!(ctx.selectedKind === "column" && ctx.selectedColumnId === target.id)) ctx.setSelectedColumn(target.id);
+    } else if (target.kind === "section" && target.id) {
+      if (!(ctx.selectedKind === "section" && ctx.selectedSectionId === target.id)) ctx.setSelectedSection(target.id);
+    } else if (target.kind === "window" && target.id) {
+      if (!(ctx.selectedKind === "window" && ctx.windowInst?.id === target.id)) {
+        const picked = ctx.windows.find((item) => item.id === target.id) ?? null;
+        if (picked) {
+          ctx.windowInst = picked;
+          ctx.setSelectedWindow();
+        }
+      }
+    } else if (target.kind === "door" && target.id) {
+      if (!(ctx.selectedKind === "door" && ctx.doorInst?.id === target.id)) {
+        const picked = ctx.doors.find((item) => item.id === target.id) ?? null;
+        if (picked) {
+          ctx.doorInst = picked;
+          ctx.setSelectedDoor();
+        }
+      }
+    } else if (target.kind === "underlay") {
+      if (ctx.selectedKind !== "underlay") ctx.setSelectedUnderlay();
+    }
+    return currentCanvasContextTarget() ?? target;
+  };
+
+  const resolveFloorplanContextTarget = (ev: MouseEvent, rect: DOMRect): CanvasContextTarget | null => {
+    const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+    if (!hitPoint) return null;
+    const pMm = ctx.toMmPoint(hitPoint);
+    const mouse = pointerClientPointInRect(ev, rect);
+    const pickedWindow = pickFloorplanWindow(pMm, mouse, rect);
+    if (pickedWindow) return selectCanvasContextTarget({ kind: "window", id: pickedWindow.id }, ev);
+    const pickedDoor = pickFloorplanDoor(pMm, mouse, rect);
+    if (pickedDoor) return selectCanvasContextTarget({ kind: "door", id: pickedDoor.id }, ev);
+
+    const sectionHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getSectionPickMeshes()), false)[0]?.object;
+    const sectionId = ctx.getSectionIdFromObject(sectionHit);
+    if (sectionId) return selectCanvasContextTarget({ kind: "section", id: sectionId }, ev);
+    const columnHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getColumnPickMeshes()), false)[0]?.object;
+    const columnId = ctx.getColumnIdFromObject(columnHit);
+    if (columnId) return selectCanvasContextTarget({ kind: "column", id: columnId }, ev);
+
+    const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
+    const directModuleId = ctx.getInstanceIdFromObject(moduleHit);
+    const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect);
+    const rawModuleId = directModuleId ?? fallbackModuleId;
+    const moduleId = rawModuleId && ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(rawModuleId) : rawModuleId;
+    if (moduleId && isPickableKey(`module:${moduleId}`)) return selectCanvasContextTarget({ kind: "module", id: moduleId }, ev);
+
+    const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+    const worktopId = ctx.getWorktopIdFromObject(worktopHit) ?? ctx.findSelectableFloorplanWorktopAtPoint(pMm);
+    if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, contextPointerEvent(ev), pMm)) return currentCanvasContextTarget();
+
+    const floorId = pickFloorplanFloorBoundary({
+      cam: ctx.cam(),
+      distPxPointToSeg: ctx.distPxPointToSeg,
+      floors: ctx.floors,
+      floorPointToWorld: ctx.floorPointToWorld,
+      isFloorPickable: (id) => isPickableKey(`floor:${id}`),
+      mouse,
+      rect,
+      snapPx: 12,
+      worldToScreen: ctx.worldToScreen
+    });
+    if (floorId) return selectCanvasContextTarget({ kind: "floor", id: floorId }, ev);
+
+    const wallPick = resolveFloorplanWallPick({
+      axisSnapPx: 10,
+      cam: ctx.cam(),
+      isWallPickable: (id) => isPickableKey(`wall:${id}`),
+      mouse,
+      pMm,
+      pointInPolygonXZ: ctx.pointInPolygonXZ,
+      pointOnWallAxisMm: ctx.pointOnWallAxisMm,
+      rect,
+      wallSolvedOutlines: ctx.wallSolvedOutlines,
+      walls: ctx.walls,
+      worldToScreen: ctx.worldToScreen
+    });
+    const wallId = wallPick.polygonWallId ?? wallPick.axisWallId;
+    if (wallId) return selectCanvasContextTarget({ kind: "wall", id: wallId }, ev);
+    if (ctx.underlayMesh.visible && hasLoadedUnderlay() && isPickableKey("underlay:main") && ctx.raycaster.intersectObject(ctx.underlayMesh, false)[0]) {
+      return selectCanvasContextTarget({ kind: "underlay", id: "main" }, ev);
+    }
+    return null;
+  };
+
+  const resolve3dContextTarget = (ev: MouseEvent): CanvasContextTarget | null => {
+    const picks: THREE.Object3D[] = ctx.getAllInstanceGeometryMeshes();
+    const windowPicks = ctx.windows.map((item) => item.pick);
+    const doorPicks = ctx.doors.map((item) => item.pick);
+    picks.push(...windowPicks, ...doorPicks, ...ctx.getColumnPickMeshes());
+    for (const wall of ctx.walls) picks.push(wall.mesh);
+    for (const floor of ctx.floors) picks.push(floor.mesh, floor.outline);
+    const hits = ctx.raycaster.intersectObjects(pickableObjects(picks), false);
+    const windowHit = ctx.raycaster.intersectObjects(pickableObjects(windowPicks), false)[0] ?? null;
+    const doorHit = ctx.raycaster.intersectObjects(pickableObjects(doorPicks), false)[0] ?? null;
+    const openingHit = doorHit && windowHit ? (doorHit.distance <= windowHit.distance ? doorHit : windowHit) : doorHit ?? windowHit;
+    const firstHit = openingHit && (!hits[0] || openingHit.distance <= hits[0].distance + 0.25) ? openingHit : hits[0];
+    const first = firstHit?.object as THREE.Mesh | undefined;
+    if (first) {
+      const kind = (first.userData?.kind as string | undefined) ?? "module";
+      if (kind === "window") {
+        const item = findWindowFromObject(first);
+        if (item) return selectCanvasContextTarget({ kind: "window", id: item.id }, ev);
+      }
+      if (kind === "door") {
+        const item = findDoorFromObject(first);
+        if (item) return selectCanvasContextTarget({ kind: "door", id: item.id }, ev);
+      }
+      const moduleId = ctx.getInstanceIdFromObject(first);
+      const selectableModuleId = moduleId && ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(moduleId) : moduleId;
+      if (selectableModuleId) return selectCanvasContextTarget({ kind: "module", id: selectableModuleId }, ev);
+      const columnId = ctx.getColumnIdFromObject(first);
+      if (columnId) return selectCanvasContextTarget({ kind: "column", id: columnId }, ev);
+      const floorId = (first.userData?.floorId as string | undefined) ?? null;
+      if (floorId) return selectCanvasContextTarget({ kind: "floor", id: floorId }, ev);
+      const wallId = (first.userData?.wallId as string | undefined) ?? null;
+      if (wallId) return selectCanvasContextTarget({ kind: "wall", id: wallId }, ev);
+    }
+    const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
+    const worktopId = ctx.getWorktopIdFromObject(worktopHit);
+    if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, contextPointerEvent(ev))) return currentCanvasContextTarget();
+    return null;
+  };
+
+  const resolveContextTarget = (ev: MouseEvent | KeyboardEvent): CanvasContextTarget | null => {
+    if (!(ev instanceof MouseEvent) || ctx.mode !== "layout" || ctx.layoutTool !== "select") return currentCanvasContextTarget();
+    const rect = ctx.renderer.domElement.getBoundingClientRect();
+    updateRaycasterFromPointer(ev, rect);
+    if (ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan") return resolveFloorplanContextTarget(ev, rect);
+    return resolve3dContextTarget(ev);
+  };
+
+  ctx.renderer.domElement.addEventListener("dblclick", (ev) => {
+    if (ctx.mode !== "layout" || ctx.layoutTool !== "select") return;
+    const target = resolveKitchenGroupTargetFromPointer(ev);
+    const action = resolveKitchenDoubleClickAction({
+      target,
+      kitchenEditMode: !!ctx.S.kitchenEditMode,
+      activeKitchenGroupId: ctx.S.activeKitchenGroupId,
+      moduleEditorActive: !!ctx.kitchenMode?.isTallModuleEditorActive?.()
+    });
+    if (!action) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (action.type === "open-group") {
+      ctx.kitchenMode?.enterExisting?.(action.target.groupId, action.target.focusInstanceId);
+    } else {
+      ctx.kitchenMode?.enterModuleEditor?.(action.instanceId);
+    }
+  });
 
   ctx.renderer.domElement.addEventListener("pointerdown", (ev) => {
     if (ctx.viewNavigation.handlePointerDown(ev)) {
       return;
     }
 
-    // Marquee selection in layout select tool: left in floorplan, right in any layout view.
-    const startsMarquee =
-      ctx.mode === "layout" &&
-      ctx.layoutTool === "select" &&
-      !ctx.isWindowPlacementActive?.() &&
-      !ctx.isDoorPlacementActive?.() &&
-      !ctx.isColumnPlacementActive?.() &&
-      !ctx.floorEdit.active &&
-      !ctx.transformState.kind &&
-      !ctx.placement.active &&
-      !ctx.measureState.enabled &&
-      ((ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ev.button === 0) || ev.button === 2);
+    // Marquee selection in layout select tool uses the primary button in every layout view.
+    const startsMarquee = shouldStartLayoutMarqueeSelection({
+      button: ev.button,
+      floorEditActive: ctx.floorEdit.active,
+      isColumnPlacementActive: !!ctx.isColumnPlacementActive?.(),
+      isDoorPlacementActive: !!ctx.isDoorPlacementActive?.(),
+      isWindowPlacementActive: !!ctx.isWindowPlacementActive?.(),
+      layoutTool: ctx.layoutTool,
+      measureEnabled: ctx.measureState.enabled,
+      mode: ctx.mode,
+      placementActive: ctx.placement.active,
+      transformActive: !!ctx.transformState.kind
+    });
     if (
       startsMarquee
     ) {
-      if (ev.button === 2) ev.preventDefault();
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      ctx.marquee.pending = true;
-      ctx.marquee.active = false;
-      ctx.marquee.pointerId = ev.pointerId;
-      ctx.marquee.hitSomething = false;
-      ctx.marquee.startX = ev.clientX - rect.left;
-      ctx.marquee.startY = ev.clientY - rect.top;
-      ctx.marquee.mode = "contain";
-      ctx.marqueeEl.style.display = "none";
+      const point = pointerClientPointInRect(ev, rect);
+      beginPointerMarquee(ctx.marquee, ctx.marqueeEl, {
+        pointerId: ev.pointerId,
+        x: point.x,
+        y: point.y
+      });
       try {
         ctx.renderer.domElement.setPointerCapture(ev.pointerId);
       } catch {
@@ -449,233 +1795,136 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     }
 
     const rect = ctx.renderer.domElement.getBoundingClientRect();
-    const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-    const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-    ctx.pointerNdc.set(x, y);
-
-    ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
+    updateRaycasterFromPointer(ev, rect);
 
     if (ctx.mode === "layout") {
-      if (ev.button === 0) {
-        const windowDimensionParam = pickWindowDimensionParam();
-        if (windowDimensionParam && beginWindowDimensionEdit(windowDimensionParam, ev)) {
-          cancelPendingMarquee(ev.pointerId);
-          ev.preventDefault();
-          ev.stopPropagation();
-          return;
-        }
-        const doorDimensionParam = pickDoorDimensionParam();
-        if (doorDimensionParam && beginDoorDimensionEdit(doorDimensionParam, ev)) {
-          cancelPendingMarquee(ev.pointerId);
-          ev.preventDefault();
-          ev.stopPropagation();
-          return;
-        }
+      if (handleOpeningSelectionControlClick({
+        button: ev.button,
+        pickWindowSwingControlAction,
+        applyWindowSwingControlAction,
+        pickDoorSwingControlAction,
+        applyDoorSwingControlAction,
+        pickWindowDimensionParam,
+        beginWindowDimensionEdit: (param) => beginWindowDimensionEdit(param, ev),
+        pickDoorDimensionParam,
+        beginDoorDimensionEdit: (param) => beginDoorDimensionEdit(param, ev),
+        cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
+        preventDefault: () => ev.preventDefault(),
+        stopPropagation: () => ev.stopPropagation()
+      })) {
+        return;
       }
 
       if (ctx.floorEdit.active) {
-        if (ev.button !== 0) return;
-        const hitPoint = new THREE.Vector3();
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-        const point = ctx.worldToFloorPoint(hitPoint);
-        const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+        const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+        const point = hitPoint ? ctx.worldToFloorPoint(hitPoint) : null;
+        const mouse = pointerClientPointInRect(ev, rect);
         const pickedEdit = ctx.pickFloorEditElement(mouse, rect);
 
-        if (pickedEdit) {
-          ctx.floorEdit.first = null;
-          ctx.floorEdit.hover = null;
-          ctx.floorEdit.error = "";
-          if (pickedEdit.kind === "vertex") {
-            const startPoint = { ...ctx.floorEdit.segments[pickedEdit.ref.segmentIndex][pickedEdit.ref.endpoint] };
-            ctx.floorEdit.selectedVertex = pickedEdit.ref;
-            ctx.floorEdit.selectedSegmentIndex = null;
-            ctx.floorEdit.drag = { pointerId: ev.pointerId, kind: "vertex", startPoint, startSegments: ctx.cloneFloorSegments(ctx.floorEdit.segments) };
-          } else {
-            ctx.floorEdit.selectedSegmentIndex = pickedEdit.segmentIndex;
-            ctx.floorEdit.selectedVertex = null;
-            ctx.floorEdit.drag = {
-              pointerId: ev.pointerId,
-              kind: "segment",
-              segmentIndex: pickedEdit.segmentIndex,
-              startWorld: point,
-              startSegments: ctx.cloneFloorSegments(ctx.floorEdit.segments)
-            };
-          }
-          ctx.renderFloorBoundaryEdit();
-          ctx.renderer.domElement.setPointerCapture(ev.pointerId);
-          ctx.mountProps();
-          return;
-        }
-
-        ctx.floorEdit.selectedSegmentIndex = null;
-        ctx.floorEdit.selectedVertex = null;
-
-        if (ctx.floorEdit.tool === "pickLines") {
-          const picked = ctx.pickWallLine2D(hitPoint, rect, ctx.cam(), 14);
-          const alignPicked = ctx.pickAlignLineAt(hitPoint, mouse, rect);
-          const a = picked?.a ?? alignPicked?.segA ?? null;
-          const b = picked?.b ?? alignPicked?.segB ?? null;
-          if (!a || !b) {
-            ctx.setUnderlayStatus("Floor boundary: edge was not found.");
-            return;
-          }
-          ctx.addFloorEditSegment(ctx.worldToFloorPoint(a), ctx.worldToFloorPoint(b));
-          ctx.setUnderlayStatus("Floor boundary: edge added.");
-          return;
-        }
-
-        if (!ctx.floorEdit.first) {
-          ctx.floorEdit.first = point;
-          ctx.floorEdit.hover = point;
-          ctx.renderFloorBoundaryEdit();
-          return;
-        }
-
-        if (ctx.floorEdit.tool === "rectangle") {
-          const a = ctx.floorEdit.first;
-          const b = ctx.floorEdit.ortho ? ctx.floorOrthoPoint(a, point) : point;
-          const p1 = { x: a.x, z: a.z };
-          const p2 = { x: b.x, z: a.z };
-          const p3 = { x: b.x, z: b.z };
-          const p4 = { x: a.x, z: b.z };
-          ctx.floorEdit.segments.push({ a: p1, b: p2 }, { a: p2, b: p3 }, { a: p3, b: p4 }, { a: p4, b: p1 });
-          ctx.floorEdit.first = null;
-          ctx.floorEdit.hover = null;
-          ctx.renderFloorBoundaryEdit();
-          return;
-        }
-
-        if (ctx.floorEdit.tool === "circle") {
-          const points = ctx.makeFloorCirclePoints(ctx.floorEdit.first, point);
-          for (let i = 0; i < points.length; i++) ctx.floorEdit.segments.push({ a: points[i], b: points[(i + 1) % points.length] });
-          ctx.floorEdit.first = null;
-          ctx.floorEdit.hover = null;
-          ctx.renderFloorBoundaryEdit();
-          return;
-        }
-
-        const start = ctx.floorEdit.first;
-        const rawEnd = ctx.floorEdit.ortho ? ctx.floorOrthoPoint(start, point) : point;
-        const end = ctx.floorEdit.segments.length >= 2 && ctx.floorEdit.segments[0] && ctx.floorPointEq(rawEnd, ctx.floorEdit.segments[0].a, 12) ? ctx.floorEdit.segments[0].a : rawEnd;
-        ctx.addFloorEditSegment(start, end);
-        ctx.floorEdit.first = ctx.floorPointEq(end, ctx.floorEdit.segments[0]?.a ?? end, 3) ? null : end;
-        ctx.floorEdit.hover = ctx.floorEdit.first;
-        ctx.renderFloorBoundaryEdit();
+        handleFloorBoundaryEditPointerDown({
+          addFloorEditSegment: ctx.addFloorEditSegment,
+          button: ev.button,
+          cloneFloorSegments: ctx.cloneFloorSegments,
+          floorEdit: ctx.floorEdit,
+          floorOrthoPoint: ctx.floorOrthoPoint,
+          floorPointEq: ctx.floorPointEq,
+          makeFloorCirclePoints: ctx.makeFloorCirclePoints,
+          mountProps: ctx.mountProps,
+          pickedEdit,
+          point,
+          pointerId: ev.pointerId,
+          renderFloorBoundaryEdit: ctx.renderFloorBoundaryEdit,
+          resolvePickedLineSegment: () => {
+            if (!hitPoint) return null;
+            const picked = ctx.pickWallLine2D(hitPoint, rect, ctx.cam(), 14);
+            const alignPicked = ctx.pickAlignLineAt(hitPoint, mouse, rect);
+            const a = picked?.a ?? alignPicked?.segA ?? null;
+            const b = picked?.b ?? alignPicked?.segB ?? null;
+            return a && b ? { a: ctx.worldToFloorPoint(a), b: ctx.worldToFloorPoint(b) } : null;
+          },
+          setPointerCapture: (pointerId) => ctx.renderer.domElement.setPointerCapture(pointerId),
+          setUnderlayStatus: ctx.setUnderlayStatus
+        });
         return;
       }
 
       if (ctx.underlayCal.active) {
-        if (!ctx.underlayMesh.visible || !hasLoadedUnderlay() || ctx.underlayState.pinned) {
-          ctx.underlayCal.active = false;
-          ctx.underlayCal.first = null;
-          ctx.setUnderlayStatus("Underlay not available.");
-          return;
-        }
-
-        const hit = ctx.raycaster.intersectObject(ctx.underlayMesh, false)[0];
-        if (!hit) {
-          ctx.setUnderlayStatus("Click on underlay.");
-          return;
-        }
-        const hitPoint = hit.point.clone();
-        if (!ctx.underlayCal.first) {
-          ctx.underlayCal.first = hitPoint.clone();
-          ctx.setUnderlayStatus(ctx.underlayCal.mode === "reference" ? "Reference scale: click second point..." : "Calibration: click second point...");
-          return;
-        }
-
-        const a = ctx.underlayCal.first;
-        const b = hitPoint;
-        const distM = Math.hypot(b.x - a.x, b.z - a.z);
-        if (distM <= 1e-6) {
-          ctx.setUnderlayStatus("Reference scale failed (zero distance).");
-          ctx.underlayCal.active = false;
-          ctx.underlayCal.first = null;
-          return;
-        }
-
-        let desiredMm = Math.max(1, ctx.underlayCal.knownMm);
-        if (ctx.underlayCal.mode === "reference") {
-          const measuredMm = Math.round(distM * 1000);
-          const s = window.prompt("Real distance (mm)", String(measuredMm));
-          const n = s === null ? null : Number(s.trim().replace(",", "."));
-          if (!n || !Number.isFinite(n) || n <= 0) {
-            ctx.setUnderlayStatus("Reference scale canceled.");
-            ctx.underlayCal.active = false;
-            ctx.underlayCal.first = null;
-            return;
-          }
-          desiredMm = n;
-        }
-
-        const desiredM = desiredMm / 1000;
-        if (distM > 1e-6 && ctx.underlayMesh.visible) {
-          const factor = desiredM / distM;
-          ctx.underlayState.scale *= factor;
-          ctx.updateUnderlayTransform();
-          if (ctx.underlayScaleEl) ctx.underlayScaleEl.value = String(ctx.underlayState.scale);
-          ctx.setUnderlayStatus(ctx.underlayCal.mode === "reference" ? `Reference scale OK: ${Math.round(desiredMm)} mm` : `Calibration OK: ${Math.round(desiredMm)} mm`);
-        } else {
-          ctx.setUnderlayStatus("Calibration failed (zero distance).");
-        }
-
-        ctx.underlayCal.active = false;
-        ctx.underlayCal.first = null;
+        handleUnderlayCalibrationPointerDown({
+          getHitPoint: () => ctx.raycaster.intersectObject(ctx.underlayMesh, false)[0]?.point.clone() ?? null,
+          hasLoadedUnderlay: hasLoadedUnderlay(),
+          promptReferenceDistanceMm: (measuredMm) => window.prompt("Real distance (mm)", String(measuredMm)),
+          setScaleInputValue: (value) => {
+            if (ctx.underlayScaleEl) ctx.underlayScaleEl.value = value;
+          },
+          setUnderlayStatus: ctx.setUnderlayStatus,
+          underlayCal: ctx.underlayCal,
+          underlayPinned: ctx.underlayState.pinned,
+          underlayScale: {
+            get value() {
+              return ctx.underlayState.scale;
+            },
+            set value(value) {
+              ctx.underlayState.scale = value;
+            }
+          },
+          underlayVisible: ctx.underlayMesh.visible,
+          updateUnderlayTransform: ctx.updateUnderlayTransform
+        });
         return;
       }
 
-      if (ctx.placement.active && ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.layoutTool === "select") {
-        if (ev.button !== 0) return;
-        const hitPoint = new THREE.Vector3();
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-        ctx.rebuildGhost(ctx.S, ctx.placementHelpers, hitPoint);
-        ctx.commitPlacement(ctx.S, ctx.placementHelpers);
-        ev.preventDefault();
-        ev.stopPropagation();
+      if (
+        handlePlacementCommitPointerDown({
+          button: ev.button,
+          commitPlacement: ctx.commitPlacement,
+          getHitPoint: () => intersectRayPlane(ctx.raycaster, ctx.groundPlane),
+          helpers: ctx.placementHelpers,
+          isActive: ctx.placement.active && ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.layoutTool === "select",
+          preventDefault: () => ev.preventDefault(),
+          rebuildGhost: ctx.rebuildGhost,
+          state: ctx.S,
+          stopPropagation: () => ev.stopPropagation()
+        })
+      ) {
         return;
       }
 
       if (ctx.layoutTool === "select" && ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.transformState.kind) {
         if (ev.button !== 0) return;
-        const hitPoint = new THREE.Vector3();
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-        const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24);
+        const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+        if (!hitPoint) return;
+        const moveSnap =
+          ctx.transformState.kind === "move"
+            ? resolveMoveSnap(hitPoint, rect, ctx.transformState.step === "pickTarget" ? ctx.transformState.base : null)
+            : null;
+        const snapped =
+          ctx.transformState.kind === "move"
+            ? (moveSnap ?? makeNoSnapResult(hitPoint))
+            : ctx.snapPoint2D(hitPoint, rect, ctx.cam(), SNAP_DISTANCE_PX.transformRotate);
         const p = snapped.kind !== "none" ? snapped.point : hitPoint;
 
-        if (ctx.transformState.kind === "move") {
-          if (ctx.transformState.step === "pickBase") {
-            ctx.transformState.base = p.clone();
-            ctx.transformState.step = "pickTarget";
-            ctx.transformState.lastValidDelta.set(0, 0, 0);
-            ctx.setUnderlayStatus("Move: click target point...");
-            return;
-          }
-          if (ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
-            const delta = p.clone().sub(ctx.transformState.base);
-            ctx.applyMoveDelta(delta);
-            ctx.commitHistory(ctx.S);
-            ctx.clearTransform({ status: "Move: done." });
-            ctx.mountProps();
-            return;
-          }
-        }
-
-        if (ctx.transformState.kind === "rotate") {
-          if (ctx.transformState.step === "pickPivot") {
-            ctx.transformState.pivot = p.clone();
-            ctx.transformState.step = "rotating";
-            ctx.transformState.typed = "";
-            ctx.transformState.lastValidAngle = 0;
-            ctx.transformState.startPointerAngle = Math.atan2(hitPoint.z - p.z, hitPoint.x - p.x);
-            ctx.setUnderlayStatus("Rotate: move mouse to rotate (type degrees + Enter). Click to finish.");
-            return;
-          }
-          if (ctx.transformState.step === "rotating") {
-            ctx.commitHistory(ctx.S);
-            ctx.clearTransform({ status: "Rotate: done." });
-            ctx.mountProps();
-            return;
-          }
+        if (
+          handleTransformClickPointerDown({
+            applyMoveDelta: ctx.applyMoveDelta,
+            clearMoveHud: () => {
+              ctx.selectPlanSnap = null;
+              ctx.drawSnapOverlay.hide();
+              ctx.hideHoverCursor();
+              ctx.clearToolHud();
+            },
+            clearTransform: ctx.clearTransform,
+            commitHistory: () => ctx.commitHistory(ctx.S),
+            constrainMoveDelta,
+            hitPoint,
+            mountProps: ctx.mountProps,
+            pickedPoint: p,
+            resolveMoveDelta: (delta) => resolveMoveDeltaWithObjectSnap(prepareMoveDeltaForSnapMode(delta, ctx.transformState.moveSnapDisabled), rect).delta,
+            setStatus: ctx.setUnderlayStatus,
+            shiftKey: ev.shiftKey,
+            transformState: ctx.transformState
+          })
+        ) {
+          return;
         }
       }
 
@@ -683,51 +1932,25 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         if (ctx.viewMode !== "2d") return;
         if (ev.button !== 0) return;
 
-        const hitPoint = new THREE.Vector3();
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+        const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+        if (!hitPoint) return;
 
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
-        const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
-        const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect2);
+        const mouse = pointerClientPointInRect(ev, rect2);
+        const picked = ctx.pickDimensionLineAt?.(hitPoint, mouse, rect2) ?? ctx.pickAlignLineAt(hitPoint, mouse, rect2);
 
-        if (picked) {
-          if (ctx.dimensionState.picked.length > 0 && !ctx.areAlignLinesParallel(ctx.dimensionState.picked[0]!, picked)) {
-            ctx.setUnderlayStatus("Dimension: next line must be parallel with the first one.");
-            ev.preventDefault();
-            ev.stopPropagation();
-            return;
-          }
-          if (ctx.technicalDimensions.isLinePicked(picked)) {
-            ctx.setUnderlayStatus("Dimension: this line is already selected.");
-            ev.preventDefault();
-            ev.stopPropagation();
-            return;
-          }
-          ctx.dimensionState.picked.push(picked);
-          ctx.dimensionState.preview = [];
-          ctx.setUnderlayStatus(
-            ctx.dimensionState.picked.length === 1
-              ? "Dimension: select another parallel line."
-              : `Dimension: selected ${ctx.dimensionState.picked.length} lines. Add another one or click empty space.`
-          );
-          ctx.mountProps();
-          ev.preventDefault();
-          ev.stopPropagation();
-          return;
-        }
-
-        if (ctx.dimensionState.picked.length < 2) {
-          ctx.setUnderlayStatus("Dimension: select at least two parallel lines first.");
-          ev.preventDefault();
-          ev.stopPropagation();
-          return;
-        }
-
-        const dims = ctx.technicalDimensions.buildFromPickedLines(ctx.dimensionState.picked, hitPoint, "dimension");
-        ctx.technicalDimensions.commitDimensions(dims);
-        ctx.technicalDimensions.resetDraft();
-        ctx.setUnderlayStatus(dims.length > 0 ? `Dimension: inserted ${dims.length}. Select the next first line.` : "Dimension: insert failed.");
-        ctx.mountProps();
+        handleDimensionToolClick({
+          picked,
+          hitPoint,
+          dimensionState: ctx.dimensionState,
+          areAlignLinesParallel: ctx.areAlignLinesParallel,
+          isLinePicked: ctx.technicalDimensions.isLinePicked,
+          buildDimensions: (lines, point) => ctx.technicalDimensions.buildFromPickedLines(lines, point, "dimension"),
+          commitDimensions: ctx.technicalDimensions.commitDimensions,
+          resetDraft: ctx.technicalDimensions.resetDraft,
+          setStatus: ctx.setUnderlayStatus,
+          mountProps: ctx.mountProps
+        });
         ev.preventDefault();
         ev.stopPropagation();
         return;
@@ -737,45 +1960,34 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         if (ctx.viewMode !== "2d") return;
         if (ev.button !== 0) return;
 
-        const hitPoint = new THREE.Vector3();
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+        const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+        if (!hitPoint) return;
 
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
-        const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
-        const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect2);
+        const mouse = pointerClientPointInRect(ev, rect2);
+        const picked = ctx.alignState.ref
+          ? ctx.pickCompatibleAlignLineAt(ctx.alignState.ref, hitPoint, mouse, rect2)
+          : ctx.pickAlignLineAt(hitPoint, mouse, rect2);
 
-        if (!picked) {
-          ctx.setUnderlayStatus("Align: click a wall/module/worktop line.");
-          return;
-        }
-
-        if (!ctx.alignState.ref) {
-          ctx.alignState.ref = picked;
-          ctx.alignState.lastA = null;
-          ctx.alignState.lastB = null;
-          ctx.alignState.lastUntilMs = 0;
-          ctx.setUnderlayStatus("Align: click second parallel line...");
-          ctx.mountProps();
-          return;
-        }
-
-        const ref = ctx.alignState.ref;
-        const result = ctx.applyAlignBetweenPickedLines(ref, picked);
-        if (!result.ok) {
-          ctx.setUnderlayStatus(result.reason);
-          ctx.alignState.ref = null;
-          ctx.mountProps();
-          return;
-        }
-        ctx.updateSelectionHighlights();
-        ctx.commitHistory(ctx.S);
-
-        ctx.alignState.lastA = ref;
-        ctx.alignState.lastB = picked;
-        ctx.alignState.lastUntilMs = performance.now() + 2500;
-        ctx.alignState.ref = null;
-        ctx.setUnderlayStatus(result.reason);
-        ctx.mountProps();
+        handleAlignToolClick({
+          picked,
+          alignState: ctx.alignState,
+          applyAlignBetweenPickedLines: ctx.applyAlignBetweenPickedLines,
+          updateSelectionHighlights: ctx.updateSelectionHighlights,
+          commitHistory: () => ctx.commitHistory(ctx.S),
+          setStatus: ctx.setUnderlayStatus,
+          mountProps: ctx.mountProps,
+          finishAlignTool: () => {
+            ctx.alignState.ref = null;
+            ctx.alignState.hover = null;
+            ctx.alignState.lastA = null;
+            ctx.alignState.lastB = null;
+            ctx.alignState.lastUntilMs = 0;
+            ctx.clearToolHud();
+            ctx.setToolSelect();
+          },
+          now: performance.now()
+        });
         return;
       }
 
@@ -783,50 +1995,29 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         if (ctx.viewMode !== "2d") return;
         if (ev.button !== 0) return;
 
-        const hitPoint = new THREE.Vector3();
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+        const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+        if (!hitPoint) return;
 
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
-        const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
+        const mouse = pointerClientPointInRect(ev, rect2);
         const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect2);
         if (!picked) {
-          ctx.setUnderlayStatus(ctx.trimState.step === "pickTarget" ? "Trim: click target wall line." : "Trim: click cutter line.");
+          handleTrimNoPick({ trimState: ctx.trimState, setStatus: ctx.setUnderlayStatus });
           return;
         }
 
-        if (ctx.trimState.step === "pickTarget") {
-          if (!picked.wallId) return;
-          ctx.trimState.targetWallId = picked.wallId;
-          ctx.trimState.targetPick = picked;
-          ctx.trimState.targetClick = hitPoint.clone();
-          ctx.trimState.step = "pickCutter";
-          ctx.trimState.lastTarget = null;
-          ctx.trimState.lastCutter = null;
-          ctx.trimState.lastUntilMs = 0;
-          ctx.setUnderlayStatus("Trim: click cutter line...");
-          ctx.mountProps();
-          return;
-        }
+        if (handleTrimTargetPick({ picked, hitPoint, trimState: ctx.trimState, setStatus: ctx.setUnderlayStatus, mountProps: ctx.mountProps })) return;
 
         const cutterClick = hitPoint.clone();
 
         const wallId = ctx.trimState.targetWallId;
         const w = wallId ? (ctx.walls.find((x) => x.id === wallId) ?? null) : null;
         if (!w) {
-          ctx.trimState.step = "pickTarget";
-          ctx.trimState.targetWallId = null;
-          ctx.trimState.targetPick = null;
-          ctx.setUnderlayStatus("Trim: target missing. Click target wall...");
-          ctx.mountProps();
+          handleMissingTrimTarget({ trimState: ctx.trimState, setStatus: ctx.setUnderlayStatus, mountProps: ctx.mountProps });
           return;
         }
         if (ctx.pinnedWallIds.has(w.id)) {
-          ctx.trimState.step = "pickTarget";
-          ctx.trimState.targetWallId = null;
-          ctx.trimState.targetPick = null;
-          ctx.trimState.targetClick = null;
-          ctx.setUnderlayStatus("Trim: target is pinned.");
-          ctx.mountProps();
+          handlePinnedTrimTarget({ trimState: ctx.trimState, setStatus: ctx.setUnderlayStatus, mountProps: ctx.mountProps });
           return;
         }
 
@@ -834,115 +2025,80 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         if (picked.wallId !== w.id && ctx.trimState.targetPick && ctx.trimState.targetClick) {
           const w2 = ctx.walls.find((x) => x.id === picked.wallId) ?? null;
           if (w2 && !ctx.pinnedWallIds.has(w2.id)) {
-            const I = ctx.lineLineIntersectionXZ(ctx.trimState.targetPick.p, ctx.trimState.targetPick.dir, picked.p, picked.dir);
-            if (!I) {
+            const result = resolveTrimCornerEdit({
+              targetWall: w,
+              cutterWall: w2,
+              targetPick: ctx.trimState.targetPick,
+              cutterPick: picked,
+              targetClick: ctx.trimState.targetClick,
+              cutterClick,
+              geometry: { lineLineIntersectionXZ: ctx.lineLineIntersectionXZ, toMmPoint: ctx.toMmPoint }
+            });
+            if (result.kind === "parallel") {
               ctx.setUnderlayStatus("Trim: walls must not be parallel.");
               return;
             }
+            if (result.kind === "noChange") {
+              finishTrimNoChange({ trimState: ctx.trimState, setStatus: ctx.setUnderlayStatus, mountProps: ctx.mountProps });
+              return;
+            }
 
-            const chooseEnd = (wall: WallInstance, click: THREE.Vector3) => {
-              const a = new THREE.Vector3(wall.params.aMm.x / 1000, 0, wall.params.aMm.z / 1000);
-              const b = new THREE.Vector3(wall.params.bMm.x / 1000, 0, wall.params.bMm.z / 1000);
-              return click.distanceTo(a) <= click.distanceTo(b) ? ("a" as const) : ("b" as const);
-            };
-
-            const iMm = ctx.toMmPoint(I);
-            const end1 = chooseEnd(w, ctx.trimState.targetClick);
-            const end2 = chooseEnd(w2, cutterClick);
-
-            const old1 = end1 === "a" ? w.params.aMm : w.params.bMm;
-            const old2 = end2 === "a" ? w2.params.aMm : w2.params.bMm;
-
-            const dx1 = iMm.x - old1.x;
-            const dz1 = iMm.z - old1.z;
-            const dx2 = iMm.x - old2.x;
-            const dz2 = iMm.z - old2.z;
-
-            if (dx1 !== 0 || dz1 !== 0) ctx.moveWallEndpointAndConnected(w, end1, dx1, dz1);
-            if (dx2 !== 0 || dz2 !== 0) ctx.moveWallEndpointAndConnected(w2, end2, dx2, dz2);
+            const moved = ctx.setWallEndpointsAndConnectedMm(result.edits);
+            if (!moved) {
+              ctx.mountProps();
+              return;
+            }
             ctx.commitHistory(ctx.S);
 
-            ctx.trimState.lastTarget = ctx.trimState.targetPick;
-            ctx.trimState.lastCutter = picked;
-            ctx.trimState.lastUntilMs = performance.now() + 2500;
-            ctx.trimState.step = "pickTarget";
-            ctx.trimState.targetWallId = null;
-            ctx.trimState.targetPick = null;
-            ctx.trimState.targetClick = null;
-            ctx.setUnderlayStatus("Trim: corner done. Click target wall...");
-            ctx.mountProps();
+            finishTrimSuccess({
+              trimState: ctx.trimState,
+              lastTarget: ctx.trimState.targetPick,
+              lastCutter: picked,
+              now: performance.now(),
+              status: "Trim: corner done. Click target wall...",
+              setStatus: ctx.setUnderlayStatus,
+              mountProps: ctx.mountProps
+            });
             return;
           }
         }
 
-        const aW = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
-        const bW = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
-        const ab = bW.clone().sub(aW);
-        const len2 = ab.lengthSq();
-        if (len2 < 1e-10) {
+        const result = resolveTrimSingleWallEdit({
+          wall: w,
+          picked,
+          hitPoint,
+          cutterClick,
+          geometry: { lineLineIntersectionXZ: ctx.lineLineIntersectionXZ, toMmPoint: ctx.toMmPoint }
+        });
+        if (result.kind === "tooSmall") {
           ctx.setUnderlayStatus("Trim: wall too small.");
           return;
         }
-        const dW = ab.clone().normalize();
-        const dC = picked.dir.clone().normalize();
-        const I = ctx.lineLineIntersectionXZ(aW, dW, picked.p, dC);
-        if (!I) {
+        if (result.kind === "parallel") {
           ctx.setUnderlayStatus("Trim: cutter must not be parallel.");
           return;
         }
-
-        const t = I.clone().sub(aW).dot(ab) / len2;
-        if (t < -1e-5 || t > 1 + 1e-5) {
-          ctx.setUnderlayStatus("Trim: cutter must cross the wall segment.");
+        if (result.kind === "noChange") {
+          finishTrimNoChange({ trimState: ctx.trimState, setStatus: ctx.setUnderlayStatus, mountProps: ctx.mountProps });
           return;
         }
 
-        const nC = new THREE.Vector3(-dC.z, 0, dC.x);
-        const sign = (v: number) => (v > 1e-7 ? 1 : v < -1e-7 ? -1 : 0);
-        let sClick = sign(nC.dot(hitPoint.clone().sub(picked.p)));
-        const sA = sign(nC.dot(aW.clone().sub(picked.p)));
-        const sB = sign(nC.dot(bW.clone().sub(picked.p)));
-        if (sClick === 0) sClick = sA !== 0 ? sA : sB;
-
-        let moveWhich: "a" | "b" = "a";
-        if (sClick !== 0) {
-          if (sA === sClick && sB !== sClick) moveWhich = "a";
-          else if (sB === sClick && sA !== sClick) moveWhich = "b";
-          else {
-            // ambiguous: choose closer endpoint to the click point
-            moveWhich = cutterClick.distanceTo(aW) <= cutterClick.distanceTo(bW) ? "a" : "b";
-          }
-        } else {
-          moveWhich = cutterClick.distanceTo(aW) <= cutterClick.distanceTo(bW) ? "a" : "b";
-        }
-
-        const iMm = ctx.toMmPoint(I);
-        const old = moveWhich === "a" ? w.params.aMm : w.params.bMm;
-        const dxMm = iMm.x - old.x;
-        const dzMm = iMm.z - old.z;
-
-        if (dxMm === 0 && dzMm === 0) {
-          ctx.setUnderlayStatus("Trim: no change.");
-          ctx.trimState.step = "pickTarget";
-          ctx.trimState.targetWallId = null;
-          ctx.trimState.targetPick = null;
-          ctx.trimState.targetClick = null;
+        const moved = ctx.setWallEndpointAndConnectedMm(result.edit.wall, result.edit.which, result.edit.next);
+        if (!moved) {
           ctx.mountProps();
           return;
         }
-
-        ctx.moveWallEndpointAndConnected(w, moveWhich, dxMm, dzMm);
         ctx.commitHistory(ctx.S);
 
-        ctx.trimState.lastTarget = ctx.trimState.targetPick ?? picked;
-        ctx.trimState.lastCutter = picked;
-        ctx.trimState.lastUntilMs = performance.now() + 2500;
-        ctx.trimState.step = "pickTarget";
-        ctx.trimState.targetWallId = null;
-        ctx.trimState.targetPick = null;
-        ctx.trimState.targetClick = null;
-        ctx.setUnderlayStatus("Trim: done. Click target wall...");
-        ctx.mountProps();
+        finishTrimSuccess({
+          trimState: ctx.trimState,
+          lastTarget: ctx.trimState.targetPick ?? picked,
+          lastCutter: picked,
+          now: performance.now(),
+          status: "Trim: done. Click target wall...",
+          setStatus: ctx.setUnderlayStatus,
+          mountProps: ctx.mountProps
+        });
         return;
       }
 
@@ -954,14 +2110,14 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const normalMode = ctx.viewMode === "2d" && ev.shiftKey;
 
         if (ctx.viewMode === "2d") {
-          const hitPoint = new THREE.Vector3();
-          if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+          const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+          if (!hitPoint) return;
           const snapped = ctx.resolveMeasurePlanSnap(hitPoint, rect, normalMode);
           kind = snapped.kind;
           point = snapped.kind !== "none" ? snapped.point : hitPoint;
           binding = ctx.bindingFromPlanSnap(snapped, point);
           if (!ctx.measureState.axisLock && (snapped.kind === "none" || snapped.kind === "axis")) {
-            const axisAssist = ctx.applyMeasureAxisAssist(ctx.measureState.firstPoint, point, ctx.cam(), rect, 12);
+            const axisAssist = ctx.applyMeasureAxisAssist(ctx.measureState.firstPoint, point, ctx.cam(), rect, SNAP_DISTANCE_PX.measure2dAxis);
             if (axisAssist) {
               point = axisAssist.point;
               kind = "axis";
@@ -972,12 +2128,12 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           const hit = ctx.pickSurfacePoint(ctx.raycaster, ctx.getLayoutMeasureMeshes3d());
           if (!hit) return;
           const snapTarget = ctx.getMeasure3DSnapTargetObject(hit.object);
-          const snapped = ctx.snapPoint3D(hit.point, snapTarget ?? hit.object, ctx.cam(), rect, 32);
+          const snapped = ctx.snapPoint3D(hit.point, snapTarget ?? hit.object, ctx.cam(), rect, SNAP_DISTANCE_PX.measure3d);
           kind = snapped.kind;
           point = snapped.point;
           binding = ctx.toFreePlanBinding(point);
           if (!ctx.measureState.axisLock && snapped.kind === "free") {
-            const axisAssist = ctx.applyMeasureAxisAssist3D(ctx.measureState.firstPoint, point, ctx.cam(), rect, 12);
+            const axisAssist = ctx.applyMeasureAxisAssist3D(ctx.measureState.firstPoint, point, ctx.cam(), rect, SNAP_DISTANCE_PX.measure3dAxis);
             if (axisAssist) {
               point = axisAssist.point;
               kind = "axis";
@@ -987,70 +2143,44 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         }
         if (!point) return;
 
-        if (!ctx.measureState.firstPoint) {
-          ctx.measureState.firstPoint = point.clone();
-          ctx.measureState.firstBinding = binding ?? ctx.toFreePlanBinding(point);
-          ctx.setFirstPointMarker(ctx.measureState.firstPoint);
-          ctx.args.measureReadoutEl.textContent =
-            normalMode
-              ? `Normal (${kind}): ${ctx.formatMm(point)} -> click second guide point.`
-              : `First point (${kind}): ${ctx.formatMm(point)} -> click second point.`;
-          ctx.setUnderlayStatus(normalMode ? "Measure: click second guide point for normal." : "Measure: click second point.");
-          ctx.mountProps();
-          return;
-        }
-
-        let a = ctx.measureState.firstPoint.clone();
-        let b = point.clone();
-        if (ctx.measureState.axisLock) b = ctx.viewMode === "2d" ? ctx.axisLockXZ(a, b) : ctx.axisLockPoint3D(a, b);
-        const aBinding = ctx.measureState.firstBinding ?? ctx.toFreePlanBinding(a);
-        const bBinding = binding ?? ctx.toFreePlanBinding(b);
-        if (normalMode) {
-          const baseDir = b.clone().sub(a).setY(0);
-          if (baseDir.lengthSq() > 1e-10) {
-            baseDir.normalize();
-            const normalDir = new THREE.Vector3(-baseDir.z, 0, baseDir.x).normalize();
-            const spanM = Math.max(4, Math.min(30, a.distanceTo(b) * 6));
-            ctx.addMeasurement(
-              a.clone().addScaledVector(normalDir, -spanM / 2),
-              a.clone().addScaledVector(normalDir, spanM / 2),
-              aBinding,
-              bBinding,
-              { kind: "normalGuide" }
-            );
-          }
-        } else {
-          ctx.addMeasurement(a, b, aBinding, bBinding, {
-            kind: "distance",
-            distanceMm: ctx.viewMode === "2d" ? ctx.planarDistanceMm(a, b) : ctx.distance3dMm(a, b)
-          });
-        }
-        ctx.measureState.firstPoint = null;
-        ctx.measureState.firstBinding = null;
-        ctx.setFirstPointMarker(null);
-        ctx.clearPreview();
-        ctx.clearToolHud();
+        handleMeasurePointClick({
+          point,
+          kind,
+          binding,
+          normalMode,
+          viewMode: ctx.viewMode,
+          measureState: ctx.measureState,
+          formatMm: ctx.formatMm,
+          toFreePlanBinding: ctx.toFreePlanBinding,
+          axisLockXZ: ctx.axisLockXZ,
+          axisLockPoint3D: ctx.axisLockPoint3D,
+          planarDistanceMm: ctx.planarDistanceMm,
+          distance3dMm: ctx.distance3dMm,
+          addMeasurement: ctx.addMeasurement,
+          setFirstPointMarker: ctx.setFirstPointMarker,
+          setReadout: (message) => { ctx.args.measureReadoutEl.textContent = message; },
+          setStatus: ctx.setUnderlayStatus,
+          clearPreview: ctx.clearPreview,
+          clearToolHud: ctx.clearToolHud,
+          mountProps: ctx.mountProps
+        });
         return;
       }
 
       if (ctx.layoutTool === "section") {
         if (ctx.viewMode !== "2d" || ctx.activeViewerTab !== "floorplan" || ev.button !== 0) return;
-        const hitPoint = new THREE.Vector3();
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+        const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+        if (!hitPoint) return;
         const resolved = ctx.resolveSectionDrawPoint(hitPoint, rect, !ev.shiftKey);
-        ctx.sectionDraw.axisLocked = resolved.axisLocked;
-        const point = { x: Math.round(resolved.point.x * 1000), z: Math.round(resolved.point.z * 1000) };
-
-        if (!ctx.sectionDraw.a) {
-          ctx.sectionDraw.a = point;
-          ctx.sectionDraw.hoverPoint = point;
-          ctx.updateSectionDrawPreview();
-          ctx.setUnderlayStatus("Section: click second point. Ortho = straight, Shift = no axis snap, Space = mirror direction.");
-          ctx.mountProps();
-          return;
-        }
-
-        if (ctx.commitSectionDraw(point)) {
+        const sectionResult = handleSectionDrawPointClick({
+          resolved,
+          sectionDraw: ctx.sectionDraw,
+          updateSectionDrawPreview: ctx.updateSectionDrawPreview,
+          setStatus: ctx.setUnderlayStatus,
+          mountProps: ctx.mountProps,
+          commitSectionDraw: ctx.commitSectionDraw
+        });
+        if (sectionResult.preventDefault) {
           ev.preventDefault();
           ev.stopPropagation();
         }
@@ -1059,285 +2189,110 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
       if (ctx.S.kitchenEditMode && ctx.kitchenWorktopDraw.active) {
         if (ctx.viewMode !== "2d" || ev.button !== 0) return;
-        const hitPoint = new THREE.Vector3();
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+        const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+        if (!hitPoint) return;
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
         const activeSnap = ctx.resolveKitchenWorktopDrawSnap(hitPoint, rect2);
-        const source = activeSnap ? activeSnap.point : hitPoint.clone();
-        const rawPoint = { x: Math.round(source.x * 1000), z: Math.round(source.z * 1000) };
-        const basePoint = ctx.kitchenWorktopDraw.points[ctx.kitchenWorktopDraw.points.length - 1] ?? null;
-        const point = basePoint ? ctx.floorOrthoPoint(basePoint, rawPoint) : rawPoint;
-        ctx.appendKitchenWorktopPoint(point);
+        handleKitchenWorktopDrawPointClick({
+          hitPoint,
+          activeSnap,
+          kitchenWorktopDraw: ctx.kitchenWorktopDraw,
+          floorOrthoPoint: ctx.floorOrthoPoint,
+          appendKitchenWorktopPoint: ctx.appendKitchenWorktopPoint
+        });
+        return;
+      }
+
+      if (ctx.layoutTool === "led") {
+        if (ev.button !== 0 || !ctx.ledStripDrawController) return;
+        if (!ctx.ledStripDrawController.state.active) {
+          const picked = ctx.ledStripDrawController.pick(ctx.raycaster);
+          if (picked) {
+            ctx.ledStripDrawController.selectPick(picked);
+            if (ctx.viewMode === "2d") {
+              const hitPoint = getLedEditHitPoint();
+              if (hitPoint && ctx.ledStripDrawController.beginPointerEdit(ev.pointerId, picked, hitPoint)) {
+                try {
+                  ctx.renderer.domElement.setPointerCapture(ev.pointerId);
+                } catch {
+                  // Pointer capture is optional for LED editing.
+                }
+              }
+            }
+          }
+          return;
+        }
+        if (ctx.viewMode !== "2d") return;
+        const hitPoint = getLedEditHitPoint();
+        if (!hitPoint) return;
+        if (ctx.activeViewerTab === "floorplan") {
+          const rect2 = ctx.renderer.domElement.getBoundingClientRect();
+          const snapped = ctx.snapPoint2D(hitPoint, rect2, ctx.cam());
+          ctx.ledStripDrawController.point(snapped.kind === "none" ? hitPoint : snapped.point);
+        } else {
+          ctx.ledStripDrawController.point(hitPoint);
+        }
         return;
       }
 
       if (ctx.layoutTool === "wall") {
         if (ev.button !== 0) return;
         // Place wall by 2 clicks on ground (XZ).
-        const hitPoint = new THREE.Vector3();
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+        const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+        if (!hitPoint) return;
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
         const snapped = ctx.snapPoint2D(hitPoint, rect2, ctx.cam());
         const shouldAxisSnap = ctx.drawOrthoEnabled && !ev.shiftKey && snapped.kind === "none";
 
-      if (!ctx.wallDraw.active) {
-        ctx.wallDraw.active = true;
-        ctx.wallDraw.segments = ctx.wallDraw.segments || 0;
-        const start = snapped.kind !== "none" ? snapped.point : hitPoint.clone();
-        const startMm = { x: Math.round(start.x * 1000), z: Math.round(start.z * 1000) };
-        ctx.wallDraw.a = new THREE.Vector3(startMm.x / 1000, 0, startMm.z / 1000);
-        if (!ctx.wallDraw.chainStart) ctx.wallDraw.chainStart = ctx.wallDraw.a.clone();
-        ctx.wallDraw.hoverB = ctx.wallDraw.a.clone();
-        ctx.wallDraw.typedMm = "";
-        ctx.wallTypedHud.style.display = "none";
-        if (!ctx.wallDraw.preview) {
-          ctx.wallDraw.preview = ctx.makeWallPreviewMesh(ctx.wallDraw.a, ctx.wallDraw.a, ctx.wallDefault.thicknessMm);
-          ctx.wallDraw.preview.name = "wallPreview";
-          ctx.layoutRoot.add(ctx.wallDraw.preview);
-        }
-        ctx.updateWallMeshWithJustification(
-          ctx.wallDraw.preview,
-          ctx.wallDraw.a,
-          ctx.wallDraw.a,
-          ctx.wallDefault.thicknessMm,
-          ctx.wallDefault.justification,
-          ctx.wallDefault.exteriorSign
-        );
-        ctx.setUnderlayStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
-        return;
-      }
-
-        const a = ctx.wallDraw.a;
-        if (!a) return;
-        const b0 = snapped.kind !== "none" ? snapped.point : hitPoint.clone();
-        const b = shouldAxisSnap ? ctx.snapAxisXZ(a, b0, true) : b0;
-        const bMm = { x: Math.round(b.x * 1000), z: Math.round(b.z * 1000) };
-        const bExact = new THREE.Vector3(bMm.x / 1000, 0, bMm.z / 1000);
-
-        // Snap to chain start when closing loop.
-        const closeTolM = 0.03;
-        const cs = ctx.wallDraw.chainStart;
-        const closes =
-          !!cs && ctx.wallDraw.segments >= 2 && Math.hypot(bExact.x - cs.x, bExact.z - cs.z) <= closeTolM;
-        const end = closes && cs ? cs.clone() : bExact;
-
-        // Finish wall
-        const w = ctx.addWall(a, end, ctx.wallDefault.thicknessMm);
-        if (!w) return;
-        ctx.autoJoinAtMmPoint(w.params.aMm);
-        ctx.autoJoinAtMmPoint(w.params.bMm);
-        ctx.wallDraw.segments += 1;
-
-        if (closes) {
-          ctx.clearWallDrawState();
-          ctx.setUnderlayStatus("Wall: chain closed.");
+        if (!ctx.wallDraw.active) {
+          handleWallDrawStartClick({
+            hitPoint,
+            snapped,
+            wallDraw: ctx.wallDraw,
+            wallDefault: ctx.wallDefault,
+            wallTypedHud: ctx.wallTypedHud,
+            makeWallPreviewMesh: ctx.makeWallPreviewMesh,
+            addPreviewToLayout: (preview) => ctx.layoutRoot.add(preview),
+            updateWallMeshWithJustification: ctx.updateWallMeshWithJustification,
+            setStatus: ctx.setUnderlayStatus
+          });
           return;
         }
 
-        // Continue chain from end point.
-        ctx.wallDraw.active = true;
-        ctx.wallDraw.a = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
-        ctx.wallDraw.hoverB = ctx.wallDraw.a.clone();
-        ctx.wallDraw.typedMm = "";
-        ctx.wallTypedHud.style.display = "none";
-        ctx.updateWallMeshWithJustification(
-          ctx.wallDraw.preview!,
-          ctx.wallDraw.a,
-          ctx.wallDraw.a,
-          ctx.wallDefault.thicknessMm,
-          ctx.wallDefault.justification,
-          ctx.wallDefault.exteriorSign
-        );
-        ctx.setUnderlayStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, Esc = stop)");
-        // Keep wall tool active; just show properties for the placed wall.
-        ctx.selectedKind = "wall";
-        ctx.selectedWallId = w.id;
-        ctx.mountProps();
+        handleWallDrawEndClick({
+          hitPoint,
+          snapped,
+          shouldAxisSnap,
+          rect: rect2,
+          camera: ctx.cam(),
+          precisionMm: isWallDrawFreeMm(ctx.wallDraw),
+          walls: ctx.walls,
+          hudWallEndAlignmentGuide: ctx.hudWallEndAlignmentGuide,
+          updateHudDashedLine: ctx.updateHudDashedLine,
+          wallDraw: ctx.wallDraw,
+          wallDefault: ctx.wallDefault,
+          wallTypedHud: ctx.wallTypedHud,
+          snapAxisXZ: ctx.snapAxisXZ,
+          addWall: ctx.addWall,
+          autoJoinAtMmPoint: ctx.autoJoinAtMmPoint,
+          clearWallDrawState: ctx.clearWallDrawState,
+          updateWallMeshWithJustification: ctx.updateWallMeshWithJustification,
+          setStatus: ctx.setUnderlayStatus,
+          selectWall: (id) => {
+            ctx.selectedKind = "wall";
+            ctx.selectedWallId = id;
+            ctx.mountProps();
+          }
+        });
         return;
       }
 
       if (ctx.measureState.enabled) return;
 
-      // 2D wall selection without raycasting (walls are hidden in 2D; plan mesh is merged).
-      if (ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.layoutTool === "select" && ev.button === 0) {
-        const hitPoint = new THREE.Vector3();
-        if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-        const pMm = ctx.toMmPoint(hitPoint);
-        const rect2 = ctx.renderer.domElement.getBoundingClientRect();
-        const mouse = { x: ev.clientX - rect2.left, y: ev.clientY - rect2.top };
+      if (handleFloorplanSelectPointerDown(ev)) return;
 
-        if (ctx.isColumnPlacementActive?.()) {
-          const placementPoint = resolveColumnPlacementPoint(hitPoint, rect2);
-          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-            ctx.marquee.hitSomething = true;
-            ctx.marquee.pending = false;
-            ctx.marquee.active = false;
-            ctx.marqueeEl.style.display = "none";
-          }
-          ctx.insertColumnAtPoint?.(ctx.toMmPoint(placementPoint));
-          ev.preventDefault();
-          ev.stopPropagation();
-          return;
-        }
-
-        if (ctx.isWindowPlacementActive?.()) {
-          const wallId = pickFloorplanWallId(pMm, mouse, rect2);
-          if (!wallId) {
-            ctx.setUnderlayStatus("Window: klikni priamo na stenu.");
-            return;
-          }
-          ctx.insertWindowAtWallPoint?.(wallId, pMm);
-          return;
-        }
-
-        if (ctx.isDoorPlacementActive?.()) {
-          const wallId = pickFloorplanWallId(pMm, mouse, rect2);
-          if (!wallId) {
-            ctx.setUnderlayStatus("Door: klikni priamo na stenu.");
-            return;
-          }
-          ctx.insertDoorAtWallPoint?.(wallId, pMm);
-          return;
-        }
-
-        const pickedWindow = pickFloorplanWindow(pMm, mouse, rect2);
-        if (pickedWindow) {
-          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-            ctx.marquee.hitSomething = true;
-            ctx.marquee.pending = false;
-            ctx.marquee.active = false;
-            ctx.marqueeEl.style.display = "none";
-          }
-          ctx.windowInst = pickedWindow;
-          ctx.setSelectedWindow();
-          return;
-        }
-
-        const pickedDoor = pickFloorplanDoor(pMm, mouse, rect2);
-        if (pickedDoor) {
-          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-            ctx.marquee.hitSomething = true;
-            ctx.marquee.pending = false;
-            ctx.marquee.active = false;
-            ctx.marqueeEl.style.display = "none";
-          }
-          ctx.doorInst = pickedDoor;
-          ctx.setSelectedDoor();
-          return;
-        }
-
-        const sectionHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getSectionPickMeshes()), false)[0]?.object;
-        const sectionId = ctx.getSectionIdFromObject(sectionHit);
-        if (sectionId) {
-          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-            ctx.marquee.hitSomething = true;
-            ctx.marquee.pending = false;
-            ctx.marquee.active = false;
-            ctx.marqueeEl.style.display = "none";
-          }
-          ctx.setSelectedSection(sectionId);
-          return;
-        }
-
-        const columnHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getColumnPickMeshes()), false)[0]?.object;
-        const columnId = ctx.getColumnIdFromObject(columnHit);
-        if (columnId) {
-          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-            ctx.marquee.hitSomething = true;
-            ctx.marquee.pending = false;
-            ctx.marquee.active = false;
-            ctx.marqueeEl.style.display = "none";
-          }
-          ctx.setSelectedColumn(columnId);
-          return;
-        }
-
-        const moduleHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getAllInstanceGeometryMeshes()), false)[0]?.object;
-        const moduleId = ctx.getInstanceIdFromObject(moduleHit);
-        const selectableModuleId = moduleId && ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(moduleId) : moduleId;
-        if (selectableModuleId && ctx.beginModuleSelection(selectableModuleId, ev)) return;
-
-        const fallbackModuleId = ctx.findSelectableFloorplanModuleAtPoint(pMm, mouse, rect2);
-        if (fallbackModuleId && isPickableKey(`module:${fallbackModuleId}`) && ctx.beginModuleSelection(fallbackModuleId, ev)) return;
-
-        const worktopHit = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object;
-        const worktopId = ctx.getWorktopIdFromObject(worktopHit);
-        if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
-
-        let bestFloor: { id: string; px: number } | null = null;
-        for (const floor of ctx.floors) {
-          if (!isPickableKey(`floor:${floor.id}`)) continue;
-          const boundary = floor.params.boundary;
-          for (let i = 0; i < boundary.length; i++) {
-            const a = boundary[i];
-            const b = boundary[(i + 1) % boundary.length];
-            const sa = ctx.worldToScreen(ctx.floorPointToWorld(a), ctx.cam(), rect2);
-            const sb = ctx.worldToScreen(ctx.floorPointToWorld(b), ctx.cam(), rect2);
-            const edgePx = ctx.distPxPointToSeg(mouse.x, mouse.y, sa.x, sa.y, sb.x, sb.y);
-            const cornerPx = Math.min(Math.hypot(mouse.x - sa.x, mouse.y - sa.y), Math.hypot(mouse.x - sb.x, mouse.y - sb.y));
-            const px = Math.min(edgePx, cornerPx);
-            if (px <= 12 && (!bestFloor || px < bestFloor.px)) bestFloor = { id: floor.id, px };
-          }
-        }
-        if (bestFloor) {
-          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-            ctx.marquee.hitSomething = true;
-            ctx.marquee.pending = false;
-            ctx.marquee.active = false;
-            ctx.marqueeEl.style.display = "none";
-          }
-          ctx.setSelectedFloor(bestFloor.id);
-          return;
-        }
-
-        // Prefer polygon hit-testing when available.
-        let bestPoly: { id: string; px: number } | null = null;
-        const pW = { x: pMm.x / 1000, z: pMm.z / 1000 };
-        for (const [id, poly] of ctx.wallSolvedOutlines) {
-          if (!isPickableKey(`wall:${id}`)) continue;
-          if (poly.length < 3) continue;
-          if (!ctx.pointInPolygonXZ(pW, poly)) continue;
-          // score by distance to mouse from wall midpoint (stable pick)
-          const w = ctx.walls.find((x) => x.id === id) ?? null;
-          const mid = w ? new THREE.Vector3((w.params.aMm.x + w.params.bMm.x) / 2000, 0, (w.params.aMm.z + w.params.bMm.z) / 2000) : new THREE.Vector3(pW.x, 0, pW.z);
-          const s = ctx.worldToScreen(mid, ctx.cam(), rect2);
-          const px = Math.hypot(s.x - mouse.x, s.y - mouse.y);
-          if (!bestPoly || px < bestPoly.px) bestPoly = { id, px };
-        }
-        if (bestPoly) {
-          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-            ctx.marquee.hitSomething = true;
-            ctx.marquee.pending = false;
-            ctx.marquee.active = false;
-            ctx.marqueeEl.style.display = "none";
-          }
-          ctx.setSelectedWall(bestPoly.id);
-          return;
-        }
-
-        let best: { id: string; px: number } | null = null;
-        for (const w of ctx.walls) {
-          if (!isPickableKey(`wall:${w.id}`)) continue;
-          const closest = ctx.pointOnWallAxisMm(w, pMm);
-          if (!Number.isFinite(closest.distMm)) continue;
-          const cp = new THREE.Vector3(closest.closest.x / 1000, 0, closest.closest.z / 1000);
-          const s = ctx.worldToScreen(cp, ctx.cam(), rect2);
-          const px = Math.hypot(s.x - mouse.x, s.y - mouse.y);
-          if (!best || px < best.px) best = { id: w.id, px };
-        }
-
-        if (best && best.px <= 10) {
-          if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-            ctx.marquee.hitSomething = true;
-            ctx.marquee.pending = false;
-            ctx.marquee.active = false;
-            ctx.marqueeEl.style.display = "none";
-          }
-          ctx.setSelectedWall(best.id);
-          return;
-        }
-      }
-
+      const pointerRect = ctx.renderer.domElement.getBoundingClientRect();
+      const pointerMouse = pointerClientPointInRect(ev, pointerRect);
       const picks: THREE.Object3D[] = ctx.getAllInstanceGeometryMeshes();
       const windowPicks = ctx.windows.map((inst) => inst.pick);
       const doorPicks = ctx.doors.map((inst) => inst.pick);
@@ -1345,7 +2300,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       picks.push(...doorPicks);
       picks.push(...ctx.getColumnPickMeshes());
       for (const w of ctx.walls) picks.push(w.mesh);
-      for (const floor of ctx.floors) picks.push(floor.mesh, floor.outline as any);
+      for (const floor of ctx.floors) picks.push(floor.mesh, floor.outline);
       const hits = ctx.raycaster.intersectObjects(pickableObjects(picks), false);
       const windowHit = ctx.raycaster.intersectObjects(pickableObjects(windowPicks), false)[0] ?? null;
       const doorHit = ctx.raycaster.intersectObjects(pickableObjects(doorPicks), false)[0] ?? null;
@@ -1355,184 +2310,171 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           : doorHit ?? windowHit;
       const firstHit = openingHit && (!hits[0] || openingHit.distance <= hits[0].distance + 0.25) ? openingHit : hits[0];
       const first = firstHit?.object as THREE.Mesh | undefined;
+      const tallSubmoduleHit = ctx.S.kitchenEditMode && ctx.kitchenMode?.isTallModuleEditorActive?.()
+        ? hits.find((hit) => hasTallSubmodulePickData(hit.object)) ?? null
+        : null;
+      const tallSubmoduleObject = tallSubmoduleHit?.object as THREE.Mesh | undefined;
       const worktopHit3d = ctx.raycaster.intersectObjects(pickableObjects(ctx.getKitchenWorktopGeometryMeshes()), false)[0]?.object as THREE.Mesh | undefined;
-      const kind = (first?.userData?.kind as string | undefined) ?? "module";
+      const pickedKind = (first?.userData?.kind as string | undefined) ?? "module";
+      const detailFallbackModuleId = resolveDetailModuleIdFromScreenBounds(pointerMouse, pointerRect);
+      const directModuleId = ctx.getInstanceIdFromObject(first);
+      const shouldUseDetailModuleFallback = !!detailFallbackModuleId && (!first || pickedKind === "wall" || pickedKind === "floor");
+      const id = directModuleId ?? (shouldUseDetailModuleFallback ? detailFallbackModuleId : null);
+      const kind = id ? "module" : pickedKind;
+
+      if (ctx.S.kitchenEditMode && ctx.kitchenMode?.isTallModuleEditorActive?.()) {
+        const activeHostId = ctx.getInstanceIdFromObject(tallSubmoduleObject) ?? directModuleId ?? detailFallbackModuleId ?? null;
+        if (tallSubmoduleObject && ctx.kitchenMode.selectTallSubmoduleFromObject?.(activeHostId, tallSubmoduleObject, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+          markPendingMarqueeHit(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+        ctx.kitchenMode.clearTallSubmoduleSelection?.();
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
 
       if (kind === "window") {
         const pickedWindow = findWindowFromObject(first);
         if (!pickedWindow) return;
-        ctx.windowInst = pickedWindow;
-        if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-          ctx.marquee.hitSomething = true;
-          ctx.marquee.pending = false;
-          ctx.marquee.active = false;
-          ctx.marqueeEl.style.display = "none";
-        }
-        ctx.setSelectedWindow();
-
-        ctx.windowDragState.active = true;
-        const customWallId = ctx.windowInst.params.wallId ?? null;
-        ctx.windowDragState.wall = customWallId ?? ctx.windowInst.params.wall;
-        if (customWallId) {
-          const wall = ctx.walls.find((item) => item.id === customWallId) ?? null;
-          const hitPoint = new THREE.Vector3();
-          if (!wall || !ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-          const closest = ctx.pointOnWallAxisMm(wall, ctx.toMmPoint(hitPoint));
-          const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
-          ctx.windowDragState.offsetMm = ctx.windowInst.params.centerMm - closest.t * lengthMm;
-        } else {
-          const def = ctx.wallDefs[ctx.windowInst.params.wall];
-          const hitPoint = new THREE.Vector3();
-          const okWall = ctx.raycaster.ray.intersectPlane(def.plane, hitPoint);
-          if (!okWall) {
-            if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-          }
-          const axis = def.axis === "x" ? hitPoint.x : hitPoint.z;
-          ctx.windowDragState.offsetMm = ctx.windowInst.params.centerMm - axis * 1000;
-        }
-        ctx.renderer.domElement.setPointerCapture(ev.pointerId);
+        beginWindowDragFromPick({
+          cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
+          continueMoveAfterSelection: () => continueMoveAfterSelection(firstHit?.point),
+          findCustomWall: (wallId) => ctx.walls.find((item) => item.id === wallId) ?? null,
+          getGroundHitPoint: () => intersectRayPlane(ctx.raycaster, ctx.groundPlane),
+          getLegacyWallHitPoint: (wallId) => {
+            const def = ctx.wallDefs[wallId];
+            return def ? intersectRayPlane(ctx.raycaster, def.plane) : null;
+          },
+          getLegacyWallMeta: (wallId) => ctx.wallDefs[wallId] ?? null,
+          opening: pickedWindow,
+          pointOnWallAxisMm: ctx.pointOnWallAxisMm,
+          selectOpening: (window) => {
+            ctx.windowInst = window;
+            ctx.setSelectedWindow();
+          },
+          setPointerCapture: () => ctx.renderer.domElement.setPointerCapture(ev.pointerId),
+          toMmPoint: ctx.toMmPoint,
+          windowDragState: ctx.windowDragState
+        });
         return;
       }
 
       if (kind === "door") {
         const pickedDoor = findDoorFromObject(first);
         if (!pickedDoor) return;
-        ctx.doorInst = pickedDoor;
-        if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-          ctx.marquee.hitSomething = true;
-          ctx.marquee.pending = false;
-          ctx.marquee.active = false;
-          ctx.marqueeEl.style.display = "none";
-        }
-        ctx.setSelectedDoor();
-
-        ctx.doorDragState.active = true;
-        const customWallId = ctx.doorInst.params.wallId ?? null;
-        ctx.doorDragState.wall = customWallId;
-        if (customWallId) {
-          const wall = ctx.walls.find((item) => item.id === customWallId) ?? null;
-          const hitPoint = new THREE.Vector3();
-          if (!wall || !ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-          const closest = ctx.pointOnWallAxisMm(wall, ctx.toMmPoint(hitPoint));
-          const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
-          ctx.doorDragState.offsetMm = ctx.doorInst.params.centerMm - closest.t * lengthMm;
-        }
-        ctx.renderer.domElement.setPointerCapture(ev.pointerId);
+        beginDoorDragFromPick({
+          cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
+          continueMoveAfterSelection: () => continueMoveAfterSelection(firstHit?.point),
+          doorDragState: ctx.doorDragState,
+          findCustomWall: (wallId) => ctx.walls.find((item) => item.id === wallId) ?? null,
+          getGroundHitPoint: () => intersectRayPlane(ctx.raycaster, ctx.groundPlane),
+          opening: pickedDoor,
+          pointOnWallAxisMm: ctx.pointOnWallAxisMm,
+          selectOpening: (door) => {
+            ctx.doorInst = door;
+            ctx.setSelectedDoor();
+          },
+          setPointerCapture: () => ctx.renderer.domElement.setPointerCapture(ev.pointerId),
+          toMmPoint: ctx.toMmPoint
+        });
         return;
       }
 
-      const id = ctx.getInstanceIdFromObject(first);
       const columnId = ctx.getColumnIdFromObject(first);
       const wallId = (first?.userData?.wallId as string | undefined) ?? null;
       const floorId = (first?.userData?.floorId as string | undefined) ?? null;
       const worktopId = ctx.getWorktopIdFromObject(first) ?? ctx.getWorktopIdFromObject(worktopHit3d);
-      if (!id && worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
-      if (kind === "column" || columnId) {
-        if (!columnId) {
-          ctx.setSelectedColumn(null);
-          return;
-        }
-        if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-          ctx.marquee.hitSomething = true;
-          ctx.marquee.pending = false;
-          ctx.marquee.active = false;
-          ctx.marqueeEl.style.display = "none";
-        }
-        ctx.setSelectedColumn(columnId);
+      if (ctx.S.kitchenEditMode && kind !== "module") {
+        if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
         return;
       }
-      if (kind === "floor") {
-        if (ctx.viewMode === "2d" && ctx.activeViewerTab !== "floorplan") {
-          ctx.selectedKind = null;
-          ctx.selectedColumnId = null;
-          ctx.selectedSectionId = null;
-          ctx.selectedKitchenGroupId = null;
-          ctx.selectedFloorId = null;
-          ctx.selectedWallId = null;
-          ctx.selectedWallIds.clear();
-          ctx.selectedInstanceId = null;
-          ctx.selectedInstanceIds.clear();
-          ctx.setInstanceSelected(null);
-          ctx.showWallSnapMarkersFor(null);
-          ctx.syncSelectionState();
-          ctx.updateSelectionHighlights();
-          ctx.updateAllSectionVisuals();
-          ctx.mountProps();
-          return;
-        }
-        if (!floorId) {
-          ctx.setSelectedFloor(null);
-          return;
-        }
-        if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-          ctx.marquee.hitSomething = true;
-          ctx.marquee.pending = false;
-          ctx.marquee.active = false;
-          ctx.marqueeEl.style.display = "none";
-        }
-        ctx.setSelectedFloor(floorId);
+      if (ctx.S.kitchenEditMode && kind === "module" && id && !ctx.kitchenMode?.filterSelectableInstanceId(id)) {
+        if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
         return;
       }
-      if (kind === "wall") {
-        if (!wallId) {
-          ctx.setSelectedWall(null);
+      if (ctx.S.kitchenEditMode && kind === "module" && id) {
+        if (ctx.kitchenMode?.selectTallSubmoduleFromObject?.(id, first, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+          cancelPendingMarquee(ev.pointerId);
+          ev.preventDefault();
+          ev.stopPropagation();
           return;
         }
-        if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-          ctx.marquee.hitSomething = true;
-          ctx.marquee.pending = false;
-          ctx.marquee.active = false;
-          ctx.marqueeEl.style.display = "none";
-        }
-        ctx.setSelectedWall(wallId);
+        ctx.kitchenMode?.clearTallSubmoduleSelection?.();
+      }
+
+      if (
+        executeFallbackPickSelection({
+          activeViewerTab: ctx.activeViewerTab,
+          beginModuleSelection: (selectableId) => ctx.beginModuleSelection(selectableId, ev),
+          beginWorktopSelection: (id) => ctx.beginKitchenWorktopSelection(id, ev),
+          cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
+          clearNonFloorplanFloorSelection: () => clearNonFloorplanFloorSelection(ctx),
+          clearWindowLightIfMissing: ctx.clearWindowLightIfMissing,
+          columnId,
+          continueMoveAfterSelection,
+          filterSelectableId: (rawId) => (ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(rawId) : rawId),
+          firstHitPoint: firstHit?.point,
+          floorId,
+          id,
+          kind,
+          setDoorInstNull: () => {
+            ctx.doorInst = null;
+          },
+          selectColumn: ctx.setSelectedColumn,
+          selectFloor: ctx.setSelectedFloor,
+          selectModule: ctx.setSelectedModule,
+          selectWall: ctx.setSelectedWall,
+          transformSelectElements: ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements",
+          viewMode: ctx.viewMode,
+          wallId,
+          worktopId
+        })
+      ) {
         return;
       }
 
       if (!id) {
-        if (ctx.viewMode === "2d" && ctx.layoutTool === "select" && ev.button === 0 && ctx.underlayMesh.visible && hasLoadedUnderlay() && isPickableKey("underlay:main") && !ctx.underlayState.pinned) {
-          const underlayHit = ctx.raycaster.intersectObject(ctx.underlayMesh, false)[0];
-          if (underlayHit) {
-            if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-              ctx.marquee.hitSomething = true;
-              ctx.marquee.pending = false;
-              ctx.marquee.active = false;
-              ctx.marqueeEl.style.display = "none";
-            }
-            ctx.setSelectedUnderlay();
-            const hitPoint = new THREE.Vector3();
-            if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-            ctx.underlayDragState.active = true;
-            ctx.underlayDragState.pointerId = ev.pointerId;
-            ctx.underlayDragState.startWorld.copy(hitPoint);
-            ctx.underlayDragState.startOffsetMm = { x: ctx.underlayState.offsetMm.x, z: ctx.underlayState.offsetMm.z };
-            ctx.renderer.domElement.setPointerCapture(ev.pointerId);
-            ctx.setUnderlayStatus("Drag underlay... (Pin when ready)");
-            return;
-          }
-        }
-        if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId) {
-          // don't clear selection yet; if it becomes a drag we want marquee selection
+        const underlayDragHandled = beginUnderlayDragPointerDown({
+          button: ev.button,
+          cancelPendingMarquee: () => cancelPendingMarquee(ev.pointerId),
+          getGroundHitPoint: () => intersectRayPlane(ctx.raycaster, ctx.groundPlane),
+          hasUnderlayHit: () => !!ctx.raycaster.intersectObject(ctx.underlayMesh, false)[0],
+          isEligible:
+            ctx.viewMode === "2d" &&
+            ctx.layoutTool === "select" &&
+            ctx.underlayMesh.visible &&
+            hasLoadedUnderlay() &&
+            isPickableKey("underlay:main") &&
+            !ctx.underlayState.pinned,
+          pointerId: ev.pointerId,
+          setPointerCapture: (pointerId) => ctx.renderer.domElement.setPointerCapture(pointerId),
+          setSelectedUnderlay: ctx.setSelectedUnderlay,
+          setUnderlayStatus: ctx.setUnderlayStatus,
+          underlayDragState: ctx.underlayDragState,
+          underlayOffsetMm: ctx.underlayState.offsetMm
+        });
+        if (underlayDragHandled) return;
+        if (
+          handleEmptyFallbackPickSelection({
+            clearWindowLightIfMissing: ctx.clearWindowLightIfMissing,
+            cloneMovePoint: (point) => new THREE.Vector3().copy(point),
+            continueMoveWithCurrentSelection,
+            getCurrentMoveHitPoint: () => intersectRayPlane(ctx.raycaster, ctx.groundPlane),
+            hasPendingMarqueeForPointer: ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId,
+            setDoorInstNull: () => {
+              ctx.doorInst = null;
+            },
+            selectFloor: ctx.setSelectedFloor,
+            selectModule: ctx.setSelectedModule,
+            selectWall: ctx.setSelectedWall
+          })
+        ) {
           return;
         }
-        ctx.setSelectedFloor(null);
-        ctx.setSelectedWall(null);
-        ctx.setSelectedModule(null);
-        ctx.doorInst = null;
-        ctx.clearWindowLightIfMissing();
-        return;
       }
-
-      const selectableId = ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(id) : id;
-      if (!selectableId) {
-        if (worktopId && ctx.beginKitchenWorktopSelection(worktopId, ev)) return;
-        ctx.setSelectedModule(null);
-        ctx.doorInst = null;
-        ctx.clearWindowLightIfMissing();
-        return;
-      }
-
-      ctx.beginModuleSelection(selectableId, ev);
-      return;
     }
 
     if (!ctx.cabinetGroup) return;
@@ -1544,24 +2486,18 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       if (!hit) return;
 
       const snapped = ctx.snapPointXZ(hit.point, hit.object);
-      if (!ctx.measureState.firstPoint) {
-        ctx.measureState.firstPoint = snapped.point;
-        ctx.measureState.firstBinding = ctx.toFreePlanBinding(snapped.point);
-        ctx.args.measureReadoutEl.textContent = `First point (${snapped.kind}): ${ctx.formatMm(snapped.point)} -> pick second point...`;
-        return;
-      }
-
-      let a = ctx.measureState.firstPoint;
-      let b = snapped.point;
-      if (ctx.measureState.axisLock) b = ctx.axisLockXZ(a, b);
-
-      ctx.addMeasurement(a, b, ctx.measureState.firstBinding ?? ctx.toFreePlanBinding(a), ctx.toFreePlanBinding(b), {
-        kind: "distance",
-        distanceMm: ctx.planarDistanceMm(a, b)
+      handleLegacySurfaceMeasurePointClick({
+        point: snapped.point,
+        kind: snapped.kind,
+        measureState: ctx.measureState,
+        formatMm: ctx.formatMm,
+        toFreePlanBinding: ctx.toFreePlanBinding,
+        axisLockXZ: ctx.axisLockXZ,
+        planarDistanceMm: ctx.planarDistanceMm,
+        addMeasurement: ctx.addMeasurement,
+        setReadout: (message) => { ctx.args.measureReadoutEl.textContent = message; },
+        clearPreview: ctx.clearPreview
       });
-      ctx.measureState.firstPoint = null;
-      ctx.measureState.firstBinding = null;
-      ctx.clearPreview();
       return;
     }
 
@@ -1576,111 +2512,96 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       return;
     }
 
+    if (ctx.mode === "layout" && ctx.layoutTool === "led" && ctx.ledStripDrawController?.state.pointerEdit && ctx.viewMode === "2d") {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = getLedEditHitPoint();
+      if (hitPoint) ctx.ledStripDrawController.updatePointerEdit(ev.pointerId, hitPoint);
+      return;
+    }
+
     if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.floorEdit.active) {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      if (!hitPoint) return;
       const floorPoint = ctx.worldToFloorPoint(hitPoint);
 
-      const activeFloorDrag = ctx.floorEdit.drag;
-      if (activeFloorDrag && activeFloorDrag.pointerId === ev.pointerId) {
-        if (activeFloorDrag.kind === "vertex") {
-          ctx.moveFloorEditVertex(activeFloorDrag.startSegments, activeFloorDrag.startPoint, floorPoint);
-        } else {
-          ctx.moveFloorEditSegment(activeFloorDrag.startSegments, activeFloorDrag.segmentIndex, activeFloorDrag.startWorld, floorPoint);
-        }
-        ctx.floorEdit.error = "";
-        ctx.renderFloorBoundaryEdit();
-        return;
-      }
-
-      if (ctx.floorEdit.tool === "pickLines") {
-        const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-        const picked = ctx.pickWallLine2D(hitPoint, rect, ctx.cam(), 14);
-        const alignPicked = ctx.pickAlignLineAt(hitPoint, mouse, rect);
-        const a = picked?.a ?? alignPicked?.segA ?? null;
-        const b = picked?.b ?? alignPicked?.segB ?? null;
-        if (a && b) ctx.updateHudLine(ctx.hudHoverLine, a, b, ctx.hudLineThicknessM(rect));
-        else ctx.hudHoverLine.visible = false;
-      } else {
-        ctx.hudHoverLine.visible = false;
-      }
-
-      if (ctx.floorEdit.first) {
-        ctx.floorEdit.hover = ctx.floorEdit.ortho ? ctx.floorOrthoPoint(ctx.floorEdit.first, floorPoint) : floorPoint;
-        ctx.renderFloorBoundaryEdit();
-      }
+      updateFloorBoundaryEditPointerMove({
+        floorEdit: ctx.floorEdit,
+        floorPoint,
+        hitPoint,
+        pointerId: ev.pointerId,
+        rect,
+        mouse: ctx.floorEdit.tool === "pickLines" ? pointerClientPointInRect(ev, rect) : null,
+        camera: ctx.cam(),
+        hudHoverLine: ctx.hudHoverLine,
+        floorOrthoPoint: ctx.floorOrthoPoint,
+        moveFloorEditVertex: ctx.moveFloorEditVertex,
+        moveFloorEditSegment: ctx.moveFloorEditSegment,
+        pickWallLine2D: ctx.pickWallLine2D,
+        pickAlignLineAt: ctx.pickAlignLineAt,
+        updateHudLine: ctx.updateHudLine,
+        hudLineThickness: ctx.hudLineThicknessM(rect),
+        renderFloorBoundaryEdit: ctx.renderFloorBoundaryEdit
+      });
       return;
     }
 
-    if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.layoutTool === "select" && ctx.isWindowPlacementActive?.()) {
+    if (
+      ctx.mode === "layout" &&
+      ctx.viewMode === "2d" &&
+      ctx.layoutTool === "select" &&
+      (ctx.isWindowPlacementActive?.() || ctx.isDoorPlacementActive?.())
+    ) {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) {
-        ctx.clearWindowPlacementPreview?.();
-        return;
-      }
-      const pMm = ctx.toMmPoint(hitPoint);
-      const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-      const wallId = pickFloorplanWallId(pMm, mouse, rect);
-      ctx.updateWindowPlacementPreview?.(wallId, pMm);
-      return;
-    }
-
-    if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.layoutTool === "select" && ctx.isDoorPlacementActive?.()) {
-      const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) {
-        ctx.clearDoorPlacementPreview?.();
-        return;
-      }
-      const pMm = ctx.toMmPoint(hitPoint);
-      const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-      const wallId = pickFloorplanWallId(pMm, mouse, rect);
-      ctx.updateDoorPlacementPreview?.(wallId, pMm);
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      const mouse = pointerClientPointInRect(ev, rect);
+      handleSelectOpeningPlacementPreviewPointerMove({
+        clearDoorPreview: () => ctx.clearDoorPlacementPreview?.(),
+        clearWindowPreview: () => ctx.clearWindowPlacementPreview?.(),
+        hitPoint,
+        isDoorActive: !!ctx.isDoorPlacementActive?.(),
+        isWindowActive: !!ctx.isWindowPlacementActive?.(),
+        pickWallId: (pointMm) => pickFloorplanWallId(pointMm, mouse, rect),
+        pointFromHit: ctx.toMmPoint,
+        updateDoorPreview: (wallId, pointMm) => ctx.updateDoorPlacementPreview?.(wallId, pointMm),
+        updateWindowPreview: (wallId, pointMm) => ctx.updateWindowPlacementPreview?.(wallId, pointMm)
+      });
       return;
     }
 
     if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.layoutTool === "select" && ctx.isColumnPlacementActive?.()) {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) {
-        ctx.updateColumnPlacementPreview?.(null);
-        ctx.selectPlanSnap = null;
-        ctx.drawSnapOverlay.hide();
-        ctx.hideHoverCursor();
-        return;
-      }
-      const placementPoint = resolveColumnPlacementPoint(hitPoint, rect);
-      ctx.updateColumnPlacementPreview?.(ctx.toMmPoint(placementPoint));
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      handleColumnPlacementPreviewPointerMove({
+        clearPlanSnap: () => {
+          ctx.selectPlanSnap = null;
+          ctx.drawSnapOverlay.hide();
+        },
+        hideHoverCursor: ctx.hideHoverCursor,
+        hitPoint,
+        isActive: true,
+        pointFromPlacementPoint: ctx.toMmPoint,
+        resolvePlacementPoint: (point) => resolveColumnPlacementPoint(point, rect),
+        updatePreview: (pointMm) => ctx.updateColumnPlacementPreview?.(pointMm)
+      });
       return;
     }
 
     if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.layoutTool === "select" && ctx.placement.active) {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-      ctx.rebuildGhost(ctx.S, ctx.placementHelpers, hitPoint);
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      handlePlacementPreviewPointerMove({
+        helpers: ctx.placementHelpers,
+        hitPoint,
+        isActive: true,
+        rebuildGhost: ctx.rebuildGhost,
+        state: ctx.S
+      });
       return;
     }
 
@@ -1691,511 +2612,316 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       if (!w) return;
 
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      if (!hitPoint) return;
 
-      if (d.kind === "move") {
-        const dx = hitPoint.x - d.startWorld.x;
-        const dz = hitPoint.z - d.startWorld.z;
-        const nextA = { x: Math.round(d.startA.x + dx * 1000), z: Math.round(d.startA.z + dz * 1000) };
-        const nextB = { x: Math.round(d.startB.x + dx * 1000), z: Math.round(d.startB.z + dz * 1000) };
-        w.params.aMm = nextA;
-        w.params.bMm = nextB;
-
-        const touched = new Set<string>();
-        touched.add(w.id);
-        for (const c of d.connectedA) {
-          const ow = ctx.walls.find((x) => x.id === c.wallId) ?? null;
-          if (!ow) continue;
-          if (c.which === "a") ow.params.aMm = nextA;
-          else ow.params.bMm = nextA;
-          touched.add(ow.id);
-        }
-        for (const c of d.connectedB) {
-          const ow = ctx.walls.find((x) => x.id === c.wallId) ?? null;
-          if (!ow) continue;
-          if (c.which === "a") ow.params.aMm = nextB;
-          else ow.params.bMm = nextB;
-          touched.add(ow.id);
-        }
-
-        for (const id of touched) {
-          const ww = ctx.walls.find((x) => x.id === id) ?? null;
-          if (ww) ctx.rebuildWall(ww);
-        }
-        ctx.rebuildWallPlanMesh();
-
-        // Block moving walls into modules.
-        if (ctx.instances.some((i) => ctx.moduleOverlapsWalls(i))) {
-          w.params.aMm = { x: d.startA.x, z: d.startA.z };
-          w.params.bMm = { x: d.startB.x, z: d.startB.z };
-          for (const c of d.connectedA) {
-            const ow = ctx.walls.find((x) => x.id === c.wallId) ?? null;
-            if (!ow) continue;
-            if (c.which === "a") ow.params.aMm = { x: d.startA.x, z: d.startA.z };
-            else ow.params.bMm = { x: d.startA.x, z: d.startA.z };
-          }
-          for (const c of d.connectedB) {
-            const ow = ctx.walls.find((x) => x.id === c.wallId) ?? null;
-            if (!ow) continue;
-            if (c.which === "a") ow.params.aMm = { x: d.startB.x, z: d.startB.z };
-            else ow.params.bMm = { x: d.startB.x, z: d.startB.z };
-          }
-          for (const ww of ctx.walls) ctx.rebuildWall(ww);
-          ctx.rebuildWallPlanMesh();
-        }
-        return;
-      }
-
-      const which = d.kind;
-      const other = which === "a" ? ctx.fromMmPoint(d.startB) : ctx.fromMmPoint(d.startA);
-      const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam());
-      const shouldAxisSnap = !ev.shiftKey && snapped.kind === "none";
-      const p0 = snapped.kind !== "none" ? snapped.point : hitPoint;
-      const p = shouldAxisSnap ? ctx.snapAxisXZ(other, p0, true) : p0;
-      const pMm = ctx.toMmPoint(p);
-
-      if (which === "a") w.params.aMm = pMm;
-      else w.params.bMm = pMm;
-
-      const touched = new Set<string>();
-      touched.add(w.id);
-      const connected = which === "a" ? d.connectedA : d.connectedB;
-      for (const c of connected) {
-        const ow = ctx.walls.find((x) => x.id === c.wallId) ?? null;
-        if (!ow) continue;
-        if (c.which === "a") ow.params.aMm = pMm;
-        else ow.params.bMm = pMm;
-        touched.add(ow.id);
-      }
-      for (const id of touched) {
-        const ww = ctx.walls.find((x) => x.id === id) ?? null;
-        if (ww) ctx.rebuildWall(ww);
-      }
-      ctx.rebuildWallPlanMesh();
-
-      // Block moving walls into modules.
-      if (ctx.instances.some((i) => ctx.moduleOverlapsWalls(i))) {
-        // Restore endpoints from drag start snapshot.
-        if (which === "a") w.params.aMm = { x: d.startA.x, z: d.startA.z };
-        else w.params.bMm = { x: d.startB.x, z: d.startB.z };
-        for (const c of connected) {
-          const ow = ctx.walls.find((x) => x.id === c.wallId) ?? null;
-          if (!ow) continue;
-          const src = which === "a" ? d.startA : d.startB;
-          if (c.which === "a") ow.params.aMm = { x: src.x, z: src.z };
-          else ow.params.bMm = { x: src.x, z: src.z };
-        }
-        for (const ww of ctx.walls) ctx.rebuildWall(ww);
-        ctx.rebuildWallPlanMesh();
-      }
+      updateWallEditHudDragPointerMove({
+        drag: d,
+        fromMmPoint: ctx.fromMmPoint,
+        hasModuleWallOverlap: () => ctx.instances.some((i) => ctx.moduleOverlapsWalls(i)),
+        hitPoint,
+        rebuildWall: ctx.rebuildWall,
+        rebuildWallPlanMesh: ctx.rebuildWallPlanMesh,
+        shiftKey: ev.shiftKey,
+        snapAxisXZ: ctx.snapAxisXZ,
+        snapPoint2D: (point) => ctx.snapPoint2D(point, rect, ctx.cam()),
+        toMmPoint: ctx.toMmPoint,
+        wall: w,
+        walls: ctx.walls
+      });
       return;
     }
 
     if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.layoutTool === "select" && ctx.transformState.kind) {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      ctx.transformState.lastPointerPx.x = ev.clientX - rect.left;
-      ctx.transformState.lastPointerPx.y = ev.clientY - rect.top;
+      const pointerPoint = pointerClientPointInRect(ev, rect);
 
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
 
-      const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 24, {
-        sticky: ctx.selectPlanSnap
+      if (
+        handleTransformPointerMovePreview({
+          applyMoveDelta: ctx.applyMoveDelta,
+          applyRotateAngle: ctx.applyRotateAngle,
+          constrainMoveDelta,
+          hitPoint,
+          makeNoSnapResult,
+          pointerPoint,
+          rect,
+          resolveMoveDelta: (delta) => resolveMoveDeltaWithObjectSnap(prepareMoveDeltaForSnapMode(delta, ctx.transformState.moveSnapDisabled), rect),
+          resolveMoveSnap,
+          resolveRotateSnap: (point, targetRect) => ctx.snapPoint2D(point, targetRect, ctx.cam(), SNAP_DISTANCE_PX.transformRotate, {
+            sticky: ctx.selectPlanSnap
+          }),
+          setSelectPlanSnap: (snap) => {
+            ctx.selectPlanSnap = snap;
+          },
+          setStatus: ctx.setUnderlayStatus,
+          shiftKey: ev.shiftKey,
+          transformState: ctx.transformState,
+          updateHoverCursor: (point, kind, targetRect) => ctx.updateHoverCursor(ctx.worldToScreen(point, ctx.cam(), targetRect), kind),
+          updateMoveSnapFeedback: (snap, target, targetRect) => updateMoveSnapFeedback(snap, target, targetRect),
+          updateObjectSnapFeedback: (snap, target) => updateMoveSnapFeedback(snap, target, rect),
+          hideHoverCursor: ctx.hideHoverCursor
+        })
+      ) {
+        return;
+      }
+    }
+
+
+    if (ctx.marquee.active || (ctx.marquee.pending && !ctx.marquee.active && ctx.marquee.pointerId === ev.pointerId)) {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      const point = pointerClientPointInRect(ev, rect);
+      updatePointerMarqueePointerMove(ctx.marquee, ctx.marqueeEl, {
+        pointerId: ev.pointerId,
+        x: point.x,
+        y: point.y
       });
-      ctx.selectPlanSnap = snapped.kind !== "none" ? snapped : null;
-      const p = snapped.kind !== "none" ? snapped.point : hitPoint;
-      if (snapped.kind !== "none") {
-        ctx.updateHoverCursor(ctx.worldToScreen(p, ctx.cam(), rect), snapped.kind);
-      } else {
-        ctx.hideHoverCursor();
-      }
-
-      if (ctx.transformState.kind === "move" && ctx.transformState.step === "pickTarget" && ctx.transformState.base) {
-        const delta = p.clone().sub(ctx.transformState.base);
-        ctx.applyMoveDelta(delta);
-        ctx.setUnderlayStatus(`Move: ${Math.round(delta.x * 1000)} x ${Math.round(delta.z * 1000)} mm (click to finish)`);
-        return;
-      }
-
-      if (ctx.transformState.kind === "rotate" && ctx.transformState.step === "rotating" && ctx.transformState.pivot) {
-        const pivot = ctx.transformState.pivot;
-        const a0 = ctx.transformState.startPointerAngle;
-        const a1 = Math.atan2(hitPoint.z - pivot.z, hitPoint.x - pivot.x);
-        let d = a1 - a0;
-        // normalize
-        while (d > Math.PI) d -= Math.PI * 2;
-        while (d < -Math.PI) d += Math.PI * 2;
-        ctx.transformState.lastAngleSign = d < 0 ? -1 : 1;
-        ctx.applyRotateAngle(d);
-        ctx.setUnderlayStatus(`Rotate: ${Math.round((d * 180) / Math.PI)} deg (click to finish)`);
-        return;
-      }
-    }
-
-
-    if (ctx.marquee.active) {
-      const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ev.clientX - rect.left;
-      const y = ev.clientY - rect.top;
-      ctx.marquee.mode = x >= ctx.marquee.startX ? "contain" : "touch";
-      if (ctx.marquee.mode === "contain") {
-        ctx.marqueeEl.style.border = "1px solid rgba(92, 140, 255, 0.95)";
-        ctx.marqueeEl.style.background = "rgba(92, 140, 255, 0.10)";
-      } else {
-        ctx.marqueeEl.style.border = "1px solid rgba(61, 220, 151, 0.95)";
-        ctx.marqueeEl.style.background = "rgba(61, 220, 151, 0.10)";
-      }
-      const x0 = Math.min(ctx.marquee.startX, x);
-      const y0 = Math.min(ctx.marquee.startY, y);
-      const x1 = Math.max(ctx.marquee.startX, x);
-      const y1 = Math.max(ctx.marquee.startY, y);
-      ctx.marqueeEl.style.left = `${x0}px`;
-      ctx.marqueeEl.style.top = `${y0}px`;
-      ctx.marqueeEl.style.width = `${Math.max(0, x1 - x0)}px`;
-      ctx.marqueeEl.style.height = `${Math.max(0, y1 - y0)}px`;
-    }
-
-    if (ctx.marquee.pending && !ctx.marquee.active && ctx.marquee.pointerId === ev.pointerId) {
-      const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ev.clientX - rect.left;
-      const y = ev.clientY - rect.top;
-      const w = Math.abs(x - ctx.marquee.startX);
-      const h = Math.abs(y - ctx.marquee.startY);
-      if (w >= 6 || h >= 6) {
-        ctx.marquee.active = true;
-        ctx.marqueeEl.style.border = "1px solid rgba(92, 140, 255, 0.95)";
-        ctx.marqueeEl.style.background = "rgba(92, 140, 255, 0.10)";
-        ctx.marqueeEl.style.left = `${ctx.marquee.startX}px`;
-        ctx.marqueeEl.style.top = `${ctx.marquee.startY}px`;
-        ctx.marqueeEl.style.width = "0px";
-        ctx.marqueeEl.style.height = "0px";
-        ctx.marqueeEl.style.display = "block";
-      }
     }
 
     if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.layoutTool === "select" && ctx.underlayDragState.active && ctx.underlayDragState.pointerId === ev.pointerId) {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-      const dxMm = Math.round((hitPoint.x - ctx.underlayDragState.startWorld.x) * 1000);
-      const dzMm = Math.round((hitPoint.z - ctx.underlayDragState.startWorld.z) * 1000);
-      ctx.underlayState.offsetMm.x = ctx.underlayDragState.startOffsetMm.x + dxMm;
-      ctx.underlayState.offsetMm.z = ctx.underlayDragState.startOffsetMm.z + dzMm;
-      ctx.updateUnderlayTransform();
-      if (ctx.underlayOffXEl) ctx.underlayOffXEl.value = String(ctx.underlayState.offsetMm.x);
-      if (ctx.underlayOffZEl) ctx.underlayOffZEl.value = String(ctx.underlayState.offsetMm.z);
-      if (ctx.selectedUnderlayBox) (ctx.selectedUnderlayBox as any).update?.();
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      updateUnderlayDragPointerMove({
+        hitPoint,
+        pointerId: ev.pointerId,
+        selectedUnderlayBox: ctx.selectedUnderlayBox,
+        setOffsetInputs: (x, z) => {
+          if (ctx.underlayOffXEl) ctx.underlayOffXEl.value = x;
+          if (ctx.underlayOffZEl) ctx.underlayOffZEl.value = z;
+        },
+        underlayDragState: ctx.underlayDragState,
+        underlayOffsetMm: ctx.underlayState.offsetMm,
+        updateUnderlayTransform: ctx.updateUnderlayTransform
+      });
       return;
     }
 
     if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.layoutTool === "dimension") {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) {
-        ctx.dimensionState.hover = null;
-        ctx.dimensionState.preview = [];
-        ctx.clearToolHud();
-      } else {
-        const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-        const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect);
-        const canPick = !picked || ctx.dimensionState.picked.length === 0 || ctx.areAlignLinesParallel(ctx.dimensionState.picked[0]!, picked);
-        const thick = ctx.hudLineThicknessM(rect);
-        ctx.dimensionState.hover = canPick ? picked : null;
-        if (ctx.dimensionState.hover) ctx.updateHudLine(ctx.hudHoverLine, ctx.dimensionState.hover.segA, ctx.dimensionState.hover.segB, thick);
-        else ctx.hudHoverLine.visible = false;
-
-        if (ctx.dimensionState.picked[0]) ctx.updateHudLine(ctx.hudPickLine1, ctx.dimensionState.picked[0].segA, ctx.dimensionState.picked[0].segB, thick);
-        else ctx.hudPickLine1.visible = false;
-
-        const lastPicked = ctx.dimensionState.picked.length > 1 ? ctx.dimensionState.picked[ctx.dimensionState.picked.length - 1] : null;
-        if (lastPicked) ctx.updateHudLine(ctx.hudPickLine2, lastPicked.segA, lastPicked.segB, thick);
-        else ctx.hudPickLine2.visible = false;
-
-        ctx.dimensionState.preview =
-          !picked && ctx.dimensionState.picked.length >= 2
-            ? ctx.technicalDimensions.buildFromPickedLines(ctx.dimensionState.picked, hitPoint, "preview")
-            : [];
-      }
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      updateDimensionToolPointerMoveHover({
+        hitPoint,
+        mouse: hitPoint ? pointerClientPointInRect(ev, rect) : null,
+        rect,
+        dimensionState: ctx.dimensionState,
+        pickDimensionLineAt: ctx.pickDimensionLineAt,
+        pickAlignLineAt: ctx.pickAlignLineAt,
+        areAlignLinesParallel: ctx.areAlignLinesParallel,
+        buildPreviewDimensions: (picked, point) => ctx.technicalDimensions.buildFromPickedLines(picked, point, "preview"),
+        hudHoverLine: ctx.hudHoverLine,
+        hudPickLine1: ctx.hudPickLine1,
+        hudPickLine2: ctx.hudPickLine2,
+        hudLineThickness: hitPoint ? ctx.hudLineThicknessM(rect) : 0,
+        updateHudLine: ctx.updateHudLine,
+        clearToolHud: ctx.clearToolHud
+      });
     }
 
     if (ctx.mode === "layout" && ctx.viewMode === "2d" && (ctx.layoutTool === "align" || ctx.layoutTool === "trim")) {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) {
-        ctx.clearToolHud();
-      } else {
-        const mouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-        const picked = ctx.pickAlignLineAt(hitPoint, mouse, rect);
-        const thick = ctx.hudLineThicknessM(rect);
-
-        const now = performance.now();
-        if (ctx.layoutTool === "align") {
-          ctx.alignState.hover = picked;
-          if (picked) ctx.updateHudLine(ctx.hudHoverLine, picked.segA, picked.segB, thick);
-          else ctx.hudHoverLine.visible = false;
-
-          if (ctx.alignState.ref) {
-            ctx.updateHudLine(ctx.hudPickLine1, ctx.alignState.ref.segA, ctx.alignState.ref.segB, thick);
-            ctx.hudPickLine2.visible = false;
-          } else if (ctx.alignState.lastA && ctx.alignState.lastB && ctx.alignState.lastUntilMs > now) {
-            ctx.updateHudLine(ctx.hudPickLine1, ctx.alignState.lastA.segA, ctx.alignState.lastA.segB, thick);
-            ctx.updateHudLine(ctx.hudPickLine2, ctx.alignState.lastB.segA, ctx.alignState.lastB.segB, thick);
-          } else {
-            ctx.alignState.lastA = null;
-            ctx.alignState.lastB = null;
-            ctx.alignState.lastUntilMs = 0;
-            ctx.hudPickLine1.visible = false;
-            ctx.hudPickLine2.visible = false;
-          }
-        } else {
-          ctx.trimState.hover = picked;
-          if (picked) ctx.updateHudLine(ctx.hudHoverLine, picked.segA, picked.segB, thick);
-          else ctx.hudHoverLine.visible = false;
-
-          if (ctx.trimState.targetPick) ctx.updateHudLine(ctx.hudPickLine1, ctx.trimState.targetPick.segA, ctx.trimState.targetPick.segB, thick);
-          else ctx.hudPickLine1.visible = false;
-
-          if (ctx.trimState.lastTarget && ctx.trimState.lastCutter && ctx.trimState.lastUntilMs > now) {
-            ctx.updateHudLine(ctx.hudPickLine1, ctx.trimState.lastTarget.segA, ctx.trimState.lastTarget.segB, thick);
-            ctx.updateHudLine(ctx.hudPickLine2, ctx.trimState.lastCutter.segA, ctx.trimState.lastCutter.segB, thick);
-          } else if (ctx.trimState.step === "pickCutter" && ctx.trimState.targetPick) {
-            ctx.hudPickLine2.visible = false;
-          } else {
-            if (ctx.trimState.lastUntilMs <= now) {
-              ctx.trimState.lastTarget = null;
-              ctx.trimState.lastCutter = null;
-              ctx.trimState.lastUntilMs = 0;
-              if (!ctx.trimState.targetPick) {
-                ctx.hudPickLine1.visible = false;
-                ctx.hudPickLine2.visible = false;
-              }
-            }
-          }
-        }
-      }
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      updateAlignTrimToolPointerMoveHover({
+        tool: ctx.layoutTool,
+        hitPoint,
+        mouse: hitPoint ? pointerClientPointInRect(ev, rect) : null,
+        rect,
+        alignState: ctx.alignState,
+        trimState: ctx.trimState,
+        pickAlignLineAt: ctx.layoutTool === "align" && ctx.alignState.ref
+          ? (hitPoint, mouse, rect) => ctx.pickCompatibleAlignLineAt(ctx.alignState.ref!, hitPoint, mouse, rect)
+          : ctx.pickAlignLineAt,
+        hudHoverLine: ctx.hudHoverLine,
+        hudPickLine1: ctx.hudPickLine1,
+        hudPickLine2: ctx.hudPickLine2,
+        hudLineThickness: hitPoint ? ctx.hudLineThicknessM(rect) : 0,
+        now: hitPoint ? performance.now() : 0,
+        updateHudLine: ctx.updateHudLine,
+        clearToolHud: ctx.clearToolHud
+      });
       // no return; other pointermove handling can still run (e.g. marquee box)
     }
 
     if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.layoutTool === "measure") {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) {
-        ctx.hideHoverCursor();
-        ctx.clearToolHud();
-        ctx.clearPreview();
-        return;
-      }
-
-      const normalMode = ev.shiftKey;
-      ctx.updateMeasureHoverFromPlanPoint(hitPoint, rect, normalMode);
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      updateMeasure2DPointerMoveHover({
+        hitPoint,
+        rect,
+        normalMode: ev.shiftKey,
+        hideHoverCursor: ctx.hideHoverCursor,
+        clearToolHud: ctx.clearToolHud,
+        clearPreview: ctx.clearPreview,
+        updateMeasureHoverFromPlanPoint: ctx.updateMeasureHoverFromPlanPoint
+      });
       return;
     }
 
     if (ctx.mode === "layout" && ctx.viewMode === "3d" && ctx.layoutTool === "measure") {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
+      updateRaycasterFromPointer(ev, rect);
 
       const hit = ctx.pickSurfacePoint(ctx.raycaster, ctx.getLayoutMeasureMeshes3d());
-      if (!hit) {
-        ctx.measureState.hoverPoint = null;
-        ctx.measureState.hoverSnap = "none";
-        ctx.hideHoverCursor();
-        ctx.clearToolHud();
-        ctx.clearPreview();
-        ctx.args.measureReadoutEl.textContent = ctx.measureState.firstPoint
-          ? "Measure 3D: pick second point."
-          : "Measure 3D: click first point.";
-        return;
-      }
-
-      const snapTarget = ctx.getMeasure3DSnapTargetObject(hit.object);
-      const snapped = ctx.snapPoint3D(hit.point, snapTarget ?? hit.object, ctx.cam(), rect, 32);
-      let kind: MeasureState["hoverSnap"] = snapped.kind;
-      let point = snapped.point.clone();
-      if (!ctx.measureState.axisLock && snapped.kind === "free") {
-        const axisAssist = ctx.applyMeasureAxisAssist3D(ctx.measureState.firstPoint, point, ctx.cam(), rect, 12);
-        if (axisAssist) {
-          point = axisAssist.point;
-          kind = "axis";
-        }
-      }
-
-      ctx.measureState.hoverPoint = point.clone();
-      ctx.measureState.hoverSnap = kind;
-      ctx.updateHoverCursor(ctx.worldToScreen(point, ctx.cam(), rect), kind);
-
-      const thick = ctx.hudLineThicknessM(rect);
-      if (kind === "axis" && ctx.measureState.firstPoint) {
-        ctx.updateHudLine(ctx.hudHoverLine, ctx.measureState.firstPoint, point, thick * 1.75);
-      } else {
-        ctx.hudHoverLine.visible = false;
-      }
-
-      if (ctx.measureState.firstPoint) {
-        const a = ctx.measureState.firstPoint.clone();
-        let b = point.clone();
-        if (ctx.measureState.axisLock) b = ctx.axisLockPoint3D(a, b);
-        ctx.updatePreview(a, b, rect, ctx.distance3dMm(a, b));
-        ctx.args.measureReadoutEl.textContent = `Measure 3D (${kind}): ${Math.round(ctx.distance3dMm(a, b))} mm`;
-      } else {
-        ctx.clearPreview();
-        ctx.args.measureReadoutEl.textContent = `Measure 3D hover (${kind}): ${Math.round(point.x * 1000)}, ${Math.round(point.y * 1000)}, ${Math.round(point.z * 1000)}`;
-      }
-      ctx.setFirstPointMarker(ctx.measureState.firstPoint);
+      updateMeasure3DPointerMoveHover({
+        hit,
+        rect,
+        measureState: ctx.measureState,
+        cam: ctx.cam,
+        getMeasure3DSnapTargetObject: ctx.getMeasure3DSnapTargetObject,
+        snapPoint3D: ctx.snapPoint3D,
+        applyMeasureAxisAssist3D: ctx.applyMeasureAxisAssist3D,
+        worldToScreen: ctx.worldToScreen,
+        updateHoverCursor: ctx.updateHoverCursor,
+        hideHoverCursor: ctx.hideHoverCursor,
+        clearToolHud: ctx.clearToolHud,
+        clearPreview: ctx.clearPreview,
+        setReadout: (message) => { ctx.args.measureReadoutEl.textContent = message; },
+        hudHoverLine: ctx.hudHoverLine,
+        hudLineThickness: ctx.hudLineThicknessM(rect),
+        updateHudLine: ctx.updateHudLine,
+        updatePreview: ctx.updatePreview,
+        distance3dMm: ctx.distance3dMm,
+        axisLockPoint3D: ctx.axisLockPoint3D,
+        setFirstPointMarker: ctx.setFirstPointMarker
+      });
       return;
     }
 
     if (ctx.mode === "layout" && ctx.layoutTool === "section" && ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan") {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) {
-        ctx.hideHoverCursor();
-        ctx.drawSnapOverlay.hide();
-        return;
-      }
-      const resolved = ctx.resolveSectionDrawPoint(hitPoint, rect, !ev.shiftKey);
-      ctx.sectionDraw.axisLocked = resolved.axisLocked;
-      if (resolved.kind !== "none") {
-        ctx.updateHoverCursor(ctx.worldToScreen(resolved.point, ctx.cam(), rect), resolved.kind);
-        ctx.drawSnapOverlay.showWorld(resolved.point, ctx.cam(), rect, resolved.kind);
-      } else {
-        ctx.hideHoverCursor();
-        ctx.drawSnapOverlay.hide();
-      }
-      ctx.sectionDraw.hoverPoint = { x: Math.round(resolved.point.x * 1000), z: Math.round(resolved.point.z * 1000) };
-      ctx.updateSectionDrawPreview();
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      updateSectionDrawPointerMoveHover({
+        hitPoint,
+        rect,
+        allowAxisSnap: !ev.shiftKey,
+        sectionDraw: ctx.sectionDraw,
+        resolveSectionDrawPoint: ctx.resolveSectionDrawPoint,
+        showSnapHover: (point, kind) => {
+          ctx.updateHoverCursor(ctx.worldToScreen(point, ctx.cam(), rect), kind);
+          ctx.drawSnapOverlay.showWorld(point, ctx.cam(), rect, kind);
+        },
+        hideHoverCursor: () => {
+          ctx.hideHoverCursor();
+          ctx.drawSnapOverlay.hide();
+        },
+        updateSectionDrawPreview: ctx.updateSectionDrawPreview
+      });
       return;
     }
 
     if (ctx.mode === "layout" && ctx.S.kitchenEditMode && ctx.kitchenWorktopDraw.active && ctx.viewMode === "2d") {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.kitchenWorktopDraw.lastPointerPx.x = ev.clientX - rect.left;
-      ctx.kitchenWorktopDraw.lastPointerPx.y = ev.clientY - rect.top;
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-      const activeSnap = ctx.resolveKitchenWorktopDrawSnap(hitPoint, rect);
-      if (activeSnap) {
-        ctx.updateHoverCursor(ctx.worldToScreen(activeSnap.point, ctx.cam(), rect), activeSnap.kind);
-      } else {
-        ctx.hideHoverCursor();
-      }
-      const source = activeSnap ? activeSnap.point : hitPoint;
-      const rawPoint = { x: Math.round(source.x * 1000), z: Math.round(source.z * 1000) };
-      const basePoint = ctx.kitchenWorktopDraw.points[ctx.kitchenWorktopDraw.points.length - 1] ?? null;
-      ctx.kitchenWorktopDraw.hoverPoint = basePoint ? ctx.floorOrthoPoint(basePoint, rawPoint) : rawPoint;
-      if (ctx.kitchenWorktopDraw.typedMm.trim().length > 0) {
-        ctx.wallTypedHud.textContent = `${ctx.kitchenWorktopDraw.typedMm} mm`;
-        ctx.wallTypedHud.style.left = `${ev.clientX - rect.left}px`;
-        ctx.wallTypedHud.style.top = `${ev.clientY - rect.top}px`;
-        ctx.wallTypedHud.style.display = "block";
-      } else {
-        ctx.wallTypedHud.style.display = "none";
-      }
-      if (ctx.kitchenWorktopDraw.points.length > 0) ctx.scheduleKitchenWorktopPreviewUpdate();
+      const pointerPoint = pointerClientPointInRect(ev, rect);
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      updateKitchenWorktopDrawPointerMoveHover({
+        pointerPoint,
+        hitPoint,
+        rect,
+        kitchenWorktopDraw: ctx.kitchenWorktopDraw,
+        resolveKitchenWorktopDrawSnap: ctx.resolveKitchenWorktopDrawSnap,
+        floorOrthoPoint: ctx.floorOrthoPoint,
+        showSnapHover: (point, kind) => ctx.updateHoverCursor(ctx.worldToScreen(point, ctx.cam(), rect), kind),
+        hideHoverCursor: ctx.hideHoverCursor,
+        updateTypedHud: (typedMm, point) => updatePointerTypedHud(ctx.wallTypedHud, typedMm, point),
+        schedulePreviewUpdate: ctx.scheduleKitchenWorktopPreviewUpdate
+      });
       return;
     }
 
     if (ctx.mode === "layout" && ctx.layoutTool === "wall" && ctx.wallDraw.active && ctx.wallDraw.a && ctx.wallDraw.preview) {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.wallDraw.lastPointerPx.x = ev.clientX - rect.left;
-      ctx.wallDraw.lastPointerPx.y = ev.clientY - rect.top;
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-      const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 14, {
-        sticky: ctx.wallDrawSnap
+      const pointerPoint = pointerClientPointInRect(ev, rect);
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      ctx.wallDrawSnap = updateActiveWallDrawPointerMoveHover({
+        pointerPoint,
+        hitPoint,
+        rect,
+        wallDraw: ctx.wallDraw,
+        wallDefault: ctx.wallDefault,
+        currentSnap: ctx.wallDrawSnap,
+        camera: ctx.cam(),
+        snapPoint2D: ctx.snapPoint2D,
+        keepStickyPlanSnap: ctx.keepStickyPlanSnap,
+        worldToScreen: ctx.worldToScreen,
+        updateHoverCursor: ctx.updateHoverCursor,
+        hideHoverCursor: ctx.hideHoverCursor,
+        allowAxisSnap: ctx.drawOrthoEnabled && !ev.shiftKey,
+        precisionMm: isWallDrawFreeMm(ctx.wallDraw),
+        walls: ctx.walls,
+        hudWallEndAlignmentGuide: ctx.hudWallEndAlignmentGuide,
+        updateHudDashedLine: ctx.updateHudDashedLine,
+        snapAxisXZ: ctx.snapAxisXZ,
+        updateWallMeshWithJustification: ctx.updateWallMeshWithJustification,
+        updateTypedHud: (typedMm, point) => updatePointerTypedHud(ctx.wallTypedHud, typedMm, point)
       });
-      const activeSnap = snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(hitPoint, ctx.wallDrawSnap, ctx.cam(), rect, 18);
-      ctx.wallDrawSnap = activeSnap;
-      if (activeSnap) {
-        ctx.updateHoverCursor(ctx.worldToScreen(activeSnap.point, ctx.cam(), rect), activeSnap.kind);
-      } else {
-        ctx.hideHoverCursor();
-      }
+      return;
+    }
 
-      const shouldAxisSnap = ctx.drawOrthoEnabled && !ev.shiftKey && !activeSnap;
-      const b0 = activeSnap ? activeSnap.point : hitPoint;
-      const b = shouldAxisSnap ? ctx.snapAxisXZ(ctx.wallDraw.a, b0, true) : b0;
-      ctx.wallDraw.hoverB = b.clone();
-      ctx.updateWallMeshWithJustification(
-        ctx.wallDraw.preview,
-        ctx.wallDraw.a,
-        b,
-        ctx.wallDefault.thicknessMm,
-        ctx.wallDefault.justification,
-        ctx.wallDefault.exteriorSign
-      );
-
-      if (ctx.wallDraw.typedMm.trim().length > 0) {
-        ctx.wallTypedHud.textContent = `${ctx.wallDraw.typedMm} mm`;
-        ctx.wallTypedHud.style.left = `${ev.clientX - rect.left}px`;
-        ctx.wallTypedHud.style.top = `${ev.clientY - rect.top}px`;
-        ctx.wallTypedHud.style.display = "block";
+    if (ctx.mode === "layout" && ctx.layoutTool === "led" && ctx.ledStripDrawController?.state.active && ctx.viewMode === "2d") {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = getLedEditHitPoint();
+      if (!hitPoint) return;
+      if (ctx.activeViewerTab === "floorplan") {
+        const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam());
+        ctx.ledStripDrawController.updatePreview(snapped.kind === "none" ? hitPoint : snapped.point);
       } else {
-        ctx.wallTypedHud.style.display = "none";
+        ctx.ledStripDrawController.updatePreview(hitPoint);
       }
       return;
     }
 
     if (ctx.mode === "layout" && ctx.layoutTool === "wall" && ctx.viewMode === "2d") {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.wallDraw.lastPointerPx.x = ev.clientX - rect.left;
-      ctx.wallDraw.lastPointerPx.y = ev.clientY - rect.top;
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-      const snapped = ctx.snapPoint2D(hitPoint, rect, ctx.cam(), 14, {
-        sticky: ctx.wallDrawSnap
+      const pointerPoint = pointerClientPointInRect(ev, rect);
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      ctx.wallDrawSnap = updateWallToolPointerMoveHover({
+        pointerPoint,
+        hitPoint,
+        rect,
+        wallDraw: ctx.wallDraw,
+        currentSnap: ctx.wallDrawSnap,
+        camera: ctx.cam(),
+        snapPoint2D: ctx.snapPoint2D,
+        keepStickyPlanSnap: ctx.keepStickyPlanSnap,
+        worldToScreen: ctx.worldToScreen,
+        updateHoverCursor: ctx.updateHoverCursor,
+        hideHoverCursor: ctx.hideHoverCursor
       });
-      const activeSnap = snapped.kind !== "none" ? snapped : ctx.keepStickyPlanSnap(hitPoint, ctx.wallDrawSnap, ctx.cam(), rect, 18);
-      ctx.wallDrawSnap = activeSnap;
-      if (activeSnap) {
-        ctx.updateHoverCursor(ctx.worldToScreen(activeSnap.point, ctx.cam(), rect), activeSnap.kind);
-      } else {
-        ctx.hideHoverCursor();
-      }
+    }
+
+    const canShowSelectionHover =
+      ctx.mode === "layout" &&
+      ctx.layoutTool === "select" &&
+      !ctx.placement.active &&
+      !ctx.transformState.kind &&
+      !ctx.dragState.active &&
+      !ctx.windowDragState.active &&
+      !ctx.doorDragState.active &&
+      !ctx.wallEditHud.drag &&
+      !ctx.marquee.active &&
+      !ctx.measureState.enabled &&
+      !ctx.floorEdit.active;
+
+    if (canShowSelectionHover) {
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      updateRaycasterFromPointer(ev, rect);
+      const target = ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan"
+        ? resolveFloorplanHoverTarget(ev)
+        : resolve3dHoverTarget(ev);
+      ctx.updateSelectionHover(target);
+    } else {
+      ctx.updateSelectionHover(null);
     }
 
     if (ctx.mode === "layout" && ctx.viewMode === "2d" && ctx.activeViewerTab === "floorplan" && ctx.layoutTool === "select" && !ctx.dragState.active && !ctx.windowDragState.active && !ctx.doorDragState.active && !ctx.wallEditHud.drag && !ctx.marquee.active) {
@@ -2204,141 +2930,85 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       ctx.hideHoverCursor();
     }
 
-    if (ctx.mode === "layout" && ctx.windowDragState.active && ctx.windowInst && ctx.windowDragState.wall) {
+    if (
+      ctx.mode === "layout" &&
+      ((ctx.windowDragState.active && ctx.windowInst && ctx.windowDragState.wall) ||
+        (ctx.doorDragState.active && ctx.doorInst && ctx.doorDragState.wall))
+    ) {
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
+      updateRaycasterFromPointer(ev, rect);
 
-      const hitPoint = new THREE.Vector3();
-      const customWallId = ctx.windowInst.params.wallId ?? null;
-      if (customWallId) {
-        const wall = ctx.walls.find((item) => item.id === customWallId) ?? null;
-        if (!wall || !ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-        const closest = ctx.pointOnWallAxisMm(wall, ctx.toMmPoint(hitPoint));
-        const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
-        ctx.windowInst.params.centerMm = closest.t * lengthMm + ctx.windowDragState.offsetMm;
-      } else {
-        const def = ctx.wallDefs[ctx.windowDragState.wall];
-        const okWall = ctx.raycaster.ray.intersectPlane(def.plane, hitPoint);
-        if (!okWall) {
-          if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-        }
-        const axis = def.axis === "x" ? hitPoint.x : hitPoint.z;
-        ctx.windowInst.params.centerMm = axis * 1000 + ctx.windowDragState.offsetMm;
+      if (handleOpeningDragPointerMove({
+        doorDragState: ctx.doorDragState,
+        doorOpening: ctx.doorInst,
+        findCustomWall: (wallId) => ctx.walls.find((item) => item.id === wallId) ?? null,
+        getGroundHitPoint: () => intersectRayPlane(ctx.raycaster, ctx.groundPlane),
+        getLegacyWallHitPoint: (wallId) => intersectRayPlane(ctx.raycaster, ctx.wallDefs[wallId].plane),
+        getLegacyWallMeta: (wallId) => ctx.wallDefs[wallId],
+        mountProps: ctx.mountProps,
+        pointOnWallAxisMm: ctx.pointOnWallAxisMm,
+        toMmPoint: ctx.toMmPoint,
+        updateDoorTransform: ctx.updateDoorTransform,
+        updateWindowTransform: ctx.updateWindowTransform,
+        windowDragState: ctx.windowDragState,
+        windowOpening: ctx.windowInst
+      })) {
+        return;
       }
-
-      ctx.updateWindowTransform(ctx.windowInst);
-      ctx.mountProps();
-      return;
-    }
-
-    if (ctx.mode === "layout" && ctx.doorDragState.active && ctx.doorInst && ctx.doorDragState.wall) {
-      const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
-
-      const wall = ctx.walls.find((item) => item.id === ctx.doorDragState.wall) ?? null;
-      const hitPoint = new THREE.Vector3();
-      if (!wall || !ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-      const closest = ctx.pointOnWallAxisMm(wall, ctx.toMmPoint(hitPoint));
-      const lengthMm = Math.hypot(wall.params.bMm.x - wall.params.aMm.x, wall.params.bMm.z - wall.params.aMm.z);
-      ctx.doorInst.params.centerMm = closest.t * lengthMm + ctx.doorDragState.offsetMm;
-
-      ctx.updateDoorTransform(ctx.doorInst);
-      ctx.mountProps();
-      return;
     }
 
     if (ctx.mode === "layout" && ctx.dragState.active && ctx.dragState.id) {
-      const inst = ctx.findInstance(ctx.dragState.id);
-      if (!inst) return;
-
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-      ctx.pointerNdc.set(x, y);
-      ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
+      updateRaycasterFromPointer(ev, rect);
 
-      const hitPoint = new THREE.Vector3();
-      if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return;
-
-      const desired = new THREE.Vector3(hitPoint.x - ctx.dragState.offset.x, inst.root.position.y, hitPoint.z - ctx.dragState.offset.z);
-      const desiredInRoom = ctx.applyWallConstraints(inst, desired);
-      const snapped = ctx.snapPosition(inst, desiredInRoom);
-      const finalPos = ctx.applyWallConstraints(inst, snapped);
-
-      const prevPos = inst.root.position.clone();
-      inst.root.position.copy(finalPos);
-      ctx.autoOrientModuleToRoomWallIfSnapped(inst);
-      const pushed = ctx.nudgePinnedModuleChain(inst, inst.root.position.clone().sub(prevPos));
-      if (ctx.anyOverlap(inst, null) || ctx.moduleOverlapsWalls(inst) || ctx.moduleOverlapsKitchenWorktops(inst)) {
-        inst.root.position.copy(ctx.dragState.lastValid);
-        for (const item of pushed) {
-          const neighbor = ctx.findInstance(item.id);
-          if (!neighbor) continue;
-          neighbor.root.position.copy(item.prev);
-        }
-      } else {
-        if (inst.kitchenGroupId) {
-          const group = ctx.S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-          const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
-          inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
-        }
-        for (const item of pushed) {
-          const neighbor = ctx.findInstance(item.id);
-          if (!neighbor?.kitchenGroupId) continue;
-          const group = ctx.S.kitchenGroups.find((entry) => entry.id === neighbor.kitchenGroupId) ?? null;
-          const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
-          neighbor.kitchenPlacement = ctx.inferKitchenPlacementBinding(neighbor, neighbor.kitchenGroupId, backOffsetMm);
-        }
-        ctx.dragState.lastValid.copy(inst.root.position);
-        ctx.updateLayoutPanel();
-      }
+      const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
+      updateModuleDragFromGroundHit({
+        dragState: ctx.dragState,
+        hitPoint,
+        findInstance: ctx.findInstance,
+        applyWallConstraints: ctx.applyWallConstraints,
+        snapPosition: ctx.snapPosition,
+        autoOrientModuleToRoomWallIfSnapped: ctx.autoOrientModuleToRoomWallIfSnapped,
+        nudgePinnedModuleChain: ctx.nudgePinnedModuleChain,
+        anyOverlap: ctx.anyOverlap,
+        moduleOverlapsWalls: ctx.moduleOverlapsWalls,
+        moduleOverlapsKitchenWorktops: ctx.moduleOverlapsKitchenWorktops,
+        kitchenGroups: ctx.S.kitchenGroups,
+        defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
+        inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding,
+        updateLayoutPanel: ctx.updateLayoutPanel,
+        isModuleAlignLocked: ctx.isModuleAlignLocked
+      });
       return;
     }
 
     if (!ctx.measureState.enabled || !ctx.cabinetGroup) return;
 
     const rect = ctx.renderer.domElement.getBoundingClientRect();
-    const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-    const y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
-    ctx.pointerNdc.set(x, y);
-    ctx.raycaster.setFromCamera(ctx.pointerNdc, ctx.cam());
+    updateRaycasterFromPointer(ev, rect);
 
     const meshes = ctx.getSelectableMeshes(ctx.cabinetGroup).filter((m) => m.visible);
     const hit = ctx.pickSurfacePoint(ctx.raycaster, meshes);
-    if (!hit) {
-      ctx.measureState.hoverPoint = null;
-      ctx.measureState.hoverSnap = "none";
-      ctx.hideHoverCursor();
-      ctx.args.measureReadoutEl.textContent = ctx.measureState.firstPoint
-        ? "Pick second point... (no surface)"
-        : "Click 2 points to measure (planar X/Z).";
-      ctx.clearPreview();
-      return;
-    }
+    updateLegacySurfaceMeasurePointerMoveHover({
+      hit,
+      rect,
+      measureState: ctx.measureState,
+      snapPointXZ: ctx.snapPointXZ,
+      cam: ctx.cam,
+      worldToScreen: ctx.worldToScreen,
+      updateHoverCursor: ctx.updateHoverCursor,
+      hideHoverCursor: ctx.hideHoverCursor,
+      setReadout: (message) => { ctx.args.measureReadoutEl.textContent = message; },
+      clearPreview: ctx.clearPreview,
+      updatePreview: (a, b, previewRect) => ctx.updatePreview(a, b, previewRect),
+      axisLockXZ: ctx.axisLockXZ,
+      planarDistanceMm: ctx.planarDistanceMm,
+      formatMm: ctx.formatMm
+    });
+  });
 
-    const snapped = ctx.snapPointXZ(hit.point, hit.object);
-    ctx.measureState.hoverPoint = snapped.point;
-    ctx.measureState.hoverSnap = snapped.kind;
-
-    ctx.updateHoverCursor(ctx.worldToScreen(snapped.point, ctx.cam(), rect), snapped.kind as any);
-
-    // Preview line after first click
-    if (ctx.measureState.firstPoint) {
-      let a = ctx.measureState.firstPoint;
-      let b = snapped.point;
-      if (ctx.measureState.axisLock) b = ctx.axisLockXZ(a, b);
-      ctx.updatePreview(a, b, rect);
-      ctx.args.measureReadoutEl.textContent = `Measuring (${snapped.kind}) -> ${Math.round(ctx.planarDistanceMm(a, b))} mm`;
-    } else {
-      ctx.args.measureReadoutEl.textContent = `Hover (${snapped.kind}): ${ctx.formatMm(snapped.point)} -> click first point`;
-      ctx.clearPreview();
-    }
+  ctx.renderer.domElement.addEventListener("pointerleave", () => {
+    ctx.updateSelectionHover(null);
   });
 
   ctx.renderer.domElement.addEventListener("pointerup", (ev) => {
@@ -2348,246 +3018,176 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
     if (ctx.mode !== "layout") return;
 
-    if (ctx.floorEdit.drag && ctx.floorEdit.drag.pointerId === ev.pointerId) {
-      ctx.floorEdit.drag = null;
-      ctx.renderFloorBoundaryEdit();
-      ctx.mountProps();
+    if (ctx.layoutTool === "led" && ctx.ledStripDrawController?.finishPointerEdit(ev.pointerId)) {
       try {
         ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
       } catch {
-        // ignore
+        // Pointer capture may already have been released by the browser.
       }
       return;
     }
 
-    if (ctx.wallEditHud.drag && ctx.wallEditHud.drag.pointerId === ev.pointerId) {
-      const d = ctx.wallEditHud.drag;
-      ctx.wallEditHud.drag = null;
-      const w = ctx.walls.find((x) => x.id === d.wallId) ?? null;
-      if (w) {
-        ctx.autoJoinAtMmPoint(w.params.aMm);
-        ctx.autoJoinAtMmPoint(w.params.bMm);
-      }
-      ctx.rebuildWallPlanMesh();
-      ctx.mountProps();
-      ctx.commitHistory(ctx.S);
-      try {
-        ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
-      } catch {
-        // ignore
-      }
+    if (finishFloorBoundaryEditDragPointerUp({
+      floorEdit: ctx.floorEdit,
+      mountProps: ctx.mountProps,
+      pointerId: ev.pointerId,
+      releasePointerCapture: (pointerId) => {
+        try {
+          ctx.renderer.domElement.releasePointerCapture(pointerId);
+        } catch {
+          // ignore
+        }
+      },
+      renderFloorBoundaryEdit: ctx.renderFloorBoundaryEdit
+    })) {
       return;
     }
 
-    if (ctx.underlayDragState.active && ctx.underlayDragState.pointerId === ev.pointerId) {
-      ctx.underlayDragState.active = false;
-      ctx.underlayDragState.pointerId = null;
-      ctx.setUnderlayStatus("Underlay moved.");
-      ctx.commitHistory(ctx.S);
-      try {
-        ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
-      } catch {
-        // ignore
-      }
+    if (finishWallEditHudDragPointerUp({
+      autoJoinAtMmPoint: ctx.autoJoinAtMmPoint,
+      commitHistory: () => ctx.commitHistory(ctx.S),
+      mountProps: ctx.mountProps,
+      pointerId: ev.pointerId,
+      rebuildWallPlanMesh: ctx.rebuildWallPlanMesh,
+      releasePointerCapture: (pointerId) => {
+        try {
+          ctx.renderer.domElement.releasePointerCapture(pointerId);
+        } catch {
+          // ignore
+        }
+      },
+      wallEditHud: ctx.wallEditHud,
+      walls: ctx.walls
+    })) {
       return;
     }
 
-    if (ctx.marquee.pending && ctx.marquee.pointerId === ev.pointerId && !ctx.marquee.active) {
-      const wasRightClick = ev.button === 2;
-      ctx.marquee.pending = false;
-      ctx.marquee.pointerId = null;
-      if (!ctx.marquee.hitSomething && ctx.viewMode === "2d" && ctx.layoutTool === "select") {
-        ctx.setSelectedWall(null);
-        ctx.setSelectedModule(null);
-      }
-      try {
-        ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
-      } catch {
-        // ignore
-      }
-      if (wasRightClick) ctx.openQuickActionMenu?.(ev.clientX, ev.clientY);
+    if (finishUnderlayDragPointerUp({
+      commitHistory: () => ctx.commitHistory(ctx.S),
+      pointerId: ev.pointerId,
+      releasePointerCapture: (pointerId) => {
+        try {
+          ctx.renderer.domElement.releasePointerCapture(pointerId);
+        } catch {
+          // ignore
+        }
+      },
+      setUnderlayStatus: ctx.setUnderlayStatus,
+      underlayDragState: ctx.underlayDragState
+    })) {
+      return;
+    }
+
+    if (finishPendingPointerMarquee({
+      button: ev.button,
+      clientX: ev.clientX,
+      clientY: ev.clientY,
+      layoutTool: ctx.layoutTool,
+      marquee: ctx.marquee,
+      openQuickActionMenu: ctx.openQuickActionMenu,
+      pointerId: ev.pointerId,
+      releasePointerCapture: (pointerId) => {
+        try {
+          ctx.renderer.domElement.releasePointerCapture(pointerId);
+        } catch {
+          // ignore
+        }
+      },
+      setSelectedModule: ctx.setSelectedModule,
+      setSelectedWall: ctx.setSelectedWall,
+      viewMode: ctx.viewMode
+    })) {
       return;
     }
 
     if (ctx.marquee.active) {
-      ctx.marquee.active = false;
-      ctx.marquee.pending = false;
-      ctx.marquee.pointerId = null;
-      ctx.marqueeEl.style.display = "none";
-
       const rect = ctx.renderer.domElement.getBoundingClientRect();
-      const endX = ev.clientX - rect.left;
-      const endY = ev.clientY - rect.top;
-      const x0 = Math.min(ctx.marquee.startX, endX);
-      const y0 = Math.min(ctx.marquee.startY, endY);
-      const x1 = Math.max(ctx.marquee.startX, endX);
-      const y1 = Math.max(ctx.marquee.startY, endY);
-      const w = x1 - x0;
-      const h = y1 - y0;
+      const endPoint = pointerClientPointInRect(ev, rect);
 
-      // If it's a click-sized drag, let normal click selection handle it.
-      if (w >= 6 && h >= 6 && ctx.layoutTool === "select") {
-        const rectSel = { x0, y0, x1, y1 };
-        const contains = (b: { minX: number; minY: number; maxX: number; maxY: number }) =>
-          b.minX >= rectSel.x0 && b.maxX <= rectSel.x1 && b.minY >= rectSel.y0 && b.maxY <= rectSel.y1;
-        const overlaps = (b: { minX: number; minY: number; maxX: number; maxY: number }) =>
-          b.maxX >= rectSel.x0 && b.minX <= rectSel.x1 && b.maxY >= rectSel.y0 && b.minY <= rectSel.y1;
-
-        const wallScreenPolygon = (w: WallInstance) => {
-          const solved = ctx.wallSolvedOutlines.get(w.id) ?? null;
-          if (solved && solved.length >= 3) {
-            return solved.map((p: { x: number; z: number }) => ctx.worldToScreen(new THREE.Vector3(p.x, 0, p.z), ctx.cam(), rect));
+      finishActivePointerMarquee({
+        additive: ev.shiftKey,
+        applyCustomSelection: (selectionRect, additive) => {
+          if (!ctx.S.kitchenEditMode || !ctx.kitchenMode?.isTallModuleEditorActive?.()) return false;
+          if (!ctx.kitchenMode.selectTallSubmodulesFromObjects) return false;
+          const submoduleHits = collectTallSubmoduleObjectsInMarquee(selectionRect, rect);
+          if (!submoduleHits) return false;
+          ctx.kitchenMode.selectTallSubmodulesFromObjects(submoduleHits.activeHostId, submoduleHits.hits, { additive });
+          return true;
+        },
+        collectHitIds: (selectionRect) => {
+          const instBounds = (id: string) => {
+            const inst = ctx.findInstance(id);
+            if (!inst) return null;
+            const meshes = ctx.getInstanceGeometryMeshes(inst);
+            return buildModuleMarqueeScreenBounds({
+              meshes,
+              worldToScreen: (point) => ctx.worldToScreen(point, ctx.cam(), rect)
+            });
+          };
+          return collectMarqueeHitIds({
+            getModuleBounds: (inst) => instBounds(inst.id),
+            getWallPolygon: (wall) =>
+              buildWallMarqueeScreenPolygon({
+                fromMmPoint: ctx.fromMmPoint,
+                solvedOutline: ctx.wallSolvedOutlines.get(wall.id) ?? null,
+                wall,
+                worldToScreen: (point) => ctx.worldToScreen(point, ctx.cam(), rect)
+              }),
+            isModuleSelectable: (inst) => !ctx.kitchenMode || !!ctx.kitchenMode.filterSelectableInstanceId(inst.id),
+            isWallPickable: (wall) => isPickableKey(`wall:${wall.id}`),
+            marqueeMode: ctx.marquee.mode,
+            modules: ctx.instances,
+            pinnedInstanceIds: ctx.pinnedInstanceIds,
+            pinnedWallIds: ctx.pinnedWallIds,
+            selectionRect,
+            walls: ctx.walls
+          });
+        },
+        currentInstanceId: ctx.selectedInstanceId,
+        currentWallId: ctx.selectedWallId,
+        endPoint,
+        layoutTool: ctx.layoutTool,
+        marquee: ctx.marquee,
+        marqueeEl: ctx.marqueeEl,
+        mountProps: ctx.mountProps,
+        pointerId: ev.pointerId,
+        releasePointerCapture: (pointerId) => {
+          try {
+            ctx.renderer.domElement.releasePointerCapture(pointerId);
+          } catch {
+            // ignore
           }
-          const a = ctx.fromMmPoint(w.params.aMm);
-          const b = ctx.fromMmPoint(w.params.bMm);
-          const d = b.clone().sub(a);
-          const len = d.length();
-          if (len < 1e-8) return [ctx.worldToScreen(a, ctx.cam(), rect)];
-          d.multiplyScalar(1 / len);
-          const n = new THREE.Vector3(-d.z, 0, d.x);
-          const halfThickness = Math.max(1, w.params.thicknessMm / 2) / 1000;
-          return [
-            a.clone().addScaledVector(n, halfThickness),
-            a.clone().addScaledVector(n, -halfThickness),
-            b.clone().addScaledVector(n, -halfThickness),
-            b.clone().addScaledVector(n, halfThickness)
-          ].map((p) => ctx.worldToScreen(p, ctx.cam(), rect));
-        };
-        const pointInRect = (p: { x: number; y: number }) => p.x >= rectSel.x0 && p.x <= rectSel.x1 && p.y >= rectSel.y0 && p.y <= rectSel.y1;
-        const orientation = (a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }) =>
-          (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-        const segmentIntersects = (a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }, d: { x: number; y: number }) => {
-          const abC = orientation(a, b, c);
-          const abD = orientation(a, b, d);
-          const cdA = orientation(c, d, a);
-          const cdB = orientation(c, d, b);
-          return abC * abD <= 0 && cdA * cdB <= 0;
-        };
-        const polygonTouchesRect = (poly: Array<{ x: number; y: number }>) => {
-          if (poly.some(pointInRect)) return true;
-          const corners = [
-            { x: rectSel.x0, y: rectSel.y0 },
-            { x: rectSel.x1, y: rectSel.y0 },
-            { x: rectSel.x1, y: rectSel.y1 },
-            { x: rectSel.x0, y: rectSel.y1 }
-          ];
-          for (let i = 0; i < poly.length; i++) {
-            const a = poly[i];
-            const b = poly[(i + 1) % poly.length];
-            for (let j = 0; j < corners.length; j++) {
-              if (segmentIntersects(a, b, corners[j], corners[(j + 1) % corners.length])) return true;
-            }
+        },
+        selectedInstanceIds: ctx.selectedInstanceIds,
+        selectedWallIds: ctx.selectedWallIds,
+        setSelectedModule: ctx.setSelectedModule,
+        setSelectedWall: ctx.setSelectedWall,
+        updateSelectionHighlights: ctx.updateSelectionHighlights
+      });
+      return;
+    }
+
+    const draggedInstanceId = ctx.dragState.active ? ctx.dragState.id : null;
+    if (
+      finishPointerDragState({
+        doorDragState: ctx.doorDragState,
+        moduleDragState: ctx.dragState,
+        pointerId: ev.pointerId,
+        releasePointerCapture: (pointerId) => {
+          try {
+            ctx.renderer.domElement.releasePointerCapture(pointerId);
+          } catch {
+            // ignore
           }
-          return false;
-        };
-
-        const instBounds = (id: string) => {
-          const inst = ctx.findInstance(id);
-          if (!inst) return null;
-          const meshes = ctx.getInstanceGeometryMeshes(inst);
-          if (meshes.length === 0) return null;
-          const box = new THREE.Box3();
-          for (const mesh of meshes) box.expandByObject(mesh);
-          const pts = [
-            new THREE.Vector3(box.min.x, 0, box.min.z),
-            new THREE.Vector3(box.min.x, 0, box.max.z),
-            new THREE.Vector3(box.max.x, 0, box.min.z),
-            new THREE.Vector3(box.max.x, 0, box.max.z)
-          ];
-          const ss = pts.map((p) => ctx.worldToScreen(p, ctx.cam(), rect));
-          const xs = ss.map((p) => p.x);
-          const ys = ss.map((p) => p.y);
-          return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
-        };
-
-        const hitWalls: string[] = [];
-        for (const ww of ctx.walls) {
-          if (ctx.pinnedWallIds.has(ww.id)) continue;
-          if (!isPickableKey(`wall:${ww.id}`)) continue;
-          const poly = wallScreenPolygon(ww);
-          if (poly.length === 0) continue;
-          const xs = poly.map((p: { x: number; y: number }) => p.x);
-          const ys = poly.map((p: { x: number; y: number }) => p.y);
-          const b = { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
-          const ok = overlaps(b) && polygonTouchesRect(poly);
-          if (ok) hitWalls.push(ww.id);
-        }
-
-        const hitMods: string[] = [];
-        for (const inst of ctx.instances) {
-          if (ctx.pinnedInstanceIds.has(inst.id)) continue;
-          if (ctx.kitchenMode && !ctx.kitchenMode.filterSelectableInstanceId(inst.id)) continue;
-          const b = instBounds(inst.id);
-          if (!b) continue;
-          const ok = ctx.marquee.mode === "contain" ? contains(b) : overlaps(b);
-          if (ok) hitMods.push(inst.id);
-        }
-
-        // Apply multi-selection (Shift = add).
-        const nextWalls = new Set<string>(ev.shiftKey ? Array.from(ctx.selectedWallIds) : []);
-        const nextMods = new Set<string>(ev.shiftKey ? Array.from(ctx.selectedInstanceIds) : []);
-        for (const id of hitWalls) nextWalls.add(id);
-        for (const id of hitMods) nextMods.add(id);
-
-        // Pick primary (keep current if still selected when shift-adding).
-        let primaryWall = ctx.selectedWallId && nextWalls.has(ctx.selectedWallId) ? ctx.selectedWallId : null;
-        let primaryMod = ctx.selectedInstanceId && nextMods.has(ctx.selectedInstanceId) ? ctx.selectedInstanceId : null;
-        if (!primaryWall && !primaryMod) {
-          primaryWall = hitWalls[0] ?? null;
-          primaryMod = primaryWall ? null : hitMods[0] ?? null;
-        }
-
-        // Set primary selection for handles/props, then populate sets.
-        if (primaryWall) ctx.setSelectedWall(primaryWall);
-        else if (primaryMod) ctx.setSelectedModule(primaryMod);
-        else {
-          ctx.setSelectedWall(null);
-          ctx.setSelectedModule(null);
-        }
-
-        ctx.selectedWallIds.clear();
-        for (const id of nextWalls) ctx.selectedWallIds.add(id);
-        ctx.selectedInstanceIds.clear();
-        for (const id of nextMods) ctx.selectedInstanceIds.add(id);
-        ctx.updateSelectionHighlights();
-        ctx.mountProps();
-      }
-
-      try {
-        ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
-      } catch {
-        // ignore
-      }
-      return;
-    }
-
-    if (ctx.windowDragState.active) {
-      ctx.windowDragState.active = false;
-      ctx.windowDragState.wall = null;
-      try {
-        ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
-      } catch {
-        // ignore
-      }
-      return;
-    }
-    if (ctx.doorDragState.active) {
-      ctx.doorDragState.active = false;
-      ctx.doorDragState.wall = null;
-      try {
-        ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
-      } catch {
-        // ignore
-      }
-      return;
-    }
-    if (!ctx.dragState.active) return;
-    ctx.dragState.active = false;
-    ctx.dragState.id = null;
-    try {
-      ctx.renderer.domElement.releasePointerCapture(ev.pointerId);
-    } catch {
-      // ignore
+        },
+        windowDragState: ctx.windowDragState
+      }) &&
+      draggedInstanceId
+    ) {
+      syncKitchenDragBindings(draggedInstanceId);
+      ctx.updateLayoutPanel();
     }
   });
+
+  return { resolveContextTarget };
 }

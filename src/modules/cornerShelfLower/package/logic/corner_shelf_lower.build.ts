@@ -26,7 +26,7 @@ export const defaultParams = {
   "hingeCountPerDoor": 2,
   "hingeTopOffsetMm": 110,
   "hingeBottomOffsetMm": 110,
-  "frontThicknessMm": 19,
+  "frontThicknessMm": 18,
   "sideGap": 2,
   "topGap": 2,
   "bottomGap": 2,
@@ -51,7 +51,7 @@ export const defaultParams = {
   "clipComponentId": "cmp.clip.plinth.standard",
   "handleComponentId": "cmp.handle.bar.160.inox",
   "assemblyContext": "kitchen",
-  "kitchenModuleRole": "base",
+  "kitchenModuleRole": "low",
   "legComponentId": "cmp.leg.adjustable.100.black",
   "requiresWorktop": true,
   "worktopThicknessMm": 38

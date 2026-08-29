@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ClientContext } from "../client/client-context";
 import { createCatalogModuleDefinitionFromPackage } from "../module-package/module-package-catalog";
@@ -7,12 +8,16 @@ import { createFileModulePackageRepository } from "../module-package/module-pack
 import { resolveClientCatalogPath } from "../storage/storage-path-resolver";
 import { sanitizeStorageFileName } from "../storage/storage-types";
 import { systemModulePackageTemplates } from "../../system/catalog-templates";
+import { isDemosCatalogGenerated } from "../../system/catalog-templates/demosCatalog";
 import type { ClientCatalog } from "./catalog-types";
 import {
   createSystemSeedClientCatalogRepository,
+  findCatalogComponentByCode,
+  findCatalogMaterialByCode,
   type ClientCatalogRepository
 } from "./catalog-repository";
 import { validateClientCatalog } from "./catalog-validation";
+import { invalidateCatalogExactLookupCaches } from "./catalog-exact-lookup";
 
 export function getCatalogFileNames() {
   return {
@@ -23,6 +28,7 @@ export function getCatalogFileNames() {
     modules: "modules.json",
     pricing: "pricing.json",
     kitchenDefaults: "kitchenDefaults.json",
+    vendorCatalog: "vendorCatalog.json",
     meta: "catalog.meta.json"
   } as const;
 }
@@ -55,7 +61,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
   }
 
   async function readCatalog(ctx: ClientContext): Promise<ClientCatalog | null> {
-    const [materials, hardware, components, componentGeometry, modules, priceList, kitchenDefaults, meta] = await Promise.all([
+    const [materials, hardware, components, componentGeometry, modules, priceList, kitchenDefaults, vendorCatalog, meta] = await Promise.all([
       readJson<ClientCatalog["materials"]>(ctx, names.materials),
       readJson<ClientCatalog["hardware"]>(ctx, names.hardware),
       readJson<ClientCatalog["components"]>(ctx, names.components),
@@ -63,6 +69,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
       readJson<ClientCatalog["modules"]>(ctx, names.modules),
       readJson<ClientCatalog["priceList"]>(ctx, names.pricing),
       readJson<ClientCatalog["kitchenDefaults"]>(ctx, names.kitchenDefaults),
+      readJson<ClientCatalog["vendorCatalog"]>(ctx, names.vendorCatalog),
       readJson<ClientCatalog["meta"]>(ctx, names.meta)
     ]);
     if (!materials || !hardware || !components || !componentGeometry || !modules || !priceList || !kitchenDefaults) return null;
@@ -77,6 +84,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
       modules,
       priceList,
       kitchenDefaults,
+      vendorCatalog: vendorCatalog ?? undefined,
       meta: meta ?? seed.meta
     });
   }
@@ -92,8 +100,10 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
       writeJson(ctx, names.modules, validated.modules),
       writeJson(ctx, names.pricing, validated.priceList),
       writeJson(ctx, names.kitchenDefaults, validated.kitchenDefaults),
+      writeJson(ctx, names.vendorCatalog, validated.vendorCatalog ?? null),
       writeJson(ctx, names.meta, validated.meta)
     ]);
+    invalidateCatalogExactLookupCaches(ctx.clientId);
   }
 
   async function ensureSystemModulePackages(ctx: ClientContext, catalog: ClientCatalog): Promise<ClientCatalog> {
@@ -118,7 +128,8 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
         module.modulePackageId &&
         module.modulePackageId !== persisted.module.modulePackageId
       );
-      if (existingIndex < 0 && hasClientOverrideForType) continue;
+      const templateTags = new Set((persisted.module.tags ?? []).map((tag) => tag.toLowerCase()));
+      if (existingIndex < 0 && hasClientOverrideForType && !templateTags.has("revit-export-preview")) continue;
 
       const previous = existingIndex >= 0 ? nextModules[existingIndex] : null;
       const nextDefinition = {
@@ -127,7 +138,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
           enabled: previous?.enabled ?? true,
           packageHash
         }),
-        id: previous?.id ?? persisted.module.moduleType
+        ...(previous?.id && !previous.modulePackageId ? { id: previous.id } : {})
       };
       if (previous && JSON.stringify(previous) === JSON.stringify(nextDefinition)) continue;
       if (existingIndex >= 0) nextModules[existingIndex] = nextDefinition;
@@ -146,10 +157,34 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
     };
   }
 
+  function ensureCurrentSystemCatalogData(catalog: ClientCatalog): ClientCatalog {
+    if (!isDemosCatalogGenerated()) return catalog;
+    const hasDemosMaterials = catalog.materials.some((material) => material.id.startsWith("mat.demos."));
+    const hasDemosComponents = catalog.components.some((component) => component.id.startsWith("cmp.demos."));
+    if (hasDemosMaterials && hasDemosComponents) return catalog;
+    if (catalog.meta.source !== "system-seed") return catalog;
+
+    const seed = memory.getCatalogForClient(catalog.clientId);
+    return validateClientCatalog({
+      ...catalog,
+      materials: seed.materials,
+      components: seed.components,
+      componentGeometry: seed.componentGeometry,
+      priceList: seed.priceList,
+      kitchenDefaults: seed.kitchenDefaults,
+      meta: {
+        ...catalog.meta,
+        catalogVersion: Math.max(catalog.meta.catalogVersion ?? 1, 2),
+        updatedAt: new Date().toISOString()
+      }
+    });
+  }
+
   const ensureCatalogExists = async (ctx: ClientContext): Promise<ClientCatalog> => {
     const existing = await readCatalog(ctx);
     if (existing) {
-      const repaired = await ensureSystemModulePackages(ctx, existing);
+      const withCurrentSystemData = ensureCurrentSystemCatalogData(existing);
+      const repaired = await ensureSystemModulePackages(ctx, withCurrentSystemData);
       if (repaired !== existing) await writeCatalog(ctx, repaired);
       return repaired;
     }
@@ -175,6 +210,24 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
     getCatalogForClient(clientId: string): ClientCatalog {
       return memory.getCatalogForClient(clientId);
     },
+    async getRevision(ctx) {
+      const meta = await readJson<ClientCatalog["meta"]>(ctx, names.meta);
+      if (!meta) return null;
+      try {
+        const entries = await Promise.all(Object.values(names).map(async (fileName) => {
+          const info = await stat(filePath(ctx, fileName));
+          return `${fileName}\u0000${info.size}\u0000${info.mtimeMs}`;
+        }));
+        return {
+          catalogVersion: meta.catalogVersion,
+          updatedAt: meta.updatedAt,
+          storageRevision: createHash("sha256").update(entries.join("\n")).digest("hex")
+        };
+      } catch (error: unknown) {
+        if ((error as { code?: string }).code === "ENOENT") return null;
+        throw error;
+      }
+    },
     async getCatalog(ctx) {
       return (await readCatalog(ctx)) ?? memory.getCatalogForClient(ctx.clientId);
     },
@@ -185,8 +238,14 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
     async getMaterialById(ctx, materialId) {
       return (await ensureCatalogExists(ctx)).materials.find((material) => material.id === materialId) ?? null;
     },
+    async getMaterialByCode(ctx, code) {
+      return findCatalogMaterialByCode((await ensureCatalogExists(ctx)).materials, code);
+    },
     async getComponentById(ctx, componentId) {
       return (await ensureCatalogExists(ctx)).components.find((component) => component.id === componentId) ?? null;
+    },
+    async getComponentByCode(ctx, code) {
+      return findCatalogComponentByCode((await ensureCatalogExists(ctx)).components, code);
     },
     async getModuleByType(ctx, moduleType) {
       return (await ensureCatalogExists(ctx)).modules.find((module) => module.moduleType === moduleType) ?? null;

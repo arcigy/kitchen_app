@@ -4,12 +4,23 @@ export type { ModuleParams };
 import type { SsgiPipeline } from "../rendering/ssgiPipeline";
 import type { PhotoPathTracer } from "../rendering/photoPathTracer";
 import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "./kitchenContext";
+import type { CustomFurnitureInstance, CustomFurnitureParams } from "./customFurnitureTypes";
+import type { WardrobeEditSaveState } from "./wardrobeEditMode";
+import type { LedStripGroup } from "./ledStripTypes";
+import { createEmptyProjectMaterialAssignmentsState, type ProjectMaterialAssignmentsState } from "../core/project-materials/project-material-types";
 
 export type AppMode = "build" | "layout";
-export type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
+export type LayoutTool = "select" | "wall" | "led" | "align" | "trim" | "measure" | "section" | "dimension";
 export type RenderMode = "realtime" | "realtime_ssgi" | "photo_pathtrace";
 export type SelectedKind = "module" | "kitchenGroup" | "window" | "door" | "wall" | "floor" | "underlay" | "section" | "column" | null;
 export type WallId = "back" | "left" | "right";
+export type DoorSwingDirection = "left" | "right";
+export type DoorSwingSide = "inward" | "outward";
+export type OpeningHandleType = "lever" | "knob" | "bar" | "none";
+export type PolygonClipPoint = [number, number];
+export type PolygonClipRing = PolygonClipPoint[];
+export type PolygonClipPolygon = PolygonClipRing[];
+export type PolygonClipMultiPolygon = PolygonClipPolygon[];
 
 export type WindowParams = {
   wall: WallId;
@@ -23,6 +34,12 @@ export type WindowParams = {
   sashWidthMm: number;
   sashProfileDepthMm: number;
   frameProfileDepthMm: number;
+  swingDirection: DoorSwingDirection;
+  swingSide: DoorSwingSide;
+  swingAngleDeg: number;
+  handleType: OpeningHandleType;
+  handleOffsetMm: number;
+  handleHeightMm: number;
   materialId: string;
 };
 
@@ -65,6 +82,8 @@ export type ColumnInstance = {
 };
 
 export type LayoutSnapshot = {
+  /** Optional so snapshots created before project material assignments remain readable. */
+  materialAssignments?: ProjectMaterialAssignmentsState;
   wallCounter: number;
   walls: Array<{ id: string; params: WallParams }>;
   floorCounter?: number;
@@ -75,6 +94,14 @@ export type LayoutSnapshot = {
   sections?: Array<{ id: string; params: SectionParams }>;
   worktopCounter?: number;
   worktops?: Array<{ id: string; kitchenGroupId: string; params: KitchenWorktopParams }>;
+  alignLockCounter?: number;
+  alignLocks?: AlignLock[];
+  customFurnitureCounter?: number;
+  customFurniture?: Array<{ id: string; params: CustomFurnitureParams }>;
+  /** Optional for backwards compatibility with project files saved before LED strips existed. */
+  ledStripCounter?: number;
+  ledStripGroups?: LedStripGroup[];
+  wardrobe?: WardrobeEditSaveState | null;
   instanceCounter: number;
   instances: Array<{
     id: string;
@@ -100,11 +127,16 @@ export type LayoutSnapshot = {
 };
 
 export type WallParams = {
+  typeId?: string | null;
   thicknessMm: number;
   heightMm: number;
   materialId: string;
   justification?: "center" | "interior" | "exterior";
   exteriorSign?: 1 | -1;
+  joinEnds?: {
+    a?: { enabled?: boolean; priority?: number };
+    b?: { enabled?: boolean; priority?: number };
+  };
   aMm: { x: number; z: number };
   bMm: { x: number; z: number };
 };
@@ -161,6 +193,7 @@ export type KitchenWorktopJustification = "center" | "back" | "front";
 
 export type KitchenWorktopParams = {
   path: FloorBoundaryPoint[];
+  segmentDepthsMm?: number[];
   justification: KitchenWorktopJustification;
   mirrored: boolean;
   depthMm: number;
@@ -220,6 +253,24 @@ export type AlignPickedLine = {
   segmentIndex?: number;
 };
 
+export type AlignLockModuleSide = "left" | "right" | "front" | "back";
+
+export type AlignLockEndpoint = {
+  targetKind: AlignPickedLine["targetKind"];
+  targetId: string;
+  lineRole: AlignPickedLine["lineRole"];
+  segmentIndex?: number;
+  moduleSide?: AlignLockModuleSide;
+};
+
+export type AlignLock = {
+  id: string;
+  locked: boolean;
+  a: AlignLockEndpoint;
+  b: AlignLockEndpoint;
+  pointMm: { x: number; z: number };
+};
+
 export interface AppState {
   // Scene & rendering
   mode: AppMode;
@@ -237,7 +288,7 @@ export interface AppState {
   wallPlanUnionMesh: THREE.Mesh | null;
   wallDebugEnabled: boolean;
   wallSolvedJoinPolys: Array<Array<{ x: number; z: number }>>;
-  wallUnionPolys: any | null;
+  wallUnionPolys: PolygonClipMultiPolygon | null;
   floors: FloorInstance[];
   floorCounter: number;
   columns: ColumnInstance[];
@@ -246,6 +297,12 @@ export interface AppState {
   sectionCounter: number;
   kitchenWorktops: KitchenWorktopInstance[];
   worktopCounter: number;
+  customFurniture: CustomFurnitureInstance[];
+  customFurnitureCounter: number;
+  ledStripGroups: LedStripGroup[];
+  ledStripCounter: number;
+  wardrobeHistory: { getSaveState: () => WardrobeEditSaveState | null } | null;
+  projectMaterialAssignments: ProjectMaterialAssignmentsState;
 
   // Layout instances
   instances: LayoutInstance[];
@@ -255,6 +312,8 @@ export interface AppState {
   kitchenEditMode: boolean;
   activeKitchenGroupId: string | null;
   kitchenGroups: KitchenGroup[];
+  alignLocks: AlignLock[];
+  alignLockCounter: number;
 
   // Selection
   layoutTool: LayoutTool;
@@ -283,6 +342,9 @@ export interface AppState {
     ghost: LayoutInstance | null;
     ghostValid: boolean;
     lastCursor: THREE.Vector3;
+    pendingCursor: THREE.Vector3 | null;
+    ghostFrame: number | null;
+    lastGhostCursor: THREE.Vector3 | null;
   };
 
   // UI elements
@@ -332,6 +394,12 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     sectionCounter: 1,
     kitchenWorktops: [],
     worktopCounter: 1,
+    customFurniture: [],
+    customFurnitureCounter: 1,
+    ledStripGroups: [],
+    ledStripCounter: 1,
+    wardrobeHistory: null,
+    projectMaterialAssignments: createEmptyProjectMaterialAssignmentsState(),
 
     instances: [],
     instanceCounter: 1,
@@ -340,6 +408,8 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
     kitchenEditMode: false,
     activeKitchenGroupId: null,
     kitchenGroups: [],
+    alignLocks: [],
+    alignLockCounter: 1,
 
     layoutTool: "select",
     selectedKind: null,
@@ -365,7 +435,10 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
       params: null,
       ghost: null,
       ghostValid: false,
-      lastCursor: new THREE.Vector3(0, 0, 0)
+      lastCursor: new THREE.Vector3(0, 0, 0),
+      pendingCursor: null,
+      ghostFrame: null,
+      lastGhostCursor: null
     },
 
     undoBtnEl: null,

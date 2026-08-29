@@ -14,12 +14,8 @@ import { validateModule, type ModuleParams } from "../model/cabinetTypes";
 import type { AppArgs } from "./bootstrap";
 import type { PartRow, OverlapRow } from "../ui/createPartPanel";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
-import { createModulePackageControls, findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
-
-type ParamHighlightControls = {
-  highlightParamKeys?: (keys: string[]) => void;
-  clearHighlights?: () => void;
-};
+import { createResolvedModuleControls, findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
+import type { ParamHighlightControls } from "./paramHighlightControls";
 
 type BuildModePanel = {
   setRows: (rows: PartRow[]) => void;
@@ -75,7 +71,7 @@ export function createBuildModeController(ctx: BuildModeControllerContext) {
       return;
     }
 
-    ctx.activeBuildControls = createModulePackageControls(ctx.editorHost, modulePackage, ctx.params, {
+    ctx.activeBuildControls = createResolvedModuleControls(ctx.editorHost, modulePackage, ctx.params, {
       getWorktopThicknessMm: () => 0,
       clientCatalog: ctx.clientCatalog,
       onChange: () => afterParamsChanged()

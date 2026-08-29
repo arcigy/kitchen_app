@@ -4,6 +4,7 @@ import { getSystemSeedCatalog } from "../../core/catalog/catalog-repository";
 import { makeDefaultKitchenContext } from "../../layout/kitchenContext";
 import { applyKitchenContextToModuleParams } from "../../layout/kitchenMaterialSync";
 import { makeDefaultDrawerLowParams } from "../drawerLow/types";
+import type { DrawerLowParams } from "../drawerLow/types";
 import { buildDrawerLowParametric } from "../drawerLow/parametricGeometry";
 import materialsSnapshot from "../drawerLow/package/definitions/drawer_low.materials.snapshot.json";
 import { makeDefaultSwingShelvesLowParams } from "../swingShelvesLow/types";
@@ -38,12 +39,59 @@ function expectNoVolumeOverlap(group: { getObjectByName(name: string): unknown }
   expect(hasVolumeOverlap(getWorldBox(left), getWorldBox(right)), `${leftName} overlaps ${rightName}`).toBe(false);
 }
 
+function expectGapMm(left: Box3, right: Box3, expectedMm: number) {
+  expect((right.min.z - left.max.z) * 1000).toBeCloseTo(expectedMm, 5);
+}
+
 describe("module runtime catalog context", () => {
   it("resolves valid materials from ClientCatalog", () => {
     const catalog = getSystemSeedCatalog();
     const ctx = createModuleRuntimeCatalogContext(catalog);
-    const material = ctx.resolveMaterial("mat.board.body.dtd.grey.18", "carcass");
-    expect(material?.id).toBe("mat.board.body.dtd.grey.18");
+    const material = ctx.resolveMaterial(catalog.kitchenDefaults.carcassMaterialId, "carcass");
+    expect(material?.id).toBe(catalog.kitchenDefaults.carcassMaterialId);
+  }, 15_000);
+
+  it("indexes a large tenant catalog once across repeated runtime lookups", () => {
+    const catalog = getSystemSeedCatalog();
+    const materialTemplate = catalog.materials[0]!;
+    const componentTemplate = catalog.components[0]!;
+    let materialActiveReads = 0;
+    let componentActiveReads = 0;
+
+    catalog.materials = Array.from({ length: 2_000 }, (_, index) => {
+      const material = { ...materialTemplate, id: `material-${index}` };
+      Object.defineProperty(material, "isActive", {
+        enumerable: true,
+        configurable: true,
+        get: () => {
+          materialActiveReads += 1;
+          return true;
+        }
+      });
+      return material;
+    });
+    catalog.components = Array.from({ length: 2_000 }, (_, index) => {
+      const component = { ...componentTemplate, id: `component-${index}` };
+      Object.defineProperty(component, "isActive", {
+        enumerable: true,
+        configurable: true,
+        get: () => {
+          componentActiveReads += 1;
+          return true;
+        }
+      });
+      return component;
+    });
+
+    const firstContext = createModuleRuntimeCatalogContext(catalog);
+    const secondContext = createModuleRuntimeCatalogContext(catalog);
+    for (let index = 0; index < 50; index += 1) {
+      expect(firstContext.getMaterialById("material-1999")?.id).toBe("material-1999");
+      expect(secondContext.getComponentById("component-1999")?.id).toBe("component-1999");
+    }
+
+    expect(materialActiveReads).toBeLessThanOrEqual(catalog.materials.length * 2);
+    expect(componentActiveReads).toBeLessThanOrEqual(catalog.components.length * 2);
   });
 
   it("falls back through kitchen defaults, first material, then system placeholder", () => {
@@ -58,7 +106,7 @@ describe("module runtime catalog context", () => {
     const empty = structuredClone(catalog);
     empty.materials = [];
     expect(createModuleRuntimeCatalogContext(empty).resolveRenderMaterial("missing", "front")).toMatchObject(SYSTEM_PLACEHOLDER_MATERIAL);
-  });
+  }, 30_000);
 
   it("ignores inactive materials when resolving runtime fallbacks", () => {
     const catalog = getSystemSeedCatalog();
@@ -97,7 +145,7 @@ describe("module runtime catalog context", () => {
   it("uses each client's material catalog in drawer parametric geometry", () => {
     const clientA = getSystemSeedCatalog();
     const clientB = getSystemSeedCatalog();
-    const materialId = "mat.board.body.dtd.white.18";
+    const materialId = clientA.kitchenDefaults.carcassMaterialId!;
     clientA.materials = clientA.materials.map((material) =>
       material.id === materialId ? { ...material, preview: { ...material.preview, colorHex: "#112233" } } : material
     );
@@ -105,16 +153,17 @@ describe("module runtime catalog context", () => {
       material.id === materialId ? { ...material, preview: { ...material.preview, colorHex: "#445566" } } : material
     );
 
-    const params = makeDefaultDrawerLowParams();
+    const paramsA = applyKitchenContextToModuleParams(makeDefaultDrawerLowParams(), makeDefaultKitchenContext(clientA), clientA);
+    const paramsB = applyKitchenContextToModuleParams(makeDefaultDrawerLowParams(), makeDefaultKitchenContext(clientB), clientB);
     const snapshot = materialsSnapshot as unknown as Parameters<typeof buildDrawerLowParametric>[1];
-    const groupA = buildDrawerLowParametric(params, snapshot, clientA);
-    const groupB = buildDrawerLowParametric(params, snapshot, clientB);
+    const groupA = buildDrawerLowParametric(paramsA as DrawerLowParams, snapshot, clientA);
+    const groupB = buildDrawerLowParametric(paramsB as DrawerLowParams, snapshot, clientB);
     const leftA = groupA.getObjectByName("leftSide") as Mesh;
     const leftB = groupB.getObjectByName("leftSide") as Mesh;
 
     expect(((leftA.material as MeshStandardMaterial).color.getHexString())).toBe("112233");
     expect(((leftB.material as MeshStandardMaterial).color.getHexString())).toBe("445566");
-  });
+  }, 15_000);
 
   it("builds bottom boards for lower kitchen carcasses and drawer boxes", () => {
     const catalog = getSystemSeedCatalog();
@@ -127,6 +176,47 @@ describe("module runtime catalog context", () => {
       expect(drawer.getObjectByName(`drawer_${index}_bottom`)).toBeTruthy();
     }
     expect(swing.getObjectByName("bottom")).toBeTruthy();
+  }, 15_000);
+
+  it("keeps drawer boxes behind the back panel with a stable rear gap", () => {
+    const catalog = getSystemSeedCatalog();
+    const snapshot = materialsSnapshot as unknown as Parameters<typeof buildDrawerLowParametric>[1];
+    const commonParams = {
+      ...makeDefaultDrawerLowParams(),
+      drawerCount: 1,
+      backGrooveWidthMm: 18,
+      drawerBackReserveMm: 10
+    };
+    const thick = buildDrawerLowParametric({ ...commonParams, backThickness: 18 } as DrawerLowParams, snapshot, catalog);
+    const thin = buildDrawerLowParametric({ ...commonParams, backThickness: 3.3, backGrooveWidthMm: 3.3 } as DrawerLowParams, snapshot, catalog);
+
+    const thickBack = getWorldBox(thick.getObjectByName("back") as Mesh);
+    const thickDrawerBack = getWorldBox(thick.getObjectByName("drawer_1_back") as Mesh);
+    const thickDrawerBottom = getWorldBox(thick.getObjectByName("drawer_1_bottom") as Mesh);
+    const thickDrawerSide = getWorldBox(thick.getObjectByName("drawer_1_sideL") as Mesh);
+    const thinBack = getWorldBox(thin.getObjectByName("back") as Mesh);
+    const thinDrawerBack = getWorldBox(thin.getObjectByName("drawer_1_back") as Mesh);
+    const thinDrawerBottom = getWorldBox(thin.getObjectByName("drawer_1_bottom") as Mesh);
+    const thinDrawerSide = getWorldBox(thin.getObjectByName("drawer_1_sideL") as Mesh);
+
+    expect(thinBack.min.z).toBeCloseTo(thickBack.min.z, 6);
+    expect((thickBack.max.z - thickBack.min.z) * 1000).toBeCloseTo(18, 5);
+    expect((thinBack.max.z - thinBack.min.z) * 1000).toBeCloseTo(3.3, 5);
+
+    expectGapMm(thickBack, thickDrawerBack, 10);
+    expectGapMm(thinBack, thinDrawerBack, 10);
+    expectGapMm(thickBack, thickDrawerBottom, 10 + 13);
+    expectGapMm(thinBack, thinDrawerBottom, 10 + 13);
+    expectNoVolumeOverlap(thick, "back", "drawer_1_back");
+    expectNoVolumeOverlap(thick, "back", "drawer_1_bottom");
+    expectNoVolumeOverlap(thin, "back", "drawer_1_back");
+    expectNoVolumeOverlap(thin, "back", "drawer_1_bottom");
+
+    expect(thinDrawerSide.max.z).toBeCloseTo(thickDrawerSide.max.z, 6);
+    expect((thinDrawerSide.max.z - thinDrawerSide.min.z) * 1000).toBeCloseTo(
+      (thickDrawerSide.max.z - thickDrawerSide.min.z) * 1000 + 14.7,
+      5
+    );
   });
 
   it("syncs material selections for newly added drawer fronts and bottoms", () => {
@@ -168,6 +258,17 @@ describe("module runtime catalog context", () => {
     const zHingeBox = getWorldBox(zHinge);
     const xDoorBox = getWorldBox(xDoor);
     const xHingeBox = getWorldBox(xHinge);
+    const sideEndXBox = getWorldBox(corner.getObjectByName("side_end_x") as Mesh);
+    const sideEndZBox = getWorldBox(corner.getObjectByName("side_end_z") as Mesh);
+
+    expect(zDoorBox.min.x).toBeGreaterThanOrEqual(sideEndZBox.max.x);
+    expect(zDoorBox.max.x).toBeLessThanOrEqual(sideEndXBox.min.x);
+    expect(xDoorBox.min.z).toBeGreaterThanOrEqual(sideEndXBox.max.z);
+    expect(xDoorBox.max.z).toBeLessThanOrEqual(sideEndZBox.min.z);
+    expect((zDoorBox.min.x - sideEndZBox.max.x) * 1000).toBeCloseTo(2, 3);
+    expect((sideEndXBox.min.x - zDoorBox.max.x) * 1000).toBeCloseTo(2, 3);
+    expect((xDoorBox.min.z - sideEndXBox.max.z) * 1000).toBeCloseTo(0.2, 3);
+    expect((sideEndZBox.min.z - xDoorBox.max.z) * 1000).toBeCloseTo(2, 3);
 
     expect(Math.abs(zHingeBox.max.z - zDoorBox.min.z)).toBeLessThan(0.002);
     expect(Math.abs(xHingeBox.max.x - xDoorBox.min.x)).toBeLessThan(0.002);

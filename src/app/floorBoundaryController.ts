@@ -25,6 +25,8 @@ import type {
 } from "./localTypes";
 import type { AppState } from "../layout/appState";
 import type { PlacementHelpers } from "../layout/placementManager";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
+import { clearDrawingToolSelection } from "./selectionController";
 
 type FloorEditState = {
   active: boolean;
@@ -158,7 +160,7 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
     ctx.floorEdit.hover = null;
     ctx.clearToolHud();
     renderFloorBoundaryEdit();
-    ctx.setUnderlayStatus(
+    reportEditorToolEntryStatus(ctx,
       tool === "pickLines"
         ? "Floor boundary: Pick Lines - klikni hranu steny."
         : tool === "rectangle"
@@ -167,7 +169,6 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
             ? "Floor boundary: Circle - klikni stred a polomer."
             : "Floor boundary: Line - klikaj body boundary line."
     );
-    ctx.mountProps();
   };
 
   const buildFloorBoundaryTopbar = () => {
@@ -237,17 +238,11 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
     ctx.floorEdit.selectedVertex = null;
     ctx.floorEdit.drag = null;
     ctx.floorEdit.error = "";
-    ctx.selectedKind = null;
-    ctx.selectedFloorId = null;
-    ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
-    ctx.selectedInstanceIds.clear();
-    ctx.setInstanceSelected(null);
+    clearDrawingToolSelection(ctx);
     ensureFloorOverlay();
     buildFloorBoundaryTopbar();
     renderFloorBoundaryEdit();
-    ctx.setUnderlayStatus("Floor boundary: Line - kresli boundary line alebo pouzi Pick Lines.");
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, "Floor boundary: Line - kresli boundary line alebo pouzi Pick Lines.");
   };
 
   const exitFloorBoundaryEditCommon = () => {
@@ -275,8 +270,7 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
     const boundary = floorSegmentsToBoundary(ctx.floorEdit.segments);
     if (!boundary || boundary.length < 3) {
       ctx.floorEdit.error = "Boundary line nie je uzavreta. Uzavri loop alebo dopln chybajuce ciary.";
-      ctx.setUnderlayStatus("Floor boundary: boundary musi mat aspon 3 ciary.");
-      ctx.mountProps();
+      reportEditorToolEntryStatus(ctx, "Floor boundary: boundary musi mat aspon 3 ciary.");
       return;
     }
     ctx.floorEdit.error = "";
@@ -320,6 +314,7 @@ export function createFloorBoundaryController(ctx: FloorBoundaryControllerContex
     clearFloorBoundaryGroup,
     discardFloorBoundaryEdit,
     enterFloorBoundaryEdit,
+    finishFloorBoundaryEdit,
     floorOrthoPoint,
     moveFloorEditSegment,
     moveFloorEditVertex,

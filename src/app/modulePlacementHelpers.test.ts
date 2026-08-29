@@ -1,0 +1,237 @@
+import * as THREE from "three";
+import { describe, expect, it, vi } from "vitest";
+import { makeDefaultKitchenContext } from "../layout/kitchenContext";
+import type { AlignLock, AppState } from "../layout/appState";
+import { createModulePlacementHelpers, type ModulePlacementHelpersContext } from "./modulePlacementHelpers";
+import type { KitchenWorktopInstance, LayoutInstance } from "./localTypes";
+
+function moduleInstance(kitchenGroupId: string | null): LayoutInstance {
+  const root = new THREE.Group();
+  root.updateMatrixWorld(true);
+  return {
+    id: "m1",
+    params: { type: "fridge_tall", width: 600 },
+    kitchenGroupId,
+    kitchenPlacement: null,
+    root,
+    module: new THREE.Group(),
+    localBox: new THREE.Box3(new THREE.Vector3(-0.3, 0, -0.3), new THREE.Vector3(0.3, 2, 0.3)),
+    pick: new THREE.Mesh(),
+    outline: new THREE.LineSegments()
+  } as LayoutInstance;
+}
+
+function cornerModule(): LayoutInstance {
+  const inst = moduleInstance("kg1");
+  inst.id = "corner";
+  inst.params = { type: "corner_shelf_lower" } as LayoutInstance["params"];
+  return inst;
+}
+
+function groupedModule(id: string, binding: NonNullable<LayoutInstance["kitchenPlacement"]>): LayoutInstance {
+  const inst = moduleInstance("kg1");
+  inst.id = id;
+  inst.kitchenPlacement = binding;
+  return inst;
+}
+
+function worktop(groupId: string): KitchenWorktopInstance {
+  return {
+    id: "w1",
+    kitchenGroupId: groupId,
+    params: { path: [{ x: 0, z: 0 }, { x: 1000, z: 0 }] }
+  } as KitchenWorktopInstance;
+}
+
+function makeContext(instance: LayoutInstance, getKitchenGuideSegmentInfo = vi.fn()): ModulePlacementHelpersContext {
+  const guidePath = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 0, 0)];
+  return {
+    instances: [instance],
+    kitchenWorktops: [worktop(instance.kitchenGroupId ?? "missing")],
+    walls: [],
+    S: {
+      kitchenGroups: [{ id: "kg1", name: "Kitchen", instanceIds: [], ctx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 45 } }],
+      kitchenCtx: { ...makeDefaultKitchenContext(), worktopBackOffsetMm: 80 },
+      alignLocks: [] as AlignLock[]
+    },
+    roomBounds: { halfW: 10, halfD: 10 },
+    wallSolvedOutlines: new Map(),
+    moduleAdjacencyGroup: new THREE.Group(),
+    placementAdjacencyPreview: new THREE.Line(),
+    instanceLayoutWorldBox: vi.fn(() => instance.localBox.clone()),
+    instanceWorldBox: vi.fn(() => instance.localBox.clone()),
+    instanceFitsRoom: vi.fn(() => true),
+    getModuleLocalBackCenter: vi.fn(() => new THREE.Vector3(0, 0, 0)),
+    moduleStaysOutsideKitchenWorktop: vi.fn(() => true),
+    isCornerKitchenModule: vi.fn(() => false),
+    applyKitchenPlacementBinding: vi.fn(() => true),
+    getKitchenCornerArmBindingInfo: vi.fn(() => null),
+    getKitchenGuideSegmentInfo: getKitchenGuideSegmentInfo.mockImplementation(() => ({
+      start: new THREE.Vector3(0, 0, 0),
+      dir: new THREE.Vector3(1, 0, 0),
+      length: 1
+    })),
+    getKitchenWorktopBackGuidePath: vi.fn(() => guidePath),
+    findInstance: vi.fn(() => null),
+    getWallUnionPolys: vi.fn(() => null),
+    getWallSolvedJoinPolys: vi.fn(() => []),
+    getViewMode: vi.fn((): "2d" => "2d"),
+    getActiveViewerTab: vi.fn(() => "layout")
+  };
+}
+
+describe("module placement helpers", () => {
+  it("uses group-specific kitchen placement back offset for tall resize anchor inference", () => {
+    const instance = moduleInstance("kg1");
+    const getKitchenGuideSegmentInfo = vi.fn();
+    const helpers = createModulePlacementHelpers(makeContext(instance, getKitchenGuideSegmentInfo));
+
+    expect(helpers.inferTallResizeAnchorSide(instance)).toBe("right");
+
+    expect(getKitchenGuideSegmentInfo).toHaveBeenCalledWith(expect.objectContaining({ id: "w1" }), 0, 45);
+  });
+
+  it("falls back to default kitchen placement back offset when the group is missing", () => {
+    const instance = moduleInstance("missing");
+    const getKitchenGuideSegmentInfo = vi.fn();
+    const helpers = createModulePlacementHelpers(makeContext(instance, getKitchenGuideSegmentInfo));
+
+    expect(helpers.inferTallResizeAnchorSide(instance)).toBe("right");
+
+    expect(getKitchenGuideSegmentInfo).toHaveBeenCalledWith(expect.objectContaining({ id: "w1" }), 0, 80);
+  });
+
+  it("uses the required group offset when propagating corner resize to pinned neighbors", () => {
+    const corner = cornerModule();
+    const neighbor = groupedModule("m2", { worktopId: "w1", segmentIndex: 0, offsetAlongM: 0 });
+    const applyKitchenPlacementBinding = vi.fn((inst: LayoutInstance) => {
+      inst.root.position.x += 0.1;
+      return true;
+    });
+    const getKitchenCornerArmBindingInfo = vi.fn(() => ({
+      worktopId: "w1",
+      xSegmentIndex: 0,
+      zSegmentIndex: null
+    }));
+    const ctx = makeContext(corner);
+    ctx.instances = [corner, neighbor];
+    ctx.applyKitchenPlacementBinding = applyKitchenPlacementBinding;
+    ctx.getKitchenCornerArmBindingInfo = getKitchenCornerArmBindingInfo;
+    ctx.isCornerKitchenModule = vi.fn(() => true);
+    const helpers = createModulePlacementHelpers(ctx);
+
+    expect(helpers.propagateCornerResizeToPinnedNeighbors(corner, corner.params)).toEqual({ ok: true, movedIds: ["m2"] });
+
+    expect(getKitchenCornerArmBindingInfo).toHaveBeenCalledExactlyOnceWith(corner, 45);
+    expect(applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(neighbor, neighbor.kitchenPlacement, 45);
+  });
+
+  it("does not push the protected moved-to-anchor module when the anchor width changes", () => {
+    const left = moduleInstance("kg1");
+    left.id = "drawer";
+    left.params = { type: "drawer_low", width: 600 } as LayoutInstance["params"];
+    const right = moduleInstance("kg1");
+    right.id = "shelf";
+    right.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    const prevBoxes = new Map([
+      ["drawer", new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.3), new THREE.Vector3(0, 0.8, 0.3))],
+      ["shelf", new THREE.Box3(new THREE.Vector3(0.08, 0, -0.3), new THREE.Vector3(0.68, 0.8, 0.3))]
+    ]);
+    const currentBoxes = new Map(prevBoxes);
+    currentBoxes.set("drawer", new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.3), new THREE.Vector3(0.2, 0.8, 0.3)));
+    const ctx = makeContext(left);
+    ctx.instances = [left, right];
+    ctx.S.alignLocks = [lockedModulePair("drawer", "right", "shelf", "left")];
+    ctx.findInstance = vi.fn((id: string) => ctx.instances.find((inst) => inst.id === id) ?? null);
+    ctx.instanceWorldBox = vi.fn((inst: LayoutInstance) => currentBoxes.get(inst.id)?.clone() ?? inst.localBox.clone());
+    const helpers = createModulePlacementHelpers(ctx);
+
+    expect(helpers.propagateModuleResizeToPinnedNeighbors(left, prevBoxes.get("drawer")!, prevBoxes).movedIds).toEqual([]);
+    expect(right.root.position.x).toBeCloseTo(0);
+
+    right.root.position.set(0, 0, 0);
+    currentBoxes.set("drawer", new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.3), new THREE.Vector3(-0.1, 0.8, 0.3)));
+
+    expect(helpers.propagateModuleResizeToPinnedNeighbors(left, prevBoxes.get("drawer")!, prevBoxes).movedIds).toEqual([]);
+    expect(right.root.position.x).toBeCloseTo(0);
+  });
+
+  it("does not push a protected shelf from a locked corner anchor resize", () => {
+    const corner = cornerModule();
+    const shelf = moduleInstance("kg1");
+    shelf.id = "shelf";
+    shelf.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    const prevBoxes = new Map([
+      ["corner", new THREE.Box3(new THREE.Vector3(-0.8, 0, -0.8), new THREE.Vector3(0, 0.8, 0))],
+      ["shelf", new THREE.Box3(new THREE.Vector3(0.12, 0, -0.3), new THREE.Vector3(0.72, 0.8, 0.3))]
+    ]);
+    const currentBoxes = new Map(prevBoxes);
+    currentBoxes.set("corner", new THREE.Box3(new THREE.Vector3(-0.8, 0, -0.8), new THREE.Vector3(0.25, 0.8, 0)));
+    const ctx = makeContext(corner);
+    ctx.instances = [corner, shelf];
+    ctx.S.alignLocks = [lockedModulePair("corner", "right", "shelf", "left")];
+    ctx.findInstance = vi.fn((id: string) => ctx.instances.find((inst) => inst.id === id) ?? null);
+    ctx.instanceWorldBox = vi.fn((inst: LayoutInstance) => currentBoxes.get(inst.id)?.clone() ?? inst.localBox.clone());
+    const helpers = createModulePlacementHelpers(ctx);
+
+    expect(helpers.propagateModuleResizeToPinnedNeighbors(corner, prevBoxes.get("corner")!, prevBoxes).movedIds).toEqual([]);
+    expect(shelf.root.position.x).toBeCloseTo(0);
+  });
+
+  it("lets the protected moved-to-anchor module push the weaker anchor if needed", () => {
+    const a = moduleInstance("kg1");
+    a.id = "shelf-a";
+    a.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    const b = moduleInstance("kg1");
+    b.id = "shelf-b";
+    b.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    const prevBoxes = new Map([
+      ["shelf-a", new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.3), new THREE.Vector3(0, 0.8, 0.3))],
+      ["shelf-b", new THREE.Box3(new THREE.Vector3(0.1, 0, -0.3), new THREE.Vector3(0.7, 0.8, 0.3))]
+    ]);
+    const currentBoxes = new Map(prevBoxes);
+    currentBoxes.set("shelf-b", new THREE.Box3(new THREE.Vector3(-0.05, 0, -0.3), new THREE.Vector3(0.7, 0.8, 0.3)));
+    const ctx = makeContext(b);
+    ctx.instances = [a, b];
+    ctx.S.alignLocks = [lockedModulePair("shelf-a", "right", "shelf-b", "left")];
+    ctx.findInstance = vi.fn((id: string) => ctx.instances.find((inst) => inst.id === id) ?? null);
+    ctx.instanceWorldBox = vi.fn((inst: LayoutInstance) => currentBoxes.get(inst.id)?.clone() ?? inst.localBox.clone());
+    const helpers = createModulePlacementHelpers(ctx);
+
+    expect(helpers.propagateModuleResizeToPinnedNeighbors(b, prevBoxes.get("shelf-b")!, prevBoxes).movedIds).toEqual(["shelf-a"]);
+    expect(a.root.position.x).toBeCloseTo(-0.15);
+  });
+
+  it("uses a locked shelf to worktop end as the resize anchor side", () => {
+    const shelf = moduleInstance("kg1");
+    shelf.id = "shelf";
+    const ctx = makeContext(shelf);
+    ctx.S.alignLocks = [
+      {
+        id: "lock-worktop",
+        locked: true,
+        a: { targetKind: "module", targetId: "shelf", lineRole: "edge", moduleSide: "right" },
+        b: { targetKind: "worktop", targetId: "w1", lineRole: "endB", segmentIndex: 0 },
+        pointMm: { x: 1000, z: 0 }
+      }
+    ];
+    const helpers = createModulePlacementHelpers(ctx);
+
+    expect(helpers.chooseResizeAnchorSide(shelf, [])).toBe("right");
+  });
+});
+
+function lockedModulePair(
+  aId: string,
+  aSide: "left" | "right" | "front" | "back",
+  bId: string,
+  bSide: "left" | "right" | "front" | "back"
+): AlignLock {
+  return {
+    id: `${aId}-${bId}`,
+    locked: true,
+    a: { targetKind: "module", targetId: aId, lineRole: "edge", moduleSide: aSide },
+    b: { targetKind: "module", targetId: bId, lineRole: "edge", moduleSide: bSide },
+    pointMm: { x: 0, z: 0 }
+  };
+}

@@ -6,6 +6,8 @@ import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
 import type { KitchenWorktopInstance, LayoutInstance, WallInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { AppState } from "../layout/appState";
+import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { getLockedModuleNeighborIdsForSide, getLockedResizeAnchorSide, isProtectedAlignModule } from "./alignLocks";
 
 type PolygonPoint = [number, number];
 type PolygonRing = PolygonPoint[];
@@ -33,7 +35,7 @@ export type ModulePlacementHelpersContext = {
   instances: LayoutInstance[];
   kitchenWorktops: KitchenWorktopInstance[];
   walls: WallInstance[];
-  S: Pick<AppState, "kitchenCtx" | "kitchenGroups">;
+  S: Pick<AppState, "kitchenCtx" | "kitchenGroups" | "alignLocks">;
   roomBounds: { halfW: number; halfD: number };
   wallSolvedOutlines: Map<string, Array<{ x: number; z: number }>>;
   moduleAdjacencyGroup: THREE.Group;
@@ -84,6 +86,7 @@ export function createModulePlacementHelpers(ctx: ModulePlacementHelpersContext)
     getKitchenWorktopBackGuidePath,
     findInstance
   } = ctx;
+  let moduleAdjacencySignature = "";
 
 function placeWithoutOverlap(inst: LayoutInstance) {
   const step = 0.25;
@@ -321,10 +324,20 @@ function collectPinnedPushChain(startId: string, side: ResizeAnchorSide) {
     const current = findInstance(currentId);
     if (!current) continue;
     const currentBox = instanceWorldBox(current);
+    for (const neighborId of getLockedModuleNeighborIdsForSide(S.alignLocks, currentId, side)) {
+      if (visited.has(neighborId)) continue;
+      const neighbor = findInstance(neighborId);
+      if (!neighbor) continue;
+      if (current.kitchenGroupId && neighbor.kitchenGroupId !== current.kitchenGroupId) continue;
+      visited.add(neighborId);
+      result.push(neighborId);
+      queue.push(neighborId);
+    }
 
     for (const other of instances) {
       if (other.id === currentId || visited.has(other.id)) continue;
       if (current.kitchenGroupId && other.kitchenGroupId !== current.kitchenGroupId) continue;
+      if (isProtectedAlignModule(S.alignLocks, other.id)) continue;
       const info = detectModuleAdjacencyInfo(currentBox, instanceWorldBox(other), other.id);
       if (!info || info.side !== side) continue;
       visited.add(other.id);
@@ -350,10 +363,21 @@ function collectPinnedPushChainFromBoxes(
     const currentId = queue.shift()!;
     const currentBox = boxesById.get(currentId);
     if (!currentBox) continue;
+    for (const neighborId of getLockedModuleNeighborIdsForSide(S.alignLocks, currentId, side)) {
+      if (visited.has(neighborId)) continue;
+      const neighbor = instances.find((item) => item.id === neighborId) ?? null;
+      if (!neighbor) continue;
+      if (kitchenGroupId && neighbor.kitchenGroupId !== kitchenGroupId) continue;
+      if (!boxesById.has(neighborId)) continue;
+      visited.add(neighborId);
+      result.push(neighborId);
+      queue.push(neighborId);
+    }
 
     for (const other of instances) {
       if (other.id === currentId || visited.has(other.id)) continue;
       if (kitchenGroupId && other.kitchenGroupId !== kitchenGroupId) continue;
+      if (isProtectedAlignModule(S.alignLocks, other.id)) continue;
       const otherBox = boxesById.get(other.id);
       if (!otherBox) continue;
       const info = detectModuleAdjacencyInfo(currentBox, otherBox, other.id);
@@ -379,7 +403,9 @@ function collectAdjacentModuleInfos(inst: LayoutInstance, referenceBox = instanc
   return infos;
 }
 
-function chooseResizeAnchorSide(_inst: LayoutInstance, infos: AdjacentModuleInfo[]) {
+function chooseResizeAnchorSide(inst: LayoutInstance, infos: AdjacentModuleInfo[]) {
+  const lockedSide = getLockedResizeAnchorSide(S.alignLocks, inst.id);
+  if (lockedSide) return lockedSide;
   if (infos.length === 0) return null;
 
   const bySide = new Map<ResizeAnchorSide, Array<(typeof infos)[number]>>();
@@ -423,8 +449,11 @@ function inferTallResizeAnchorSide(inst: LayoutInstance) {
   const halfModuleWidthM =
     Number.isFinite(widthMm) && widthMm > 0 ? widthMm / 2000 : Math.max(0.001, (inst.localBox.max.x - inst.localBox.min.x) * 0.5);
   const backCenterWorld = getModuleLocalBackCenter(inst).clone().applyMatrix4(inst.root.matrixWorld);
-    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
-  const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm;
+  const backOffsetMm = resolveKitchenPlacementBackOffset({
+    kitchenGroupId: inst.kitchenGroupId,
+    kitchenGroups: S.kitchenGroups,
+    defaultWorktopBackOffsetMm: S.kitchenCtx.worktopBackOffsetMm
+  });
 
   let best:
     | {
@@ -514,11 +543,12 @@ function nudgePinnedModuleChain(inst: LayoutInstance, delta: THREE.Vector3) {
 
 function propagateCornerResizeToPinnedNeighbors(inst: LayoutInstance, previousParams: ModuleParams) {
   if (!inst.kitchenGroupId || !isCornerKitchenModule(inst)) return { ok: true, movedIds: [] as string[] };
-    const group = S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId) ?? null;
+  const group = findKitchenPlacementGroup({ kitchenGroupId: inst.kitchenGroupId, kitchenGroups: S.kitchenGroups });
   if (!group) return { ok: true, movedIds: [] as string[] };
+  const backOffsetMm = group.ctx.worktopBackOffsetMm;
   void previousParams;
 
-  const armInfo = getKitchenCornerArmBindingInfo(inst, group.ctx.worktopBackOffsetMm);
+  const armInfo = getKitchenCornerArmBindingInfo(inst, backOffsetMm);
   if (!armInfo) return { ok: true, movedIds: [] as string[] };
   const touchedSegments = new Set([armInfo.xSegmentIndex, armInfo.zSegmentIndex].filter((value): value is number => value != null));
   if (touchedSegments.size === 0) return { ok: true, movedIds: [] as string[] };
@@ -531,7 +561,7 @@ function propagateCornerResizeToPinnedNeighbors(inst: LayoutInstance, previousPa
     if ((otherBinding.kind ?? "segment") === "corner") continue;
     if (!touchedSegments.has(otherBinding.segmentIndex)) continue;
     const before = other.root.position.clone();
-    if (!applyKitchenPlacementBinding(other, structuredClone(otherBinding), group.ctx.worktopBackOffsetMm)) continue;
+    if (!applyKitchenPlacementBinding(other, structuredClone(otherBinding), backOffsetMm)) continue;
     if (before.distanceToSquared(other.root.position) > 1e-10) movedIds.add(other.id);
   }
 
@@ -581,14 +611,38 @@ function snapPosition(moving: LayoutInstance, desired: THREE.Vector3) {
 function setPlacementAdjacencyPreview(link: ModuleAdjacencyLink | null) {
   if (!link) {
     placementAdjacencyPreview.visible = false;
+    moduleAdjacencySignature = "";
     return;
   }
   placementAdjacencyPreview.geometry.dispose();
   placementAdjacencyPreview.geometry = new THREE.BufferGeometry().setFromPoints([link.lineStart, link.lineEnd]);
   placementAdjacencyPreview.visible = true;
+  moduleAdjacencySignature = "";
 }
 
 function updateModuleAdjacencyVisuals() {
+  const viewKey = `${ctx.getViewMode()}:${ctx.getActiveViewerTab()}:${placementAdjacencyPreview.visible ? 1 : 0}`;
+  const shouldDrawAdjacency = ctx.getViewMode() === "2d" && ctx.getActiveViewerTab() === "floorplan";
+  const instanceKey = shouldDrawAdjacency
+    ? instances
+        .map((inst) => {
+          const box = instanceWorldBox(inst);
+          return [
+            inst.id,
+            box.min.x.toFixed(4),
+            box.min.y.toFixed(4),
+            box.min.z.toFixed(4),
+            box.max.x.toFixed(4),
+            box.max.y.toFixed(4),
+            box.max.z.toFixed(4)
+          ].join(",");
+        })
+        .join("|")
+    : "";
+  const nextSignature = `${viewKey}:${instanceKey}`;
+  if (nextSignature === moduleAdjacencySignature) return;
+  moduleAdjacencySignature = nextSignature;
+
   for (const child of [...moduleAdjacencyGroup.children]) {
     if (child === placementAdjacencyPreview) continue;
     moduleAdjacencyGroup.remove(child);

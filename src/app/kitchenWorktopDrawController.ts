@@ -1,7 +1,8 @@
-import * as THREE from "three";
 import type { AppState } from "../layout/appState";
-import { kitchenWorktopPointToWorld } from "../layout/worktopGeometry";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import type { FloorBoundaryPoint, KitchenWorktopParams } from "./localTypes";
+import { resolveKitchenWorktopTypedPoint } from "./pointerKitchenWorktopDrawClickHelpers";
+import { refreshSelectionVisualState } from "./selectionController";
 
 type KitchenWorktopDrawState = {
   active: boolean;
@@ -49,10 +50,8 @@ export function createKitchenWorktopDrawController(ctx: KitchenWorktopDrawContex
     ctx.kitchenWorktopDraw.mirrored = false;
     ctx.setWorktopDrawSnap(null);
     ctx.clearSelectionForDraw();
-    ctx.syncSelectionState();
-    ctx.updateSelectionHighlights();
-    ctx.setUnderlayStatus("Worktop: click shape points. Type mm + Enter for segment length. Esc confirms the shape.");
-    ctx.mountProps();
+    refreshSelectionVisualState(ctx);
+    reportEditorToolEntryStatus(ctx, "Worktop: click shape points. Type mm + Enter for segment length. Esc confirms the shape.");
   };
 
   const appendKitchenWorktopPoint = (point: FloorBoundaryPoint) => {
@@ -91,20 +90,16 @@ export function createKitchenWorktopDrawController(ctx: KitchenWorktopDrawContex
   const commitKitchenWorktopTypedLength = () => {
     const draw = ctx.kitchenWorktopDraw;
     if (!draw.active || draw.points.length === 0) return false;
-    const mm = Math.max(1, Math.round(Number(draw.typedMm)));
-    if (!Number.isFinite(mm)) return false;
 
     const start = draw.points[draw.points.length - 1];
     if (!start) return false;
-    const startWorld = kitchenWorktopPointToWorld(start);
-    const hover = draw.hoverPoint ?? { x: start.x + 1000, z: start.z };
-    const hoverWorld = kitchenWorktopPointToWorld(hover);
-    const dir = hoverWorld.clone().sub(startWorld);
-    if (dir.lengthSq() < 1e-8) dir.set(1, 0, 0);
-    dir.normalize();
-    const endWorld = startWorld.clone().addScaledVector(dir, mm / 1000);
-    const rawPoint = { x: Math.round(endWorld.x * 1000), z: Math.round(endWorld.z * 1000) };
-    return appendKitchenWorktopPoint(ctx.floorOrthoPoint(start, rawPoint));
+    const point = resolveKitchenWorktopTypedPoint({
+      start,
+      hoverPoint: draw.hoverPoint,
+      typedMm: draw.typedMm,
+      floorOrthoPoint: ctx.floorOrthoPoint
+    });
+    return point ? appendKitchenWorktopPoint(point) : false;
   };
 
   const mirrorKitchenWorktopDraw = () => {
@@ -119,8 +114,7 @@ export function createKitchenWorktopDrawController(ctx: KitchenWorktopDrawContex
     if (!draw.active) return false;
     if (draw.points.length < 2) {
       ctx.cancelKitchenWorktopDraw({ silent: true });
-      ctx.setUnderlayStatus("Worktop: canceled.");
-      ctx.mountProps();
+      reportEditorToolEntryStatus(ctx, "Worktop: canceled.");
       return true;
     }
     const groupId = ctx.S.activeKitchenGroupId;
@@ -138,8 +132,7 @@ export function createKitchenWorktopDrawController(ctx: KitchenWorktopDrawContex
     const existingId = ctx.getKitchenGroupWorktops(groupId)[0]?.id ?? `wt${ctx.getWorktopCounter()}`;
     ctx.replaceKitchenGroupWorktops(groupId, [{ id: existingId, params }], { skipHistory: false });
     ctx.cancelKitchenWorktopDraw({ silent: true });
-    ctx.setUnderlayStatus(params.path.length >= 3 ? "Corner worktop created." : "Worktop created.");
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, params.path.length >= 3 ? "Corner worktop created." : "Worktop created.");
     return true;
   };
 

@@ -1,0 +1,21 @@
+{
+  "id": "stone_marble_white_grey",
+  "source": "ambientCG",
+  "assetId": "Marble012",
+  "requestedAssetId": "Marble012",
+  "matchedAssetId": "Marble012",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Marble012_2K-JPG (1).zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

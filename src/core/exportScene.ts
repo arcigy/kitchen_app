@@ -1,5 +1,48 @@
 import * as THREE from "three";
+import materialManifest from "../../backend/materials/material_manifest.json";
+import demosDecorMappings from "../../backend/materials/vendor_catalogs/demos_decor_mappings.json";
 import type { ClientProjectPhaseScope } from "./storage/storage-types";
+
+export type MaterialColorTransform = {
+  mode: "none" | "tint_multiply" | "tint_mix" | "solid_color" | "hsv_adjust";
+  baseColorHex?: string | null;
+  grainColorHex?: string | null;
+  secondaryColorHex?: string | null;
+  tintStrength?: number;
+  grainContrast?: number;
+  hueShiftDegrees?: number;
+  saturationScale?: number;
+  valueScale?: number;
+  contrastScale?: number;
+};
+
+export type MaterialRequestPayload = {
+  materialId?: string;
+  vendor?: string;
+  vendorDecorId?: string;
+  sourceCatalogMaterialId?: string;
+  displayName?: string;
+  demosReferenceImageUrl?: string;
+  demosReferencePageUrl?: string;
+  targetInternalMaterialId?: string;
+  proceduralTemplate?: string;
+  grainPatternId?: string;
+  surfaceProfile?: string | null;
+  baseColor?: string | null;
+  colorTransform?: MaterialColorTransform;
+  roughnessMultiplier?: number;
+  roughnessOverride?: number | null;
+  bumpMultiplier?: number;
+  grainDepth?: number;
+  coatMultiplier?: number;
+  tileSizeMeters?: number;
+  uvScale?: number;
+  rotation?: number;
+  textureStrength?: number;
+  reflectivity?: number;
+  grainDirection?: "horizontal" | "vertical" | "lengthwise" | "none" | "auto" | null;
+  usesExternalVendorTexture?: boolean;
+};
 
 export type SceneExportV1 = {
   meta: {
@@ -13,6 +56,12 @@ export type SceneExportV1 = {
     viewTransform: string;
     exposure?: number;
     look?: string;
+  };
+  renderProfile?: {
+    preset: "interior_app";
+    materialMode: "app";
+    previewResolution: [number, number];
+    finalResolution: [number, number];
   };
   camera: {
     type: "perspective" | "orthographic";
@@ -77,12 +126,20 @@ export type SceneExportV1 = {
         emissive?: { uri: string; repeat?: [number, number]; rotationDeg?: number; offset?: [number, number] };
       };
       envMapIntensity?: number;
+      materialRequest?: MaterialRequestPayload;
     };
     shadow: {
       cast: boolean;
       receive: boolean;
     };
     tags: string[];
+    ifc?: {
+      className: string;
+      predefinedType?: string;
+      elementId?: string;
+      objectType?: string;
+      name?: string;
+    };
   }>;
 };
 
@@ -116,10 +173,32 @@ const decomposeBlenderTRS = (worldMatrixThree: THREE.Matrix4) => {
 
 const threeToBlenderVec3 = (x: number, y: number, z: number) => [x, -z, y] as [number, number, number];
 
+type TextureImageSource = {
+  currentSrc?: unknown;
+  src?: unknown;
+};
+
+type PbrMaterialLike = THREE.Material & {
+  color?: unknown;
+  emissive?: unknown;
+  map?: THREE.Texture;
+  normalMap?: THREE.Texture;
+  roughnessMap?: THREE.Texture;
+  metalnessMap?: THREE.Texture;
+  emissiveMap?: THREE.Texture;
+  normalScale?: unknown;
+  roughness?: unknown;
+  metalness?: unknown;
+  transmission?: unknown;
+  ior?: unknown;
+  emissiveIntensity?: unknown;
+  envMapIntensity?: unknown;
+};
+
 const texToSpec = (tex: THREE.Texture | null | undefined) => {
   if (!tex) return null;
 
-  const img: any = (tex as any).image;
+  const img = tex.image as TextureImageSource | null | undefined;
   const uri =
     typeof img?.currentSrc === "string" && img.currentSrc.trim().length > 0
       ? img.currentSrc
@@ -152,13 +231,315 @@ const inferTags = (name: string, userTags: unknown): string[] => {
     for (const t of userTags) if (typeof t === "string" && t.trim()) tags.push(t.trim());
   }
   const n = name.toLowerCase();
+  const isRoomObject = n.startsWith("room") || n.startsWith("wallmesh") || n.startsWith("floormesh");
+  const isHardware =
+    n.includes("handle") ||
+    n.includes("uchyt") ||
+    n.includes("hinge") ||
+    n.includes("leg") ||
+    n.includes("foot") ||
+    n.includes("screw") ||
+    n.includes("kickclip") ||
+    n.includes("bracket") ||
+    n.includes("knob") ||
+    n.includes("rail");
   if (n.startsWith("room")) tags.push("room");
-  if (n.includes("floor")) tags.push("floor");
-  if (n.includes("wall") || n.includes("back") || n.includes("left") || n.includes("right") || n.includes("ceiling")) tags.push("wall");
+  if (n.startsWith("floormesh") || n.includes("roomfloor")) tags.push("floor");
+  if (isRoomObject && (n.includes("wall") || n.includes("ceiling") || n.includes("roomback") || n.includes("roomfront") || n.includes("roomleft") || n.includes("roomright"))) {
+    tags.push("wall");
+  }
   if (n.includes("wood")) tags.push("wood");
   if (n.includes("glass")) tags.push("glass");
   if (n.includes("metal")) tags.push("metal");
+  if (isHardware) tags.push("hardware", "metal");
+  if (n.includes("worktop") || n.includes("countertop") || n.includes("pracovna")) tags.push("worktop");
+  if (n.includes("backsplash") || n.includes("tile") || n.includes("obklad")) tags.push("tile");
+  if (n.includes("door") || n.includes("dvier")) tags.push("door");
+  if (n.includes("cabinet") || n.includes("skrinka")) tags.push("cabinet");
   return Array.from(new Set(tags));
+};
+
+const extractIfcMetadata = (userData: Record<string, unknown> | undefined) => {
+  const raw = userData?.ifc;
+  if (!raw || typeof raw !== "object") return undefined;
+  const record = raw as Record<string, unknown>;
+  const className = typeof record.className === "string" ? record.className.trim() : "";
+  if (!className) return undefined;
+  const predefinedType = typeof record.predefinedType === "string" && record.predefinedType.trim() ? record.predefinedType.trim() : undefined;
+  const elementId = typeof record.elementId === "string" && record.elementId.trim() ? record.elementId.trim() : undefined;
+  const objectType = typeof record.objectType === "string" && record.objectType.trim() ? record.objectType.trim() : undefined;
+  const name = typeof record.name === "string" && record.name.trim() ? record.name.trim() : undefined;
+  return {
+    className,
+    ...(predefinedType ? { predefinedType } : {}),
+    ...(elementId ? { elementId } : {}),
+    ...(objectType ? { objectType } : {}),
+    ...(name ? { name } : {})
+  };
+};
+
+const isExportHelperMesh = (name: string): boolean => {
+  const n = name.toLowerCase();
+  return (
+    n.startsWith("pick_") ||
+    n.startsWith("outline_") ||
+    n.startsWith("measure_") ||
+    n.startsWith("debug_") ||
+    n.includes("plansymbol") ||
+    n.includes("planfill") ||
+    n.includes("placementpreview")
+  );
+};
+
+const MATERIAL_HEX_RE = /^#[0-9A-Fa-f]{6}$/;
+const GRAIN_DIRECTIONS = new Set(["horizontal", "vertical", "lengthwise", "none", "auto"]);
+const MATERIAL_DEFAULTS = new Map(
+  (materialManifest as Array<{
+    id: string;
+    category?: string;
+    defaultSurfaceProfile?: string;
+    surfaceProfileDefault?: string;
+    tileSizeMeters?: number;
+    uvScaleDefault?: number;
+    grainDirectionDefault?: "horizontal" | "vertical" | "lengthwise" | "none";
+  }>).map((item) => [item.id, item])
+);
+const VENDOR_DECOR_DEFAULTS = new Map(
+  (demosDecorMappings as Array<{
+    vendor: string;
+    vendorDecorId: string;
+    targetInternalMaterialId?: string;
+    proceduralTemplate?: string;
+    grainPatternId?: string;
+    surfaceProfile?: string;
+    colorTransform?: MaterialColorTransform;
+    roughnessMultiplier?: number;
+    roughnessOverride?: number | null;
+    bumpMultiplier?: number;
+    grainDepth?: number;
+    coatMultiplier?: number;
+    tileSizeMeters?: number;
+    uvScale?: number;
+    grainDirectionDefault?: "horizontal" | "vertical" | "lengthwise" | "none";
+  }>).map((item) => [`${item.vendor}:${item.vendorDecorId}`, item])
+);
+
+const normalizeTileScale = (tileSizeMeters: unknown, uvScale: unknown, fallbackTileSize = 0.4, fallbackUvScale = 2.5) => {
+  const tile = toFiniteNumber(tileSizeMeters, NaN);
+  if (Number.isFinite(tile) && tile > 0) {
+    const clampedTile = Math.max(0.01, Math.min(10, tile));
+    return { tileSizeMeters: clampedTile, uvScale: 1 / clampedTile };
+  }
+  const uv = toFiniteNumber(uvScale, NaN);
+  if (Number.isFinite(uv) && uv > 0) {
+    const clampedUv = Math.max(0.1, Math.min(10, uv));
+    return { tileSizeMeters: 1 / clampedUv, uvScale: clampedUv };
+  }
+  return { tileSizeMeters: fallbackTileSize, uvScale: fallbackUvScale };
+};
+
+const defaultSurfaceProfileForMaterial = (
+  defaults:
+    | {
+        category?: string;
+        defaultSurfaceProfile?: string;
+        surfaceProfileDefault?: string;
+      }
+    | undefined
+) =>
+  defaults?.surfaceProfileDefault ?? defaults?.defaultSurfaceProfile ?? (defaults?.category === "wood" ? "wood_standard_matte" : "generic_matte");
+
+const sanitizeMaterialRequest = (value: unknown): MaterialRequestPayload | null => {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const materialId = typeof v.materialId === "string" && v.materialId.trim() ? v.materialId.trim() : undefined;
+  const vendor = typeof v.vendor === "string" && v.vendor.trim() ? v.vendor.trim() : undefined;
+  const vendorDecorId = typeof v.vendorDecorId === "string" && v.vendorDecorId.trim() ? v.vendorDecorId.trim() : undefined;
+  const targetInternalMaterialId =
+    typeof v.targetInternalMaterialId === "string" && v.targetInternalMaterialId.trim()
+      ? v.targetInternalMaterialId.trim()
+      : undefined;
+  if (!materialId && !(vendor && vendorDecorId)) return null;
+  const vendorDefaults = vendor && vendorDecorId ? VENDOR_DECOR_DEFAULTS.get(`${vendor}:${vendorDecorId}`) : undefined;
+  const defaults = materialId
+    ? MATERIAL_DEFAULTS.get(materialId)
+    : targetInternalMaterialId
+      ? MATERIAL_DEFAULTS.get(targetInternalMaterialId)
+      : vendorDefaults?.targetInternalMaterialId
+        ? MATERIAL_DEFAULTS.get(vendorDefaults.targetInternalMaterialId)
+        : undefined;
+  const fallbackSurfaceProfile =
+    vendorDefaults?.surfaceProfile ?? defaultSurfaceProfileForMaterial(defaults);
+  const tileDefaults = normalizeTileScale(
+    v.tileSizeMeters,
+    v.uvScale,
+    vendorDefaults?.tileSizeMeters ?? defaults?.tileSizeMeters ?? 0.4,
+    vendorDefaults?.uvScale ?? defaults?.uvScaleDefault ?? 2.5
+  );
+
+  const out: MaterialRequestPayload = {
+    ...(materialId ? { materialId } : {}),
+    ...(vendor ? { vendor } : {}),
+    ...(vendorDecorId ? { vendorDecorId } : {}),
+    ...(typeof v.sourceCatalogMaterialId === "string" && v.sourceCatalogMaterialId.trim() ? { sourceCatalogMaterialId: v.sourceCatalogMaterialId.trim() } : {}),
+    ...(typeof v.displayName === "string" && v.displayName.trim() ? { displayName: v.displayName.trim() } : {}),
+    ...(typeof v.demosReferenceImageUrl === "string" && /^https?:\/\//i.test(v.demosReferenceImageUrl) ? { demosReferenceImageUrl: v.demosReferenceImageUrl } : {}),
+    ...(typeof v.demosReferencePageUrl === "string" && /^https?:\/\//i.test(v.demosReferencePageUrl) ? { demosReferencePageUrl: v.demosReferencePageUrl } : {}),
+    ...(targetInternalMaterialId ? { targetInternalMaterialId } : vendorDefaults?.targetInternalMaterialId ? { targetInternalMaterialId: vendorDefaults.targetInternalMaterialId } : {}),
+    ...(vendorDefaults?.proceduralTemplate ? { proceduralTemplate: vendorDefaults.proceduralTemplate } : {}),
+    ...(vendorDefaults?.grainPatternId ? { grainPatternId: vendorDefaults.grainPatternId } : {}),
+    surfaceProfile: fallbackSurfaceProfile,
+    ...(vendorDefaults?.colorTransform ? { colorTransform: vendorDefaults.colorTransform } : {}),
+    ...(typeof vendorDefaults?.roughnessMultiplier === "number" ? { roughnessMultiplier: vendorDefaults.roughnessMultiplier } : {}),
+    ...(typeof vendorDefaults?.roughnessOverride === "number" || vendorDefaults?.roughnessOverride === null ? { roughnessOverride: vendorDefaults.roughnessOverride } : {}),
+    ...(typeof vendorDefaults?.bumpMultiplier === "number" ? { bumpMultiplier: vendorDefaults.bumpMultiplier } : {}),
+    ...(typeof vendorDefaults?.grainDepth === "number" ? { grainDepth: vendorDefaults.grainDepth } : {}),
+    ...(typeof vendorDefaults?.coatMultiplier === "number" ? { coatMultiplier: vendorDefaults.coatMultiplier } : {}),
+    tileSizeMeters: tileDefaults.tileSizeMeters,
+    uvScale: tileDefaults.uvScale,
+    grainDirection: vendorDefaults?.grainDirectionDefault ?? defaults?.grainDirectionDefault ?? "none"
+  };
+  if (typeof v.usesExternalVendorTexture === "boolean") out.usesExternalVendorTexture = v.usesExternalVendorTexture;
+  if (typeof v.surfaceProfile === "string" && v.surfaceProfile.trim()) out.surfaceProfile = v.surfaceProfile.trim();
+  if (v.surfaceProfile === null) out.surfaceProfile = null;
+  if (typeof v.baseColor === "string" && MATERIAL_HEX_RE.test(v.baseColor)) out.baseColor = v.baseColor;
+  if (v.baseColor === null) out.baseColor = null;
+  if (v.colorTransform && typeof v.colorTransform === "object") {
+    const transform = v.colorTransform as Partial<MaterialColorTransform>;
+    if (typeof transform.mode === "string") {
+      out.colorTransform = {
+        mode: transform.mode as MaterialColorTransform["mode"],
+        ...(typeof transform.baseColorHex === "string" && MATERIAL_HEX_RE.test(transform.baseColorHex) ? { baseColorHex: transform.baseColorHex } : {}),
+        ...(typeof transform.grainColorHex === "string" && MATERIAL_HEX_RE.test(transform.grainColorHex) ? { grainColorHex: transform.grainColorHex } : {}),
+        ...(typeof transform.secondaryColorHex === "string" && MATERIAL_HEX_RE.test(transform.secondaryColorHex) ? { secondaryColorHex: transform.secondaryColorHex } : {}),
+        ...(transform.baseColorHex === null ? { baseColorHex: null } : {}),
+        ...(typeof transform.tintStrength === "number" && Number.isFinite(transform.tintStrength) ? { tintStrength: clamp01(transform.tintStrength) } : {}),
+        ...(typeof transform.grainContrast === "number" && Number.isFinite(transform.grainContrast) ? { grainContrast: clamp01(transform.grainContrast) } : {}),
+        ...(typeof transform.hueShiftDegrees === "number" && Number.isFinite(transform.hueShiftDegrees) ? { hueShiftDegrees: transform.hueShiftDegrees } : {}),
+        ...(typeof transform.saturationScale === "number" && Number.isFinite(transform.saturationScale) ? { saturationScale: transform.saturationScale } : {}),
+        ...(typeof transform.valueScale === "number" && Number.isFinite(transform.valueScale) ? { valueScale: transform.valueScale } : {}),
+        ...(typeof transform.contrastScale === "number" && Number.isFinite(transform.contrastScale) ? { contrastScale: transform.contrastScale } : {})
+      };
+    }
+  }
+  if (typeof v.proceduralTemplate === "string" && v.proceduralTemplate.trim()) out.proceduralTemplate = v.proceduralTemplate.trim();
+  if (typeof v.grainPatternId === "string" && v.grainPatternId.trim()) out.grainPatternId = v.grainPatternId.trim();
+  for (const key of ["roughnessMultiplier", "bumpMultiplier", "grainDepth", "coatMultiplier"] as const) {
+    const value = toFiniteNumber(v[key], NaN);
+    if (Number.isFinite(value)) out[key] = Math.max(0, Math.min(2, value));
+  }
+  const roughnessOverride = toFiniteNumber(v.roughnessOverride, NaN);
+  if (Number.isFinite(roughnessOverride)) out.roughnessOverride = clamp01(roughnessOverride);
+  if (v.roughnessOverride === null) out.roughnessOverride = null;
+
+  const rotation = toFiniteNumber(v.rotation, NaN);
+  if (Number.isFinite(rotation)) out.rotation = ((rotation % 360) + 360) % 360;
+  const textureStrength = toFiniteNumber(v.textureStrength, NaN);
+  if (Number.isFinite(textureStrength)) out.textureStrength = clamp01(textureStrength);
+  const reflectivity = toFiniteNumber(v.reflectivity, NaN);
+  if (Number.isFinite(reflectivity)) out.reflectivity = clamp01(reflectivity);
+  if (typeof v.grainDirection === "string" && GRAIN_DIRECTIONS.has(v.grainDirection)) {
+    out.grainDirection =
+      v.grainDirection === "auto"
+        ? vendorDefaults?.grainDirectionDefault ?? defaults?.grainDirectionDefault ?? "none"
+        : (v.grainDirection as MaterialRequestPayload["grainDirection"]);
+  } else if (v.grainDirection === null) {
+    out.grainDirection = vendorDefaults?.grainDirectionDefault ?? defaults?.grainDirectionDefault ?? "none";
+  }
+  return out;
+};
+
+const defaultMaterialRequestForTags = (tags: string[]): MaterialRequestPayload | null => {
+  if (tags.includes("glass")) return null;
+  if (tags.includes("hardware") || tags.includes("metal")) {
+    return {
+      materialId: "metal_brushed_steel",
+      surfaceProfile: "generic_matte",
+      baseColor: null,
+      tileSizeMeters: 0.4,
+      uvScale: 2.5,
+      rotation: 0,
+      textureStrength: 0.5,
+      reflectivity: 0.55,
+      grainDirection: "none"
+    };
+  }
+  if (tags.includes("tile")) {
+    return {
+      materialId: "tile_white_simple",
+      surfaceProfile: "generic_matte",
+      baseColor: null,
+      tileSizeMeters: 0.4,
+      uvScale: 2.5,
+      rotation: 0,
+      textureStrength: 0.5,
+      reflectivity: 0.35,
+      grainDirection: "none"
+    };
+  }
+  if (tags.includes("worktop")) {
+    return {
+      materialId: "stone_marble_white_grey",
+      surfaceProfile: "generic_matte",
+      baseColor: null,
+      tileSizeMeters: 0.4,
+      uvScale: 2.5,
+      rotation: 0,
+      textureStrength: 0.7,
+      reflectivity: 0.45,
+      grainDirection: "lengthwise"
+    };
+  }
+  if (tags.includes("wall")) {
+    return {
+      materialId: "wall_painted_white",
+      surfaceProfile: "generic_matte",
+      baseColor: null,
+      tileSizeMeters: 0.4,
+      uvScale: 2.5,
+      rotation: 0,
+      textureStrength: 0.35,
+      reflectivity: 0.2,
+      grainDirection: "none"
+    };
+  }
+  if (tags.includes("floor")) {
+    return {
+      materialId: "stone_concrete_smooth",
+      surfaceProfile: "generic_matte",
+      baseColor: null,
+      tileSizeMeters: 0.4,
+      uvScale: 2.5,
+      rotation: 0,
+      textureStrength: 0.45,
+      reflectivity: 0.25,
+      grainDirection: "none"
+    };
+  }
+  return {
+    materialId: "wood_oak_natural",
+    surfaceProfile: "wood_standard_matte",
+    baseColor: null,
+    tileSizeMeters: 0.4,
+    uvScale: 2.5,
+    rotation: 0,
+    textureStrength: 0.5,
+    reflectivity: 0.35,
+    grainDirection: tags.includes("door") || tags.includes("cabinet") ? "vertical" : "none"
+  };
+};
+
+const extractMaterialRequest = (mesh: THREE.Mesh, tags: string[]) => {
+  const data = mesh.userData as Record<string, unknown>;
+  if (tags.includes("hardware")) {
+    return defaultMaterialRequestForTags(tags);
+  }
+  return (
+    sanitizeMaterialRequest(data.materialRequest) ??
+    sanitizeMaterialRequest(data.materialConfig) ??
+    sanitizeMaterialRequest(data.blenderMaterial) ??
+    defaultMaterialRequestForTags(tags)
+  );
 };
 
 const extractPbr = (material: THREE.Material | null | undefined, tags: string[]) => {
@@ -175,15 +556,15 @@ const extractPbr = (material: THREE.Material | null | undefined, tags: string[])
 
   if (!material) return fallback;
 
-  const m = material as any;
+  const m = material as PbrMaterialLike;
   const color = m.color instanceof THREE.Color ? m.color : null;
   const emissive = m.emissive instanceof THREE.Color ? m.emissive : null;
 
-  const baseColorTex = texToSpec(m.map as THREE.Texture | undefined);
-  const normalTex = texToSpec(m.normalMap as THREE.Texture | undefined);
-  const roughnessTex = texToSpec(m.roughnessMap as THREE.Texture | undefined);
-  const metallicTex = texToSpec(m.metalnessMap as THREE.Texture | undefined);
-  const emissiveTex = texToSpec(m.emissiveMap as THREE.Texture | undefined);
+  const baseColorTex = texToSpec(m.map);
+  const normalTex = texToSpec(m.normalMap);
+  const roughnessTex = texToSpec(m.roughnessMap);
+  const metallicTex = texToSpec(m.metalnessMap);
+  const emissiveTex = texToSpec(m.emissiveMap);
   const normalScale =
     m.normalScale instanceof THREE.Vector2 && Number.isFinite(m.normalScale.x) && Number.isFinite(m.normalScale.y)
       ? (Math.abs(m.normalScale.x) + Math.abs(m.normalScale.y)) / 2
@@ -254,6 +635,7 @@ export type ExportSceneArgs = {
     hdriRotationDeg?: number;
   };
   colorManagement?: { viewTransform: string; exposure?: number; look?: string };
+  renderProfile?: SceneExportV1["renderProfile"];
   lighting?: { sunDirection?: THREE.Vector3; sunStrength?: number; sunAngle?: number };
   window?: { opening?: { center: THREE.Vector3; inwardNormal: THREE.Vector3; width: number; height: number } | null; daylightIntensity?: number };
   includeInvisible?: boolean;
@@ -266,20 +648,26 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
   args.camera.updateMatrixWorld(true);
   const cameraWorld = args.camera.matrixWorld.clone();
   const camTRS = decomposeBlenderTRS(cameraWorld);
-  const isPerspective = (args.camera as any).isPerspectiveCamera === true;
-  const isOrtho = (args.camera as any).isOrthographicCamera === true;
+  const perspectiveCamera = args.camera instanceof THREE.PerspectiveCamera ? args.camera : null;
+  const orthoCamera = args.camera instanceof THREE.OrthographicCamera ? args.camera : null;
+  const isPerspective = !!perspectiveCamera;
+  const isOrtho = !!orthoCamera;
   const cameraType: SceneExportV1["camera"]["type"] = isOrtho ? "orthographic" : "perspective";
-  const fov = isPerspective && typeof (args.camera as any).fov === "number" ? toFiniteNumber((args.camera as any).fov, 35) : undefined;
+  const fov = perspectiveCamera ? toFiniteNumber(perspectiveCamera.fov, 35) : undefined;
   const orthoScale =
-    isOrtho &&
-    typeof (args.camera as any).left === "number" &&
-    typeof (args.camera as any).right === "number" &&
-    Number.isFinite((args.camera as any).left) &&
-    Number.isFinite((args.camera as any).right)
-      ? Math.max(0.0001, Math.abs((args.camera as any).right - (args.camera as any).left))
+    orthoCamera && Number.isFinite(orthoCamera.left) && Number.isFinite(orthoCamera.right)
+      ? Math.max(0.0001, Math.abs(orthoCamera.right - orthoCamera.left))
       : undefined;
-  const near = typeof (args.camera as any).near === "number" && Number.isFinite((args.camera as any).near) ? (args.camera as any).near : undefined;
-  const far = typeof (args.camera as any).far === "number" && Number.isFinite((args.camera as any).far) ? (args.camera as any).far : undefined;
+  const near = perspectiveCamera
+    ? perspectiveCamera.near
+    : orthoCamera
+      ? orthoCamera.near
+      : undefined;
+  const far = perspectiveCamera
+    ? perspectiveCamera.far
+    : orthoCamera
+      ? orthoCamera.far
+      : undefined;
 
   const env = args.environment ?? { hdriPath: null, hdriStrength: 0.35 };
   const hdriStrength = Math.max(0, toFiniteNumber(env.hdriStrength, 0.35));
@@ -298,12 +686,13 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
   args.scene.updateMatrixWorld(true);
 
   args.scene.traverse((obj) => {
-    const mesh = obj as THREE.Mesh;
-    if (!(mesh as any).isMesh) return;
+    if (!(obj instanceof THREE.Mesh)) return;
+    const mesh = obj;
     if (!args.includeInvisible && !mesh.visible) return;
+    if (isExportHelperMesh(mesh.name || "")) return;
 
     const geo = mesh.geometry as THREE.BufferGeometry | undefined;
-    if (!geo || !(geo as any).isBufferGeometry) {
+    if (!geo || !(geo instanceof THREE.BufferGeometry)) {
       warnings.push(`Skipping non-buffer geometry mesh: ${mesh.name || mesh.uuid}`);
       return;
     }
@@ -315,7 +704,7 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
     }
 
     const idx = geo.getIndex();
-    const indices = idx ? Array.from(idx.array as any as ArrayLike<number>) : Array.from({ length: posAttr.count }, (_, i) => i);
+    const indices = idx ? Array.from(idx.array as ArrayLike<number>) : Array.from({ length: posAttr.count }, (_, i) => i);
 
     const vertices: number[] = new Array(posAttr.count * 3);
     for (let i = 0; i < posAttr.count; i++) {
@@ -360,9 +749,16 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
     const kind: SceneExportV1["objects"][number]["geometry"]["kind"] =
       geo.type === "BoxGeometry" ? "box" : geo.type === "PlaneGeometry" ? "plane" : "bufferGeometry";
 
-    const tags = inferTags(mesh.name || "Mesh", (mesh.userData as any)?.tags);
+    const userData = mesh.userData as Record<string, unknown>;
+    const ifc = extractIfcMetadata(userData);
+    const tags = inferTags(mesh.name || "Mesh", userData?.tags);
+    if (ifc?.className) tags.push(ifc.className, `ifc:${ifc.className}`);
     const mat = Array.isArray(mesh.material) ? (mesh.material[0] ?? null) : mesh.material;
-    const material = extractPbr(mat, tags);
+    const materialRequest = extractMaterialRequest(mesh, tags);
+    const material = {
+      ...extractPbr(mat, tags),
+      ...(materialRequest ? { materialRequest } : {})
+    };
 
     const transform = decomposeBlenderTRS(mesh.matrixWorld);
 
@@ -379,7 +775,8 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
       transform,
       material,
       shadow: { cast: !!mesh.castShadow, receive: !!mesh.receiveShadow },
-      tags
+      tags: Array.from(new Set(tags)),
+      ...(ifc ? { ifc } : {})
     });
   });
 
@@ -394,6 +791,7 @@ export function exportSceneToJson(args: ExportSceneArgs): SceneExportV1 {
       ...(warnings.length ? { warnings } : {})
     },
     ...(args.colorManagement ? { colorManagement: args.colorManagement } : {}),
+    ...(args.renderProfile ? { renderProfile: args.renderProfile } : {}),
     camera: {
       type: cameraType,
       position: camTRS.position,

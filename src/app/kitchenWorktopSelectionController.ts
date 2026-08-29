@@ -1,26 +1,17 @@
 import type { KitchenWorktopInstance } from "./localTypes";
-
-type KitchenGroupLookup = {
-  id: string;
-};
-
-type KitchenModeWorktopSelectionApi = {
-  findKitchenGroup: (id: string) => KitchenGroupLookup | null;
-};
-
-type MarqueeState = {
-  active: boolean;
-  pending: boolean;
-  pointerId: number | null;
-  hitSomething: boolean;
-};
+import { getKitchenWorktopPolygon } from "../layout/worktopGeometry";
+import { pointInPolygonXZ } from "./sharedUtils";
+import type { KitchenModeGroupSelectionApi, SelectionMarqueeState } from "./selectionControllerTypes";
+import { findKitchenWorktopSegmentAtPoint } from "../layout/worktopSegmentEditing";
 
 type KitchenWorktopSelectionControllerContext = {
-  marquee: MarqueeState;
+  kitchenWorktops: KitchenWorktopInstance[];
+  marquee: SelectionMarqueeState;
   marqueeEl: HTMLElement;
   findKitchenWorktop: (id: string) => KitchenWorktopInstance | null;
+  getActiveKitchenGroupId: () => string | null;
   getKitchenEditMode: () => boolean;
-  getKitchenMode: () => KitchenModeWorktopSelectionApi | null;
+  getKitchenMode: () => KitchenModeGroupSelectionApi | null;
   setSelectedKitchenGroup: (groupId: string | null) => void;
 };
 
@@ -33,10 +24,24 @@ export function createKitchenWorktopSelectionController(ctx: KitchenWorktopSelec
     ctx.marqueeEl.style.display = "none";
   };
 
-  const beginKitchenWorktopSelection = (worktopId: string, ev: PointerEvent) => {
+  const beginKitchenWorktopSelection = (
+    worktopId: string,
+    ev: PointerEvent,
+    pointMm?: { x: number; z: number }
+  ) => {
     const worktop = ctx.findKitchenWorktop(worktopId);
     if (!worktop) return false;
     cancelPendingMarqueeHit(ev.pointerId);
+
+    if (ctx.getKitchenEditMode() && worktop.kitchenGroupId !== ctx.getActiveKitchenGroupId()) return false;
+
+    if (ctx.getKitchenEditMode() && pointMm) {
+      const segmentIndex = findKitchenWorktopSegmentAtPoint(worktop.params, pointMm);
+      if (segmentIndex != null && worktop.kitchenGroupId) {
+        ctx.setSelectedKitchenGroup(worktop.kitchenGroupId);
+        return ctx.getKitchenMode()?.selectWorktopSegment?.(worktop.id, segmentIndex) ?? false;
+      }
+    }
 
     if (!ctx.getKitchenEditMode() && worktop.kitchenGroupId) {
       const group = ctx.getKitchenMode()?.findKitchenGroup(worktop.kitchenGroupId) ?? null;
@@ -52,5 +57,25 @@ export function createKitchenWorktopSelectionController(ctx: KitchenWorktopSelec
     return false;
   };
 
-  return { beginKitchenWorktopSelection };
+  const findSelectableFloorplanWorktopAtPoint = (pointMm: { x: number; z: number }) => {
+    const pointWorld = { x: pointMm.x / 1000, z: pointMm.z / 1000 };
+    let best: { id: string; areaM2: number } | null = null;
+
+    for (const worktop of ctx.kitchenWorktops) {
+      const polygon = getKitchenWorktopPolygon(worktop.params).map((point) => ({ x: point.x, z: point.z }));
+      if (polygon.length < 3) continue;
+      if (!pointInPolygonXZ(pointWorld, polygon)) continue;
+      const areaM2 = Math.abs(
+        polygon.reduce((sum, point, index) => {
+          const next = polygon[(index + 1) % polygon.length]!;
+          return sum + point.x * next.z - next.x * point.z;
+        }, 0) / 2
+      );
+      if (!best || areaM2 < best.areaM2) best = { id: worktop.id, areaM2 };
+    }
+
+    return best?.id ?? null;
+  };
+
+  return { beginKitchenWorktopSelection, findSelectableFloorplanWorktopAtPoint };
 }

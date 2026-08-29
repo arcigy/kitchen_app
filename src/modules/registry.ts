@@ -4,6 +4,7 @@ import { makeDefaultModuleParams } from "../model/cabinetTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { BOMResult } from "../layout/bom/bomTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { CornerShelfLowerParams } from "./cornerShelfLower/types";
 import { buildCornerShelfLower } from "./cornerShelfLower/geometry";
 import { createCornerShelfLowerControls } from "./cornerShelfLower/controls";
@@ -20,10 +21,20 @@ import type { FridgeTallParams } from "./fridgeTall/types";
 import { buildFridgeTall } from "./fridgeTall/geometry";
 import { createFridgeTallControls } from "./fridgeTall/controls";
 import { calculateBOM as calculateFridgeTallBOM } from "./fridgeTall/calculation";
+import type { PinoSideCabinetParams } from "./pinoSideCabinet/types";
+import { buildPinoSideCabinet } from "./pinoSideCabinet/geometry";
+import { createPinoSideCabinetControls } from "./pinoSideCabinet/controls";
+import { calculateBOM as calculatePinoSideCabinetBOM } from "./pinoSideCabinet/calculation";
 import type { SwingShelvesLowParams } from "./swingShelvesLow/types";
 import { buildSwingShelvesLow } from "./swingShelvesLow/geometry";
 import { createSwingShelvesLowControls } from "./swingShelvesLow/controls";
 import { calculateBOM as calculateSwingShelvesLowBOM } from "./swingShelvesLow/calculation";
+import { FWM_FURNITURE_SPECS, type FwmFurnitureSpec } from "./fwmFurniture/definitions";
+import type { FwmFurnitureParams } from "./fwmFurniture/types";
+import { makeDefaultFwmFurnitureParams } from "./fwmFurniture/types";
+import { buildFwmFurniture } from "./fwmFurniture/geometry";
+import { createFwmFurnitureControls } from "./fwmFurniture/controls";
+import { calculateFwmFurnitureBOM } from "./fwmFurniture/calculation";
 
 export type ModuleControlsApi = {
   syncFromParams: () => void;
@@ -38,6 +49,12 @@ export type ModuleControlsArgs = {
   clientCatalog: ClientCatalog;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;
+  createParameterPreset?: (args: {
+    modulePackage: FurnQuoteModulePackage;
+    parameters: Record<string, unknown>;
+    name: string;
+    note: string;
+  }) => Promise<{ modulePackage: FurnQuoteModulePackage; presetId: string } | null>;
 };
 
 export type ModuleCapabilityFlags = {
@@ -63,6 +80,24 @@ export type ModuleDescriptor = {
   calculateBOM: (params: ModuleParams, ctx: KitchenContext, catalog: ClientCatalog) => BOMResult;
   capabilities: ModuleCapabilityFlags;
 };
+
+const fwmFurnitureDescriptors: ModuleDescriptor[] = (FWM_FURNITURE_SPECS as readonly FwmFurnitureSpec[]).map((spec) => ({
+  type: spec.moduleType as ModuleType,
+  folder: "fwmFurniture",
+  label: spec.displayName,
+  packageName: `module-builder-${spec.moduleType}`,
+  packageVersion: "1.0.0",
+  defaultParams: () => makeDefaultFwmFurnitureParams(spec.moduleType as FwmFurnitureParams["type"]) as ModuleParams,
+  build: (params, catalog) => buildFwmFurniture(params as FwmFurnitureParams, catalog),
+  createControls: (container, params, args) => createFwmFurnitureControls(container, params as FwmFurnitureParams, args),
+  calculateBOM: (params, ctx, catalog) => calculateFwmFurnitureBOM(params as FwmFurnitureParams, ctx, catalog),
+  capabilities: {
+    hasWorktop: spec.hasWorktop === true,
+    supportsKitchenContextDimensions: !!spec.kitchenRole,
+    supportsKitchenContextMaterials: !!spec.kitchenRole,
+    supportsWallMountedVariant: spec.wallMounted === true
+  }
+}));
 
 export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
   {
@@ -128,6 +163,21 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     }
   },
   {
+    type: "pino_side_cabinet",
+    folder: "pinoSideCabinet",
+    label: "PINO boční skříňka",
+    packageName: "module-builder-pino_side_cabinet",
+    packageVersion: "1.0.0",
+    defaultParams: () => makeDefaultModuleParams("pino_side_cabinet"),
+    build: (params, catalog) => buildPinoSideCabinet(params as PinoSideCabinetParams, catalog),
+    createControls: (container, params, args) => createPinoSideCabinetControls(container, params as PinoSideCabinetParams, args),
+    calculateBOM: (params, ctx, catalog) => calculatePinoSideCabinetBOM(params as PinoSideCabinetParams, ctx, catalog),
+    capabilities: {
+          "supportsKitchenContextDimensions": true,
+          "supportsKitchenContextMaterials": true
+    }
+  },
+  {
     type: "swing_shelves_low",
     folder: "swingShelvesLow",
     label: "Shelf Doors",
@@ -142,7 +192,8 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
           "supportsKitchenContextDimensions": true,
           "supportsKitchenContextMaterials": true
     }
-  }
+  },
+  ...fwmFurnitureDescriptors
 ] as const;
 
 const moduleDescriptorMap = new Map<ModuleType, ModuleDescriptor>(

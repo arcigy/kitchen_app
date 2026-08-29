@@ -3,6 +3,8 @@ import type { AssociativeMeasureKind } from "./measureAssociative";
 import type { PlanSnapBinding } from "./planSnap";
 import { axisLockXZ, planarDistanceMm, worldToScreen } from "./sharedUtils";
 import type { SnapOverlayController } from "./snapOverlay";
+import { createInputElement } from "./propsPanelElements";
+import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 
 export type WallEditHud = {
   root: HTMLDivElement;
@@ -121,12 +123,24 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   const wallEditHud: WallEditHud = {
     root: document.createElement("div"),
     label: document.createElement("div"),
-    input: document.createElement("input"),
+    input: createInputElement("text", "", {
+      autocomplete: "off",
+      id: "wall-edit-length",
+      inputMode: "numeric",
+      name: "wall-edit-length",
+      placeholder: "mm"
+    }),
     lenLine: document.createElement("div"),
     lenExtA: document.createElement("div"),
     lenExtB: document.createElement("div"),
     offsetLabel: document.createElement("div"),
-    offsetInput: document.createElement("input"),
+    offsetInput: createInputElement("text", "", {
+      autocomplete: "off",
+      id: "wall-edit-offset",
+      inputMode: "numeric",
+      name: "wall-edit-offset",
+      placeholder: "mm"
+    }),
     offsetLine: document.createElement("div"),
     offsetTickA: document.createElement("div"),
     offsetTickB: document.createElement("div"),
@@ -140,7 +154,13 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   const moduleEditHud: ModuleEditHud = {
     root: document.createElement("div"),
     label: document.createElement("div"),
-    input: document.createElement("input"),
+    input: createInputElement("text", "", {
+      autocomplete: "off",
+      id: "module-edit-width",
+      inputMode: "numeric",
+      name: "module-edit-width",
+      placeholder: "mm"
+    }),
     widthLine: document.createElement("div"),
     widthExtA: document.createElement("div"),
     widthExtB: document.createElement("div")
@@ -236,13 +256,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   root.appendChild(label);
 
   const input = wallEditHud.input;
-  input.id = "wall-edit-length";
-  input.name = "wall-edit-length";
-  input.type = "text";
-  input.inputMode = "numeric";
-  input.placeholder = "mm";
   input.setAttribute("aria-label", "Wall length in millimeters");
-  input.autocomplete = "off";
   input.style.position = "absolute";
   input.style.display = "none";
   input.style.pointerEvents = "auto";
@@ -277,13 +291,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   root.appendChild(oLabel);
 
   const oInput = wallEditHud.offsetInput;
-  oInput.id = "wall-edit-offset";
-  oInput.name = "wall-edit-offset";
-  oInput.type = "text";
-  oInput.inputMode = "numeric";
-  oInput.placeholder = "mm";
   oInput.setAttribute("aria-label", "Wall offset in millimeters");
-  oInput.autocomplete = "off";
   oInput.style.position = "absolute";
   oInput.style.display = "none";
   oInput.style.pointerEvents = "auto";
@@ -318,13 +326,7 @@ export function createMeasureTools(args: CreateMeasureToolsArgs) {
   root.appendChild(mLabel);
 
   const mInput = moduleEditHud.input;
-  mInput.id = "module-edit-width";
-  mInput.name = "module-edit-width";
-  mInput.type = "text";
-  mInput.inputMode = "numeric";
-  mInput.placeholder = "mm";
   mInput.setAttribute("aria-label", "Module width in millimeters");
-  mInput.autocomplete = "off";
   mInput.style.position = "absolute";
   mInput.style.display = "none";
   mInput.style.pointerEvents = "auto";
@@ -769,7 +771,7 @@ export function applyMeasureAxisAssist(
   point: THREE.Vector3,
   camera: THREE.Camera,
   rect: DOMRect,
-  thresholdPx = 12
+  thresholdPx: number = SNAP_DISTANCE_PX.measure2dAxis
 ) {
   if (!firstPoint) return null;
   const axisPoint = axisLockXZ(firstPoint, point);

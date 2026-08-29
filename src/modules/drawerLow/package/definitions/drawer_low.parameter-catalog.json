@@ -125,7 +125,7 @@
       "group": "drawers",
       "type": "number",
       "required": true,
-      "defaultValue": 8,
+      "defaultValue": 10,
       "description": "Exported parameter drawer back reserve mm."
     },
     {

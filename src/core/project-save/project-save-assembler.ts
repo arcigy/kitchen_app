@@ -1,7 +1,11 @@
 import type { ClientCatalog } from "../catalog/catalog-types";
 import { computeModulePackageHash } from "../module-package/module-package-file";
 import type { FurnQuoteModulePackage } from "../module-package/module-package-types";
-import type { ProjectMetadata } from "../project/project-types";
+import {
+  createEmptyProjectMaterialAssignmentsState,
+  type ProjectMaterialAssignmentsState
+} from "../project-materials/project-material-types";
+import type { ProjectMetadata, ProjectPreview } from "../project/project-types";
 import type { ProjectAssetManifest, ProjectCatalogSnapshot, ProjectSaveFile, UsedModulePackageSnapshot } from "./project-save-types";
 import { CURRENT_PROJECT_SAVE_VERSION } from "./project-save-types";
 import { validateProjectSaveFile } from "./project-save-validation";
@@ -22,12 +26,15 @@ export type ProjectSaveAssemblerInput = {
   layoutState: unknown;
   kitchenState: unknown;
   moduleInstances: unknown[];
+  materialAssignments?: ProjectMaterialAssignmentsState;
   sceneState: unknown;
   editorState?: unknown;
+  recentActivity?: unknown;
   cameraState?: unknown;
   selections?: unknown;
   pricingSettings?: unknown;
   quoteSettings?: unknown;
+  projectPreview?: ProjectPreview;
   bomSnapshot?: unknown;
   assets?: ProjectAssetManifest;
   modulePackages?: FurnQuoteModulePackage[];
@@ -89,15 +96,46 @@ function createUsedModulePackageSnapshots(
     });
 }
 
+function createPriceListSnapshot(catalog: ClientCatalog, usedCatalogIds: readonly string[]) {
+  const used = new Set(usedCatalogIds);
+  return {
+    ...catalog.priceList,
+    prices: Object.fromEntries(Object.entries(catalog.priceList.prices).filter(([id]) => used.has(id)))
+  };
+}
+
 export function createCatalogSnapshot(
   catalog: ClientCatalog,
   source: unknown,
   modulePackages: readonly FurnQuoteModulePackage[] = []
 ): ProjectCatalogSnapshot {
-  const usedMaterialIds = collectStringIds(source, new Set(["materialId", "frontsMaterialId", "corpusMaterialId", "backMaterialId", "drawerBottomMaterialId", "worktopMaterialId"]));
-  const usedComponentIds = collectStringIds(source, new Set(["componentId", "handleComponentId", "hingeComponentId", "drawerSystemComponentId"]));
+  const usedMaterialIds = collectStringIds(source, new Set([
+    "materialId",
+    "frontsMaterialId",
+    "corpusMaterialId",
+    "backMaterialId",
+    "drawerBottomMaterialId",
+    "worktopMaterialId",
+    "edgeFrontId",
+    "edgeOtherId"
+  ]));
+  const usedComponentIds = collectStringIds(source, new Set([
+    "componentId",
+    "handleComponentId",
+    "hingeComponentId",
+    "drawerSystemComponentId",
+    "runnerComponentId",
+    "liftUpComponentId",
+    "legComponentId",
+    "fastenerComponentId"
+  ]));
   const usedModuleTypes = collectStringIds(source, new Set(["type", "moduleType"]));
   const usedModulePackageSnapshots = createUsedModulePackageSnapshots(modulePackages, usedModuleTypes, source);
+  const usedCatalogIds = [...new Set([...usedMaterialIds, ...usedComponentIds])].sort();
+  const materials = catalog.materials.filter((item) => usedMaterialIds.includes(item.id));
+  const components = catalog.components.filter((item) => usedComponentIds.includes(item.id));
+  const modules = catalog.modules.filter((item) => usedModuleTypes.includes(item.moduleType));
+  const priceListSnapshot = createPriceListSnapshot(catalog, usedCatalogIds);
   return {
     catalogVersion: catalog.meta.catalogVersion,
     capturedAt: nowIso(),
@@ -105,11 +143,17 @@ export function createCatalogSnapshot(
     usedComponentIds,
     usedModuleTypes,
     usedModulePackageSnapshots,
-    materials: catalog.materials.filter((item) => usedMaterialIds.includes(item.id)),
-    components: catalog.components.filter((item) => usedComponentIds.includes(item.id)),
-    modules: catalog.modules.filter((item) => usedModuleTypes.includes(item.moduleType)),
-    priceListSnapshot: cloneJson(catalog.priceList),
-    fullCatalog: cloneJson(catalog)
+    materials,
+    components,
+    modules,
+    priceListSnapshot: cloneJson(priceListSnapshot),
+    fullCatalog: cloneJson({
+      ...catalog,
+      materials,
+      components,
+      modules,
+      priceList: priceListSnapshot
+    })
   };
 }
 
@@ -119,10 +163,12 @@ export function assembleProjectSaveFile(input: ProjectSaveAssemblerInput): Proje
   const layoutState = cloneJson(input.layoutState);
   const kitchenState = cloneJson(input.kitchenState);
   const moduleInstances = cloneJson(input.moduleInstances);
+  const materialAssignments = cloneJson(input.materialAssignments ?? createEmptyProjectMaterialAssignmentsState());
   const appStateSource = {
     layoutState,
     kitchenState,
     moduleInstances,
+    materialAssignments,
     pricingSettings: input.pricingSettings,
     quoteSettings: input.quoteSettings
   };
@@ -143,6 +189,7 @@ export function assembleProjectSaveFile(input: ProjectSaveAssemblerInput): Proje
         layoutState,
         kitchenState,
         moduleInstances,
+        materialAssignments: cloneJson(materialAssignments),
         pricingSettings: cloneJson(input.pricingSettings),
         quoteSettings: cloneJson(input.quoteSettings),
         bomSnapshot: cloneJson(input.bomSnapshot),
@@ -155,12 +202,15 @@ export function assembleProjectSaveFile(input: ProjectSaveAssemblerInput): Proje
       layout: layoutState,
       kitchen: kitchenState,
       modules: moduleInstances,
+      materialAssignments,
       scene: cloneJson(input.sceneState),
       editor: cloneJson(input.editorState),
+      recentActivity: cloneJson(input.recentActivity),
       camera: cloneJson(input.cameraState),
       selections: cloneJson(input.selections),
       pricingSettings: cloneJson(input.pricingSettings),
-      quoteSettings: cloneJson(input.quoteSettings)
+      quoteSettings: cloneJson(input.quoteSettings),
+      projectPreview: cloneJson(input.projectPreview)
     },
     assets: input.assets ?? { bundled: [], external: [], missing: [], generated: [] },
     integrity: {

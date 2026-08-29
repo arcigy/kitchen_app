@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { disposeObject3D } from "../core/dispose";
+import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import { buildSectionMarkerGeometry } from "./sectionViews";
 import type { FloorBoundaryPoint, SectionInstance, SectionParams } from "./localTypes";
 import type { PlanSnapResult } from "./planSnap";
@@ -88,8 +89,7 @@ export function createSectionDrawController(ctx: SectionDrawControllerContext) {
     ctx.hideHoverCursor();
     ctx.drawSnapOverlay.hide();
     if (!opts?.silent) {
-      ctx.setUnderlayStatus("");
-      ctx.mountProps();
+      reportEditorToolEntryStatus(ctx, "");
     }
   };
 
@@ -106,8 +106,7 @@ export function createSectionDrawController(ctx: SectionDrawControllerContext) {
     cancelSectionDraw({ silent: true });
     ctx.setSelectedSection(section.id);
     ctx.activateViewerTab(`section:${section.id}`);
-    ctx.setUnderlayStatus(`Section ${section.params.name} created.`);
-    ctx.mountProps();
+    reportEditorToolEntryStatus(ctx, `Section ${section.params.name} created.`);
     return true;
   };
 

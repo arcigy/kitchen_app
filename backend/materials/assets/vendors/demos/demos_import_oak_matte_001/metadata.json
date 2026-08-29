@@ -1,0 +1,16 @@
+{
+  "width": null,
+  "height": null,
+  "mode": null,
+  "format": null,
+  "sourcePath": "assets/materials/wood/wood_oak_natural/maps/basecolor.jpg",
+  "importedAt": "2026-05-20T16:11:49.834838+00:00",
+  "hasNormal": true,
+  "hasRoughness": true,
+  "normalMeta": {
+    "sourcePath": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\assets\\materials\\wood\\wood_oak_natural\\maps\\normal.jpg"
+  },
+  "roughnessMeta": {
+    "sourcePath": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\assets\\materials\\wood\\wood_oak_natural\\maps\\roughness.jpg"
+  }
+}

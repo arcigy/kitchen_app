@@ -1,0 +1,175 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { appendMutedText, createButtonElement, createCheckboxElement, createFileInputElement, createHtmlButtonElement, createInputElement, createMutedText, createRangeElement, createSelectElement, createTextElement } from "./propsPanelElements";
+import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
+
+describe("props panel elements", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("creates reusable plain text elements", () => {
+    installFakeDocument();
+
+    const element = createTextElement("Value text") as unknown as FakeElement;
+
+    expect(element.className).toBe("");
+    expect(element.textContent).toBe("Value text");
+  });
+
+  it("creates reusable text button elements", () => {
+    installFakeDocument();
+
+    const button = createButtonElement("Clear") as unknown as FakeElement;
+
+    expect(button.type).toBe("button");
+    expect(button.textContent).toBe("Clear");
+  });
+
+  it("creates reusable submit button elements", () => {
+    installFakeDocument();
+
+    const button = createButtonElement("Prihlasit", { type: "submit" }) as unknown as FakeElement;
+
+    expect(button.type).toBe("submit");
+    expect(button.textContent).toBe("Prihlasit");
+  });
+
+  it("creates reusable html button elements with labels", () => {
+    installFakeDocument();
+
+    const button = createHtmlButtonElement("&#8596;", {
+      ariaLabel: "Prehodit lave/prave dvere",
+      className: "door-swing-button",
+      title: "Prehodit na lave dvere"
+    }) as unknown as FakeElement;
+
+    expect(button.type).toBe("button");
+    expect(button.className).toBe("door-swing-button");
+    expect(button.innerHTML).toBe("&#8596;");
+    expect(button.title).toBe("Prehodit na lave dvere");
+    expect(button.attributes.get("aria-label")).toBe("Prehodit lave/prave dvere");
+  });
+
+  it("creates reusable select elements with stable option values and labels", () => {
+    installFakeDocument();
+
+    const select = createSelectElement("back", [
+      { value: "center", label: "Center" },
+      { value: "back", label: "Back edge" }
+    ]) as unknown as FakeElement;
+
+    expect(select.value).toBe("back");
+    expect(select.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["center", "Center"],
+      ["back", "Back edge"]
+    ]);
+  });
+
+  it("creates reusable text input elements with stable values", () => {
+    installFakeDocument();
+
+    const input = createInputElement("text", "Ground floor") as unknown as FakeElement;
+
+    expect(input.type).toBe("text");
+    expect(input.value).toBe("Ground floor");
+  });
+
+  it("creates reusable password input elements with form attributes", () => {
+    installFakeDocument();
+
+    const input = createInputElement("password", "", {
+      autocomplete: "current-password",
+      id: "login-password",
+      inputMode: "text",
+      name: "password",
+      placeholder: "Zadaj heslo",
+      required: true
+    }) as unknown as FakeElement;
+
+    expect(input.type).toBe("password");
+    expect(input.autocomplete).toBe("current-password");
+    expect(input.id).toBe("login-password");
+    expect(input.inputMode).toBe("text");
+    expect(input.name).toBe("password");
+    expect(input.placeholder).toBe("Zadaj heslo");
+    expect(input.required).toBe(true);
+  });
+
+  it("creates reusable number input elements with stable bounds, step, placeholder, and values", () => {
+    installFakeDocument();
+
+    const input = createInputElement("number", "120", { min: "1", max: "4096", step: "1", placeholder: "(mixed)" }) as unknown as FakeElement;
+
+    expect(input.type).toBe("number");
+    expect(input.min).toBe("1");
+    expect(input.max).toBe("4096");
+    expect(input.step).toBe("1");
+    expect(input.placeholder).toBe("(mixed)");
+    expect(input.value).toBe("120");
+  });
+
+  it("creates reusable checkbox elements with stable checked state", () => {
+    installFakeDocument();
+
+    const input = createCheckboxElement(true) as unknown as FakeElement;
+
+    expect(input.type).toBe("checkbox");
+    expect(input.checked).toBe(true);
+  });
+
+  it("creates reusable range elements with stable bounds and values", () => {
+    installFakeDocument();
+
+    const input = createRangeElement("0.5", { min: "0", max: "1", step: "0.01" }) as unknown as FakeElement;
+
+    expect(input.type).toBe("range");
+    expect(input.min).toBe("0");
+    expect(input.max).toBe("1");
+    expect(input.step).toBe("0.01");
+    expect(input.value).toBe("0.5");
+  });
+
+  it("creates reusable file input elements with stable accept filters", () => {
+    installFakeDocument();
+
+    const input = createFileInputElement(".png,image/png") as unknown as FakeElement;
+
+    expect(input.type).toBe("file");
+    expect(input.accept).toBe(".png,image/png");
+  });
+
+  it("stringifies numeric select values the same way DOM option values do", () => {
+    installFakeDocument();
+
+    const select = createSelectElement(2, [
+      { value: 1, label: "One" },
+      { value: 2, label: "Two" }
+    ]) as unknown as FakeElement;
+
+    expect(select.value).toBe("2");
+    expect(select.children.map((child) => [child.value, child.textContent])).toEqual([
+      ["1", "One"],
+      ["2", "Two"]
+    ]);
+  });
+
+  it("creates reusable muted text elements without changing text content", () => {
+    installFakeDocument();
+
+    const element = createMutedText("Summary text") as unknown as FakeElement;
+
+    expect(element.className).toBe("muted");
+    expect(element.textContent).toBe("Summary text");
+  });
+
+  it("appends muted text and returns the appended element", () => {
+    installFakeDocument();
+    const parent = new FakeElement() as FakeElement & HTMLElement;
+
+    const element = appendMutedText(parent, "Panel status") as unknown as FakeElement;
+
+    expect(parent.children).toEqual([element]);
+    expect(element.className).toBe("muted");
+    expect(element.textContent).toBe("Panel status");
+  });
+});

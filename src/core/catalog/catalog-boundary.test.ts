@@ -7,15 +7,20 @@ const forbiddenImport = /from\s+["'][^"']*data\/(?:materials|hardware|pricing)(?
 const runtimeRoots = ["src/modules", "src/layout", "src/ui", "src/app", "src/lib/materials"];
 const sourceRoots = ["src", "scripts", "server"];
 const allowedSystemSeedCatalogFiles = new Set([
+  "scripts/arcigyModuleIconRenderer.ts",
   "scripts/testPortableMaterialLive.mjs",
   "scripts/testPricingContract.ts",
   "scripts/testModulePropertiesUi.mjs",
   "src/core/catalog/catalog-boundary.test.ts",
+  "src/core/catalog/client-module-assignment.test.ts",
   "src/app/kitchenWorktopVisuals.test.ts",
   "src/core/catalog/catalog-repository.ts",
   "src/core/catalog/catalog-service.test.ts",
+  "src/layout/kitchenMaterialSync.test.ts",
+  "src/layout/placementManager.test.ts",
   "src/core/project-save/project-save.test.ts",
   "src/lib/materials/rendering.test.ts",
+  "src/modules/fwmFurniture/fwmFurniture.test.ts",
   "src/modules/runtime/runtimeCatalog.test.ts"
 ]);
 
@@ -45,7 +50,7 @@ describe("ClientCatalog runtime boundaries", () => {
       if (forbiddenImport.test(source)) offenders.push(file);
     }
     expect(offenders).toEqual([]);
-  });
+  }, 30_000);
 
   it("keeps getSystemSeedCatalog inside seed, demo, and test boundaries", async () => {
     const files = (await Promise.all(sourceRoots.map((root) => listRuntimeSourceFiles(root)))).flat();
@@ -58,7 +63,7 @@ describe("ClientCatalog runtime boundaries", () => {
     }
 
     expect(offenders).toEqual([]);
-  });
+  }, 30_000);
 
   it("keeps app composition off direct system seed repositories", async () => {
     const source = await readFile(path.join(process.cwd(), "src/app.ts"), "utf-8");

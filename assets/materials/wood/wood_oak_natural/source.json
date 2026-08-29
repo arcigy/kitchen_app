@@ -1,0 +1,21 @@
+{
+  "id": "wood_oak_natural",
+  "source": "ambientCG",
+  "assetId": "Wood049",
+  "requestedAssetId": "Wood049",
+  "matchedAssetId": "Wood049",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Wood049_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

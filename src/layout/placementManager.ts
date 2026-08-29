@@ -5,64 +5,64 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { getEnabledModulePackageDefinitions } from "../core/catalog/module-catalog";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import {
-  createDefaultModulePackageParameters,
-  resolveModulePackageComponentAssignments,
-  resolveModulePackageMaterialAssignments
+  createModulePackageDefaultParams
 } from "../core/module-package/runtime/module-runtime-adapter";
 import type { ModuleAdjacencyLink } from "../app/moduleAdjacency";
 import { commitHistory } from "./historyManager";
 import { applyKitchenContextToModuleParams } from "./kitchenMaterialSync";
+import type { KitchenContext } from "./kitchenContext";
+import type { EditorPropsApi } from "../app/editorModeApis";
 
-function makeGhostMaterial(material: THREE.Material) {
+const ghostCursorSkipDistanceSq = 0.0025 * 0.0025;
+
+function makeGhostMaterial(material: THREE.Material, cache: Map<THREE.Material, THREE.Material>) {
+  const cached = cache.get(material);
+  if (cached) return cached;
   const ghostMaterial = material.clone();
   ghostMaterial.transparent = true;
   ghostMaterial.opacity = Math.min(ghostMaterial.opacity, 0.48);
   ghostMaterial.depthWrite = false;
   ghostMaterial.needsUpdate = true;
+  cache.set(material, ghostMaterial);
   return ghostMaterial;
 }
 
 function showGhostModulePreview(ghost: LayoutInstance) {
+  const materialCache = new Map<THREE.Material, THREE.Material>();
   ghost.module.visible = true;
   ghost.module.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
     object.material = Array.isArray(object.material)
-      ? object.material.map(makeGhostMaterial)
-      : makeGhostMaterial(object.material);
+      ? object.material.map((material) => makeGhostMaterial(material, materialCache))
+      : makeGhostMaterial(object.material, materialCache);
     object.renderOrder = Math.max(object.renderOrder, 40);
   });
 }
 
-type PropsApi = {
-  setTitle: (title: string) => void;
-  section: () => HTMLElement;
-  row: (sectionEl: HTMLElement, label: string, inputEl: HTMLElement) => HTMLElement;
-};
-
 export interface PlacementHelpers {
-  props: PropsApi;
-  layoutRoot: any;
+  props: EditorPropsApi;
+  layoutRoot: THREE.Object3D;
   setUnderlayStatus: (text: string) => void;
   getBuildParams: (type: ModuleParams["type"]) => ModuleParams | null;
   createInstance: (params: ModuleParams, opts?: { id?: string }) => LayoutInstance;
-  disposeObject3D: (obj: any) => void;
+  disposeObject3D: (obj: THREE.Object3D) => void;
   updateLayoutPanel: () => void;
   mountProps: () => void;
   setSelectedModule: (id: string | null) => void;
 
-  applyWallConstraints: (moving: LayoutInstance, desired: any) => any;
-  roomContainsBoxXZ: (box: any) => boolean;
-  instanceWorldBox: (inst: LayoutInstance) => any;
+  applyWallConstraints: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
+  roomContainsBoxXZ: (box: THREE.Box3) => boolean;
+  instanceWorldBox: (inst: LayoutInstance) => THREE.Box3;
   anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
   moduleOverlapsWalls: (moving: LayoutInstance) => boolean;
   moduleOverlapsKitchenWorktops: (moving: LayoutInstance) => boolean;
   autoOrientModuleToRoomWallIfSnapped: (inst: LayoutInstance) => void;
   resolveModuleAdjacencySnap?: (
     moving: LayoutInstance,
-    desired: any,
+    desired: THREE.Vector3,
     opts?: { stickyNeighborId?: string | null; preferredKitchenPlacement?: KitchenPlacementBinding | null }
   ) => {
-    position: any;
+    position: THREE.Vector3;
     rotationY?: number;
     link: ModuleAdjacencyLink | null;
     kitchenPlacement?: KitchenPlacementBinding | null;
@@ -70,13 +70,14 @@ export interface PlacementHelpers {
   setPlacementAdjacencyPreview?: (link: ModuleAdjacencyLink | null) => void;
   finalizePlacedInstance?: (inst: LayoutInstance) => void;
   syncPlacedInstancePresentation?: (inst: LayoutInstance) => void;
+  rebuildKitchenGroupWorktops?: (groupId: string) => void;
   catalog: ClientCatalog;
   modulePackages?: readonly FurnQuoteModulePackage[];
   resolvePlacementConstraint?: (
     ghost: LayoutInstance,
-    cursorWorld: any
+    cursorWorld: THREE.Vector3
   ) => {
-    position: any;
+    position: THREE.Vector3;
     rotationY: number;
     valid: boolean;
     kitchenPlacement?: KitchenPlacementBinding | null;
@@ -90,6 +91,7 @@ export const cancelPlacement = (S: AppState, helpers: PlacementHelpers) => {
   if (!S.placement.active) return;
 
   helpers.setPlacementAdjacencyPreview?.(null);
+  if (S.placement.ghostFrame != null) cancelAnimationFrame(S.placement.ghostFrame);
 
   if (S.placement.ghost) {
     helpers.layoutRoot.remove(S.placement.ghost.root);
@@ -100,27 +102,39 @@ export const cancelPlacement = (S: AppState, helpers: PlacementHelpers) => {
   S.placement.ghost = null;
   S.placement.ghostValid = false;
   S.placement.lastCursor.set(0, 0, 0);
+  S.placement.pendingCursor = null;
+  S.placement.ghostFrame = null;
+  S.placement.lastGhostCursor = null;
   helpers.setUnderlayStatus("Placement: canceled.");
   helpers.mountProps();
 };
 
-export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld: any) => {
+export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld: THREE.Vector3, opts?: { force?: boolean }) => {
   if (!S.placement.active || !S.placement.params) return;
 
   S.placement.lastCursor.copy(cursorWorld);
+  if (
+    !opts?.force &&
+    S.placement.ghost &&
+    S.placement.lastGhostCursor &&
+    S.placement.lastGhostCursor.distanceToSquared(cursorWorld) < ghostCursorSkipDistanceSq
+  ) {
+    return;
+  }
+  S.placement.lastGhostCursor = cursorWorld.clone();
 
   if (!S.placement.ghost) {
     const ghost = helpers.createInstance(structuredClone(S.placement.params) as ModuleParams, { id: "ghost" });
     ghost.root.name = "placementGhost";
     showGhostModulePreview(ghost);
-    (ghost.pick.material as any).transparent = true;
-    (ghost.pick.material as any).opacity = 0;
-    (ghost.pick.material as any).depthWrite = false;
+    (ghost.pick.material as THREE.Material).transparent = true;
+    (ghost.pick.material as THREE.Material).opacity = 0;
+    (ghost.pick.material as THREE.Material).depthWrite = false;
     ghost.pick.visible = false;
     ghost.outline.visible = true;
-    (ghost.outline.material as any).transparent = true;
-    (ghost.outline.material as any).opacity = 0.9;
-    (ghost.outline.material as any).depthTest = false;
+    (ghost.outline.material as THREE.Material).transparent = true;
+    (ghost.outline.material as THREE.Material).opacity = 0.9;
+    (ghost.outline.material as THREE.Material).depthTest = false;
     helpers.layoutRoot.add(ghost.root);
     S.placement.ghost = ghost;
   }
@@ -176,10 +190,23 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
   const ok = inRoom && !overlaps && (constrainedPlacement?.valid ?? true);
   S.placement.ghostValid = ok;
 
-  (g.outline.material as any).color.setHex(ok ? 0x3ddc97 : 0xff6b6b);
+  (g.outline.material as THREE.LineBasicMaterial).color.setHex(ok ? 0x3ddc97 : 0xff6b6b);
   if (constrainedPlacement?.statusText) {
     helpers.setUnderlayStatus(constrainedPlacement.statusText);
   }
+};
+
+export const scheduleRebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld: any) => {
+  if (!S.placement.active || !S.placement.params) return;
+  S.placement.lastCursor.copy(cursorWorld);
+  S.placement.pendingCursor = cursorWorld.clone();
+  if (S.placement.ghostFrame != null) return;
+  S.placement.ghostFrame = requestAnimationFrame(() => {
+    const pending = S.placement.pendingCursor;
+    S.placement.pendingCursor = null;
+    S.placement.ghostFrame = null;
+    if (pending) rebuildGhost(S, helpers, pending);
+  });
 };
 
 export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
@@ -206,6 +233,7 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
 
   helpers.layoutRoot.add(inst.root);
   S.instances.push(inst);
+  if (inst.kitchenGroupId) helpers.rebuildKitchenGroupWorktops?.(inst.kitchenGroupId);
 
   cancelPlacement(S, helpers);
 
@@ -213,6 +241,47 @@ export const commitPlacement = (S: AppState, helpers: PlacementHelpers) => {
   helpers.updateLayoutPanel();
   commitHistory(S);
   helpers.setUnderlayStatus("Placement: placed.");
+  return true;
+};
+
+function isSideMirrorablePlacement(params: ModuleParams | null): params is ModuleParams & { side: "left" | "right" } {
+  const side = (params as Record<string, unknown> | null)?.side;
+  return side === "left" || side === "right";
+}
+
+function disposePlacementGhost(S: AppState, helpers: PlacementHelpers) {
+  if (S.placement.ghostFrame != null) cancelAnimationFrame(S.placement.ghostFrame);
+  S.placement.ghostFrame = null;
+  S.placement.pendingCursor = null;
+  S.placement.lastGhostCursor = null;
+  if (!S.placement.ghost) return;
+  helpers.layoutRoot.remove(S.placement.ghost.root);
+  helpers.disposeObject3D(S.placement.ghost.root);
+  S.placement.ghost = null;
+}
+
+export const mirrorActivePlacementSide = (S: AppState, helpers: PlacementHelpers) => {
+  if (!S.placement.active || !isSideMirrorablePlacement(S.placement.params)) return false;
+  S.placement.params.side = S.placement.params.side === "left" ? "right" : "left";
+  disposePlacementGhost(S, helpers);
+  rebuildGhost(S, helpers, S.placement.lastCursor, { force: true });
+  helpers.setUnderlayStatus(`Placement: zrkadlene na ${S.placement.params.side}. Space = druha strana.`);
+  return true;
+};
+
+export const rotateActivePlacement = (S: AppState, helpers: PlacementHelpers, deltaRad = Math.PI / 2) => {
+  if (!S.placement.active) return false;
+  if (mirrorActivePlacementSide(S, helpers)) return true;
+  const ghost = S.placement.ghost;
+  if (!ghost) return false;
+  if (ghost.kitchenPlacement) {
+    helpers.setUnderlayStatus("Placement: tento modul je naviazany na worktop, rotaciu urcuje vlozenie.");
+    return true;
+  }
+  ghost.root.rotation.y += deltaRad;
+  rebuildGhost(S, helpers, S.placement.lastCursor, { force: true });
+  const deg = Math.round(THREE.MathUtils.radToDeg(ghost.root.rotation.y));
+  helpers.setUnderlayStatus(`Placement: rotacia ${deg}°. Space = +90°.`);
   return true;
 };
 
@@ -255,42 +324,45 @@ export const mountPlacementControls = (S: AppState, helpers: PlacementHelpers) =
   const hint = document.createElement("div");
   hint.className = "muted";
   hint.style.marginTop = "8px";
-  hint.textContent = "Move cursor in 2D plan. Click to place. Esc to cancel.";
+  hint.textContent = "Move cursor in 2D plan. Click to place. Space rotates free modules. Esc to cancel.";
   s.appendChild(hint);
 
-  const applyRot = (delta: number) => {
-    const g = S.placement.ghost;
-    if (!g) return;
-    g.root.rotation.y += delta;
-    rebuildGhost(S, helpers, S.placement.lastCursor);
-  };
-
-  rotL.addEventListener("click", () => applyRot(-Math.PI / 2));
-  rotR.addEventListener("click", () => applyRot(Math.PI / 2));
+  rotL.addEventListener("click", () => rotateActivePlacement(S, helpers, -Math.PI / 2));
+  rotR.addEventListener("click", () => rotateActivePlacement(S, helpers, Math.PI / 2));
   cancel.addEventListener("click", () => cancelPlacement(S, helpers));
   commit.addEventListener("click", () => commitPlacement(S, helpers));
 };
 
-export const addInstance = (S: AppState, helpers: PlacementHelpers, type: ModuleParams["type"]) => {
+export function getActivePlacementKitchenContext(S: AppState): KitchenContext {
+  if (!S.kitchenEditMode || !S.activeKitchenGroupId) return S.kitchenCtx;
+  return S.kitchenGroups.find((group) => group.id === S.activeKitchenGroupId)?.ctx ?? S.kitchenCtx;
+}
+
+export const addInstance = (
+  S: AppState,
+  helpers: PlacementHelpers,
+  type: ModuleParams["type"],
+  opts: { modulePackageId?: string; initialParams?: ModuleParams } = {}
+) => {
   if (S.placement.active) cancelPlacement(S, helpers);
 
   const modulePackage = getEnabledModulePackageDefinitions(helpers.catalog, helpers.modulePackages ?? [])
-    .find((candidate) => candidate.module.moduleType === type) ?? null;
+    .find((candidate) =>
+      opts.modulePackageId
+        ? candidate.module.modulePackageId === opts.modulePackageId
+        : candidate.module.moduleType === type
+    ) ?? null;
   if (!modulePackage) {
     helpers.setUnderlayStatus(`Placement: module package missing or disabled for ${type}.`);
     return;
   }
 
-  const defaults = {
-    ...createDefaultModulePackageParameters(modulePackage),
-    materialAssignments: resolveModulePackageMaterialAssignments({ modulePackage, catalog: helpers.catalog }),
-    componentAssignments: resolveModulePackageComponentAssignments({ modulePackage, catalog: helpers.catalog }),
-    type
-  } as ModuleParams;
-  const nextParams = structuredClone(helpers.getBuildParams(type) ?? defaults) as ModuleParams;
+  const defaults = createModulePackageDefaultParams({ modulePackage, catalog: helpers.catalog }) as ModuleParams;
+  const previousBuildParams = opts.modulePackageId ? null : helpers.getBuildParams(type);
+  const nextParams = structuredClone(opts.initialParams ?? previousBuildParams ?? defaults) as ModuleParams;
 
   if (S.kitchenEditMode && S.activeKitchenGroupId) {
-    applyKitchenContextToModuleParams(nextParams, S.kitchenCtx, helpers.catalog, modulePackage);
+    applyKitchenContextToModuleParams(nextParams, getActivePlacementKitchenContext(S), helpers.catalog, modulePackage);
   }
 
   helpers.setSelectedModule(null);
@@ -298,7 +370,6 @@ export const addInstance = (S: AppState, helpers: PlacementHelpers, type: Module
   S.placement.params = nextParams;
   S.placement.ghostValid = false;
 
-  helpers.setUnderlayStatus("Placement: move cursor, click to place. Esc cancels.");
-  rebuildGhost(S, helpers, S.placement.lastCursor);
+  helpers.setUnderlayStatus("Placement: move cursor, click to place. Space rotates free modules. Esc cancels.");
   mountPlacementControls(S, helpers);
 };

@@ -8,14 +8,19 @@ import {
   type PortableModuleControlsApi,
   type PortableModuleControlsArgs
 } from "../runtime/portableControls";
+import { createPinoVendorControls, mergeModuleControlsApis } from "../pinoVendorControls";
 
 export function createFlapShelvesLowControls(
   container: HTMLElement,
   params: FlapShelvesLowParams,
   args: PortableModuleControlsArgs
 ): PortableModuleControlsApi {
-  return createPortableModuleControls({
-    container,
+  container.innerHTML = "";
+  const vendorApi = createPinoVendorControls(container, params as unknown as Record<string, unknown>, args);
+  const portableHost = document.createElement("div");
+  container.appendChild(portableHost);
+  const portableApi = createPortableModuleControls({
+    container: portableHost,
     params: params as Record<string, unknown>,
     catalog: parameterCatalog as Parameters<typeof createPortableModuleControls>[0]["catalog"],
     controlArgs: args,
@@ -26,4 +31,5 @@ export function createFlapShelvesLowControls(
     systemCatalog: systemParameterCatalog as Parameters<typeof createPortableModuleControls>[0]["systemCatalog"],
     systemValues: systemParameterValues as Parameters<typeof createPortableModuleControls>[0]["systemValues"]
   });
+  return mergeModuleControlsApis(vendorApi, portableApi);
 }

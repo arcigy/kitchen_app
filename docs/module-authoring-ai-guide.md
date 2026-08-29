@@ -52,9 +52,11 @@ The app reads tenant `module.package.json` through `/api/modules`. It must not u
 ## Module Authoring Workflow
 
 1. Choose stable IDs:
-   - `modulePackageId`: unique family package ID, for example `corner_shelf_lower_family_v1`.
-   - `moduleType`: stable runtime type, for example `corner_shelf_lower`.
-   - `runtimeBuilderKey`: trusted builder key, for example `cornerShelfLower.v1`.
+   - `modulePackageId`: unique normalized package ID, for example `base_corner`.
+   - `moduleType`: stable normalized runtime type, for example `base_corner`.
+   - `runtimeBuilderKey`: trusted builder key, for example `baseCorner.v1`.
+   - Never include a client/supplier prefix such as `delfi`, `pino`, or `fwm`.
+   - Never include `family` or a version suffix in `modulePackageId`; use `module.version` for versioning.
 
 2. Create or update `*.fqm.source.json`.
 

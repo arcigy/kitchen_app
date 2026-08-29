@@ -1,8 +1,9 @@
 import type { ClientCatalog } from "../catalog/catalog-types";
 import type { FurnQuoteModulePackage } from "../module-package/module-package-types";
-import type { ProjectMetadata, ProjectPhaseStatus } from "../project/project-types";
+import type { ProjectMaterialAssignmentsState } from "../project-materials/project-material-types";
+import type { ProjectMetadata, ProjectPhaseStatus, ProjectPreview } from "../project/project-types";
 
-export const CURRENT_PROJECT_SAVE_VERSION = 1;
+export const CURRENT_PROJECT_SAVE_VERSION = 2;
 
 export type ProjectPhaseSave = {
   phaseId: string;
@@ -12,6 +13,7 @@ export type ProjectPhaseSave = {
   layoutState: unknown;
   kitchenState: unknown;
   moduleInstances: unknown[];
+  materialAssignments: ProjectMaterialAssignmentsState;
   pricingSettings?: unknown;
   quoteSettings?: unknown;
   bomSnapshot?: unknown;
@@ -94,12 +96,15 @@ export type ProjectSaveFile = {
     layout: unknown;
     kitchen: unknown;
     modules: unknown[];
+    materialAssignments: ProjectMaterialAssignmentsState;
     scene: unknown;
     editor?: unknown;
+    recentActivity?: unknown;
     camera?: unknown;
     selections?: unknown;
     pricingSettings?: unknown;
     quoteSettings?: unknown;
+    projectPreview?: ProjectPreview;
   };
   assets: ProjectAssetManifest;
   integrity: {
@@ -108,6 +113,11 @@ export type ProjectSaveFile = {
     savedAt: string;
     appVersion?: string;
     saveSchemaHash?: string;
+    saveRevision?: number;
+    lastWrite?: {
+      keyHash: string;
+      requestHash: string;
+    };
   };
 };
 

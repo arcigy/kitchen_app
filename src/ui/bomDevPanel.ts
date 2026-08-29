@@ -1,7 +1,9 @@
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
+import type { CustomFurnitureInstance } from "../layout/customFurnitureTypes";
 import type { BOMResult } from "../layout/bom/bomTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { isProjectMarginSettingsState } from "../core/project-margins/project-margin-types";
 import { DEFAULT_PHASE_ID, DEFAULT_PROJECT_ID } from "../core/storage/storage-types";
 import { exportMarketingOfferPdf } from "../layout/bom/exportMarketingPdf";
 import { exportProjectPricingWorkbook } from "../layout/bom/exportWorkbook";
@@ -12,8 +14,15 @@ import {
   aggregateProjectEdges,
   buildProjectQuoteSummary,
   sanitizeProjectQuoteSettings,
-  type ProjectQuoteSettings
+  type ProjectQuoteSettings,
+  type ProjectQuoteSettingsInput
 } from "../layout/bom/projectQuote";
+import {
+  formatDisplayCurrency,
+  readPriceDisplayCurrency,
+  type PriceDisplayCurrency,
+  writePriceDisplayCurrency
+} from "./currencyDisplay";
 
 export function quoteSettingsStorageKey(catalog: Pick<ClientCatalog, "clientId">, projectId = DEFAULT_PROJECT_ID, phaseId = DEFAULT_PHASE_ID) {
   return `bom.${catalog.clientId}.${projectId}.${phaseId}.projectQuoteSettings`;
@@ -23,12 +32,8 @@ function formatNumber(value: number, digits = 3) {
   return new Intl.NumberFormat("sk-SK", { maximumFractionDigits: digits }).format(value);
 }
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("sk-SK", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 2
-  }).format(value);
+function formatCurrency(value: number, currency: PriceDisplayCurrency) {
+  return formatDisplayCurrency(value, currency);
 }
 
 function readStoredSettings(storageKey: string): ProjectQuoteSettings {
@@ -193,19 +198,26 @@ export function mountBomDevPanel(
   container: HTMLElement,
   instances: LayoutInstance[],
   worktops: KitchenWorktopInstance[],
+  customFurniture: CustomFurnitureInstance[],
   ctx: KitchenContext,
-  catalog: ClientCatalog
+  catalog: ClientCatalog,
+  options: {
+    quoteSettings?: ProjectQuoteSettingsInput;
+    displayCurrency?: PriceDisplayCurrency;
+    lockDisplayCurrency?: boolean;
+  } = {}
 ): void {
-  const entries = buildProjectPricingViews(instances, worktops, ctx, catalog);
+  const entries = buildProjectPricingViews(instances, worktops, customFurniture, ctx, catalog);
   const storageKey = quoteSettingsStorageKey(catalog);
-  let settings = readStoredSettings(storageKey);
+  let settings: ProjectQuoteSettingsInput = options.quoteSettings ?? readStoredSettings(storageKey);
+  let displayCurrency = options.displayCurrency ?? readPriceDisplayCurrency();
 
   container.className = "bom-dev";
 
   const render = () => {
     container.innerHTML = "";
 
-    if (instances.length === 0 && worktops.length === 0) {
+    if (instances.length === 0 && worktops.length === 0 && customFurniture.length === 0) {
       const empty = document.createElement("div");
       empty.textContent = "Nie su umiestnene ziadne moduly.";
       empty.className = "bom-dev__empty";
@@ -213,8 +225,12 @@ export function mountBomDevPanel(
       return;
     }
 
-    settings = sanitizeProjectQuoteSettings(settings);
-    writeStoredSettings(storageKey, settings);
+    const projectMarginsManaged = isProjectMarginSettingsState(settings);
+    const legacySettings = projectMarginsManaged ? null : sanitizeProjectQuoteSettings(settings);
+    if (legacySettings) {
+      settings = legacySettings;
+      writeStoredSettings(storageKey, legacySettings);
+    }
 
     const boards = aggregateProjectBoards(entries);
     const edges = aggregateProjectEdges(entries);
@@ -239,9 +255,32 @@ export function mountBomDevPanel(
     const actions = document.createElement("div");
     actions.className = "bom-dev__actions";
 
+    const currencyLabel = document.createElement("label");
+    currencyLabel.className = "bom-dev__currency-toggle";
+    const currencyText = document.createElement("span");
+    currencyText.textContent = "Ceny";
+    const currencySelect = document.createElement("select");
+    currencySelect.value = displayCurrency;
+    const currencies = options.lockDisplayCurrency ? [displayCurrency] : ["CZK", "EUR"] as const;
+    for (const currency of currencies) {
+      const option = document.createElement("option");
+      option.value = currency;
+      option.textContent = currency;
+      currencySelect.appendChild(option);
+    }
+    currencySelect.addEventListener("change", () => {
+      if (options.lockDisplayCurrency) return;
+      displayCurrency = currencySelect.value === "EUR" ? "EUR" : "CZK";
+      writePriceDisplayCurrency(displayCurrency);
+      render();
+    });
+    currencySelect.disabled = options.lockDisplayCurrency === true;
+    currencyLabel.append(currencyText, currencySelect);
+    actions.appendChild(currencyLabel);
+
     const exportBtn = createButton("Create Sheet");
     exportBtn.addEventListener("click", () => {
-      exportProjectPricingWorkbook(entries, summary);
+      exportProjectPricingWorkbook(entries, summary, displayCurrency);
     });
     actions.appendChild(exportBtn);
 
@@ -251,7 +290,7 @@ export function mountBomDevPanel(
       const previous = pdfBtn.textContent;
       pdfBtn.textContent = "Generujem...";
       try {
-        await exportMarketingOfferPdf(entries, summary);
+        await exportMarketingOfferPdf(entries, summary, displayCurrency);
       } finally {
         pdfBtn.disabled = false;
         pdfBtn.textContent = previous;
@@ -276,21 +315,28 @@ export function mountBomDevPanel(
       "Project pricing inputs",
       "Tieto dve hodnoty sa pouziju rovnako v appke, v Create Sheet aj v marketingovom PDF."
     );
-    const settingsGrid = document.createElement("div");
-    settingsGrid.className = "bom-dev__settings-grid";
-    settingsGrid.appendChild(
-      buildNumberInput("Dodatocna praca projektu", settings.additionalLaborCost, (value) => {
-        settings = sanitizeProjectQuoteSettings({ ...settings, additionalLaborCost: value });
-        render();
-      }, "EUR")
-    );
-    settingsGrid.appendChild(
-      buildNumberInput("Marza", settings.marginPercent, (value) => {
-        settings = sanitizeProjectQuoteSettings({ ...settings, marginPercent: value });
-        render();
-      }, "%")
-    );
-    settingsSection.appendChild(settingsGrid);
+    if (projectMarginsManaged) {
+      const managedNotice = document.createElement("p");
+      managedNotice.className = "bom-dev__section-description";
+      managedNotice.textContent = "Marže a dodatočná práca sú uložené v projekte. Upravujú sa v sekcii Marže, aby appka, Excel, PDF a JSON používali rovnaké hodnoty.";
+      settingsSection.appendChild(managedNotice);
+    } else if (legacySettings) {
+      const settingsGrid = document.createElement("div");
+      settingsGrid.className = "bom-dev__settings-grid";
+      settingsGrid.appendChild(
+        buildNumberInput("Dodatocna praca projektu", legacySettings.additionalLaborCost, (value) => {
+          settings = sanitizeProjectQuoteSettings({ ...legacySettings, additionalLaborCost: value });
+          render();
+        }, displayCurrency)
+      );
+      settingsGrid.appendChild(
+        buildNumberInput("Marza", legacySettings.marginPercent, (value) => {
+          settings = sanitizeProjectQuoteSettings({ ...legacySettings, marginPercent: value });
+          render();
+        }, "%")
+      );
+      settingsSection.appendChild(settingsGrid);
+    }
     container.appendChild(settingsSection);
 
     const results = section(
@@ -300,11 +346,11 @@ export function mountBomDevPanel(
     const totalGrid = document.createElement("div");
     totalGrid.className = "bom-dev__metrics";
     const cards: Array<[string, string, "default" | "accent"]> = [
-      ["Material", formatCurrency(summary.materialCost), "default" as const],
-      ["Praca moduly", formatCurrency(summary.moduleLaborCost), "default" as const],
-      ["Praca projekt", formatCurrency(summary.additionalLaborCost), "default" as const],
-      ["Marza", `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount)}`, "default" as const],
-      ["Vysledok Create Sheet", formatCurrency(summary.finalPrice), "accent" as const]
+      ["Material", formatCurrency(summary.materialCost, displayCurrency), "default" as const],
+      ["Praca moduly", formatCurrency(summary.moduleLaborCost, displayCurrency), "default" as const],
+      ["Praca projekt", formatCurrency(summary.additionalLaborCost, displayCurrency), "default" as const],
+      ["Marza", `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount, displayCurrency)}`, "default" as const],
+      ["Vysledok Create Sheet", formatCurrency(summary.finalPrice, displayCurrency), "accent" as const]
     ];
     for (const [label, value, tone] of cards) {
       totalGrid.appendChild(createMetricCard(label, value, tone));
@@ -312,9 +358,9 @@ export function mountBomDevPanel(
     results.appendChild(totalGrid);
     results.appendChild(
       table(["Check", "Value"], [
-        ["Create Sheet result", formatCurrency(summary.finalPrice)],
-        ["App BOM result", formatCurrency(summary.finalPrice)],
-        ["Rozdiel", formatCurrency(0)],
+        ["Create Sheet result", formatCurrency(summary.finalPrice, displayCurrency)],
+        ["App BOM result", formatCurrency(summary.finalPrice, displayCurrency)],
+        ["Rozdiel", formatCurrency(0, displayCurrency)],
         ["Board pricing rule", summary.formulas.boardPricing],
         ["Final formula", summary.formulas.finalPrice]
       ])
@@ -330,7 +376,7 @@ export function mountBomDevPanel(
         ["Subtotal formula", summary.formulas.subtotalBeforeMargin],
         ["Margin formula", summary.formulas.marginAmount],
         ["Final formula", summary.formulas.finalPrice],
-        ["Additional project labor", formatCurrency(summary.additionalLaborCost)],
+        ["Additional project labor", formatCurrency(summary.additionalLaborCost, displayCurrency)],
         ["Margin percent", `${formatNumber(summary.marginPercent, 2)} %`]
       ])
     );
@@ -346,8 +392,8 @@ export function mountBomDevPanel(
           row.group ?? "",
           formatNumber(row.quantity),
           formatNumber(row.pricedQuantity ?? row.quantity),
-          formatCurrency(row.unitPrice),
-          formatCurrency(row.cost)
+          formatCurrency(row.unitPrice, displayCurrency),
+          formatCurrency(row.cost, displayCurrency)
         ])
       )
     );
@@ -362,8 +408,8 @@ export function mountBomDevPanel(
           row.catalogId,
           row.group ?? "",
           formatNumber(row.quantity),
-          formatCurrency(row.unitPrice),
-          formatCurrency(row.cost)
+          formatCurrency(row.unitPrice, displayCurrency),
+          formatCurrency(row.cost, displayCurrency)
         ])
       )
     );
@@ -378,8 +424,8 @@ export function mountBomDevPanel(
           row.catalogId,
           row.group ?? "",
           formatNumber(row.quantity),
-          formatCurrency(row.unitPrice),
-          formatCurrency(row.cost)
+          formatCurrency(row.unitPrice, displayCurrency),
+          formatCurrency(row.cost, displayCurrency)
         ])
       )
     );
@@ -391,11 +437,11 @@ export function mountBomDevPanel(
         ["Module", "Boards", "Edges", "Hardware", "Labor", "Final"],
         entries.map((entry) => [
           entry.label,
-          formatCurrency(entry.result.pricing.groups.boards.cost),
-          formatCurrency(entry.result.pricing.groups.edge_bands.cost),
-          formatCurrency(entry.result.pricing.groups.hardware.cost),
-          formatCurrency(entry.result.pricing.laborCostFixed),
-          formatCurrency(entry.result.pricing.finalPrice)
+          formatCurrency(entry.result.pricing.groups.boards.cost, displayCurrency),
+          formatCurrency(entry.result.pricing.groups.edge_bands.cost, displayCurrency),
+          formatCurrency(entry.result.pricing.groups.hardware.cost, displayCurrency),
+          formatCurrency(entry.result.pricing.laborCostFixed, displayCurrency),
+          formatCurrency(entry.result.pricing.finalPrice, displayCurrency)
         ])
       )
     );
@@ -415,8 +461,8 @@ export function mountBomDevPanel(
             item.pricingGroup ?? "",
             formatNumber(item.quantity),
             formatNumber(item.pricingQuantity),
-            item.unitPrice == null ? "-" : formatCurrency(item.unitPrice),
-            item.itemCost == null ? "-" : formatCurrency(item.itemCost)
+            item.unitPrice == null ? "-" : formatCurrency(item.unitPrice, displayCurrency),
+            item.itemCost == null ? "-" : formatCurrency(item.itemCost, displayCurrency)
           ])
         )
       )

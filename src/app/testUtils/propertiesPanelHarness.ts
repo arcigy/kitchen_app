@@ -1,0 +1,163 @@
+import { vi } from "vitest";
+
+type FakeListener = (event: Record<string, unknown>) => void;
+
+export class FakeElement {
+  accept = "";
+  attributes = new Map<string, string>();
+  checked = false;
+  children: FakeElement[] = [];
+  className = "";
+  classList = {
+    add: (...tokens: string[]) => {
+      const classes = new Set(this.className.split(/\s+/).filter(Boolean));
+      for (const token of tokens) classes.add(token);
+      this.className = [...classes].join(" ");
+    },
+    remove: (...tokens: string[]) => {
+      const remove = new Set(tokens);
+      this.className = this.className
+        .split(/\s+/)
+        .filter((token) => token && !remove.has(token))
+        .join(" ");
+    },
+    contains: (token: string) => this.className.split(/\s+/).filter(Boolean).includes(token),
+    toggle: (token: string, force?: boolean) => {
+      const classes = new Set(this.className.split(/\s+/).filter(Boolean));
+      const shouldAdd = force ?? !classes.has(token);
+      if (shouldAdd) classes.add(token);
+      else classes.delete(token);
+      this.className = [...classes].join(" ");
+      return shouldAdd;
+    }
+  };
+  dataset: Record<string, string> = {};
+  disabled = false;
+  id = "";
+  inputMode = "";
+  isConnected = true;
+  listeners = new Map<string, FakeListener[]>();
+  max = "";
+  min = "";
+  name = "";
+  placeholder = "";
+  required = false;
+  step = "";
+  style: Record<string, string> = {};
+  textContent = "";
+  title = "";
+  type = "";
+  value = "";
+  autocomplete = "";
+  clickCount = 0;
+  files: Array<{ name: string; size: number }> | null = null;
+  private innerHtmlValue = "";
+
+  get innerHTML() {
+    return this.innerHtmlValue;
+  }
+
+  set innerHTML(value: string) {
+    this.innerHtmlValue = value;
+    if (value === "") this.children = [];
+  }
+
+  addEventListener(type: string, listener: FakeListener) {
+    const listeners = this.listeners.get(type) ?? [];
+    listeners.push(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  append(...children: FakeElement[]) {
+    this.children.push(...children);
+  }
+
+  appendChild(child: FakeElement) {
+    this.children.push(child);
+    return child;
+  }
+
+  prepend(...children: FakeElement[]) {
+    this.children.unshift(...children);
+  }
+
+  click() {
+    this.clickCount += 1;
+    this.dispatch("click");
+  }
+
+  dispatch(type: string, event: Record<string, unknown> = {}) {
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+
+  focus() {
+    // No-op for lightweight DOM tests.
+  }
+
+  blur() {
+    // No-op for lightweight DOM tests.
+  }
+
+  remove() {
+    this.isConnected = false;
+  }
+
+  replaceChildren(...children: FakeElement[]) {
+    this.children = children;
+  }
+
+  querySelectorAll<T = FakeElement>(_selector: string): T[] {
+    return [];
+  }
+
+  querySelector<T = FakeElement>(_selector: string): T | null {
+    return null;
+  }
+
+  select() {
+    // No-op for lightweight DOM tests.
+  }
+
+  setAttribute(name: string, value: string) {
+    this.attributes.set(name, value);
+  }
+}
+
+export class FakeInputElement extends FakeElement {}
+
+export class FakeSelectElement extends FakeElement {}
+
+export function installFakeDocument() {
+  vi.stubGlobal("HTMLInputElement", FakeInputElement);
+  vi.stubGlobal("HTMLSelectElement", FakeSelectElement);
+  vi.stubGlobal("document", {
+    createElement: (tagName: string) => {
+      const element = tagName === "input"
+        ? new FakeInputElement()
+        : tagName === "select"
+          ? new FakeSelectElement()
+          : new FakeElement();
+      if (tagName === "input") element.type = "text";
+      return element;
+    },
+    createTextNode: (text: string) => {
+      const node = new FakeElement();
+      node.textContent = text;
+      return node;
+    }
+  });
+}
+
+export function makePropertiesPanelHarness() {
+  const rows: Array<{ label: string; control: FakeElement }> = [];
+  const section = new FakeElement() as FakeElement & HTMLElement;
+  const props = {
+    setTitle: vi.fn(),
+    section: () => section,
+    row: (_section: HTMLElement, label: string, control: HTMLElement) => {
+      rows.push({ label, control: control as unknown as FakeElement });
+      return new FakeElement() as FakeElement & HTMLElement;
+    }
+  };
+  return { props, rows, section };
+}

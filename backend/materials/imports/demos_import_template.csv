@@ -1,0 +1,2 @@
+vendor,vendorDecorId,vendorSku,displayName,slug,materialType,decorFamily,colorFamily,surfaceHint,baseColorSource,normalSource,roughnessSource,fallbackAsset,tileSizeMeters,grainDirectionDefault,colorSource,baseColorTint,tintStrength,source,notes
+demos,demos_oak_natural_001,,Dub Natural,dub-natural,wood,oak,natural,matte,relative/or/absolute/path/to/source_texture.jpg,,,0.4,vertical,texture,,0.0,manual_import,

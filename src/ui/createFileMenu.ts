@@ -25,13 +25,17 @@ type FileMenuActions = {
   saveProject?: () => void | Promise<void>;
   downloadProject?: () => void | Promise<void>;
   loadProjectFile?: () => void | Promise<void>;
+  openProjectManager?: () => void | Promise<void>;
   save: () => void | Promise<void>;
   saveAs: () => void | Promise<void>;
   exportLayoutJson: () => void | Promise<void>;
   exportSceneJson: () => void | Promise<void>;
+  exportWebsiteInitial: () => void | Promise<void>;
+  exportWebsiteFinal: () => void | Promise<void>;
+  exportBlenderPreview: () => void | Promise<void>;
   exportPng: () => void | Promise<void>;
   copyJson: () => void | Promise<void>;
-  onLanguageChange?: (language: AppLanguage) => void;
+  onLanguageChange?: (language: AppLanguage) => void | Promise<void>;
 };
 
 export function attachFileMenu(anchor: HTMLElement, actions: FileMenuActions) {
@@ -82,6 +86,7 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
         { label: t("New Project"), onSelect: actions.newProject },
         { label: t("Open Project"), onSelect: actions.openProject ?? actions.save },
         { label: t("Save Project"), onSelect: actions.saveProject ?? actions.save },
+        { label: t("Project Manager"), onSelect: actions.openProjectManager ?? actions.openProject ?? actions.save },
         { label: t("Download Project File"), onSelect: actions.downloadProject ?? actions.saveAs },
         { label: t("Load Project File"), onSelect: actions.loadProjectFile ?? actions.saveAs },
         { type: "separator" }
@@ -94,7 +99,16 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
     { type: "separator" },
     { label: t("Export Layout JSON…"), onSelect: actions.exportLayoutJson },
     { label: t("Export Scene JSON…"), onSelect: actions.exportSceneJson },
+    {
+      type: "submenu",
+      label: t("Website animation export"),
+      items: [
+        { label: t("Export initial / wrong parameters…"), onSelect: actions.exportWebsiteInitial },
+        { label: t("Export final / corrected parameters…"), onSelect: actions.exportWebsiteFinal }
+      ]
+    },
     { label: t("Export PNG Snapshot…"), onSelect: actions.exportPng },
+    { label: t("Export Blender Material Preview..."), onSelect: actions.exportBlenderPreview },
     { label: t("Copy JSON to Clipboard"), onSelect: actions.copyJson },
     {
       type: "submenu",
@@ -109,7 +123,7 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
               checked: currentLanguage === "en",
               onSelect: () => {
                 setCurrentLanguage("en");
-                actions.onLanguageChange?.("en");
+                void Promise.resolve(actions.onLanguageChange?.("en")).catch(() => undefined);
               }
             },
             {
@@ -117,7 +131,15 @@ function buildItems(actions: FileMenuActions): MenuItem[] {
               checked: currentLanguage === "sk",
               onSelect: () => {
                 setCurrentLanguage("sk");
-                actions.onLanguageChange?.("sk");
+                void Promise.resolve(actions.onLanguageChange?.("sk")).catch(() => undefined);
+              }
+            },
+            {
+              label: t("Czech"),
+              checked: currentLanguage === "cs",
+              onSelect: () => {
+                setCurrentLanguage("cs");
+                void Promise.resolve(actions.onLanguageChange?.("cs")).catch(() => undefined);
               }
             }
           ]

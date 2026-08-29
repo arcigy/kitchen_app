@@ -1,0 +1,12 @@
+{
+  "dryRun": false,
+  "rowsProcessed": 12,
+  "rowsChanged": 1,
+  "rowsPreservedLocked": 11,
+  "rowsWithSuggestedTargetInternalMaterialId": 9,
+  "rowsWithSuggestedColor": 12,
+  "rowsStillMissingRequiredFields": 0,
+  "needs_review": 1,
+  "mapped": 11,
+  "warnings": []
+}

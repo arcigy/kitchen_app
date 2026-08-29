@@ -219,7 +219,7 @@
         "label": "Front Thickness mm",
         "type": "number",
         "required": false,
-        "defaultValue": 19,
+        "defaultValue": 18,
         "group": "advanced",
         "affects": "geometry"
       },

@@ -1,0 +1,24 @@
+{
+  "id": "wood_amaretto_hudson_oak",
+  "source": "Demos preview reference",
+  "assetId": "DTDL K530 HU BU Amaretto Hudson Oak",
+  "requestedAssetId": "495021",
+  "matchedAssetId": "495021",
+  "downloadProfile": "vendor-preview-proof",
+  "license": "vendor preview reference; internal proof only",
+  "originalMatchedPath": "https://www.demos-trade.sk/content/images/product/original/297177.jpeg",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": [
+    "Basecolor is the Demos preview image for visual proof only.",
+    "Roughness, normal, and displacement were copied from wood_oak_natural to keep standard wood behavior."
+  ]
+}

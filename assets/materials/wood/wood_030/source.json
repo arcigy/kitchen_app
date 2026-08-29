@@ -1,0 +1,23 @@
+﻿{
+    "id":  "wood_030",
+    "source":  "ambientCG",
+    "assetId":  "Wood030",
+    "requestedAssetId":  "Wood030",
+    "matchedAssetId":  "Wood030",
+    "downloadProfile":  "2K",
+    "license":  "CC0",
+    "originalMatchedPath":  "C:\\Users\\laube\\Downloads\\Wood030_2K-JPG.zip",
+    "normalConvention":  "GL",
+    "mapsFound":  {
+                      "basecolor":  true,
+                      "roughness":  true,
+                      "normal":  true,
+                      "ao":  false,
+                      "displacement":  true,
+                      "metallic":  false,
+                      "opacity":  false
+                  },
+    "notes":  [
+
+              ]
+}

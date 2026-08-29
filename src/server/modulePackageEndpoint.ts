@@ -1,19 +1,37 @@
 import type http from "node:http";
-import { createFileClientCatalogRepository } from "../core/catalog/catalog-file-repository";
+import type { ClientCatalogRepository } from "../core/catalog/catalog-repository";
 import type { ClientContext } from "../core/client/client-context";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
-import { createFileModulePackageRepository } from "../core/module-package/module-package-repository";
+import type { ModulePackageRepository, ModulePackageRepositoryRevision } from "../core/module-package/module-package-repository";
 import { createModulePackageService } from "../core/module-package/module-package-service";
+import {
+  createClientModulePackagesPendingKey,
+  type ClientModulePackagesResponseCache
+} from "./clientModulePackagesResponseCache";
+import { acceptsGzip, gzipJsonBody, sendPrecompressedGzipJson } from "./http-response-compression";
 
 type ModulePackageEndpointDeps = {
-  projectRoot: string;
   getContext(cookieHeader: string | string[] | undefined): Promise<ClientContext>;
+  createCatalogRepository(): ClientCatalogRepository;
+  createModulePackageRepository(): ModulePackageRepository;
+  responseCache: ClientModulePackagesResponseCache;
   readJsonBody(req: http.IncomingMessage): Promise<unknown>;
   sendJson(res: http.ServerResponse, status: number, data: unknown): void;
 };
 
 function bodyRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Module import body is required.");
+  return value as Record<string, unknown>;
+}
+
+function sameRevision(left: ModulePackageRepositoryRevision, right: ModulePackageRepositoryRevision): boolean {
+  return left.count === right.count &&
+    left.updatedAt === right.updatedAt &&
+    left.storageRevision === right.storageRevision;
+}
+
+function optionalRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
 }
 
@@ -25,17 +43,40 @@ export async function handleModulePackageApi(
 ): Promise<boolean> {
   if (!url.pathname.startsWith("/api/modules")) return false;
   const context = await deps.getContext(req.headers.cookie);
-  const catalogRepository = createFileClientCatalogRepository(deps.projectRoot);
+  const catalogRepository = deps.createCatalogRepository();
+  const packageRepository = deps.createModulePackageRepository();
   const service = createModulePackageService({
     context,
-    packageRepository: createFileModulePackageRepository(deps.projectRoot),
+    packageRepository,
     catalogRepository
   });
 
   if (req.method === "GET" && url.pathname === "/api/modules") {
-    await catalogRepository.ensureCatalogExists(context);
-    const packages = await service.listPackages();
-    deps.sendJson(res, 200, { ok: true, modules: packages });
+    if (!acceptsGzip(req.headers["accept-encoding"])) {
+      const packages = await service.listPackages();
+      deps.sendJson(res, 200, { ok: true, modules: packages });
+      return true;
+    }
+
+    const initialRevision = await packageRepository.getRevision(context);
+    const initialKey = { clientId: context.clientId, revision: initialRevision };
+    const cached = deps.responseCache.get(initialKey);
+    if (cached) {
+      sendPrecompressedGzipJson(res, cached);
+      return true;
+    }
+
+    const pendingKey = createClientModulePackagesPendingKey(context.clientId, initialRevision);
+    const prepared = await deps.responseCache.coalesce(pendingKey, async () => {
+      const payload = { ok: true, modules: await service.listPackages() };
+      const body = await gzipJsonBody(payload);
+      if (!body) return { compressed: null, payload } as const;
+      const finalRevision = await packageRepository.getRevision(context);
+      if (sameRevision(initialRevision, finalRevision)) deps.responseCache.set(initialKey, body);
+      return { compressed: body } as const;
+    });
+    if (prepared.compressed) sendPrecompressedGzipJson(res, prepared.compressed);
+    else deps.sendJson(res, 200, prepared.payload);
     return true;
   }
 
@@ -50,7 +91,41 @@ export async function handleModulePackageApi(
     return true;
   }
 
+  const presetMatch = url.pathname.match(/^\/api\/modules\/([^/]+)\/parameter-presets$/);
+  if (req.method === "POST" && presetMatch) {
+    if (context.role === "viewer") {
+      deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot create module parameter presets." });
+      return true;
+    }
+    const body = bodyRecord(await deps.readJsonBody(req));
+    if (typeof body.clientId === "string") throw new Error("Unexpected clientId in request body.");
+    const name = typeof body.name === "string" ? body.name : "";
+    const note = typeof body.note === "string" ? body.note : "";
+    const parameters = optionalRecord(body.parameters);
+    const result = await service.createParameterPreset({
+      modulePackageId: decodeURIComponent(presetMatch[1]!),
+      name,
+      note,
+      parameters
+    });
+    deps.sendJson(res, 201, {
+      ok: true,
+      modulePackage: result.modulePackage,
+      catalogModule: result.catalogModule,
+      preset: {
+        presetId: result.preset.presetId,
+        label: result.preset.label,
+        note: result.preset.note
+      }
+    });
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/modules/import") {
+    if (context.role === "viewer") {
+      deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot import module packages." });
+      return true;
+    }
     const body = bodyRecord(await deps.readJsonBody(req));
     if (typeof body.clientId === "string") throw new Error("Unexpected clientId in request body.");
     const fqm = typeof body.fqm === "string" ? body.fqm : typeof body.moduleFile === "string" ? body.moduleFile : undefined;

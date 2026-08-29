@@ -42,6 +42,8 @@ If a change needs more than a small wiring edit, create or update a focused file
 | Module UI controls | `src/modules/[module]/controls.ts` |
 | Shared material/pricing data | `src/data/` |
 
+For every new icon-bearing UI action, also follow `docs/ui-icon-contract.md`.
+
 ## Before adding code
 
 1. Identify the feature area from the table above.
@@ -49,6 +51,47 @@ If a change needs more than a small wiring edit, create or update a focused file
 3. Extend that file if the responsibility matches.
 4. Create a new focused file only when no existing owner fits.
 5. Keep `app.ts` changes to imports, context wiring, and wrappers.
+
+## Feature planning directive
+
+Before implementing a new feature, first write down the system owner and the smallest safe implementation path. Do not start by adding code to the nearest event handler.
+
+For each feature, confirm:
+
+- which existing system owns it;
+- which existing controller/helper already has similar behavior;
+- which Universal Editor capabilities are involved, if any;
+- which current behavior needs characterization tests before refactoring;
+- which new behavior needs focused tests;
+- which manual app path belongs in `MANUAL_TEST_LOG.csv`;
+- which files are intentionally out of scope.
+
+If the owner is unclear, stop at analysis and add tests or a wrapper first. Do not create a second custom implementation beside an existing one.
+
+## Universal editor directive
+
+Read and follow `docs/universal-editor-contract.md` before touching editor-wide behavior:
+
+- selection and deselection;
+- delete, duplicate, copy, move, pointer drag, transform move, and align;
+- trim and extend;
+- dimensions and temporary dimensions;
+- undo and redo;
+- keyboard shortcuts;
+- editor topbars, toolbars, and mode shells.
+
+Editor behavior must move toward shared commands, capability profiles, and tested adapters. Do not add entity-specific shortcuts unless the Universal Editor Contract says the entity should be special.
+
+## Commit hygiene directive
+
+Every non-trivial slice should be independently reviewable:
+
+- one behavior area per commit;
+- focused tests before or with the change;
+- `MANUAL_TEST_LOG.csv` row for user-verifiable behavior;
+- no `dist/` output;
+- no package/config churn unless the task requires it;
+- no unrelated formatting or line-ending normalization.
 
 ## Hard limits
 
@@ -70,6 +113,12 @@ If a change needs more than a small wiring edit, create or update a focused file
 - Keep feature-specific types beside the controller that owns them.
 - Export a type only when another module genuinely consumes it.
 
+## Project save/load contract
+
+Read and follow `docs/PROJECT_SAVE_LOAD_CONTRACT.md` before adding or changing any persisted project state, module parameters, layout entities, database project storage, import/export, recent activity, BOM/pricing snapshots, or restore logic.
+
+Any new user-visible state must be serialized, restored, validated, and asserted in the project roundtrip tests.
+
 ## Required checks after structural changes
 
 Run at minimum:
@@ -78,6 +127,7 @@ Run at minimum:
 npm run typecheck
 npm test
 npm run build
+npm run test:project-roundtrip-full
 npm run test:ui-regression
 ```
 

@@ -7,7 +7,7 @@ Copy this shape when creating a new system module package source template. Repla
   "format": "furnquote-module",
   "packageVersion": 1,
   "module": {
-    "modulePackageId": "example_module_family_v1",
+    "modulePackageId": "base_example",
     "moduleType": "example_module",
     "familyName": "Example Module",
     "displayName": "Example Module",

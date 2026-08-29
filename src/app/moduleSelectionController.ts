@@ -2,28 +2,11 @@ import * as THREE from "three";
 import { pointInPolygonXZ, worldToScreen } from "./sharedUtils";
 import { getModulePlanPolygon } from "./planSnap";
 import type { LayoutInstance } from "./localTypes";
+import type { KitchenModeGroupSelectionApi, SelectionMarqueeState } from "./selectionControllerTypes";
+import type { PointerModuleDragState } from "./pointerModuleDrag";
 
-type KitchenGroupLookup = {
-  id: string;
-};
-
-type KitchenModeSelectionApi = {
+type KitchenModeSelectionApi = KitchenModeGroupSelectionApi & {
   filterSelectableInstanceId: (id: string) => string | null;
-  findKitchenGroup: (id: string) => KitchenGroupLookup | null;
-};
-
-type ModuleDragState = {
-  active: boolean;
-  id: string | null;
-  offset: THREE.Vector3;
-  lastValid: THREE.Vector3;
-};
-
-type MarqueeState = {
-  active: boolean;
-  pending: boolean;
-  pointerId: number | null;
-  hitSomething: boolean;
 };
 
 type ModuleSelectionControllerContext = {
@@ -32,8 +15,8 @@ type ModuleSelectionControllerContext = {
   raycaster: THREE.Raycaster;
   groundPlane: THREE.Plane;
   renderer: THREE.WebGLRenderer;
-  dragState: ModuleDragState;
-  marquee: MarqueeState;
+  dragState: PointerModuleDragState;
+  marquee: SelectionMarqueeState;
   marqueeEl: HTMLElement;
   findInstance: (id: string) => LayoutInstance | null;
   getCamera: () => THREE.Camera;
@@ -42,8 +25,9 @@ type ModuleSelectionControllerContext = {
   getKitchenEditMode: () => boolean;
   getKitchenMode: () => KitchenModeSelectionApi | null;
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
+  isModuleAlignLocked?: (id: string) => boolean;
   setSelectedKitchenGroup: (groupId: string | null) => void;
-  setSelectedModule: (id: string | null) => void;
+  setSelectedModule: (id: string | null, options?: { additive?: boolean }) => void;
 };
 
 export function createModuleSelectionController(ctx: ModuleSelectionControllerContext) {
@@ -69,18 +53,7 @@ export function createModuleSelectionController(ctx: ModuleSelectionControllerCo
     cancelPendingMarqueeHit(ev.pointerId);
 
     if (selectOwningKitchenGroup(inst.kitchenGroupId)) return true;
-    ctx.setSelectedModule(selectableId);
-
-    if (ctx.getViewMode() !== "2d") return true;
-    if (ctx.pinnedInstanceIds.has(selectableId)) return true;
-
-    const hitPoint = new THREE.Vector3();
-    if (!ctx.raycaster.ray.intersectPlane(ctx.groundPlane, hitPoint)) return true;
-    ctx.dragState.active = true;
-    ctx.dragState.id = selectableId;
-    ctx.dragState.offset.set(hitPoint.x - inst.root.position.x, 0, hitPoint.z - inst.root.position.z);
-    ctx.dragState.lastValid.copy(inst.root.position);
-    ctx.renderer.domElement.setPointerCapture(ev.pointerId);
+    ctx.setSelectedModule(selectableId, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey });
     return true;
   };
 

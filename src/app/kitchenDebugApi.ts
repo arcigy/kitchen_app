@@ -4,20 +4,184 @@ import { wallEndpointWhich } from "./wallGeometryHelpers";
 import { getModulePlanPolygon } from "./planSnap";
 import { detectModuleAdjacencyInfo } from "./moduleAdjacency";
 import { getSelectionMeasureBindings } from "./measureEditing";
-import { makeDefaultKitchenContext, resolveContext } from "../layout/kitchenContext";
+import type { MeasureSelectionTarget } from "./measureEditing";
+import type { PlanSnapBinding, PlanSnapResult } from "./planSnap";
+import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
+import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "../layout/kitchenContext";
 import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync";
 import { captureLayoutSnapshot, commitHistory } from "../layout/historyManager";
-import { cancelPlacement } from "../layout/placementManager";
+import { cancelPlacement, type PlacementHelpers } from "../layout/placementManager";
 import { normalizeModuleParamsForSource, type ModuleParams } from "../model/cabinetTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { createDefaultModulePackageParameters } from "../core/module-package/runtime/module-runtime-adapter";
 import { findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
-import type { AppState } from "../layout/appState";
+import type { AppState, KitchenPlacementBinding } from "../layout/appState";
 import type { MeasureState } from "./measureTools";
-import type { FloorBoundaryPoint, FloorParams, KitchenWorktopInstance, KitchenWorktopJustification, LayoutInstance, WallInstance } from "./localTypes";
+import type {
+  AlignPickedLine,
+  ColumnInstance,
+  ColumnParams,
+  FloorBoundaryPoint,
+  FloorInstance,
+  FloorParams,
+  KitchenWorktopInstance,
+  KitchenWorktopJustification,
+  LayoutInstance,
+  SectionInstance,
+  SectionParams,
+  WallInstance
+} from "./localTypes";
+import type { createKitchenEditMode } from "../layout/kitchenEditMode";
+import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
+import { refreshSelectionHighlights } from "./selectionController";
+import type { ProjectActions } from "./project/projectActions";
+import { buildPinoVendorKitchenCatalog } from "../layout/pinoVendorKitchenCatalog";
+import {
+  buildPinoShowroomPlan,
+  createPinoShowroomKitchenContext,
+  createPinoShowroomSeedEntries
+} from "./pinoVendorShowroom";
 
-export type KitchenDebugApiContext = Record<string, any>;
+type KitchenGuideSegmentInfo = {
+  start: THREE.Vector3;
+  dir: THREE.Vector3;
+  frontNormal: THREE.Vector3;
+  length: number;
+};
+
+type KitchenCornerPlacementInfo = {
+  valid: boolean;
+  binding: KitchenPlacementBinding;
+};
+
+type TallKitchenPlacementConstraint = {
+  position: THREE.Vector3;
+  rotationY: number;
+  kitchenPlacement?: KitchenPlacementBinding | null;
+};
+
+type AlignApplyResult = {
+  ok: boolean;
+  reason?: string;
+};
+
+type SceneDebugState = {
+  planAmbientVisible: boolean;
+  planOverlayVisible: boolean;
+};
+
+type KitchenDebugApiContext = {
+  S: AppState;
+  kitchenWorktops: KitchenWorktopInstance[];
+  instances: LayoutInstance[];
+  placement: AppState["placement"];
+  placementHelpers: PlacementHelpers;
+  layoutRoot: THREE.Object3D;
+  measureState: MeasureState;
+  wallDefault: Pick<AppState["walls"][number]["params"], "thicknessMm">;
+  walls: WallInstance[];
+  renderer: THREE.WebGLRenderer;
+  wallJoinTolMm: number;
+  wallPlanGroup: THREE.Object3D;
+  detailSliceGroup: THREE.Object3D;
+  instanceVisualWorldBox: (inst: LayoutInstance) => THREE.Box3;
+  getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
+  getModuleWorldKitchenAnchor: (inst: LayoutInstance) => THREE.Vector3;
+  getKitchenWorktopBackGuidePath: (params: KitchenWorktopInstance["params"], backOffsetMm?: number) => THREE.Vector3[];
+  cancelKitchenWorktopDraw: (opts?: { silent?: boolean }) => void;
+  removeKitchenWorktop: (id: string, opts?: { skipHistory?: boolean }) => void;
+  deleteInstance: (id: string) => void;
+  setSelectedKitchenGroup: (id: string | null) => void;
+  setSelectedModule: (id: string | null) => void;
+  mountProps: () => void;
+  updateLayoutPanel: () => void;
+  modulePackages: readonly FurnQuoteModulePackage[];
+  createInstance: (params: ModuleParams) => LayoutInstance;
+  getKitchenCornerPlacementInfo: (
+    worktop: KitchenWorktopInstance,
+    cornerIndex: number,
+    backOffsetMm: number,
+    inst: LayoutInstance
+  ) => KitchenCornerPlacementInfo | null;
+  applyKitchenPlacementBinding: (inst: LayoutInstance, binding: KitchenPlacementBinding, backOffsetMm: number) => boolean;
+  getKitchenGuideSegmentInfo: (
+    worktop: KitchenWorktopInstance,
+    segmentIndex: number,
+    backOffsetMm: number
+  ) => KitchenGuideSegmentInfo | null;
+  moduleStaysOutsideKitchenWorktop: (inst: LayoutInstance) => boolean;
+  clampNumber: (value: number, min: number, max: number) => number;
+  getTallKitchenPlacementConstraint: (
+    inst: LayoutInstance,
+    cursorWorld: THREE.Vector3,
+    worktops: KitchenWorktopInstance[],
+    backOffsetMm: number
+  ) => TallKitchenPlacementConstraint | null;
+  getKitchenModulePlacementY: (instOrParams: LayoutInstance | ModuleParams, groupId?: string | null) => number;
+  ensureLayoutMode: () => void;
+  fitSelectedKitchenModuleToGap: () => void;
+  createKitchenWorktop: (
+    params: KitchenWorktopInstance["params"],
+    kitchenGroupId: string,
+    opts?: { skipHistory?: boolean; id?: string }
+  ) => KitchenWorktopInstance;
+  rebuildKitchenGroupLayout: (groupId: string, nextCtx: KitchenContext, prevCtx?: KitchenContext) => void;
+  setToolMeasure: () => void;
+  addWall: (a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) => WallInstance | null;
+  setWallEndpointMm: (wall: WallInstance, which: "a" | "b", point: FloorBoundaryPoint) => void;
+  rebuildWall: (wall: WallInstance) => void;
+  autoJoinAtMmPoint: (point: FloorBoundaryPoint) => void;
+  rebuildWallPlanMesh: () => void;
+  snapPoint2D: (
+    point: THREE.Vector3,
+    rect: DOMRect,
+    camera: THREE.Camera,
+    thresholdPx: number,
+    opts?: { perpendicularFrom?: THREE.Vector3 | null }
+  ) => PlanSnapResult;
+  cam: () => THREE.Camera;
+  bindingFromPlanSnap: (snap: PlanSnapResult, fallback: THREE.Vector3) => PlanSnapBinding;
+  addMeasurement: (
+    a: THREE.Vector3,
+    b: THREE.Vector3,
+    aBinding: PlanSnapBinding,
+    bBinding: PlanSnapBinding,
+    options?: { kind?: MeasureState["measures"][number]["kind"]; distanceMm?: number }
+  ) => MeasureState["measures"][number];
+  createFloor: (params: FloorParams, opts?: { skipHistory?: boolean; id?: string }) => FloorInstance;
+  createColumn: (params?: Partial<ColumnParams>, opts?: { skipHistory?: boolean; id?: string }) => ColumnInstance;
+  createSectionInstance: (params: SectionParams, opts?: { skipHistory?: boolean; id?: string }) => SectionInstance;
+  cloneFloorParams: (params: FloorParams) => FloorParams;
+  setSelectedFloor: (id: string | null) => void;
+  setSelectedWall: (id: string | null) => void;
+  findInstance: (id: string) => LayoutInstance | null;
+  rebuildInstance: (
+    inst: LayoutInstance,
+    opts?: { previousParams?: ModuleParams; preserveBackAnchor?: boolean; sourceKey?: string }
+  ) => boolean;
+  instanceWorldBox: (inst: LayoutInstance) => THREE.Box3;
+  getCurrentMeasureSelectionTarget: () => MeasureSelectionTarget | null;
+  commitSelectedMeasureValueMm: (measureId: string, raw: string) => void;
+  commitWallMeasureValueMm: (measureId: string, raw: string) => void;
+  pickAlignLineAt: (hitPoint: THREE.Vector3, mousePx: { x: number; y: number }, rect: DOMRect) => AlignPickedLine | null;
+  applyAlignBetweenPickedLines: (ref: AlignPickedLine, picked: AlignPickedLine) => AlignApplyResult;
+  updateSelectionHighlights: () => void;
+  getSceneDebugState: () => SceneDebugState;
+  ctl: () => { target: THREE.Vector3 };
+  getKitchenMode: () => ReturnType<typeof createKitchenEditMode> | null;
+  getSelectedKitchenGroupId: () => string | null;
+  getSelectedInstanceId: () => string | null;
+  getSelectedFloorId: () => string | null;
+  getSelectedWallId: () => string | null;
+  getSelectedKind: () => AppState["selectedKind"];
+  getActiveViewerTab: () => string;
+  getLayoutTool: () => AppState["layoutTool"];
+  getViewMode: () => AppState["viewMode"];
+  getLastRebuildDebug: () => unknown;
+  catalog: ClientCatalog;
+  projectActions?: ProjectActions;
+};
 
 declare global {
   interface Window {
@@ -26,9 +190,9 @@ declare global {
 }
 
 export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
-  const catalog = ctx.catalog as ClientCatalog | undefined;
+  const catalog = ctx.catalog;
   if (!catalog) throw new Error("ClientCatalog is required for kitchen debug API.");
-  const modulePackages = (ctx.modulePackages ?? []) as readonly FurnQuoteModulePackage[];
+  const modulePackages = ctx.modulePackages ?? [];
   const {
     S,
     kitchenWorktops,
@@ -76,6 +240,8 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     bindingFromPlanSnap,
     addMeasurement,
     createFloor,
+    createColumn,
+    createSectionInstance,
     cloneFloorParams,
     setSelectedFloor,
     setSelectedWall,
@@ -91,6 +257,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     getSceneDebugState,
     ctl
   } = ctx;
+  const projectActions = ctx.projectActions;
 
   const getDebugModuleSnapshot = (inst: LayoutInstance) => {
     const box = instanceVisualWorldBox(inst);
@@ -153,6 +320,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
       kitchenPlacement: inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null,
       moduleVisible: inst.module.visible,
       outlineVisible: inst.outline.visible,
+      outlineVertexCount: inst.outline.geometry.getAttribute("position")?.count ?? 0,
       pickVisible: inst.pick.visible,
       params: structuredClone(inst.params),
       positionM: {
@@ -197,12 +365,20 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   };
 
   const getDebugKitchenSnapshot = (groupId: string | null) => {
-    const kitchenGroups = S.kitchenGroups as AppState["kitchenGroups"];
-    const allWorktops = kitchenWorktops as KitchenWorktopInstance[];
-    const allInstances = instances as LayoutInstance[];
-    const group = groupId ? kitchenGroups.find((item) => item.id === groupId) ?? null : null;
+    ctx.getKitchenMode()?.flushPendingContext?.();
+    const kitchenGroups = S.kitchenGroups;
+    const allWorktops = kitchenWorktops;
+    const allInstances = instances;
+    const group = findKitchenPlacementGroup({ kitchenGroupId: groupId, kitchenGroups });
     const groupWorktops = groupId ? allWorktops.filter((item) => item.kitchenGroupId === groupId) : [];
     const groupInstances = groupId ? allInstances.filter((item) => item.kitchenGroupId === groupId) : [];
+    const backOffsetMm = groupId
+      ? resolveKitchenPlacementBackOffset({
+          kitchenGroupId: groupId,
+          kitchenGroups,
+          defaultWorktopBackOffsetMm: S.kitchenCtx.worktopBackOffsetMm
+        })
+      : S.kitchenCtx.worktopBackOffsetMm;
     return {
       selectedKitchenGroupId: ctx.getSelectedKitchenGroupId(),
       activeKitchenGroupId: S.activeKitchenGroupId,
@@ -218,9 +394,11 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
       worktops: groupWorktops.map((worktop) => ({
         id: worktop.id,
         params: structuredClone(worktop.params),
-        guidePathM: getKitchenWorktopBackGuidePath(worktop.params, group?.ctx.worktopBackOffsetMm ?? S.kitchenCtx.worktopBackOffsetMm).map(
-          (point: THREE.Vector3) => ({ x: point.x, y: point.y, z: point.z })
-        )
+        guidePathM: getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm).map((point: THREE.Vector3) => ({
+          x: point.x,
+          y: point.y,
+          z: point.z
+        }))
       })),
       instances: groupInstances.map((inst) => getDebugModuleSnapshot(inst))
     };
@@ -254,9 +432,10 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   };
 
   const debugAddKitchenModule = (groupId: string, opts?: { type?: ModuleParams["type"]; segmentIndex?: number; offsetAlongMm?: number; cornerIndex?: number }) => {
-    const group = S.kitchenGroups.find((item: any) => item.id === groupId) ?? null;
-    const worktop = kitchenWorktops.find((item: any) => item.kitchenGroupId === groupId) ?? null;
+    const group = findKitchenPlacementGroup({ kitchenGroupId: groupId, kitchenGroups: S.kitchenGroups });
+    const worktop = kitchenWorktops.find((item) => item.kitchenGroupId === groupId) ?? null;
     if (!group || !worktop) throw new Error("Debug kitchen group/worktop not found.");
+    const backOffsetMm = group.ctx.worktopBackOffsetMm;
 
     const requestedType = opts?.type ?? "drawer_low";
     const modulePackage = findModulePackageForParams(modulePackages, { type: requestedType });
@@ -270,7 +449,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     inst.kitchenGroupId = groupId;
 
     if (nextParams.type === "corner_shelf_lower") {
-      const guidePath = getKitchenWorktopBackGuidePath(worktop.params, group.ctx.worktopBackOffsetMm);
+      const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
       let info = null as ReturnType<typeof getKitchenCornerPlacementInfo> | null;
       const requestedCornerIndex = typeof opts?.cornerIndex === "number" ? Math.round(opts.cornerIndex) : null;
       const candidateCornerIndexes =
@@ -278,14 +457,14 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
           ? [requestedCornerIndex]
           : Array.from({ length: Math.max(0, guidePath.length - 2) }, (_, index) => index + 1);
       for (const cornerIndex of candidateCornerIndexes) {
-        info = getKitchenCornerPlacementInfo(worktop, cornerIndex, group.ctx.worktopBackOffsetMm, inst);
+        info = getKitchenCornerPlacementInfo(worktop, cornerIndex, backOffsetMm, inst);
         if (info?.valid) break;
       }
       if (!info) throw new Error("Debug kitchen corner not available.");
       inst.kitchenPlacement = { ...info.binding };
-      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
+      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, backOffsetMm);
     } else {
-      const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, group.ctx.worktopBackOffsetMm);
+      const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, backOffsetMm);
       if (!info) throw new Error("Debug guide segment not available.");
 
       if (moduleStaysOutsideKitchenWorktop(inst)) {
@@ -294,7 +473,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
           .clone()
           .addScaledVector(info.dir, desiredAlongM)
           .addScaledVector(info.frontNormal, Math.max(0.05, worktop.params.depthMm / 2000));
-        const tallConstraint = getTallKitchenPlacementConstraint(inst, cursorWorld, [worktop], group.ctx.worktopBackOffsetMm);
+        const tallConstraint = getTallKitchenPlacementConstraint(inst, cursorWorld, [worktop], backOffsetMm);
         if (!tallConstraint) throw new Error("Debug tall placement not available.");
         inst.kitchenPlacement = tallConstraint.kitchenPlacement ?? null;
         inst.root.position.copy(tallConstraint.position);
@@ -309,13 +488,13 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
         segmentIndex: opts?.segmentIndex ?? 0,
         offsetAlongM: desiredAlongM
       };
-      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, group.ctx.worktopBackOffsetMm);
+      applyKitchenPlacementBinding(inst, inst.kitchenPlacement, backOffsetMm);
       }
     }
 
     layoutRoot.add(inst.root);
     instances.push(inst);
-    group.instanceIds = instances.filter((item: any) => item.kitchenGroupId === groupId).map((item: any) => item.id);
+    group.instanceIds = instances.filter((item) => item.kitchenGroupId === groupId).map((item) => item.id);
     updateLayoutPanel();
     return getDebugKitchenSnapshot(groupId);
   };
@@ -323,6 +502,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   const debugCreateKitchenScenario = (opts?: {
     ctxPatch?: Partial<ReturnType<typeof resolveContext>>;
     path?: FloorBoundaryPoint[];
+    segmentDepthsMm?: number[];
     justification?: KitchenWorktopJustification;
     mirrored?: boolean;
     addModule?: boolean;
@@ -350,6 +530,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     createKitchenWorktop(
       {
         path: structuredClone(opts?.path ?? [{ x: 0, z: 0 }, { x: 2400, z: 0 }]),
+        segmentDepthsMm: opts?.segmentDepthsMm ? [...opts.segmentDepthsMm] : undefined,
         justification: opts?.justification ?? "back",
         mirrored: !!opts?.mirrored,
         depthMm: nextCtx.worktopDepthMm,
@@ -375,8 +556,159 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     return getDebugKitchenSnapshot(groupId);
   };
 
+  const debugCreatePinoVendorShowroomProject = async (opts?: {
+    projectName?: string;
+    createProject?: boolean;
+    saveProject?: boolean;
+  }) => {
+    const startedAt = performance.now();
+    debugResetKitchenScenario();
+    ensureLayoutMode();
+
+    const vendorCatalog = buildPinoVendorKitchenCatalog(catalog);
+    const showroomEntries = createPinoShowroomSeedEntries(vendorCatalog.entries);
+    const plan = buildPinoShowroomPlan(showroomEntries);
+    if (plan.entries.length === 0 || plan.placements.length === 0) {
+      throw new Error("PINO showroom plan is empty.");
+    }
+
+    const floorMaterialId =
+      catalog.materials.find((material) => material.isActive !== false)?.id ??
+      catalog.kitchenDefaults.carcassMaterialId ??
+      catalog.kitchenDefaults.frontMaterialId ??
+      "mat.default";
+    createFloor(
+      {
+        name: "PINO showroom floor",
+        heightMm: 0,
+        thicknessMm: 40,
+        materialId: floorMaterialId,
+        boundary: structuredClone(plan.floorBoundary)
+      },
+      { skipHistory: true }
+    );
+
+    const entryById = new Map(plan.entries.map((entry) => [entry.id, entry] as const));
+    const rowGroupIdByRowId = new Map<string, string>();
+    const rowContextByRowId = new Map<string, KitchenContext>();
+    const rowWorktopByRowId = new Map<string, KitchenWorktopInstance>();
+
+    for (const row of plan.rows) {
+      const groupId = `dbg_pino_row_${row.rowId}`;
+      rowGroupIdByRowId.set(row.rowId, groupId);
+      const nextCtx = createPinoShowroomKitchenContext(catalog);
+      rowContextByRowId.set(row.rowId, structuredClone(nextCtx));
+      S.kitchenGroups.push({
+        id: groupId,
+        name: row.label,
+        ctx: structuredClone(nextCtx),
+        instanceIds: []
+      });
+      if (row.role === "low") {
+        const worktop = createKitchenWorktop(
+          {
+            path: [
+              { x: Math.round(row.minXMm - 20), z: Math.round(row.zMm) },
+              { x: Math.round(row.maxXMm + 20), z: Math.round(row.zMm) }
+            ],
+            justification: "back",
+            mirrored: false,
+            depthMm: nextCtx.worktopDepthMm,
+            thicknessMm: nextCtx.worktopThicknessMm,
+            heightMm: nextCtx.heightMm,
+            overhangSideMm: nextCtx.worktopOverhangSideMm,
+            materialId: nextCtx.worktopMaterialId
+          },
+          groupId,
+          { skipHistory: true, id: `dbg_pino_wt_${row.rowId}` }
+        );
+        rowWorktopByRowId.set(row.rowId, worktop);
+      }
+    }
+
+    for (const placement of plan.placements) {
+      const entry = entryById.get(placement.entryId);
+      const groupId = rowGroupIdByRowId.get(placement.rowId);
+      const groupCtx = rowContextByRowId.get(placement.rowId);
+      if (!entry || !groupId || !groupCtx) continue;
+      const seededParams = structuredClone(entry.params);
+      applyKitchenContextToModuleParams(seededParams, groupCtx, catalog);
+      const inst = createInstance(seededParams);
+      inst.kitchenGroupId = groupId;
+      const worktop = rowWorktopByRowId.get(placement.rowId) ?? null;
+      let placedOnWorktop = false;
+      if (worktop && entry.role === "low") {
+        const segmentInfo = getKitchenGuideSegmentInfo(worktop, 0, groupCtx.worktopBackOffsetMm);
+        if (segmentInfo) {
+          const targetPoint = new THREE.Vector3(placement.xMm / 1000, 0, placement.zMm / 1000);
+          const projected = clampNumber(targetPoint.clone().sub(segmentInfo.start).dot(segmentInfo.dir), 0, segmentInfo.length);
+          inst.kitchenPlacement = {
+            worktopId: worktop.id,
+            segmentIndex: 0,
+            offsetAlongM: projected
+          };
+          placedOnWorktop = applyKitchenPlacementBinding(inst, inst.kitchenPlacement, groupCtx.worktopBackOffsetMm);
+        }
+      }
+      if (!placedOnWorktop) {
+        inst.kitchenPlacement = null;
+        inst.root.position.set(placement.xMm / 1000, getKitchenModulePlacementY(inst, groupId), placement.zMm / 1000);
+        inst.root.rotation.y = (placement.rotationYDeg * Math.PI) / 180;
+      }
+      inst.root.updateMatrixWorld(true);
+      layoutRoot.add(inst.root);
+      instances.push(inst);
+    }
+
+    for (const group of S.kitchenGroups) {
+      group.instanceIds = instances.filter((item) => item.kitchenGroupId === group.id).map((item) => item.id);
+      rebuildKitchenGroupLayout(group.id, structuredClone(group.ctx), structuredClone(group.ctx));
+    }
+
+    const firstGroupId = S.kitchenGroups[0]?.id ?? null;
+    if (firstGroupId) setSelectedKitchenGroup(firstGroupId);
+    updateLayoutPanel();
+    mountProps();
+    commitHistory(S);
+
+    let project = projectActions?.getState().currentProject ?? null;
+    const shouldCreateProject = (opts?.createProject ?? true) && !!projectActions && !project;
+    if (shouldCreateProject) {
+      project = await projectActions!.create({
+        name: opts?.projectName?.trim() || "PINO showroom vsetky moduly",
+        address: "Arcigy local dev showroom",
+        contactName: "PINO/Nobilia",
+        notes: "Auto-generated PINO showroom project. Review/staging only."
+      });
+    }
+
+    let save = null as Awaited<ReturnType<ProjectActions["save"]>> | null;
+    if ((opts?.saveProject ?? true) && projectActions && projectActions.getState().currentProject) {
+      save = await projectActions.save();
+      project = save.project;
+    }
+
+    return {
+      createdInMs: Math.round(performance.now() - startedAt),
+      entryCount: plan.entries.length,
+      placementCount: plan.placements.length,
+      rowCount: plan.rows.length,
+      groupCount: S.kitchenGroups.length,
+      projectId: project?.projectId ?? null,
+      projectName: project?.name ?? null,
+      savedAt: save?.integrity.savedAt ?? null,
+      rows: plan.rows.map((row) => ({
+        label: row.label,
+        role: row.role,
+        itemCount: row.itemCount,
+        groups: row.groupLabels
+      })),
+      snapshot: getDebugKitchenSnapshot(firstGroupId)
+    };
+  };
+
   const debugPatchKitchenContext = (groupId: string, patch: Partial<ReturnType<typeof resolveContext>>) => {
-    const group = S.kitchenGroups.find((item: any) => item.id === groupId) ?? null;
+    const group = findKitchenPlacementGroup({ kitchenGroupId: groupId, kitchenGroups: S.kitchenGroups });
     if (!group) throw new Error(`Kitchen group ${groupId} not found.`);
     const prevCtx = resolveContext(structuredClone(group.ctx));
     const nextCtx = resolveContext({ ...group.ctx, ...patch });
@@ -407,7 +739,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   };
 
   const debugMoveWall = (wallId: string, shiftMm: { x: number; z: number }) => {
-    const wall = walls.find((item: any) => item.id === wallId) ?? null;
+    const wall = walls.find((item) => item.id === wallId) ?? null;
     if (!wall) throw new Error(`Wall ${wallId} not found.`);
     const oldA = { ...wall.params.aMm };
     const oldB = { ...wall.params.bMm };
@@ -435,16 +767,20 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     const rect = renderer.domElement.getBoundingClientRect();
     const aRaw = new THREE.Vector3(params.aMm.x / 1000, 0, params.aMm.z / 1000);
     const bRaw = new THREE.Vector3(params.bMm.x / 1000, 0, params.bMm.z / 1000);
-    const snappedA = snapPoint2D(aRaw, rect, cam(), 24);
-    const snappedB = snapPoint2D(bRaw, rect, cam(), 24, {
-      perpendicularFrom: params.normal ? null : snappedA.point
-    });
+    const snappedA = snapPoint2D(aRaw, rect, cam(), SNAP_DISTANCE_PX.measure2d);
     const a = snappedA.kind === "none" ? aRaw : snappedA.point;
-    const b = snappedB.kind === "none" ? bRaw : snappedB.point;
     const aBinding = bindingFromPlanSnap(snappedA, a);
-    const bBinding = bindingFromPlanSnap(snappedB, b);
 
     if (params.normal) {
+      const b = bRaw;
+      const bBinding: PlanSnapBinding = {
+        type: "free",
+        pointMm: {
+          x: Math.round(b.x * 1000),
+          y: Math.round(b.y * 1000),
+          z: Math.round(b.z * 1000)
+        }
+      };
       const baseDir = b.clone().sub(a).setY(0);
       if (baseDir.lengthSq() < 1e-10) throw new Error("Normal guide requires 2 distinct points.");
       baseDir.normalize();
@@ -459,6 +795,11 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
       );
     }
 
+    const snappedB = snapPoint2D(bRaw, rect, cam(), SNAP_DISTANCE_PX.measure2d, {
+      perpendicularFrom: snappedA.point
+    });
+    const b = snappedB.kind === "none" ? bRaw : snappedB.point;
+    const bBinding = bindingFromPlanSnap(snappedB, b);
     return addMeasurement(a, b, aBinding, bBinding, {
       kind: "distance",
       distanceMm: planarDistanceMm(a, b)
@@ -468,6 +809,16 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   const debugCreateFloor = (params: FloorParams) => {
     const floor = createFloor(cloneFloorParams(params), { skipHistory: true });
     return { id: floor.id, boundary: structuredClone(floor.params.boundary) };
+  };
+
+  const debugCreateColumn = (params: Partial<ColumnParams>) => {
+    const column = createColumn(params, { skipHistory: true });
+    return { id: column.id, params: structuredClone(column.params) };
+  };
+
+  const debugCreateSection = (params: SectionParams) => {
+    const section = createSectionInstance(params, { skipHistory: true });
+    return { id: section.id, params: structuredClone(section.params) };
   };
 
   const debugSelectFloor = (floorId: string) => {
@@ -483,6 +834,30 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   const debugSelectModule = (instanceId: string) => {
     setSelectedModule(instanceId);
     return { selectedKind: ctx.getSelectedKind(), selectedInstanceId: ctx.getSelectedInstanceId() };
+  };
+
+  const debugFitModuleToGap = (instanceId: string) => {
+    const inst = findInstance(instanceId);
+    if (!inst) throw new Error(`Instance ${instanceId} not found.`);
+    setSelectedModule(instanceId);
+    ctx.fitSelectedKitchenModuleToGap();
+    return getDebugKitchenSnapshot(inst.kitchenGroupId ?? null);
+  };
+
+  const debugDeleteModule = (instanceId: string) => {
+    ensureLayoutMode();
+    const inst = findInstance(instanceId);
+    if (!inst) throw new Error(`Instance ${instanceId} not found.`);
+    const groupId = inst.kitchenGroupId;
+    deleteInstance(instanceId);
+    const group = groupId ? S.kitchenGroups.find((item: any) => item.id === groupId) ?? null : null;
+    if (group) group.instanceIds = instances.filter((item: any) => item.kitchenGroupId === groupId).map((item: any) => item.id);
+    setSelectedModule(null);
+    updateSelectionHighlights();
+    updateLayoutPanel();
+    mountProps();
+    commitHistory(S);
+    return getDebugKitchenSnapshot(groupId ?? null);
   };
 
   const debugPatchModuleParams = (
@@ -536,7 +911,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
 
   const debugCommitSelectedMeasureValue = (measureId: string, valueMm: number) => {
     const target = getCurrentMeasureSelectionTarget();
-    const measure = (measureState as MeasureState).measures.find((item) => item.id === measureId) ?? null;
+    const measure = measureState.measures.find((item) => item.id === measureId) ?? null;
     const bindings = target && measure ? getSelectionMeasureBindings(measure, target) : null;
     const before = captureLayoutSnapshot(S);
     commitSelectedMeasureValueMm(measureId, String(valueMm));
@@ -563,7 +938,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   const debugProjectPlanPoint = (pointMm: { x: number; z: number }) => {
     const rect = renderer.domElement.getBoundingClientRect();
     const screen = worldToScreen(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), cam(), rect);
-    return { x: screen.x, y: screen.y };
+    return { x: rect.left + screen.x, y: rect.top + screen.y };
   };
 
   const debugPickAlignLine = (pointMm: { x: number; z: number }) => {
@@ -600,7 +975,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     }
     const result = applyAlignBetweenPickedLines(ref, picked);
     if (result.ok) {
-      updateSelectionHighlights();
+      refreshSelectionHighlights({ updateSelectionHighlights });
       commitHistory(S);
       mountProps();
     }
@@ -625,7 +1000,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     options?: { perpendicularFromMm?: { x: number; z: number } | null }
   ) => {
     const rect = renderer.domElement.getBoundingClientRect();
-    const snapped = snapPoint2D(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), rect, cam(), 24, {
+    const snapped = snapPoint2D(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), rect, cam(), SNAP_DISTANCE_PX.measure2d, {
       perpendicularFrom: options?.perpendicularFromMm
         ? new THREE.Vector3(options.perpendicularFromMm.x / 1000, 0, options.perpendicularFromMm.z / 1000)
         : null
@@ -646,7 +1021,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     firstPointMm: measureState.firstPoint
       ? { x: Math.round(measureState.firstPoint.x * 1000), z: Math.round(measureState.firstPoint.z * 1000) }
       : null,
-    measures: (measureState as MeasureState).measures.map((item) => ({
+    measures: measureState.measures.map((item) => ({
       id: item.id,
       kind: item.kind,
       aBinding: item.aBinding,
@@ -683,10 +1058,11 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
         planOverlayVisible: sceneDebug.planOverlayVisible,
         planAmbientVisible: sceneDebug.planAmbientVisible
       },
-      walls: (walls as WallInstance[]).map((wall) => ({
+      walls: walls.map((wall) => ({
         id: wall.id,
         meshVisible: wall.mesh.visible,
         outlineVisible: wall.outline.visible,
+        cutoutCount: Array.isArray(wall.mesh.userData.wallCutoutBounds) ? wall.mesh.userData.wallCutoutBounds.length : 0,
         aMm: { ...wall.params.aMm },
         bMm: { ...wall.params.bMm }
       }))
@@ -699,15 +1075,20 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     reset: debugResetKitchenScenario,
     selectKitchenGroup: debugSelectKitchenGroup,
     createKitchenScenario: debugCreateKitchenScenario,
+    createPinoVendorShowroomProject: debugCreatePinoVendorShowroomProject,
     addKitchenModule: debugAddKitchenModule,
     patchKitchenContext: debugPatchKitchenContext,
     createWall: debugCreateWall,
     createFloor: debugCreateFloor,
+    createColumn: debugCreateColumn,
+    createSection: debugCreateSection,
     moveWall: debugMoveWall,
     createMeasure: debugCreateMeasure,
     selectWall: debugSelectWall,
     selectFloor: debugSelectFloor,
     selectModule: debugSelectModule,
+    fitModuleToGap: debugFitModuleToGap,
+    deleteModule: debugDeleteModule,
     patchModuleParams: debugPatchModuleParams,
     detectModuleAdjacency: debugDetectModuleAdjacency,
     commitWallMeasureValue: debugCommitWallMeasureValue,

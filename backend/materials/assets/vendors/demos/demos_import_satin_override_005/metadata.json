@@ -1,0 +1,14 @@
+{
+  "width": null,
+  "height": null,
+  "mode": null,
+  "format": null,
+  "sourcePath": "assets/materials/wood/wood_dark_espresso/maps/basecolor.jpg",
+  "importedAt": "2026-05-20T16:11:49.849184+00:00",
+  "hasNormal": true,
+  "hasRoughness": false,
+  "normalMeta": {
+    "sourcePath": "C:\\Users\\laube\\Documents\\GitHub\\kitchen_app\\assets\\materials\\wood\\wood_dark_espresso\\maps\\normal.jpg"
+  },
+  "roughnessMeta": {}
+}

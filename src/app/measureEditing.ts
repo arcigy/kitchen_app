@@ -1,6 +1,7 @@
 import { planarDistanceMm } from "./sharedUtils";
 import type { MeasureState } from "./measureTools";
 import type { PlanSnapBinding } from "./planSnap";
+import { createInputElement } from "./propsPanelElements";
 
 export type MeasureSelectionTarget =
   | { kind: "wall"; wallId: string }
@@ -61,14 +62,14 @@ export function getLinkedDistanceMeasuresForTarget(measures: MeasureEntry[], tar
 }
 
 export function createMeasureInlineEditor(args: MeasureInlineEditorArgs) {
-  const measureInlineInput = document.createElement("input");
-  measureInlineInput.type = "text";
-  measureInlineInput.inputMode = "numeric";
-  measureInlineInput.placeholder = "mm";
-  measureInlineInput.id = "measure-inline-value";
-  measureInlineInput.name = "measure-inline-value";
+  const measureInlineInput = createInputElement("text", "", {
+    autocomplete: "off",
+    id: "measure-inline-value",
+    inputMode: "numeric",
+    name: "measure-inline-value",
+    placeholder: "mm"
+  });
   measureInlineInput.setAttribute("aria-label", "Measure value in millimeters");
-  measureInlineInput.autocomplete = "off";
   measureInlineInput.style.position = "absolute";
   measureInlineInput.style.display = "none";
   measureInlineInput.style.pointerEvents = "auto";
@@ -162,11 +163,16 @@ export function createMeasureInlineEditor(args: MeasureInlineEditorArgs) {
 
     for (const measure of linkedMeasures) {
       const targetForInput = target;
-      const input = document.createElement("input");
-      input.type = "number";
-      input.step = "1";
-      input.value = String(Math.round(planarDistanceMm(measure.a, measure.b)));
+      const originalValue = String(Math.round(planarDistanceMm(measure.a, measure.b)));
+      const input = createInputElement("number", originalValue, { step: "1" });
       input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") {
+          input.value = originalValue;
+          ev.preventDefault();
+          ev.stopPropagation();
+          input.blur();
+          return;
+        }
         if (ev.key === "Enter") {
           args.onCommitMeasure(measure.id, input.value, targetForInput);
           ev.preventDefault();

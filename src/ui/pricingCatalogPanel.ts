@@ -1,4 +1,5 @@
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import { formatDisplayCurrency, type PriceDisplayCurrency } from "./currencyDisplay";
 
 function table(headers: string[], rows: string[][]) {
   const wrap = document.createElement("div");
@@ -47,16 +48,16 @@ function table(headers: string[], rows: string[][]) {
   return wrap;
 }
 
-function formatCurrency(value: number | null) {
+function formatCurrency(value: number | null, currency: PriceDisplayCurrency) {
   if (value == null) return "-";
-  return new Intl.NumberFormat("sk-SK", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 2
-  }).format(value);
+  return formatDisplayCurrency(value, currency);
 }
 
-export function mountPricingCatalogPanel(container: HTMLElement, catalog: ClientCatalog) {
+export function mountPricingCatalogPanel(
+  container: HTMLElement,
+  catalog: ClientCatalog,
+  displayCurrency: PriceDisplayCurrency = "EUR"
+) {
   container.innerHTML = "";
   container.style.display = "grid";
   container.style.gap = "18px";
@@ -97,7 +98,7 @@ export function mountPricingCatalogPanel(container: HTMLElement, catalog: Client
         material.finish,
         material.availableThicknessesMm.join(", "),
         material.pricingUnit,
-        formatCurrency(catalog.priceList.prices[material.id] ?? null)
+        formatCurrency(catalog.priceList.prices[material.id] ?? null, displayCurrency)
       ])
     )
   );
@@ -122,7 +123,7 @@ export function mountPricingCatalogPanel(container: HTMLElement, catalog: Client
         component.series,
         component.variant,
         component.geometryId,
-        formatCurrency(catalog.priceList.prices[component.id] ?? null)
+        formatCurrency(catalog.priceList.prices[component.id] ?? null, displayCurrency)
       ])
     )
   );

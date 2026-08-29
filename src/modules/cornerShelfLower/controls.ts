@@ -18,7 +18,7 @@ function getCornerFieldState(params: CornerShelfLowerParams): Partial<Record<str
   const worktopThicknessMm = Math.max(0, Math.round(getNumber(params.worktopThicknessMm, 38)));
   const totalHeightMm = Math.max(120, Math.round(getNumber(params.height, 720)));
   const boardThicknessMm = Math.max(1, Math.round(getNumber(params.boardThickness, 18)));
-  const frontThicknessMm = Math.max(1, Math.round(getNumber(params.frontThicknessMm, 19)));
+  const frontThicknessMm = Math.max(1, Math.round(getNumber(params.frontThicknessMm, 18)));
   const heightCarcassMm = Math.max(50, Math.round(getNumber(params.heightCarcass, totalHeightMm - worktopThicknessMm)));
   const plinthHeightMaxMm = Math.max(0, heightCarcassMm - 2 * boardThicknessMm);
   const doorHeightMm = Math.max(

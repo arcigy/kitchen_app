@@ -42,6 +42,17 @@ export type ComponentType =
   | "waste_system"
   | "lighting";
 
+export type CatalogSupplierSource = {
+  supplier: string;
+  supplierProductId: string;
+  url?: string;
+  imageUrl?: string;
+  usageCategory?: string;
+  usageSubcategory?: string;
+  sourceCategory?: string;
+  rawUnit?: string;
+};
+
 export type ComponentGeometryArchetype =
   | "runner_pair"
   | "handle_bar"
@@ -84,10 +95,14 @@ export type ComponentGeometryDefinition = {
 export type MaterialDefinition = {
   id: string;
   entityType: "material";
+  supplierId?: string;
+  materialCode?: string;
+  manufacturer?: string;
   materialType: MaterialType;
   name: string;
   displayName: string;
   category: string;
+  subcategory?: string;
   baseMaterial: MaterialBase;
   decor: string;
   color: string;
@@ -104,15 +119,23 @@ export type MaterialDefinition = {
   grainDirectionRelevant?: boolean;
   edgeFamily?: EdgeFamily;
   recommendedBoardMatch?: string;
+  supplierSource?: CatalogSupplierSource;
+  lastUpdated?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type ComponentDefinition = {
   id: string;
   entityType: "component";
+  supplierId?: string;
+  componentCode?: string;
+  manufacturer?: string;
   componentType: ComponentType;
   geometryId: string;
   name: string;
   displayName: string;
+  category?: string;
+  subcategory?: string;
   brand: string;
   series: string;
   variant: string;
@@ -127,6 +150,9 @@ export type ComponentDefinition = {
   nominalHeightMm?: number;
   recommendedUse?: string;
   notes?: string[];
+  supplierSource?: CatalogSupplierSource;
+  lastUpdated?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type PricingCatalogRecord = MaterialDefinition | ComponentDefinition;

@@ -1,6 +1,13 @@
 import type { ClientCatalog } from "../../catalog/catalog-types";
 import type { FurnQuoteModulePackage, ModuleParameterDefinition } from "../module-package-types";
 import type { ModuleControlsApi, ModuleControlsArgs } from "../../../modules/registry";
+import { getModuleDescriptor } from "../../../modules/registry";
+import { t, translateEnumLabel, translateParamLabel } from "../../../i18n";
+import { applyModuleParameterPreset } from "./module-runtime-adapter";
+import {
+  createModuleParameterPresetPicker,
+  resolveMatchingModuleParameterPresetId
+} from "./moduleParameterPresetPicker";
 
 type ControlRecord = {
   key: string;
@@ -9,8 +16,27 @@ type ControlRecord = {
   sync: () => void;
 };
 
+export type ModuleControlStrategy = "module_descriptor" | "module_package";
+
 function displayValue(value: unknown): string {
   return value == null ? "" : String(value);
+}
+
+function hasOwnParameterValue(params: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(params, key);
+}
+
+function readParameterValue(params: Record<string, unknown>, parameter: ModuleParameterDefinition): unknown {
+  return hasOwnParameterValue(params, parameter.key) ? params[parameter.key] : parameter.defaultValue;
+}
+
+function createPackageParameterSnapshot(modulePackage: FurnQuoteModulePackage, params: Record<string, unknown>): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = {};
+  for (const parameter of modulePackage.parameters.parameters) {
+    const value = readParameterValue(params, parameter);
+    if (value !== undefined) snapshot[parameter.key] = value;
+  }
+  return snapshot;
 }
 
 function coerceInputValue(parameter: ModuleParameterDefinition, input: HTMLInputElement | HTMLSelectElement) {
@@ -31,7 +57,7 @@ function appendOptions(select: HTMLSelectElement, options: Array<{ label: string
   for (const option of options) {
     const el = document.createElement("option");
     el.value = option.value;
-    el.textContent = option.label;
+    el.textContent = translateEnumLabel(option.label);
     select.appendChild(el);
   }
   select.value = displayValue(currentValue);
@@ -63,6 +89,163 @@ function sortedControls(modulePackage: FurnQuoteModulePackage) {
   });
 }
 
+function isCatalogPicker(controlType: string | undefined, parameter: ModuleParameterDefinition) {
+  return controlType === "materialPicker" || controlType === "componentPicker" || parameter.type === "material" || parameter.type === "component";
+}
+
+function hasComposedHostSlotControls(modulePackage: FurnQuoteModulePackage) {
+  const uiControls = modulePackage.ui?.controls ?? [];
+  if (uiControls.some((control) => /^tallSlot\d+(Type|HeightMm|OffsetMm)$/.test(control.parameterKey))) return true;
+  return modulePackage.parameters?.parameters?.some((parameter) => /^tallSlot\d+(Type|HeightMm|OffsetMm)$/.test(parameter.key)) ?? false;
+}
+
+function isFwmCatalogPackage(modulePackage: FurnQuoteModulePackage) {
+  return modulePackage.module.moduleType.startsWith("fwm_catalog_");
+}
+
+function withParameterPresetControl(
+  container: HTMLElement,
+  modulePackage: FurnQuoteModulePackage,
+  params: Record<string, unknown>,
+  args: ModuleControlsArgs,
+  api: ModuleControlsApi
+): ModuleControlsApi {
+  const row = document.createElement("div");
+  row.className = "module-package-control";
+  row.style.display = "grid";
+  row.style.gap = "8px";
+  row.style.marginTop = "8px";
+
+  const presetPicker = createModuleParameterPresetPicker({
+    modulePackage,
+    selectedPresetId: resolveMatchingModuleParameterPresetId(modulePackage, params),
+    onSelect: (presetId) => {
+      Object.assign(params, applyModuleParameterPreset({ modulePackage, parameters: params, presetId }));
+      args.onChange();
+      api.syncFromParams();
+    }
+  });
+
+  const createButton = document.createElement("button");
+  createButton.type = "button";
+  createButton.textContent = "Vytvoriť preset";
+  createButton.disabled = !args.createParameterPreset;
+  createButton.className = "module-parameter-preset-create";
+
+  createButton.addEventListener("click", () => {
+    if (!args.createParameterPreset) return;
+    openCreatePresetDialog({
+      onSave: async ({ name, note }) => {
+        const result = await args.createParameterPreset?.({
+          modulePackage,
+          parameters: createPackageParameterSnapshot(modulePackage, params),
+          name,
+          note
+        });
+        if (!result) return;
+        Object.assign(modulePackage, result.modulePackage);
+        presetPicker.refresh(result.presetId);
+      }
+    });
+  });
+
+  row.append(presetPicker.element, createButton);
+  container.prepend(row);
+
+  return {
+    syncFromParams: () => {
+      api.syncFromParams();
+      presetPicker.refresh(resolveMatchingModuleParameterPresetId(modulePackage, params));
+    },
+    isAutoFitEnabled: () => api.isAutoFitEnabled(),
+    highlightParamKeys: (keys) => api.highlightParamKeys(keys),
+    clearHighlights: () => api.clearHighlights()
+  };
+}
+
+function openCreatePresetDialog(args: { onSave: (values: { name: string; note: string }) => Promise<void> }) {
+  const backdrop = document.createElement("div");
+  backdrop.style.position = "fixed";
+  backdrop.style.inset = "0";
+  backdrop.style.zIndex = "9999";
+  backdrop.style.background = "rgba(15, 23, 42, 0.35)";
+  backdrop.style.display = "grid";
+  backdrop.style.placeItems = "center";
+
+  const panel = document.createElement("form");
+  panel.style.width = "min(420px, calc(100vw - 32px))";
+  panel.style.background = "#ffffff";
+  panel.style.border = "1px solid rgba(15, 23, 42, 0.12)";
+  panel.style.borderRadius = "8px";
+  panel.style.boxShadow = "0 22px 70px rgba(15, 23, 42, 0.24)";
+  panel.style.padding = "18px";
+  panel.style.display = "grid";
+  panel.style.gap = "12px";
+
+  const title = document.createElement("strong");
+  title.textContent = "Create preset";
+
+  const name = document.createElement("input");
+  name.type = "text";
+  name.required = true;
+  name.placeholder = "Name";
+
+  const note = document.createElement("textarea");
+  note.required = true;
+  note.placeholder = "Note";
+  note.rows = 4;
+  note.style.resize = "vertical";
+
+  const error = document.createElement("div");
+  error.style.color = "#b42318";
+  error.style.fontSize = "12px";
+  error.style.minHeight = "16px";
+
+  const actions = document.createElement("div");
+  actions.style.display = "flex";
+  actions.style.justifyContent = "flex-end";
+  actions.style.gap = "8px";
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "Cancel";
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.textContent = "Save";
+  actions.append(cancel, save);
+
+  panel.append(title, name, note, error, actions);
+  backdrop.appendChild(panel);
+  document.body.appendChild(backdrop);
+  name.focus();
+
+  const close = () => backdrop.remove();
+  cancel.addEventListener("click", close);
+  backdrop.addEventListener("pointerdown", (event) => {
+    if (event.target === backdrop) close();
+  });
+  panel.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = {
+      name: name.value.trim(),
+      note: note.value.trim()
+    };
+    if (!values.name || !values.note) {
+      error.textContent = "Name and note are required.";
+      return;
+    }
+    save.disabled = true;
+    error.textContent = "";
+    try {
+      await args.onSave(values);
+      close();
+    } catch (saveError) {
+      save.disabled = false;
+      error.textContent = saveError instanceof Error ? saveError.message : "Preset save failed.";
+    }
+  });
+}
+
 export function findModulePackageForParams(
   modulePackages: readonly FurnQuoteModulePackage[],
   params: Record<string, unknown>
@@ -76,6 +259,21 @@ export function findModulePackageForParams(
   return moduleType ? modulePackages.find((modulePackage) => modulePackage.module.moduleType === moduleType) ?? null : null;
 }
 
+export function resolveModuleControlStrategy(
+  modulePackage: FurnQuoteModulePackage,
+  params: Record<string, unknown>
+): ModuleControlStrategy {
+  const tags = new Set((modulePackage.module.tags ?? []).map((tag) => tag.toLowerCase()));
+  if (tags.has("revit-export-preview")) return "module_package";
+  if (isFwmCatalogPackage(modulePackage)) return "module_package";
+  if (hasComposedHostSlotControls(modulePackage)) return "module_package";
+  const moduleType =
+    typeof params.type === "string" && params.type.trim().length > 0
+      ? params.type.trim()
+      : modulePackage.module.moduleType;
+  return getModuleDescriptor(moduleType as Parameters<typeof getModuleDescriptor>[0]) ? "module_descriptor" : "module_package";
+}
+
 export function createModulePackageControls(
   container: HTMLElement,
   modulePackage: FurnQuoteModulePackage,
@@ -83,6 +281,7 @@ export function createModulePackageControls(
   args: ModuleControlsArgs
 ): ModuleControlsApi {
   container.innerHTML = "";
+  container.dataset.i18nSkip = "true";
   const records: ControlRecord[] = [];
   const groups = new Map<string, HTMLElement>();
   const change = args.onChange as (previousParams?: Record<string, unknown>, sourceKey?: string) => void | boolean;
@@ -92,7 +291,7 @@ export function createModulePackageControls(
     section.className = "module-package-control-group";
     const title = document.createElement("div");
     title.className = "muted";
-    title.textContent = group.label;
+    title.textContent = t(group.label);
     section.appendChild(title);
     container.appendChild(section);
     groups.set(group.id, section);
@@ -109,32 +308,33 @@ export function createModulePackageControls(
     row.style.marginTop = "8px";
 
     const label = document.createElement("span");
-    label.textContent = parameter.unit ? `${parameter.label} (${parameter.unit})` : parameter.label;
+    const labelText = translateParamLabel(parameter.key) || t(parameter.label);
+    label.textContent = parameter.unit ? `${labelText} (${parameter.unit})` : labelText;
     row.appendChild(label);
 
     const input =
-      control.controlType === "select" || control.controlType === "materialPicker" || control.controlType === "componentPicker"
+      control.controlType === "select" && !isCatalogPicker(control.controlType, parameter)
         ? document.createElement("select")
         : document.createElement("input");
 
     if (input instanceof HTMLInputElement) {
       if (control.controlType === "checkbox" || parameter.type === "boolean") {
         input.type = "checkbox";
-        input.checked = Boolean(params[parameter.key]);
+        input.checked = Boolean(readParameterValue(params, parameter));
       } else {
         input.type = parameter.type === "number" ? "number" : "text";
         if (parameter.min != null) input.min = String(parameter.min);
         if (parameter.max != null) input.max = String(parameter.max);
         if (parameter.step != null) input.step = String(parameter.step);
-        input.value = displayValue(params[parameter.key]);
+        input.value = displayValue(readParameterValue(params, parameter));
       }
     } else {
-      appendOptions(input, buildSelectOptions(parameter, args.clientCatalog), params[parameter.key]);
+      appendOptions(input, buildSelectOptions(parameter, args.clientCatalog), readParameterValue(params, parameter));
     }
 
     const sync = () => {
-      if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = Boolean(params[parameter.key]);
-      else input.value = displayValue(params[parameter.key]);
+      if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = Boolean(readParameterValue(params, parameter));
+      else input.value = displayValue(readParameterValue(params, parameter));
     };
 
     input.addEventListener("change", () => {
@@ -152,7 +352,7 @@ export function createModulePackageControls(
     records.push({ key: parameter.key, input, row, sync });
   }
 
-  return {
+  const api: ModuleControlsApi = {
     syncFromParams: () => records.forEach((record) => record.sync()),
     isAutoFitEnabled: () => Boolean(params.shelfAutoFit),
     highlightParamKeys: (keys) => {
@@ -161,4 +361,23 @@ export function createModulePackageControls(
     },
     clearHighlights: () => records.forEach((record) => record.row.classList.remove("is-highlighted"))
   };
+  return withParameterPresetControl(container, modulePackage, params, args, api);
+}
+
+export function createResolvedModuleControls(
+  container: HTMLElement,
+  modulePackage: FurnQuoteModulePackage,
+  params: Record<string, unknown>,
+  args: ModuleControlsArgs
+): ModuleControlsApi {
+  const strategy = resolveModuleControlStrategy(modulePackage, params);
+  if (strategy === "module_descriptor") {
+    const moduleType =
+      typeof params.type === "string" && params.type.trim().length > 0
+        ? params.type.trim()
+        : modulePackage.module.moduleType;
+    const descriptor = getModuleDescriptor(moduleType as Parameters<typeof getModuleDescriptor>[0]);
+    if (descriptor) return withParameterPresetControl(container, modulePackage, params, args, descriptor.createControls(container, params as never, args));
+  }
+  return createModulePackageControls(container, modulePackage, params, args);
 }

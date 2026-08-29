@@ -1,9 +1,22 @@
 import * as THREE from "three";
-import type { FloorInstance, SelectedKind, WallInstance } from "../layout/appState";
-import type { LayoutInstance } from "./localTypes";
-import { getModulePlanPolygon } from "./planSnap";
+import { getKitchenWorktopSegmentPolygon } from "../layout/worktopGeometry";
+import type { KitchenWorktopSegmentRef } from "../layout/worktopSegmentEditing";
+import type { ColumnInstance, FloorInstance, KitchenWorktopInstance, SelectedKind, WallInstance, WindowInstance } from "../layout/appState";
+import type { DoorInstance, LayoutInstance, SectionInstance } from "./localTypes";
+import { getModulePlanLocalPolygon } from "./planSnap";
 
 type GetCamera = () => THREE.Camera;
+type WallUnionRing = Array<[number, number]>;
+type WallUnionPolygon = WallUnionRing[];
+type WallUnionMultiPolygon = WallUnionPolygon[];
+export type SelectionHighlightTargetKind = "module" | "kitchenGroup" | "worktop" | "wall" | "floor" | "column" | "section" | "window" | "door" | "submodule";
+export type SelectionHighlightTarget =
+  | { kind: Exclude<SelectionHighlightTargetKind, "submodule">; id: string }
+  | { kind: "submodule"; id: string; hostInstanceId: string };
+
+const HOVER_EDGE_COLOR = 0x1f6fff;
+const SELECTED_EDGE_COLOR = 0x0f5eff;
+const SELECTED_FILL_COLOR = 0x1f6fff;
 
 export function createToolHud(args: {
   layoutRoot: THREE.Group;
@@ -16,6 +29,15 @@ export function createToolHud(args: {
   const hudMatHover = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, transparent: true, opacity: 0.22, depthTest: false, depthWrite: false });
   const hudMatPick1 = new THREE.MeshBasicMaterial({ color: 0x2f78c4, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false });
   const hudMatPick2 = new THREE.MeshBasicMaterial({ color: 0x5c8f44, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false });
+  const dashedGuideMat = new THREE.LineDashedMaterial({
+    color: 0x1c8ed6,
+    dashSize: 0.11,
+    gapSize: 0.07,
+    transparent: true,
+    opacity: 0.88,
+    depthTest: false,
+    depthWrite: false
+  });
 
   const makeHudLineMesh = (mat: THREE.Material) => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.01, 0.01), mat);
@@ -29,11 +51,17 @@ export function createToolHud(args: {
   const hudHoverLine = makeHudLineMesh(hudMatHover);
   const hudPickLine1 = makeHudLineMesh(hudMatPick1);
   const hudPickLine2 = makeHudLineMesh(hudMatPick2);
+  const hudWallEndAlignmentGuide = new THREE.Line(new THREE.BufferGeometry(), dashedGuideMat);
+  hudWallEndAlignmentGuide.name = "wallEndAlignmentGuide";
+  hudWallEndAlignmentGuide.visible = false;
+  hudWallEndAlignmentGuide.renderOrder = 83;
+  toolHud.add(hudWallEndAlignmentGuide);
 
   const clearToolHud = () => {
     hudHoverLine.visible = false;
     hudPickLine1.visible = false;
     hudPickLine2.visible = false;
+    hudWallEndAlignmentGuide.visible = false;
   };
 
   const hudLineThicknessM = (rect: DOMRect) => {
@@ -61,13 +89,29 @@ export function createToolHud(args: {
     mesh.visible = true;
   };
 
+  const updateHudDashedLine = (line: THREE.Line, a: THREE.Vector3, b: THREE.Vector3) => {
+    if (a.distanceToSquared(b) < 1e-10) {
+      line.visible = false;
+      return;
+    }
+    line.geometry.dispose();
+    line.geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(a.x, 0.062, a.z),
+      new THREE.Vector3(b.x, 0.062, b.z)
+    ]);
+    line.computeLineDistances();
+    line.visible = true;
+  };
+
   return {
     toolHud,
     hudHoverLine,
+    hudWallEndAlignmentGuide,
     hudPickLine1,
     hudPickLine2,
     clearToolHud,
     hudLineThicknessM,
+    updateHudDashedLine,
     updateHudLine
   };
 }
@@ -83,14 +127,12 @@ export function createWallSnapMarkers(args: {
   wallSnapMarkers.visible = false;
   args.layoutRoot.add(wallSnapMarkers);
 
-  const snapMatCorner = new THREE.MeshBasicMaterial({ color: 0x5c8f44, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapMatAxis = new THREE.MeshBasicMaterial({ color: 0x2f78c4, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
-  const snapMatEdge = new THREE.MeshBasicMaterial({ color: 0x8ab3d9, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapMatEnd = new THREE.MeshBasicMaterial({ color: 0x5f5f5f, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
   const snapGeom = new THREE.CircleGeometry(0.035, 16);
 
-  const makeSnapDot = (kind: "corner" | "edge" | "axis" | "endpoint") => {
-    const mat = kind === "corner" ? snapMatCorner : kind === "edge" ? snapMatEdge : kind === "axis" ? snapMatAxis : snapMatEnd;
+  const makeSnapDot = (kind: "axis" | "endpoint") => {
+    const mat = kind === "axis" ? snapMatAxis : snapMatEnd;
     const mesh = new THREE.Mesh(snapGeom, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0.02;
@@ -143,31 +185,6 @@ export function createWallSnapMarkers(args: {
     dotM.position.z = mid.z;
     wallSnapMarkers.add(dotM);
 
-    const poly = args.getWallSolvedOutlines().get(wallId) ?? null;
-    if (poly && poly.length >= 3) {
-      for (const p of poly) {
-        const dot = makeSnapDot("corner");
-        dot.position.x = p.x;
-        dot.position.z = p.z;
-        wallSnapMarkers.add(dot);
-      }
-    } else {
-      const n = new THREE.Vector3(-d.z, 0, d.x);
-      const h = Math.max(1, wall.params.thicknessMm / 2) / 1000;
-      const corners = [
-        a.clone().addScaledVector(n, h),
-        a.clone().addScaledVector(n, -h),
-        b.clone().addScaledVector(n, -h),
-        b.clone().addScaledVector(n, h)
-      ];
-      for (const p of corners) {
-        const dot = makeSnapDot("corner");
-        dot.position.x = p.x;
-        dot.position.z = p.z;
-        wallSnapMarkers.add(dot);
-      }
-    }
-
     wallSnapMarkers.visible = args.getMode() === "layout";
   };
 
@@ -177,13 +194,29 @@ export function createWallSnapMarkers(args: {
 export function createSelectionHighlights(args: {
   layoutRoot: THREE.Group;
   getMode: () => string;
+  getViewMode?: () => "2d" | "3d";
+  getWalls: () => WallInstance[];
   getSelectedWallIds: () => Set<string>;
   getSelectedInstanceIds: () => Set<string>;
   getWallSolvedOutlines: () => Map<string, Array<{ x: number; z: number }>>;
+  getWallUnionPolys?: () => WallUnionMultiPolygon | null;
   getSelectedKind: () => SelectedKind;
+  getSelectedKitchenGroupId?: () => string | null;
   getSelectedFloorId: () => string | null;
   getFloors: () => FloorInstance[];
   getInstances: () => LayoutInstance[];
+  getKitchenWorktops?: () => KitchenWorktopInstance[];
+  getSelectedColumnId?: () => string | null;
+  getColumns?: () => ColumnInstance[];
+  getSelectedSectionId?: () => string | null;
+  getSections?: () => SectionInstance[];
+  getSelectedWindow?: () => WindowInstance | null;
+  getWindows?: () => WindowInstance[];
+  getSelectedDoor?: () => DoorInstance | null;
+  getDoors?: () => DoorInstance[];
+  getSelectedSubmoduleHighlightTarget?: () => SelectionHighlightTarget | null;
+  getSelectedSubmoduleHighlightTargets?: () => SelectionHighlightTarget[];
+  getSelectedWorktopSegment?: () => KitchenWorktopSegmentRef | null;
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
 }) {
   const selectionHighlights = new THREE.Group();
@@ -191,71 +224,436 @@ export function createSelectionHighlights(args: {
   selectionHighlights.visible = false;
   args.layoutRoot.add(selectionHighlights);
 
-  const updateSelectionHighlights = () => {
-    for (const ch of [...selectionHighlights.children]) {
-      selectionHighlights.remove(ch);
-      if ("geometry" in ch && ch.geometry instanceof THREE.BufferGeometry) ch.geometry.dispose();
+  const hoverHighlights = new THREE.Group();
+  hoverHighlights.name = "hoverHighlights";
+  hoverHighlights.visible = false;
+  args.layoutRoot.add(hoverHighlights);
+
+  let activeHoverKey: string | null = null;
+
+  const disposeHighlightChildren = (group: THREE.Group) => {
+    const materials = new Set<THREE.Material>();
+    for (const ch of [...group.children]) {
+      group.remove(ch);
+      if (ch.userData.selectionHighlightSharedGeometry !== true && "geometry" in ch && ch.geometry instanceof THREE.BufferGeometry) {
+        ch.geometry.dispose();
+      }
       if ("material" in ch) {
         const material = ch.material as THREE.Material | THREE.Material[] | undefined;
-        if (Array.isArray(material)) for (const mat of material) mat.dispose();
-        else material?.dispose();
+        if (Array.isArray(material)) for (const mat of material) materials.add(mat);
+        else if (material) materials.add(material);
       }
     }
+    for (const material of materials) material.dispose();
+  };
+
+  const matrixToLayout = (source: THREE.Object3D) => {
+    args.layoutRoot.updateMatrixWorld(true);
+    source.updateMatrixWorld(true);
+    return new THREE.Matrix4().copy(args.layoutRoot.matrixWorld).invert().multiply(source.matrixWorld);
+  };
+
+  const transformGeometryToLayout = (geometry: THREE.BufferGeometry, source: THREE.Object3D) => {
+    const localGeometry = geometry.clone();
+    localGeometry.applyMatrix4(matrixToLayout(source));
+    return localGeometry;
+  };
+
+  const shouldSkipHighlightMesh = (mesh: THREE.Mesh) => {
+    if (mesh.userData?.viewDisplaySkipMaterialRestore) return true;
+    const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
+    const materials = Array.isArray(material) ? material : material ? [material] : [];
+    return materials.some((item) => item.transparent && item.opacity <= 0.01);
+  };
+
+  // Plan highlights are intentional overlays; 3D highlights must obey depth
+  // so selected rear edges never turn Solid/Realistic into wireframe.
+  const highlightUsesDepth = () => args.getViewMode?.() !== "2d";
+
+  const addObjectHighlight = (group: THREE.Group, target: THREE.Object3D, mode: "hover" | "selected") => {
+    target.updateMatrixWorld(true);
+    target.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      if (!(object.geometry instanceof THREE.BufferGeometry)) return;
+      if (shouldSkipHighlightMesh(object)) return;
+
+      if (mode === "selected") {
+        const fill = new THREE.Mesh(
+          transformGeometryToLayout(object.geometry, object),
+          new THREE.MeshBasicMaterial({
+            color: SELECTED_FILL_COLOR,
+            transparent: true,
+            opacity: 0.2,
+            depthTest: highlightUsesDepth(),
+            depthWrite: false,
+            side: THREE.DoubleSide
+          })
+        );
+        fill.name = "selectedFillHighlight";
+        fill.renderOrder = 88;
+        group.add(fill);
+      }
+
+      const edgeSource = new THREE.EdgesGeometry(object.geometry, 1);
+      const edgeGeometry = transformGeometryToLayout(edgeSource, object);
+      edgeSource.dispose();
+      const edges = new THREE.LineSegments(
+        edgeGeometry,
+        new THREE.LineBasicMaterial({
+          color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
+          transparent: true,
+          opacity: mode === "hover" ? 0.98 : 1,
+          depthTest: highlightUsesDepth(),
+          depthWrite: false
+        })
+      );
+      edges.name = mode === "hover" ? "hoverEdgeHighlight" : "selectedEdgeHighlight";
+      edges.renderOrder = mode === "hover" ? 96 : 90;
+      group.add(edges);
+    });
+  };
+
+  const addLineLikeHighlight = (group: THREE.Group, target: THREE.Object3D, mode: "hover" | "selected") => {
+    target.updateMatrixWorld(true);
+    target.traverse((object) => {
+      if (!(object instanceof THREE.Line || object instanceof THREE.LineSegments)) return;
+      if (!(object.geometry instanceof THREE.BufferGeometry) || !object.visible) return;
+      const line = object instanceof THREE.LineSegments
+        ? new THREE.LineSegments(
+            transformGeometryToLayout(object.geometry, object),
+            new THREE.LineBasicMaterial({
+              color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
+              transparent: true,
+              opacity: mode === "hover" ? 0.98 : 1,
+              depthTest: highlightUsesDepth(),
+              depthWrite: false
+            })
+          )
+        : new THREE.Line(
+            transformGeometryToLayout(object.geometry, object),
+            new THREE.LineBasicMaterial({
+              color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
+              transparent: true,
+              opacity: mode === "hover" ? 0.98 : 1,
+              depthTest: highlightUsesDepth(),
+              depthWrite: false
+            })
+          );
+      line.name = mode === "hover" ? "hoverLineHighlight" : "selectedLineHighlight";
+      line.renderOrder = mode === "hover" ? 96 : 90;
+      group.add(line);
+    });
+  };
+
+  const addKitchenGroupModuleHighlight = (group: THREE.Group, inst: LayoutInstance, mode: "hover" | "selected") => {
+    const polygon = getModulePlanLocalPolygon(inst, args.getModuleLocalBackCenter);
+    if (polygon.length < 3) return;
+    const shape = new THREE.Shape();
+    polygon.forEach((point, index) => {
+      if (index === 0) shape.moveTo(point.x, point.z);
+      else shape.lineTo(point.x, point.z);
+    });
+    shape.closePath();
+    const planGeometry = new THREE.ShapeGeometry(shape);
+    planGeometry.rotateX(Math.PI / 2);
+
+    if (mode === "selected") {
+      const fill = new THREE.Mesh(
+        transformGeometryToLayout(planGeometry, inst.root),
+        new THREE.MeshBasicMaterial({
+          color: SELECTED_FILL_COLOR,
+          transparent: true,
+          opacity: 0.14,
+          depthTest: highlightUsesDepth(),
+          depthWrite: false,
+          side: THREE.DoubleSide
+        })
+      );
+      fill.name = "selectedKitchenGroupPlanFill";
+      fill.renderOrder = 88;
+      group.add(fill);
+    }
+
+    const edgeSource = new THREE.EdgesGeometry(planGeometry, 1);
+    const edges = new THREE.LineSegments(
+      transformGeometryToLayout(edgeSource, inst.root),
+      new THREE.LineBasicMaterial({
+        color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
+        transparent: true,
+        opacity: mode === "hover" ? 0.98 : 1,
+        depthTest: highlightUsesDepth(),
+        depthWrite: false
+      })
+    );
+    edges.name = mode === "hover" ? "hoverKitchenGroupPlanEdge" : "selectedKitchenGroupPlanEdge";
+    edges.renderOrder = mode === "hover" ? 96 : 90;
+    group.add(edges);
+    edgeSource.dispose();
+    planGeometry.dispose();
+  };
+
+  const addKitchenGroupModule3dHighlight = (group: THREE.Group, inst: LayoutInstance, mode: "hover" | "selected") => {
+    if (mode === "selected") {
+      const fillMaterial = new THREE.MeshBasicMaterial({
+        color: SELECTED_FILL_COLOR,
+        transparent: true,
+        opacity: 0.2,
+        depthTest: highlightUsesDepth(),
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+      inst.module.traverse((object) => {
+        if (!(object instanceof THREE.Mesh) || !(object.geometry instanceof THREE.BufferGeometry)) return;
+        if (!object.visible || shouldSkipHighlightMesh(object)) return;
+        const fill = new THREE.Mesh(object.geometry, fillMaterial);
+        fill.name = "selectedKitchenGroup3dFill";
+        fill.matrixAutoUpdate = false;
+        fill.matrix.copy(matrixToLayout(object));
+        fill.renderOrder = 88;
+        fill.userData.selectionHighlightSharedGeometry = true;
+        group.add(fill);
+      });
+    }
+
+    if (!(inst.outline.geometry instanceof THREE.BufferGeometry)) return;
+    const edges = new THREE.LineSegments(
+      inst.outline.geometry,
+      new THREE.LineBasicMaterial({
+        color: mode === "hover" ? HOVER_EDGE_COLOR : SELECTED_EDGE_COLOR,
+        transparent: true,
+        opacity: mode === "hover" ? 0.98 : 1,
+        depthTest: highlightUsesDepth(),
+        depthWrite: false
+      })
+    );
+    edges.name = mode === "hover" ? "hoverKitchenGroup3dEdge" : "selectedKitchenGroup3dEdge";
+    edges.matrixAutoUpdate = false;
+    edges.matrix.copy(matrixToLayout(inst.outline));
+    edges.renderOrder = mode === "hover" ? 96 : 90;
+    edges.userData.selectionHighlightSharedGeometry = true;
+    group.add(edges);
+  };
+
+  const getWorktopById = (id: string) => (args.getKitchenWorktops?.() ?? []).find((worktop) => worktop.id === id) ?? null;
+  const getWindowById = (id: string) => (args.getWindows?.() ?? []).find((window) => window.id === id) ?? null;
+  const getDoorById = (id: string) => (args.getDoors?.() ?? []).find((door) => door.id === id) ?? null;
+
+  const getSubmoduleHighlightRoots = (hostInstanceId: string, submoduleId: string) => {
+    const inst = args.getInstances().find((item) => item.id === hostInstanceId) ?? null;
+    if (!inst) return [];
+    const roots: THREE.Object3D[] = [];
+    inst.module.traverse((object) => {
+      if (object.userData?.selectableSubmoduleId !== submoduleId) return;
+      if (object.parent?.userData?.selectableSubmoduleId === submoduleId) return;
+      roots.push(object);
+    });
+    return roots;
+  };
+
+  const getHighlightTargets = (target: SelectionHighlightTarget): THREE.Object3D[] => {
+    if (target.kind === "module") {
+      const inst = args.getInstances().find((item) => item.id === target.id) ?? null;
+      return inst ? [inst.module] : [];
+    }
+    if (target.kind === "kitchenGroup") {
+      return [
+        ...args.getInstances().filter((inst) => inst.kitchenGroupId === target.id).map((inst) => inst.module),
+        ...(args.getKitchenWorktops?.() ?? []).filter((worktop) => worktop.kitchenGroupId === target.id).map((worktop) => worktop.mesh)
+      ];
+    }
+    if (target.kind === "worktop") {
+      const worktop = getWorktopById(target.id);
+      return worktop ? [worktop.mesh] : [];
+    }
+    if (target.kind === "wall") {
+      const wall = args.getWalls().find((item) => item.id === target.id) ?? null;
+      return wall ? [wall.mesh] : [];
+    }
+    if (target.kind === "floor") {
+      const floor = args.getFloors().find((item) => item.id === target.id) ?? null;
+      return floor ? [floor.mesh] : [];
+    }
+    if (target.kind === "column") {
+      const column = (args.getColumns?.() ?? []).find((item) => item.id === target.id) ?? null;
+      return column ? [column.mesh] : [];
+    }
+    if (target.kind === "section") {
+      const section = (args.getSections?.() ?? []).find((item) => item.id === target.id) ?? null;
+      return section ? [section.line, section.arrows] : [];
+    }
+    if (target.kind === "window") {
+      const window = getWindowById(target.id) ?? args.getSelectedWindow?.() ?? null;
+      return window ? [window.root] : [];
+    }
+    if (target.kind === "door") {
+      const door = getDoorById(target.id) ?? args.getSelectedDoor?.() ?? null;
+      return door ? [door.root] : [];
+    }
+    if (target.kind === "submodule") {
+      return getSubmoduleHighlightRoots(target.hostInstanceId, target.id);
+    }
+    return [];
+  };
+
+  const addTargetsHighlight = (group: THREE.Group, targets: SelectionHighlightTarget[], mode: "hover" | "selected") => {
+    for (const target of targets) {
+      if (target.kind === "kitchenGroup") {
+        for (const inst of args.getInstances()) {
+          if (inst.kitchenGroupId !== target.id) continue;
+          if (args.getViewMode?.() === "3d") addKitchenGroupModule3dHighlight(group, inst, mode);
+          else addKitchenGroupModuleHighlight(group, inst, mode);
+        }
+        for (const worktop of args.getKitchenWorktops?.() ?? []) {
+          if (worktop.kitchenGroupId !== target.id) continue;
+          addObjectHighlight(group, worktop.mesh, mode);
+        }
+        continue;
+      }
+      for (const object of getHighlightTargets(target)) {
+        addObjectHighlight(group, object, mode);
+        addLineLikeHighlight(group, object, mode);
+      }
+    }
+  };
+
+  const selectedTargets = (): SelectionHighlightTarget[] => {
+    const targets: SelectionHighlightTarget[] = [];
+    const selectedInstanceIds = args.getSelectedInstanceIds();
+    const fallbackSubmoduleTarget = args.getSelectedSubmoduleHighlightTarget?.() ?? null;
+    const selectedSubmoduleTargets = args.getSelectedSubmoduleHighlightTargets?.() ?? (fallbackSubmoduleTarget ? [fallbackSubmoduleTarget] : []);
+    const selectedSubmoduleHostIds = new Set(selectedSubmoduleTargets.filter((target) => target.kind === "submodule").map((target) => target.hostInstanceId));
+    for (const id of args.getSelectedWallIds()) targets.push({ kind: "wall", id });
+    const selectedKitchenGroupId = args.getSelectedKind() === "kitchenGroup" ? args.getSelectedKitchenGroupId?.() ?? null : null;
+    if (!selectedKitchenGroupId) {
+      for (const id of selectedInstanceIds) {
+        if (!selectedSubmoduleHostIds.has(id)) targets.push({ kind: "module", id });
+      }
+    }
+    targets.push(...selectedSubmoduleTargets.filter((target) => target.kind === "submodule"));
+    if (selectedKitchenGroupId) targets.push({ kind: "kitchenGroup", id: selectedKitchenGroupId });
+    const selectedFloorId = args.getSelectedKind() === "floor" ? args.getSelectedFloorId() : null;
+    if (selectedFloorId) targets.push({ kind: "floor", id: selectedFloorId });
+    const selectedColumnId = args.getSelectedKind() === "column" ? args.getSelectedColumnId?.() ?? null : null;
+    if (selectedColumnId) targets.push({ kind: "column", id: selectedColumnId });
+    const selectedSectionId = args.getSelectedKind() === "section" ? args.getSelectedSectionId?.() ?? null : null;
+    if (selectedSectionId) targets.push({ kind: "section", id: selectedSectionId });
+    const selectedWindow = args.getSelectedKind() === "window" ? args.getSelectedWindow?.() ?? null : null;
+    if (selectedWindow) targets.push({ kind: "window", id: selectedWindow.id });
+    const selectedDoor = args.getSelectedKind() === "door" ? args.getSelectedDoor?.() ?? null : null;
+    if (selectedDoor) targets.push({ kind: "door", id: selectedDoor.id });
+    return targets;
+  };
+
+  const selectionSourceSignature = (targets: SelectionHighlightTarget[]) => {
+    const parts: Array<string | number | boolean> = [args.getMode()];
+    for (const target of targets) {
+      parts.push(target.kind, target.id);
+      if (target.kind === "submodule") parts.push(target.hostInstanceId);
+      const objects = getHighlightTargets(target);
+      parts.push(objects.length);
+      for (const object of objects) {
+        object.updateWorldMatrix(true, true);
+        parts.push(object.uuid, object.visible);
+        for (const value of object.matrixWorld.elements) parts.push(Math.round(value * 1_000_000));
+        if (target.kind === "module" || target.kind === "kitchenGroup" || target.kind === "worktop") {
+          if ((object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.LineSegments) && object.geometry) {
+            parts.push(object.geometry.uuid);
+          }
+          continue;
+        }
+        object.traverse((child) => {
+          if (!(child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.LineSegments)) return;
+          const geometry = child.geometry;
+          if (!(geometry instanceof THREE.BufferGeometry)) return;
+          const position = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+          parts.push(
+            child.uuid,
+            geometry.uuid,
+            (geometry as THREE.BufferGeometry & { version?: number }).version ?? -1,
+            position?.version ?? -1,
+            position?.count ?? 0,
+            child.visible
+          );
+        });
+      }
+    }
+    return parts.join("|");
+  };
+
+  const getSelectionBounds = () => {
+    const box = new THREE.Box3();
+    const selectedWorktopSegment = args.getSelectedWorktopSegment?.() ?? null;
+    if (selectedWorktopSegment) {
+      const worktop = getWorktopById(selectedWorktopSegment.worktopId);
+      if (worktop) {
+        const polygon = getKitchenWorktopSegmentPolygon(worktop.params, selectedWorktopSegment.segmentIndex);
+        const bottomY = worktop.params.heightMm / 1000 - worktop.params.thicknessMm / 1000;
+        const topY = worktop.params.heightMm / 1000;
+        worktop.root.updateMatrixWorld(true);
+        for (const point of polygon) {
+          box.expandByPoint(worktop.root.localToWorld(new THREE.Vector3(point.x, bottomY, point.z)));
+          box.expandByPoint(worktop.root.localToWorld(new THREE.Vector3(point.x, topY, point.z)));
+        }
+      }
+      if (!box.isEmpty()) return box;
+    }
+
+    for (const target of selectedTargets()) {
+      for (const object of getHighlightTargets(target)) box.expandByObject(object);
+    }
+    return box.isEmpty() ? null : box;
+  };
+
+  const updateSelectionHover = (target: SelectionHighlightTarget | null) => {
+    const nextKey = target ? `${target.kind}:${target.id}` : null;
+    if (nextKey === activeHoverKey) return;
+    activeHoverKey = nextKey;
+    disposeHighlightChildren(hoverHighlights);
+    if (!target || args.getMode() !== "layout") {
+      hoverHighlights.visible = false;
+      return;
+    }
+    addTargetsHighlight(hoverHighlights, [target], "hover");
+    hoverHighlights.visible = hoverHighlights.children.length > 0;
+  };
+
+  let activeSelectionSourceSignature = "";
+
+  const rebuildSelectionHighlights = (targets: SelectionHighlightTarget[]) => {
+    disposeHighlightChildren(selectionHighlights);
 
     if (args.getMode() !== "layout") {
       selectionHighlights.visible = false;
       return;
     }
 
-    for (const id of args.getSelectedWallIds()) {
-      const poly = args.getWallSolvedOutlines().get(id) ?? null;
-      if (!poly || poly.length < 3) continue;
-      const pts = poly.map((p) => new THREE.Vector3(p.x, 0.012, p.z));
-      pts.push(new THREE.Vector3(poly[0].x, 0.012, poly[0].z));
-      const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(
-        geom,
-        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
-      );
-      line.renderOrder = 60;
-      selectionHighlights.add(line);
-    }
-
-    for (const id of args.getSelectedInstanceIds()) {
-      const inst = args.getInstances().find((item) => item.id === id) ?? null;
-      if (!inst) continue;
-      const poly = getModulePlanPolygon(inst, args.getModuleLocalBackCenter);
-      if (poly.length < 3) continue;
-      const pts = poly.map((p) => p.clone().setY(0.016));
-      pts.push(poly[0]!.clone().setY(0.016));
-      const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(
-        geom,
-        new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
-      );
-      line.renderOrder = 60;
-      selectionHighlights.add(line);
-    }
-
-    if (args.getSelectedKind() === "floor" && args.getSelectedFloorId()) {
-      const floor = args.getFloors().find((x) => x.id === args.getSelectedFloorId()) ?? null;
-      if (floor && floor.params.boundary.length >= 3) {
-        const pts = floor.params.boundary.map((p) => new THREE.Vector3(p.x / 1000, 0.018, p.z / 1000));
-        pts.push(new THREE.Vector3(floor.params.boundary[0].x / 1000, 0.018, floor.params.boundary[0].z / 1000));
-        const geom = new THREE.BufferGeometry().setFromPoints(pts);
-        const line = new THREE.Line(
-          geom,
-          new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false })
-        );
-        line.renderOrder = 61;
-        selectionHighlights.add(line);
-      }
-    }
-
+    addTargetsHighlight(selectionHighlights, targets, "selected");
     selectionHighlights.visible = selectionHighlights.children.length > 0;
   };
 
-  return { selectionHighlights, updateSelectionHighlights };
+  const updateSelectionHighlights = () => {
+    const targets = selectedTargets();
+    rebuildSelectionHighlights(targets);
+    activeSelectionSourceSignature = selectionSourceSignature(targets);
+  };
+
+  const syncSelectionHighlights = () => {
+    const targets = selectedTargets();
+    const signature = selectionSourceSignature(targets);
+    if (signature === activeSelectionSourceSignature) return false;
+    rebuildSelectionHighlights(targets);
+    activeSelectionSourceSignature = signature;
+    return true;
+  };
+
+  return {
+    selectionHighlights,
+    hoverHighlights,
+    getSelectionBounds,
+    updateSelectionHighlights,
+    syncSelectionHighlights,
+    updateSelectionHover
+  };
 }
 
 export function createUnderlayController(args: {

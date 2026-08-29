@@ -1,13 +1,30 @@
-import { mountBomDevPanel } from "../ui/bomDevPanel";
-import { mountPricingCatalogPanel } from "../ui/pricingCatalogPanel";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import type { KitchenContext } from "../layout/kitchenContext";
+import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
+import type { CustomFurnitureInstance } from "../layout/customFurnitureTypes";
+import type { ProjectQuoteSettingsInput } from "../layout/bom/projectQuote";
+import type { PriceCurrency } from "../core/pricing/currency";
+import { mountPricingCatalogPanel } from "../ui/pricingCatalogPanel";
+import { createButtonElement } from "./propsPanelElements";
 
 type BomPanelArgs = {
-  instances: Parameters<typeof mountBomDevPanel>[1];
-  kitchenWorktops: Parameters<typeof mountBomDevPanel>[2];
-  kitchenCtx: Parameters<typeof mountBomDevPanel>[3];
+  instances: LayoutInstance[];
+  kitchenWorktops: KitchenWorktopInstance[];
+  customFurniture: CustomFurnitureInstance[];
+  kitchenCtx: KitchenContext;
   catalog: ClientCatalog;
+  quoteSettings?: ProjectQuoteSettingsInput;
+  displayCurrency?: PriceCurrency;
 };
+
+function mountPanelError(container: HTMLElement, message: string) {
+  container.innerHTML = "";
+  const error = document.createElement("p");
+  error.textContent = message;
+  error.style.margin = "0";
+  error.style.color = "#ef4444";
+  container.appendChild(error);
+}
 
 export function openBomPanel(args: BomPanelArgs) {
   const overlay = document.createElement("div");
@@ -22,18 +39,20 @@ export function openBomPanel(args: BomPanelArgs) {
   panel.appendChild(header);
 
   const title = document.createElement("h2");
-  title.textContent = "BOM";
+  title.textContent = "Načítavam kusovník";
   title.className = "bom-modal__title";
   header.appendChild(title);
 
-  const closeBtn = document.createElement("button");
-  closeBtn.type = "button";
-  closeBtn.textContent = "Zavrieť";
+  const closeBtn = createButtonElement("Zavrieť");
   closeBtn.className = "bom-modal__close";
   header.appendChild(closeBtn);
 
   const content = document.createElement("div");
   content.className = "bom-modal__content";
+  content.textContent =
+    args.instances.length + args.kitchenWorktops.length + args.customFurniture.length > 0
+      ? "Loading BOM..."
+      : "Nie sú umiestnené žiadne moduly.";
   panel.appendChild(content);
 
   const close = () => overlay.remove();
@@ -42,12 +61,24 @@ export function openBomPanel(args: BomPanelArgs) {
     if (event.target === overlay) close();
   });
 
-  mountBomDevPanel(content, args.instances, args.kitchenWorktops, args.kitchenCtx, args.catalog);
   document.body.appendChild(overlay);
+  void import("../ui/bomDevPanel")
+    .then(({ mountBomDevPanel }) => {
+      if (!overlay.isConnected) return;
+      title.textContent = "Kusovník";
+      content.innerHTML = "";
+      mountBomDevPanel(content, args.instances, args.kitchenWorktops, args.customFurniture, args.kitchenCtx, args.catalog, {
+        quoteSettings: args.quoteSettings,
+        displayCurrency: args.displayCurrency,
+        lockDisplayCurrency: args.displayCurrency !== undefined
+      });
+    })
+    .catch(() => mountPanelError(content, "BOM could not be loaded."));
 }
 
-export function openPricingCatalog(catalog: ClientCatalog) {
+export function openPricingCatalog(catalog: ClientCatalog, displayCurrency: PriceCurrency = "EUR") {
   const overlay = document.createElement("div");
+  overlay.className = "pricing-catalog-modal";
   overlay.style.position = "fixed";
   overlay.style.inset = "0";
   overlay.style.zIndex = "1000";
@@ -57,6 +88,7 @@ export function openPricingCatalog(catalog: ClientCatalog) {
   overlay.style.padding = "20px";
 
   const panel = document.createElement("div");
+  panel.className = "pricing-catalog-modal__panel";
   panel.style.width = "calc(100vw - 40px)";
   panel.style.height = "calc(100vh - 40px)";
   panel.style.overflow = "auto";
@@ -76,15 +108,14 @@ export function openPricingCatalog(catalog: ClientCatalog) {
   panel.appendChild(header);
 
   const title = document.createElement("h2");
-  title.textContent = "Pricing Catalog";
+  title.textContent = "Cenový katalóg";
   title.style.margin = "0";
   title.style.color = "#eef2ff";
   title.style.font = "700 16px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
   header.appendChild(title);
 
-  const closeBtn = document.createElement("button");
-  closeBtn.type = "button";
-  closeBtn.textContent = "Zavrieť";
+  const closeBtn = createButtonElement("Zavrieť");
+  closeBtn.className = "pricing-catalog-modal__close";
   closeBtn.style.background = "#0e1118";
   closeBtn.style.color = "#eef2ff";
   closeBtn.style.border = "1px solid #303746";
@@ -101,6 +132,6 @@ export function openPricingCatalog(catalog: ClientCatalog) {
     if (event.target === overlay) close();
   });
 
-  mountPricingCatalogPanel(content, catalog);
+  mountPricingCatalogPanel(content, catalog, displayCurrency);
   document.body.appendChild(overlay);
 }

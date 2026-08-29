@@ -9,7 +9,7 @@ Cieľ je jednoduchý:
 - `develop` je pracovná integračná vetva,
 - každá úloha ide cez vlastnú branchu,
 - každá zmena ide cez Pull Request,
-- Codex nerobí nečakané push/stage/branch operácie,
+- Codex po úspešných povinných testoch automaticky publikuje hotovú Kitchen App zmenu cez PR do `develop`,
 - klientské dáta, secrety, storage a `.fqp` súbory sa nikdy nedostanú do Gitu.
 
 ---
@@ -48,6 +48,16 @@ Nikto nesmie pushovať priamo do `main`.
 Do `develop` sa mergujú hotové feature/fix branche cez PR.
 
 Nikto by nemal robiť priamo na `develop`, okrem výnimočnej údržby po dohode.
+
+### Automatický Codex testovací tok
+
+Pre Kitchen App platí tento odsúhlasený tok: keď Codex dokončí samostatnú
+feature/fix branch a prejdú jej povinné automatické testy, okamžite ju
+commitne, pushne, vytvorí Pull Request a po úspešnom CI ju mergne do
+`develop`. Founder potom testuje online práve verziu na `develop`.
+
+Toto nie je povolenie na priamy push do `develop` ani do `main`. `main` zostáva
+produkčný a vyžaduje výslovné potvrdenie Foundera po online teste na `develop`.
 
 ### `feature/*`
 
@@ -672,13 +682,12 @@ Codex musí dodržiavať tieto pravidlá.
 
 ### Codex nesmie robiť bez explicitného pokynu
 
-Codex nesmie automaticky:
+Codex nesmie automaticky mimo nižšie uvedeného odsúhlaseného Kitchen App toku:
 
 ```txt
-git push
-git pull
-git commit
-git add
+git push priamo do main/develop
+git pull alebo merge bez kontroly stavu
+git commit alebo git add nesúvisiaceho/neudeleného scope
 git reset --hard
 git clean -fd
 git checkout main
@@ -691,7 +700,19 @@ mazať klientské súbory
 mazať outputs/exports bez explicitného pokynu
 ```
 
-Codex môže navrhnúť príkazy, ale nesmie ich vykonať, ak používateľ výslovne nepovie, že má.
+Pre hotovú Kitchen App feature/fix branch je trvalým výslovným pokynom Foundera:
+po úspešných povinných testoch Codex smie commitnúť iba scope zmeny, pushnúť
+branch, vytvoriť a po zelenom CI mergnúť PR do `develop`. Codex musí predtým
+skontrolovať diff a nesmie obísť ochranu vetiev. Mimo tohto toku môže príkazy
+iba navrhnúť, pokiaľ Founder výslovne nepovie inak.
+
+### Aktívna výnimka zakladateľa: okamžitá online viditeľnosť
+
+Zakladateľ výslovne požaduje, aby každá samostatná a overená zmena bola po
+testoch hneď commitnutá a pushnutá na svoju pracovnú branch. Táto výnimka
+platí pre commit a push pracovnej branche; neplatí pre priamy push do `main`
+ani `develop`, pre neoverené zmeny, cudzie rozpracované súbory, secrety alebo
+klientske dáta.
 
 ### Codex pred prácou
 
@@ -743,7 +764,7 @@ Codex musí na konci vypísať:
 4. výsledky testov
 5. čo ostáva
 6. či niečo zlyhalo
-7. či nepushoval/necommitoval/nestageoval
+7. kam bola hotová Kitchen App zmena publikovaná a ktorý online test na `develop` nasleduje
 ```
 
 ---
@@ -1003,5 +1024,6 @@ Pull pravidelne.
 Každá úloha má vlastnú branchu.
 Pred pull/merge vždy git status.
 Do main/develop iba cez PR.
-Codex nesmie pushovať/commitovať/stageovať bez výslovného pokynu.
+Hotová Kitchen App zmena po zelených povinných testoch ide automaticky cez PR
+do `develop`; do `main` iba po výslovnom potvrdení úspešného online testu.
 ```

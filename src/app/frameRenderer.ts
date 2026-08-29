@@ -24,6 +24,7 @@ export type FrameRendererContext = {
   updateMeasureLabels: () => void;
   updateMeasureLabelInteractivity: () => void;
   updateModuleAdjacencyVisuals: () => void;
+  updateAlignLockOverlay: () => void;
   updateWallEditHud: () => void;
   updateModuleEditHud: () => void;
   updateDetailViewCamera: () => void;
@@ -74,6 +75,7 @@ export function renderAppFrame(ctx: FrameRendererContext, dt: number) {
   ctx.updateMeasureLabels();
   ctx.updateMeasureLabelInteractivity();
   ctx.updateModuleAdjacencyVisuals();
+  ctx.updateAlignLockOverlay();
   ctx.updateWallEditHud();
   ctx.updateModuleEditHud();
   ctx.updateDetailViewCamera();

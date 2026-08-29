@@ -37,6 +37,11 @@ type EditHudContext = {
   commitHistory: () => void;
 };
 
+type EditableModuleWidthParams = ModuleParams & {
+  width?: number;
+  widthMm?: number;
+};
+
 export function createEditHudController(ctx: EditHudContext) {
   const hideWallEditHud = () => {
     ctx.wallEditHud.lenLine.style.display = "none";
@@ -64,17 +69,19 @@ export function createEditHudController(ctx: EditHudContext) {
   };
 
   const getEditableModuleWidthMm = (inst: LayoutInstance) => {
-    const raw = (inst.params as any).widthMm ?? (inst.params as any).width;
+    const params = inst.params as EditableModuleWidthParams;
+    const raw = params.widthMm ?? params.width;
     return typeof raw === "number" && Number.isFinite(raw) ? Math.max(1, Math.round(raw)) : null;
   };
 
   const setEditableModuleWidthMm = (inst: LayoutInstance, valueMm: number) => {
-    if (typeof (inst.params as any).widthMm === "number") {
-      (inst.params as any).widthMm = valueMm;
+    const params = inst.params as EditableModuleWidthParams;
+    if (typeof params.widthMm === "number") {
+      params.widthMm = valueMm;
       return true;
     }
-    if (typeof (inst.params as any).width === "number") {
-      (inst.params as any).width = valueMm;
+    if (typeof params.width === "number") {
+      params.width = valueMm;
       return true;
     }
     return false;
@@ -178,7 +185,7 @@ export function createEditHudController(ctx: EditHudContext) {
     const accepted = ctx.rebuildInstance(inst, {
       previousParams,
       preserveBackAnchor: true,
-      sourceKey: typeof (inst.params as any).widthMm === "number" ? "widthMm" : "width"
+      sourceKey: typeof (inst.params as EditableModuleWidthParams).widthMm === "number" ? "widthMm" : "width"
     });
     if (!accepted) return;
     ctx.mountProps();

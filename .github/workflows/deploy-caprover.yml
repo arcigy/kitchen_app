@@ -7,48 +7,178 @@ on:
       - develop
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-develop
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'develop' }}
     env:
       NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
       - name: Select CapRover app
         id: caprover_app
         run: |
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
-            echo "app=kitchenapp" >> "$GITHUB_OUTPUT"
+            echo "app=$CAPROVER_PRODUCTION_APP" >> "$GITHUB_OUTPUT"
+            echo "url=$CAPROVER_PRODUCTION_APP_URL" >> "$GITHUB_OUTPUT"
+            echo "app_env=prod" >> "$GITHUB_OUTPUT"
+            echo "database_schema=prod" >> "$GITHUB_OUTPUT"
+            echo "object_prefix=prod" >> "$GITHUB_OUTPUT"
           else
-            echo "app=arcigy-kitchen-develop" >> "$GITHUB_OUTPUT"
+            echo "app=$CAPROVER_DEVELOP_APP" >> "$GITHUB_OUTPUT"
+            echo "url=$CAPROVER_DEVELOP_APP_URL" >> "$GITHUB_OUTPUT"
+            echo "app_env=dev" >> "$GITHUB_OUTPUT"
+            echo "database_schema=dev" >> "$GITHUB_OUTPUT"
+            echo "object_prefix=dev" >> "$GITHUB_OUTPUT"
           fi
+        env:
+          CAPROVER_DEVELOP_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
+          CAPROVER_DEVELOP_APP_URL: ${{ vars.CAPROVER_APP_URL }}
+          CAPROVER_PRODUCTION_APP: ${{ vars.CAPROVER_PRODUCTION_APP }}
+          CAPROVER_PRODUCTION_APP_URL: ${{ vars.CAPROVER_PRODUCTION_APP_URL }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        # A duplicate deploy gate must never hold the protected develop
+        # deployment indefinitely. The same full suite runs in CI with a
+        # 30-minute job limit; this shorter, explicit step bound leaves time
+        # for a clear failure and preserves the CapRover deploy timeout.
+        timeout-minutes: 15
+        run: npm test
+
+      - name: Production dependency policy
+        run: npm run security:dependencies
+
       - name: Build
         run: npm run build
 
       - name: Create deploy archive
-        run: tar -cf kitchenapp.tar captain-definition nginx.conf dist
+        run: |
+          npx --no-install tsx scripts/listDeployMaterialAssets.ts > material-asset-files.txt
 
-      - name: Deploy to CapRover
+          tar \
+            --exclude-vcs \
+            --exclude=.env \
+            --exclude=./node_modules \
+            --exclude=./dist \
+            --exclude=./reports \
+            --exclude=./outputs \
+            --exclude=./storage \
+            --exclude='*.log' \
+            --exclude=kitchenapp.tar \
+            --exclude=material-asset-files.txt \
+            --exclude=./assets/materials \
+            --exclude=./backend/materials/assets \
+            --exclude=./HDRI \
+            --exclude=./Materials \
+            --exclude=./blender/previews \
+            --exclude=./public/hdri \
+            --exclude=./public/materials \
+            -cf kitchenapp.tar .
+
+          tar -rf kitchenapp.tar -T material-asset-files.txt
+          ls -lh kitchenapp.tar
+
+      - name: Validate isolated and durable CapRover target
+        run: |
+          set -euo pipefail
+          trap 'rm -f caprover-apps.json' EXIT
+          if [ -z "${CAPROVER_APP_URL:-}" ]; then
+            echo "CAPROVER_APP_URL is required for post-deploy health and readiness verification."
+            exit 1
+          fi
+          npx caprover@2.3.1 api \
+            -u "$CAPROVER_SERVER" \
+            -p "$CAPROVER_PASSWORD" \
+            -t /user/apps/appDefinitions \
+            -m GET \
+            -d '{}' \
+            -o caprover-apps.json
+          chmod 600 caprover-apps.json
+          npx --no-install tsx scripts/validateCapRoverDeployPreflight.ts caprover-apps.json
+        env:
+          CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
+          CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
+          CAPROVER_APP: ${{ steps.caprover_app.outputs.app }}
+          CAPROVER_APP_URL: ${{ steps.caprover_app.outputs.url }}
+          ARCIGY_DEPLOY_APP_ENV: ${{ steps.caprover_app.outputs.app_env }}
+          ARCIGY_DEPLOY_DATABASE_SCHEMA: ${{ steps.caprover_app.outputs.database_schema }}
+          ARCIGY_DEPLOY_OBJECT_PREFIX: ${{ steps.caprover_app.outputs.object_prefix }}
+          ARCIGY_DEPLOY_STORAGE_PATH: /app/storage
+
+      - name: Inspect CapRover image capacity (read-only)
+        run: |
+          set -euo pipefail
+          trap 'rm -f caprover-unused-images.json' EXIT
+          npx caprover@2.3.1 api \
+            -u "$CAPROVER_SERVER" \
+            -p "$CAPROVER_PASSWORD" \
+            -t /user/apps/appDefinitions/unusedImages \
+            -m GET \
+            -d '{"mostRecentLimit":2}' \
+            -o caprover-unused-images.json
+          chmod 600 caprover-unused-images.json
+          npx --no-install tsx scripts/caproverUnusedImageCleanup.ts inspect caprover-unused-images.json
+          echo "Automatic image deletion is disabled. Any cleanup requires a fresh reviewed inventory and explicit operational approval."
+        env:
+          CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
+          CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
+
+      - name: Deploy
         id: deploy_caprover
         continue-on-error: true
         run: |
           set -o pipefail
-          npx caprover@2.3.1 deploy -h http://captain.178.104.175.242.sslip.io -p "$CAPROVER_PASSWORD" -a "${{ steps.caprover_app.outputs.app }}" -t kitchenapp.tar 2>&1 | tee deploy.log
+          npx caprover@2.3.1 deploy -h "$CAPROVER_SERVER" -p "$CAPROVER_PASSWORD" -a "$CAPROVER_APP" -t kitchenapp.tar 2>&1 | tee deploy.log
         env:
+          CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
           CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
+          CAPROVER_APP: ${{ steps.caprover_app.outputs.app }}
+
+      - name: Verify deployed health and readiness
+        id: readiness
+        if: steps.deploy_caprover.outcome == 'success'
+        run: |
+          base_url="${CAPROVER_APP_URL%/}"
+          for attempt in $(seq 1 18); do
+            if curl --fail --silent --show-error --max-time 10 "$base_url/health" | grep -q '"ok":true' && \
+               curl --fail --silent --show-error --max-time 10 "$base_url/ready" | grep -Eq '"ok":true.*"storage":"postgres"'; then
+              echo "Deployment is healthy and ready."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Deployment did not become healthy and ready in time."
+          exit 1
+        env:
+          CAPROVER_APP_URL: ${{ steps.caprover_app.outputs.url }}
 
       - name: Notify deploy result
         if: always() && env.NTFY_TOPIC != ''
@@ -68,8 +198,8 @@ jobs:
           curl -fsS -X POST --data-binary @payload.json "https://ntfy.sh/$NTFY_TOPIC" || true
         env:
           APP_NAME: ${{ steps.caprover_app.outputs.app }}
-          DEPLOY_STATUS: ${{ steps.deploy_caprover.outcome == 'success' && 'success' || 'failure' }}
+          DEPLOY_STATUS: ${{ steps.deploy_caprover.outcome == 'success' && steps.readiness.outcome == 'success' && 'success' || 'failure' }}
 
-      - name: Fail if deploy failed
-        if: steps.deploy_caprover.outcome != 'success'
+      - name: Fail if deploy or readiness failed
+        if: steps.deploy_caprover.outcome != 'success' || steps.readiness.outcome != 'success'
         run: exit 1

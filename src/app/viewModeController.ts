@@ -15,6 +15,7 @@ import type {
 import type { AppArgs } from "./bootstrap";
 import type { MeasureState } from "./measureTools";
 import type { SnapOverlayController } from "./snapOverlay";
+import { refreshSelectionHighlights } from "./selectionController";
 
 type ViewerTabKey = "3d" | "floorplan" | string;
 
@@ -162,7 +163,7 @@ export function createViewModeController(ctx: ViewModeControllerContext) {
       ctx.drawSnapOverlay.hide();
       ctx.hideHoverCursor();
     }
-    ctx.updateSelectionHighlights();
+    refreshSelectionHighlights(ctx);
     ctx.updateAllSectionVisuals();
     ctx.updateDetailSliceOverlay();
 

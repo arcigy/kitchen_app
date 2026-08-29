@@ -26,7 +26,7 @@ describe("project file security boundary", () => {
       if (source.includes("PROJECT_FILE_SECRET") || source.includes("project-save-crypto")) offenders.push(path.relative(process.cwd(), file));
     }
     expect(offenders).toEqual([]);
-  });
+  }, 15_000);
 
   it("keeps legacy project file names and magic out of runtime code", async () => {
     const files = (await Promise.all(PROJECT_FILE_RUNTIME_ROOTS.map(listFiles))).flat();

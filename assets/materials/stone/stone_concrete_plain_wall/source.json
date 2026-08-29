@@ -1,0 +1,21 @@
+{
+  "id": "stone_concrete_plain_wall",
+  "source": "ambientCG",
+  "assetId": "Concrete046",
+  "requestedAssetId": "Concrete046",
+  "matchedAssetId": "Concrete046",
+  "downloadProfile": "2K",
+  "license": "CC0",
+  "originalMatchedPath": "C:\\Users\\laube\\Downloads\\Concrete046_2K-JPG.zip",
+  "normalConvention": "GL",
+  "mapsFound": {
+    "basecolor": true,
+    "roughness": true,
+    "normal": true,
+    "ao": false,
+    "displacement": true,
+    "metallic": false,
+    "opacity": false
+  },
+  "notes": []
+}

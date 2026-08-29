@@ -1,10 +1,12 @@
-import type { ColumnInstance, DoorInstance, FloorInstance, LayoutInstance, SectionInstance, WindowInstance } from "./localTypes";
+import type { ColumnInstance, DoorInstance, FloorInstance, LayoutInstance, SectionInstance, WallInstance, WindowInstance } from "./localTypes";
+import { getWallTypeName, getWallTypePreset, resolveWallTypeId } from "./wallTypes";
 
 type LayoutExportArgs = {
   windowInst: WindowInstance | null;
   windows: WindowInstance[];
   doorInst: DoorInstance | null;
   doors: DoorInstance[];
+  walls: WallInstance[];
   columns: ColumnInstance[];
   floors: FloorInstance[];
   sections: SectionInstance[];
@@ -26,6 +28,20 @@ export function createLayoutExportPayload(args: LayoutExportArgs) {
       id: door.id,
       params: door.params
     })),
+    walls: args.walls.map((wall) => {
+      const typeId = resolveWallTypeId(wall.params);
+      const preset = getWallTypePreset(typeId);
+      return {
+        id: wall.id,
+        params: wall.params,
+        ifc: {
+          className: "IfcWall",
+          predefinedType: preset?.ifcPredefinedType ?? "STANDARD",
+          typeId,
+          typeName: preset?.name ?? getWallTypeName(typeId)
+        }
+      };
+    }),
     columns: args.columns.map((column) => ({
       id: column.id,
       params: column.params

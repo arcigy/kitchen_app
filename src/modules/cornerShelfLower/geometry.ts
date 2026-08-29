@@ -15,7 +15,7 @@ const baseLengthXMm = typeof baseLiveRuntime?.params?.lengthX === "number" ? bas
 const baseLengthZMm = typeof baseLiveRuntime?.params?.lengthZ === "number" ? baseLiveRuntime.params.lengthZ : 1000;
 const baseDepthMm = typeof baseLiveRuntime?.params?.depth === "number" ? baseLiveRuntime.params.depth : 560;
 const baseFrontThicknessMm =
-  typeof baseLiveRuntime?.params?.frontThicknessMm === "number" ? baseLiveRuntime.params.frontThicknessMm : 19;
+  typeof baseLiveRuntime?.params?.frontThicknessMm === "number" ? baseLiveRuntime.params.frontThicknessMm : 18;
 const baseBackThicknessMm =
   typeof baseLiveRuntime?.params?.backThickness === "number" ? baseLiveRuntime.params.backThickness : 6;
 const baseBoardThicknessMm =
@@ -27,6 +27,7 @@ const basePlinthHeightMm =
   typeof baseLiveRuntime?.params?.plinthHeight === "number" ? baseLiveRuntime.params.plinthHeight : 100;
 const basePlinthSetbackMm =
   typeof baseLiveRuntime?.params?.plinthSetbackMm === "number" ? baseLiveRuntime.params.plinthSetbackMm : 60;
+const cornerFrontRevealMm = 0.2;
 
 function getNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -241,6 +242,47 @@ function applyDoorAttachmentHeightAdjustments(
   }
 }
 
+function replaceHandleBoxWithRoundBar(group: THREE.Group, name: string, axis: "x" | "z") {
+  const existing = group.getObjectByName(name);
+  if (!(existing instanceof THREE.Mesh)) return;
+  const center = getObjectCenterMm(existing);
+  const dims = getMeshDimensionsMm(existing);
+  if (!center || !dims) return;
+
+  const lengthMm = Math.max(1, axis === "x" ? dims.width ?? 0 : dims.depth ?? 0);
+  const diameterMm = Math.max(4, Math.min(dims.height ?? 12, axis === "x" ? dims.depth ?? 12 : dims.width ?? 12));
+  const centerMm = { ...center };
+  if (axis === "x") centerMm.z -= Math.max(0, ((dims.depth ?? diameterMm) - diameterMm) * 0.5);
+  if (axis === "z") centerMm.x -= Math.max(0, ((dims.width ?? diameterMm) - diameterMm) * 0.5);
+  const parent = existing.parent ?? group;
+  const material = existing.material;
+  const userData = structuredClone(existing.userData ?? {});
+  parent.remove(existing);
+
+  const handle = new THREE.Mesh(
+    new THREE.CylinderGeometry((diameterMm * 0.5) / 1000, (diameterMm * 0.5) / 1000, lengthMm / 1000, 24),
+    material
+  );
+  handle.name = name;
+  if (axis === "x") handle.rotation.z = Math.PI / 2;
+  if (axis === "z") handle.rotation.x = Math.PI / 2;
+  handle.position.set(centerMm.x / 1000, centerMm.y / 1000, centerMm.z / 1000);
+  handle.userData = {
+    ...userData,
+    componentType: userData.componentType ?? "handle",
+    materialGroup: userData.materialGroup ?? "hardware",
+    dimensionsMm: axis === "x"
+      ? { width: lengthMm, height: diameterMm, depth: diameterMm }
+      : { width: diameterMm, height: diameterMm, depth: lengthMm }
+  };
+  parent.add(handle);
+}
+
+function replaceCornerHandlesWithSharedBarGeometry(group: THREE.Group) {
+  replaceHandleBoxWithRoundBar(group, "doorHandle_front_z", "x");
+  replaceHandleBoxWithRoundBar(group, "doorHandle_front_x", "z");
+}
+
 function getObjectBoundsMm(obj: THREE.Object3D | null | undefined) {
   if (!obj) return null;
   const box = new THREE.Box3().setFromObject(obj);
@@ -446,6 +488,39 @@ function applyCornerLengthAdjustments(group: THREE.Group, params: CornerShelfLow
     if (Math.abs(deltaLengthZMm) > 1e-6 && /^hinge_front_x_\d+_/i.test(name)) {
       shiftMeshAxis(mesh, "z", deltaLengthZMm);
     }
+  }
+}
+
+function applyCornerDoorGroundTruth(group: THREE.Group, params: CornerShelfLowerParams) {
+  const frontThicknessMm = Math.max(1, Math.round(getNumber(params.frontThicknessMm, baseFrontThicknessMm)));
+  const sideGapMm = Math.max(0, Math.round(getNumber(params.sideGap, baseSideGapMm)));
+  const sideEndXBounds = getObjectBoundsMm(group.getObjectByName("side_end_x"));
+  const sideEndZBounds = getObjectBoundsMm(group.getObjectByName("side_end_z"));
+  if (!sideEndXBounds || !sideEndZBounds) return;
+
+  const sharedFrontXMm = sideEndZBounds.maxX;
+  const sharedFrontZMm = sideEndXBounds.maxZ;
+  const zDoorMinXMm = sharedFrontXMm + sideGapMm;
+  const zDoorMaxXMm = sideEndXBounds.minX - sideGapMm;
+  const xDoorMinZMm = sharedFrontZMm + cornerFrontRevealMm;
+  const xDoorMaxZMm = sideEndZBounds.minZ - sideGapMm;
+  const doorFrontZCenterZMm = sharedFrontZMm + cornerFrontRevealMm + frontThicknessMm * 0.5;
+  const doorFrontXCenterXMm = sharedFrontXMm + cornerFrontRevealMm + frontThicknessMm * 0.5;
+
+  const doorFrontZ = group.getObjectByName("door_front_z") as THREE.Mesh | null;
+  if (doorFrontZ instanceof THREE.Mesh) {
+    const targetWidthMm = Math.max(1, zDoorMaxXMm - zDoorMinXMm);
+    resizeMeshAxis(doorFrontZ, "x", targetWidthMm);
+    setObjectCenterX(doorFrontZ, zDoorMinXMm + targetWidthMm * 0.5);
+    setObjectCenterZ(doorFrontZ, doorFrontZCenterZMm);
+  }
+
+  const doorFrontX = group.getObjectByName("door_front_x") as THREE.Mesh | null;
+  if (doorFrontX instanceof THREE.Mesh) {
+    const targetDepthMm = Math.max(1, xDoorMaxZMm - xDoorMinZMm);
+    resizeMeshAxis(doorFrontX, "z", targetDepthMm);
+    setObjectCenterZ(doorFrontX, xDoorMinZMm + targetDepthMm * 0.5);
+    setObjectCenterX(doorFrontX, doorFrontXCenterXMm);
   }
 }
 
@@ -867,11 +942,13 @@ export function buildCornerShelfLower(params: CornerShelfLowerParams, catalog: C
   syncCornerHingeMeshes(group, params);
   applyCornerDepthAdjustments(group, params);
   applyCornerLengthAdjustments(group, params);
+  applyCornerDoorGroundTruth(group, params);
   applyCornerBackAdjustments(group, params);
   applyCornerHeightAdjustments(group, params);
   applyCornerPlinthAdjustments(group, params);
   applyCornerFrontAdjustments(group, params);
   alignCornerFrontSupports(group);
+  replaceCornerHandlesWithSharedBarGeometry(group);
   attachKitchenCornerAnchors(group);
   applyCornerDoorOpenState(group, params);
 

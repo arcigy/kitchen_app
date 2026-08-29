@@ -3,14 +3,112 @@ import type { LayoutInstance, SelectedKind, WallInstance } from "./localTypes";
 
 type LayoutTool = "select" | "wall" | "align" | "trim" | "measure" | "section" | "dimension";
 
-type SelectionControllerContext = {
+export type SelectionSideEffects = {
+  highlights?: boolean;
+  wallSnapId?: string | null;
+  previousKind?: SelectedKind;
+  previousWallSelected?: boolean;
+  previousSectionSelected?: boolean;
+};
+
+export type SelectionApplyCommandArgs = {
+  kind: SelectedKind;
+  assignIds?: () => void;
+  cleanupVisuals?: () => void;
+  sideEffectKind?: SelectedKind;
+  sideEffectId?: string | null;
+};
+
+export type SelectionApplyCommand = (args: SelectionApplyCommandArgs) => void;
+
+export type ClearSelectionCommandContext = {
+  applySelection: SelectionApplyCommand;
+};
+
+export type ApplySelectionCommandContext = {
+  afterSelectionChanged: (opts?: SelectionSideEffects) => void;
+  clearObjectSelectionVisuals: () => void;
+  clearSelectedEntityIds: () => void;
+  ensureSelectableTool: () => void;
+  setSelectedKind: (kind: SelectedKind) => void;
+};
+
+export type SelectModuleCommandContext = {
+  applySelection: SelectionApplyCommand;
+  clearUnderlayBox: () => void;
+  kitchenMode: {
+    filterSelectableInstanceId: (id: string | null) => string | null;
+    refreshModuleCatalog?: () => void;
+  } | null;
+  pinnedInstanceIds: Set<string>;
+  selectedInstanceIds: Set<string>;
+  setInstanceSelected: (id: string | null) => void;
+};
+
+export type SelectModuleOptions = {
+  additive?: boolean;
+};
+
+export type SelectWallCommandContext = {
+  applySelection: SelectionApplyCommand;
+  pinnedWallIds: Set<string>;
+  selectedWallIds: Set<string>;
+  setSelectedWallId: (id: string | null) => void;
+  walls: WallInstance[];
+};
+
+export type SelectKitchenGroupCommandContext = {
+  applySelection: SelectionApplyCommand;
   instances: LayoutInstance[];
-  kitchenMode: { filterSelectableInstanceId: (id: string | null) => string | null } | null;
+  selectedInstanceIds: Set<string>;
+  setSelectedKitchenGroupId: (id: string | null) => void;
+};
+
+export type SelectOpeningCommandContext = {
+  applySelection: SelectionApplyCommand;
+  clearUnderlayBox: () => void;
+  setInstanceSelected: (id: string | null) => void;
+};
+
+export type SelectSectionCommandContext = {
+  applySelection: SelectionApplyCommand;
+  setSelectedSectionId: (id: string | null) => void;
+};
+
+export type SelectFloorCommandContext = {
+  applySelection: SelectionApplyCommand;
+  setSelectedFloorId: (id: string | null) => void;
+};
+
+export type SelectColumnCommandContext = {
+  applySelection: SelectionApplyCommand;
+  setSelectedColumnId: (id: string | null) => void;
+};
+
+export type SelectUnderlayCommandContext = {
+  applySelection: SelectionApplyCommand;
+  createUnderlaySelectionBox: () => void;
+  ensureSelectableTool: () => void;
+  hasUnderlaySource: () => boolean;
+  isUnderlayPinned: () => boolean;
+  isUnderlayVisible: () => boolean;
+};
+
+export type SelectionControllerContext = {
+  instances: LayoutInstance[];
+  getKitchenEditMode: () => boolean;
+  kitchenMode: {
+    filterSelectableInstanceId: (id: string | null) => string | null;
+    findKitchenGroup?: (id: string) => { id: string } | null;
+    refreshModuleCatalog?: () => void;
+    clearWorktopSegmentSelection?: () => void;
+  } | null;
   layoutPanel: { setSelected: (id: string | null) => void };
   layoutTool: LayoutTool;
   mountProps: () => void;
   pinnedInstanceIds: Set<string>;
   pinnedWallIds: Set<string>;
+  rebuildWallPlanMesh: () => void;
   scene: THREE.Scene;
   selectedColumnId: string | null;
   selectedFloorId: string | null;
@@ -37,12 +135,276 @@ type SelectionControllerContext = {
   walls: WallInstance[];
 };
 
+export function getSelectionSideEffects(kind: SelectedKind, selectedId?: string | null): SelectionSideEffects {
+  if (kind === "window" || kind === "door" || kind === "underlay") return { highlights: false };
+  if (kind === "wall") return { wallSnapId: selectedId ?? null };
+  if (kind === "kitchenGroup" || kind === "section" || kind === "floor" || kind === "column") return { wallSnapId: null };
+  return {};
+}
+
+export type NonFloorplanFloorSelectionCleanupContext = {
+  mountProps: () => void;
+  selectedColumnId: string | null;
+  selectedFloorId: string | null;
+  selectedInstanceId: string | null;
+  selectedInstanceIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedKitchenGroupId: string | null;
+  selectedSectionId: string | null;
+  selectedWallId: string | null;
+  selectedWallIds: Set<string>;
+  setInstanceSelected: (id: string | null) => void;
+  showWallSnapMarkersFor: (wallId: string | null) => void;
+  syncSelectionState: () => void;
+  updateAllSectionVisuals: () => void;
+  updateSelectionHighlights: () => void;
+};
+
+export type DrawingToolSelectionState = {
+  selectedFloorId: string | null;
+  selectedInstanceIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedWallId: string | null;
+  selectedWallIds: Set<string>;
+  setInstanceSelected: (id: string | null) => void;
+};
+
+export type SectionToolSelectionState = DrawingToolSelectionState & {
+  selectedKitchenGroupId: string | null;
+  selectedSectionId: string | null;
+};
+
+export type SelectionBoxCleanupState = {
+  scene: THREE.Scene;
+  selectedUnderlayBox: THREE.BoxHelper | null;
+  selectedWallBox: THREE.BoxHelper | null;
+};
+
+export type SelectionVisualRefreshContext = {
+  syncSelectionState: () => void;
+  updateSelectionHighlights: () => void;
+};
+
+export type SelectionHighlightRefreshContext = {
+  updateSelectionHighlights: () => void;
+};
+
+export type SelectionVisualRefreshOptions = {
+  highlights?: boolean;
+};
+
+function disposeSelectionBox(scene: THREE.Scene, box: THREE.BoxHelper | null) {
+  if (!box) return;
+  scene.remove(box);
+  box.geometry.dispose();
+  (box.material as THREE.Material).dispose();
+}
+
+export function runClearDrawingToolSelectionCommand(state: DrawingToolSelectionState) {
+  state.selectedKind = null;
+  state.selectedWallId = null;
+  state.selectedFloorId = null;
+  clearSelectionIdSet(state.selectedWallIds);
+  clearSelectionIdSet(state.selectedInstanceIds);
+  state.setInstanceSelected(null);
+}
+
+export function clearDrawingToolSelection(state: DrawingToolSelectionState) {
+  runClearDrawingToolSelectionCommand(state);
+}
+
+export function runClearSectionToolSelectionCommand(state: SectionToolSelectionState) {
+  clearDrawingToolSelection(state);
+  state.selectedSectionId = null;
+  state.selectedKitchenGroupId = null;
+}
+
+export function clearSectionToolSelection(state: SectionToolSelectionState) {
+  runClearSectionToolSelectionCommand(state);
+}
+
+export function runClearSelectionCommand(ctx: ClearSelectionCommandContext) {
+  ctx.applySelection({ kind: null });
+}
+
+export function runApplySelectionCommand(ctx: ApplySelectionCommandContext, args: SelectionApplyCommandArgs) {
+  ctx.ensureSelectableTool();
+  ctx.setSelectedKind(args.kind);
+  ctx.clearSelectedEntityIds();
+  args.assignIds?.();
+  (args.cleanupVisuals ?? ctx.clearObjectSelectionVisuals)();
+  ctx.afterSelectionChanged(getSelectionSideEffects(args.sideEffectKind ?? args.kind, args.sideEffectId));
+}
+
+export function runSelectModuleCommand(ctx: SelectModuleCommandContext, id: string | null) {
+  let selectedId = ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(id) : id;
+  if (selectedId && ctx.pinnedInstanceIds.has(selectedId)) selectedId = null;
+  ctx.applySelection({
+    kind: selectedId ? "module" : null,
+    assignIds: () => {
+      if (selectedId) replaceSelectionIdSet(ctx.selectedInstanceIds, [selectedId]);
+    },
+    cleanupVisuals: () => {
+      ctx.setInstanceSelected(selectedId);
+      ctx.clearUnderlayBox();
+    }
+  });
+}
+
+export function runSelectWallCommand(ctx: SelectWallCommandContext, id: string | null) {
+  const selectedId = id && ctx.pinnedWallIds.has(id) ? null : id;
+  const wall = selectedId ? ctx.walls.find((item) => item.id === selectedId) ?? null : null;
+  ctx.applySelection({
+    kind: selectedId ? "wall" : null,
+    sideEffectKind: "wall",
+    sideEffectId: wall ? selectedId : null,
+    assignIds: () => {
+      ctx.setSelectedWallId(selectedId);
+      if (selectedId) replaceSelectionIdSet(ctx.selectedWallIds, [selectedId]);
+    }
+  });
+}
+
+export function runSelectKitchenGroupCommand(ctx: SelectKitchenGroupCommandContext, groupId: string | null) {
+  ctx.applySelection({
+    kind: groupId ? "kitchenGroup" : null,
+    sideEffectKind: "kitchenGroup",
+    assignIds: () => {
+      ctx.setSelectedKitchenGroupId(groupId);
+      if (!groupId) return;
+      replaceSelectionIdSet(
+        ctx.selectedInstanceIds,
+        ctx.instances.filter((inst) => inst.kitchenGroupId === groupId).map((inst) => inst.id)
+      );
+    }
+  });
+}
+
+export function runSelectOpeningCommand(ctx: SelectOpeningCommandContext, kind: "window" | "door") {
+  ctx.applySelection({
+    kind,
+    cleanupVisuals: () => {
+      ctx.setInstanceSelected(null);
+      ctx.clearUnderlayBox();
+    }
+  });
+}
+
+export function runSelectSectionCommand(ctx: SelectSectionCommandContext, id: string | null) {
+  ctx.applySelection({
+    kind: id ? "section" : null,
+    sideEffectKind: "section",
+    assignIds: () => {
+      ctx.setSelectedSectionId(id);
+    }
+  });
+}
+
+export function runSelectFloorCommand(ctx: SelectFloorCommandContext, id: string | null) {
+  ctx.applySelection({
+    kind: id ? "floor" : null,
+    sideEffectKind: "floor",
+    assignIds: () => {
+      ctx.setSelectedFloorId(id);
+    }
+  });
+}
+
+export function runSelectColumnCommand(ctx: SelectColumnCommandContext, id: string | null) {
+  ctx.applySelection({
+    kind: id ? "column" : null,
+    sideEffectKind: "column",
+    assignIds: () => {
+      ctx.setSelectedColumnId(id);
+    }
+  });
+}
+
+export function runSelectUnderlayCommand(ctx: SelectUnderlayCommandContext) {
+  ctx.ensureSelectableTool();
+  if (!ctx.isUnderlayVisible() || !ctx.hasUnderlaySource() || ctx.isUnderlayPinned()) return false;
+  ctx.applySelection({
+    kind: "underlay",
+    cleanupVisuals: ctx.createUnderlaySelectionBox
+  });
+  return true;
+}
+
+export function replaceSelectionIdSet(target: Set<string>, ids: Iterable<string>) {
+  target.clear();
+  for (const id of ids) target.add(id);
+}
+
+export function resolveSelectedIds(args: {
+  selectedIds: Set<string>;
+  selectedKind: SelectedKind;
+  selectedId: string | null;
+  singleKind: SelectedKind;
+}) {
+  return args.selectedIds.size > 0
+    ? Array.from(args.selectedIds)
+    : args.selectedKind === args.singleKind && args.selectedId
+      ? [args.selectedId]
+      : [];
+}
+
+export function resolveMergedSelectionIdSet(args: {
+  additive: boolean;
+  currentIds: Iterable<string>;
+  hitIds: Iterable<string>;
+}) {
+  const nextIds = new Set<string>();
+  if (args.additive) {
+    for (const id of args.currentIds) nextIds.add(id);
+  }
+  for (const id of args.hitIds) nextIds.add(id);
+  return nextIds;
+}
+
+export function clearSelectionIdSet(target: Set<string>) {
+  target.clear();
+}
+
+export function refreshSelectionHighlights(ctx: SelectionHighlightRefreshContext, opts?: SelectionVisualRefreshOptions) {
+  if (opts?.highlights !== false) ctx.updateSelectionHighlights();
+}
+
+export function refreshSelectionVisualState(ctx: SelectionVisualRefreshContext, opts?: SelectionVisualRefreshOptions) {
+  ctx.syncSelectionState();
+  refreshSelectionHighlights(ctx, opts);
+}
+
+export function clearWallAndUnderlaySelectionBoxes(state: SelectionBoxCleanupState) {
+  if (state.selectedWallBox) {
+    disposeSelectionBox(state.scene, state.selectedWallBox);
+    state.selectedWallBox = null;
+  }
+  if (state.selectedUnderlayBox) {
+    disposeSelectionBox(state.scene, state.selectedUnderlayBox);
+    state.selectedUnderlayBox = null;
+  }
+}
+
+export function clearNonFloorplanFloorSelection(ctx: NonFloorplanFloorSelectionCleanupContext) {
+  ctx.selectedKind = null;
+  ctx.selectedColumnId = null;
+  ctx.selectedSectionId = null;
+  ctx.selectedKitchenGroupId = null;
+  ctx.selectedFloorId = null;
+  ctx.selectedWallId = null;
+  clearSelectionIdSet(ctx.selectedWallIds);
+  ctx.selectedInstanceId = null;
+  clearSelectionIdSet(ctx.selectedInstanceIds);
+  ctx.setInstanceSelected(null);
+  ctx.showWallSnapMarkersFor(null);
+  refreshSelectionVisualState(ctx);
+  ctx.updateAllSectionVisuals();
+  ctx.mountProps();
+}
+
 export function createSelectionController(ctx: SelectionControllerContext) {
   const disposeBox = (box: THREE.BoxHelper | null) => {
-    if (!box) return;
-    ctx.scene.remove(box);
-    box.geometry.dispose();
-    (box.material as THREE.Material).dispose();
+    disposeSelectionBox(ctx.scene, box);
   };
 
   const clearWallBox = () => {
@@ -60,15 +422,26 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     ctx.selectedInstanceBox = null;
   };
 
-  const afterSelectionChanged = (opts?: { highlights?: boolean; wallSnapId?: string | null }) => {
+  const afterSelectionChanged = (opts?: SelectionSideEffects) => {
     if (opts?.wallSnapId !== undefined) ctx.showWallSnapMarkersFor(opts.wallSnapId);
-    ctx.syncWindowSelectionVisuals(ctx.selectedKind === "window");
-    ctx.syncDoorSelectionVisuals(ctx.selectedKind === "door");
+    const nextKind = ctx.selectedKind;
+    ctx.syncWindowSelectionVisuals(nextKind === "window");
+    ctx.syncDoorSelectionVisuals(nextKind === "door");
     ctx.syncColumnSelectionVisuals();
     ctx.syncSelectionState();
-    if (opts?.highlights !== false) ctx.updateSelectionHighlights();
-    ctx.updateAllSectionVisuals();
+    if (opts?.previousWallSelected || nextKind === "wall" || nextKind === "window" || nextKind === "door") {
+      ctx.rebuildWallPlanMesh();
+    }
+    refreshSelectionHighlights(ctx, opts);
+    if (opts?.previousSectionSelected || nextKind === "section") {
+      ctx.updateAllSectionVisuals();
+    }
     ctx.mountProps();
+    ctx.kitchenMode?.refreshModuleCatalog?.();
+  };
+
+  const ensureSelectableTool = () => {
+    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
   };
 
   function setInstanceSelected(id: string | null) {
@@ -77,177 +450,188 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     clearInstanceBox();
   }
 
-  function setSelectedKitchenGroup(groupId: string | null) {
-    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
-    ctx.selectedKind = groupId ? "kitchenGroup" : null;
+  const clearSelectedEntityIds = () => {
     ctx.selectedColumnId = null;
     ctx.selectedSectionId = null;
-    ctx.selectedKitchenGroupId = groupId;
+    ctx.selectedKitchenGroupId = null;
     ctx.selectedFloorId = null;
     ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
-    ctx.selectedInstanceIds.clear();
-    if (groupId) {
-    for (const inst of ctx.instances) {
-        if (inst.kitchenGroupId === groupId) ctx.selectedInstanceIds.add(inst.id);
-      }
+    clearSelectionIdSet(ctx.selectedWallIds);
+    ctx.selectedInstanceId = null;
+    clearSelectionIdSet(ctx.selectedInstanceIds);
+  };
+
+  const clearObjectSelectionVisuals = () => {
+    setInstanceSelected(null);
+    clearWallBox();
+    clearUnderlayBox();
+  };
+
+  const applySelectionCommandContext: ApplySelectionCommandContext = {
+    afterSelectionChanged,
+    clearObjectSelectionVisuals,
+    clearSelectedEntityIds,
+    ensureSelectableTool,
+    setSelectedKind: (kind) => {
+      ctx.selectedKind = kind;
     }
-    setInstanceSelected(null);
-    clearWallBox();
-    clearUnderlayBox();
-    afterSelectionChanged({ wallSnapId: null });
+  };
+
+  const applySelection: SelectionApplyCommand = (args) => {
+    const previousKind = ctx.selectedKind;
+    const previousWallSelected = previousKind === "wall" || ctx.selectedWallIds.size > 0 || !!ctx.selectedWallId;
+    const previousSectionSelected = previousKind === "section" || !!ctx.selectedSectionId;
+    runApplySelectionCommand(
+      {
+        ...applySelectionCommandContext,
+        afterSelectionChanged: (opts) =>
+          afterSelectionChanged({
+            ...opts,
+            previousKind,
+            previousWallSelected,
+            previousSectionSelected
+          })
+      },
+      args
+    );
+  };
+
+  function setSelectedKitchenGroup(groupId: string | null) {
+    runSelectKitchenGroupCommand({
+      applySelection,
+      instances: ctx.instances,
+      selectedInstanceIds: ctx.selectedInstanceIds,
+      setSelectedKitchenGroupId: (selectedKitchenGroupId) => {
+        ctx.selectedKitchenGroupId = selectedKitchenGroupId;
+      }
+    }, groupId);
   }
 
-  function setSelectedModule(id: string | null) {
-    if (ctx.kitchenMode) id = ctx.kitchenMode.filterSelectableInstanceId(id);
-    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
-    if (id && ctx.pinnedInstanceIds.has(id)) id = null;
-    ctx.selectedKind = id ? "module" : null;
-    ctx.selectedColumnId = null;
-    ctx.selectedSectionId = null;
-    ctx.selectedKitchenGroupId = null;
-    ctx.selectedFloorId = null;
-    ctx.selectedInstanceId = id;
-    ctx.selectedInstanceIds.clear();
-    if (id) ctx.selectedInstanceIds.add(id);
-    ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
-    setInstanceSelected(id);
-    clearUnderlayBox();
-    afterSelectionChanged();
-  }
-
-  function setSelectedWindow() {
-    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
-    ctx.selectedKind = "window";
-    ctx.selectedColumnId = null;
-    ctx.selectedSectionId = null;
-    ctx.selectedKitchenGroupId = null;
-    ctx.selectedFloorId = null;
-    ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
-    ctx.selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    clearUnderlayBox();
-    afterSelectionChanged({ highlights: false });
-  }
-
-  function setSelectedDoor() {
-    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
-    ctx.selectedKind = "door";
-    ctx.selectedColumnId = null;
-    ctx.selectedSectionId = null;
-    ctx.selectedKitchenGroupId = null;
-    ctx.selectedFloorId = null;
-    ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
-    ctx.selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    clearUnderlayBox();
-    afterSelectionChanged({ highlights: false });
-  }
-
-  function setSelectedUnderlay() {
-    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
-    if (!ctx.underlayMesh.visible || !ctx.hasUnderlaySource() || ctx.underlayState.pinned) return;
-    ctx.selectedKind = "underlay";
-    ctx.selectedColumnId = null;
-    ctx.selectedSectionId = null;
-    ctx.selectedKitchenGroupId = null;
-    ctx.selectedFloorId = null;
-    ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
-    ctx.selectedInstanceId = null;
-    ctx.selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    clearWallBox();
-    clearUnderlayBox();
-    ctx.selectedUnderlayBox = new THREE.BoxHelper(ctx.underlayMesh, 0x5c8cff);
-    ctx.selectedUnderlayBox.name = "underlaySelectionBox";
-    ctx.scene.add(ctx.selectedUnderlayBox);
-    afterSelectionChanged({ highlights: false });
-  }
-
-  function setSelectedSection(id: string | null) {
-    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
-    ctx.selectedKind = id ? "section" : null;
-    ctx.selectedColumnId = null;
-    ctx.selectedSectionId = id;
-    ctx.selectedKitchenGroupId = null;
-    ctx.selectedFloorId = null;
-    ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
-    ctx.selectedInstanceId = null;
-    ctx.selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    clearWallBox();
-    clearUnderlayBox();
-    afterSelectionChanged({ wallSnapId: null });
-  }
-
-  function setSelectedWall(id: string | null) {
-    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
-    if (id && ctx.pinnedWallIds.has(id)) id = null;
-    ctx.selectedKind = id ? "wall" : null;
-    ctx.selectedColumnId = null;
-    ctx.selectedSectionId = null;
-    ctx.selectedKitchenGroupId = null;
-    ctx.selectedFloorId = null;
-    ctx.selectedWallId = id;
-    ctx.selectedWallIds.clear();
-    if (id) ctx.selectedWallIds.add(id);
-    setInstanceSelected(null);
-    ctx.selectedInstanceIds.clear();
-    clearUnderlayBox();
-    clearWallBox();
-
-    const wall = id ? ctx.walls.find((item) => item.id === id) ?? null : null;
-    if (!wall) {
-      afterSelectionChanged({ wallSnapId: null });
+  function setSelectedModule(id: string | null, options?: SelectModuleOptions) {
+    if (id) ctx.kitchenMode?.clearWorktopSegmentSelection?.();
+    const inst = id ? ctx.instances.find((item) => item.id === id) ?? null : null;
+    if (!ctx.getKitchenEditMode() && inst?.kitchenGroupId && ctx.kitchenMode?.findKitchenGroup?.(inst.kitchenGroupId)) {
+      setSelectedKitchenGroup(inst.kitchenGroupId);
       return;
     }
 
-    ctx.selectedWallBox = new THREE.BoxHelper(wall.root, 0x3ddc97);
-    ctx.selectedWallBox.name = "wallSelectionBox";
-    ctx.scene.add(ctx.selectedWallBox);
-    afterSelectionChanged({ wallSnapId: id });
+    if (options?.additive && id) {
+      let selectedId = ctx.kitchenMode ? ctx.kitchenMode.filterSelectableInstanceId(id) : id;
+      if (selectedId && ctx.pinnedInstanceIds.has(selectedId)) selectedId = null;
+      if (!selectedId) return;
+
+      const previousKind = ctx.selectedKind;
+      const previousWallSelected = previousKind === "wall" || ctx.selectedWallIds.size > 0 || !!ctx.selectedWallId;
+      const previousSectionSelected = previousKind === "section" || !!ctx.selectedSectionId;
+      ensureSelectableTool();
+      if (ctx.selectedKind !== "module") {
+        clearSelectedEntityIds();
+        clearObjectSelectionVisuals();
+        ctx.selectedKind = "module";
+      }
+      if (ctx.selectedInstanceIds.has(selectedId)) {
+        ctx.selectedInstanceIds.delete(selectedId);
+        const nextPrimary = Array.from(ctx.selectedInstanceIds).at(-1) ?? null;
+        ctx.selectedKind = nextPrimary ? "module" : null;
+        setInstanceSelected(nextPrimary);
+      } else {
+        ctx.selectedInstanceIds.add(selectedId);
+        ctx.selectedKind = "module";
+        setInstanceSelected(selectedId);
+      }
+      clearUnderlayBox();
+      afterSelectionChanged({
+        ...getSelectionSideEffects(ctx.selectedKind),
+        previousKind,
+        previousWallSelected,
+        previousSectionSelected
+      });
+      return;
+    }
+
+    runSelectModuleCommand({
+      applySelection,
+      clearUnderlayBox,
+      kitchenMode: ctx.kitchenMode,
+      pinnedInstanceIds: ctx.pinnedInstanceIds,
+      selectedInstanceIds: ctx.selectedInstanceIds,
+      setInstanceSelected
+    }, id);
+  }
+
+  function setSelectedOpening(kind: "window" | "door") {
+    runSelectOpeningCommand({ applySelection, clearUnderlayBox, setInstanceSelected }, kind);
+  }
+
+  function setSelectedWindow() {
+    setSelectedOpening("window");
+  }
+
+  function setSelectedDoor() {
+    setSelectedOpening("door");
+  }
+
+  function setSelectedUnderlay() {
+    runSelectUnderlayCommand({
+      applySelection: (args) => runApplySelectionCommand({ ...applySelectionCommandContext, ensureSelectableTool: () => {} }, args),
+      createUnderlaySelectionBox: () => {
+        clearObjectSelectionVisuals();
+        ctx.selectedUnderlayBox = new THREE.BoxHelper(ctx.underlayMesh, 0x5c8cff);
+        ctx.selectedUnderlayBox.name = "underlaySelectionBox";
+        ctx.scene.add(ctx.selectedUnderlayBox);
+      },
+      ensureSelectableTool,
+      hasUnderlaySource: ctx.hasUnderlaySource,
+      isUnderlayPinned: () => ctx.underlayState.pinned,
+      isUnderlayVisible: () => ctx.underlayMesh.visible
+    });
+  }
+
+  function setSelectedSection(id: string | null) {
+    runSelectSectionCommand({
+      applySelection,
+      setSelectedSectionId: (selectedSectionId) => {
+        ctx.selectedSectionId = selectedSectionId;
+      }
+    }, id);
+  }
+
+  function setSelectedWall(id: string | null) {
+    runSelectWallCommand({
+      applySelection,
+      pinnedWallIds: ctx.pinnedWallIds,
+      selectedWallIds: ctx.selectedWallIds,
+      setSelectedWallId: (selectedWallId) => {
+        ctx.selectedWallId = selectedWallId;
+      },
+      walls: ctx.walls
+    }, id);
   }
 
   function setSelectedFloor(id: string | null) {
-    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
-    ctx.selectedKind = id ? "floor" : null;
-    ctx.selectedColumnId = null;
-    ctx.selectedSectionId = null;
-    ctx.selectedKitchenGroupId = null;
-    ctx.selectedFloorId = id;
-    ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
-    ctx.selectedInstanceId = null;
-    ctx.selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    clearWallBox();
-    clearUnderlayBox();
-    afterSelectionChanged({ wallSnapId: null });
+    runSelectFloorCommand({
+      applySelection,
+      setSelectedFloorId: (selectedFloorId) => {
+        ctx.selectedFloorId = selectedFloorId;
+      }
+    }, id);
   }
 
   function setSelectedColumn(id: string | null) {
-    if (ctx.layoutTool !== "wall") ctx.layoutTool = "select";
-    ctx.selectedKind = id ? "column" : null;
-    ctx.selectedColumnId = id;
-    ctx.selectedSectionId = null;
-    ctx.selectedKitchenGroupId = null;
-    ctx.selectedFloorId = null;
-    ctx.selectedWallId = null;
-    ctx.selectedWallIds.clear();
-    ctx.selectedInstanceId = null;
-    ctx.selectedInstanceIds.clear();
-    setInstanceSelected(null);
-    clearWallBox();
-    clearUnderlayBox();
-    afterSelectionChanged({ wallSnapId: null });
+    runSelectColumnCommand({
+      applySelection,
+      setSelectedColumnId: (selectedColumnId) => {
+        ctx.selectedColumnId = selectedColumnId;
+      }
+    }, id);
+  }
+
+  function clearSelection() {
+    runClearSelectionCommand({ applySelection });
   }
 
   return {
+    clearSelection,
     setInstanceSelected,
     setSelectedColumn,
     setSelectedDoor,

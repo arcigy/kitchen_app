@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import type { AppState } from "../layout/appState";
-import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenPlacementBinding, LayoutInstance } from "./localTypes";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { AdjacentModuleInfo } from "./modulePlacementHelpers";
+import { refreshModuleKitchenPlacement } from "./moduleKitchenPlacement";
 
 type ResizeAnchorSide = "left" | "right" | "front" | "back";
 
@@ -56,17 +56,28 @@ type InstanceRebuilderContext = {
     prevBoxesById?: Map<string, THREE.Box3>
   ) => { movedIds: string[] };
   rebuildWallPlanMesh?: () => void;
+  rebuildKitchenGroupWorktops?: (groupId: string, kitchenCtx?: AppState["kitchenCtx"]) => void;
   renderErrors: (errorsEl: HTMLElement, errors: string[]) => void;
   tagModuleGeometry: (module: THREE.Object3D, instanceId: string) => void;
+  syncKitchenRunEndClosures?: (groupId: string, backOffsetMm?: number) => boolean;
   updateLayoutPanel: () => void;
   validateModule: (params: ModuleParams) => string[];
 };
 
 export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
+  const rebuildingKitchenWorktops = new Set<string>();
+
   function rebuildInstance(
     inst: LayoutInstance,
-    opts?: { skipLayoutValidation?: boolean; preserveBackAnchor?: boolean; previousParams?: ModuleParams; sourceKey?: string }
+    opts?: {
+      skipLayoutValidation?: boolean;
+      skipLayoutPanelUpdate?: boolean;
+      preserveBackAnchor?: boolean;
+      previousParams?: ModuleParams;
+      sourceKey?: string;
+    }
   ) {
+    const shouldValidateLayout = !opts?.skipLayoutValidation;
     ctx.lastRebuildDebug = null;
     const normalizedParams = ctx.normalizeModuleParamsForSource(structuredClone(inst.params), opts?.sourceKey);
     const errors = ctx.validateModule(normalizedParams);
@@ -78,9 +89,11 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
 
     const previousParams = structuredClone(opts?.previousParams ?? inst.params);
     inst.params = previousParams;
-    const prevWorldBox = ctx.instanceWorldBox(inst);
-    const prevAdjacencyInfos = ctx.collectAdjacentModuleInfos(inst, prevWorldBox);
-    const resizeAnchorSide = ctx.chooseResizeAnchorSide(inst, prevAdjacencyInfos) ?? ctx.inferTallResizeAnchorSide(inst);
+    const prevWorldBox = shouldValidateLayout ? ctx.instanceWorldBox(inst) : new THREE.Box3();
+    const prevAdjacencyInfos = shouldValidateLayout ? ctx.collectAdjacentModuleInfos(inst, prevWorldBox) : [];
+    const resizeAnchorSide = shouldValidateLayout
+      ? ctx.chooseResizeAnchorSide(inst, prevAdjacencyInfos) ?? ctx.inferTallResizeAnchorSide(inst)
+      : null;
     const prevPos = inst.root.position.clone();
     const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
     const prevLocalAnchor = ctx.getModuleLocalKitchenAnchor(inst).clone();
@@ -89,12 +102,14 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
     const prevBox = inst.localBox.clone();
     const prevNeighborPositions = new Map<string, THREE.Vector3>();
     const prevWorldBoxesById = new Map<string, THREE.Box3>();
-    for (const other of ctx.instances) {
-      if (other.id === inst.id) continue;
-      prevNeighborPositions.set(other.id, other.root.position.clone());
-      prevWorldBoxesById.set(other.id, ctx.instanceWorldBox(other).clone());
+    if (shouldValidateLayout) {
+      for (const other of ctx.instances) {
+        if (other.id === inst.id) continue;
+        prevNeighborPositions.set(other.id, other.root.position.clone());
+        prevWorldBoxesById.set(other.id, ctx.instanceWorldBox(other).clone());
+      }
+      prevWorldBoxesById.set(inst.id, prevWorldBox.clone());
     }
-    prevWorldBoxesById.set(inst.id, prevWorldBox.clone());
 
     inst.params = normalizedParams;
 
@@ -113,8 +128,8 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
       inst.localBox = ctx.moduleRootLocalBox(inst.root, inst.module);
     }
     ctx.ensurePickAndOutline(inst);
-    const keepRootPositionStable = ctx.footprintExtentsMatchXZ(prevWorldBox, ctx.instanceWorldBox(inst));
-    if (!opts?.skipLayoutValidation && !keepRootPositionStable) ctx.preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
+    const keepRootPositionStable = shouldValidateLayout && ctx.footprintExtentsMatchXZ(prevWorldBox, ctx.instanceWorldBox(inst));
+    if (shouldValidateLayout && !keepRootPositionStable) ctx.preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
     if (opts?.preserveBackAnchor) {
       ctx.preserveWorldKitchenAnchor(inst, prevWorldAnchor);
     } else if (keepRootPositionStable) {
@@ -122,23 +137,23 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
       inst.root.updateMatrixWorld(true);
     }
 
-    if (!opts?.skipLayoutValidation && !opts?.preserveBackAnchor) {
+    if (shouldValidateLayout && !opts?.preserveBackAnchor) {
       const clamped = ctx.applyWallConstraints(inst, inst.root.position.clone());
       inst.root.position.copy(clamped);
     }
-    const propagated = opts?.skipLayoutValidation
+    const propagated = !shouldValidateLayout
       ? { ok: true, movedIds: [] as string[] }
       : ctx.isCornerKitchenModule(inst)
         ? ctx.propagateCornerResizeToPinnedNeighbors(inst, previousParams)
         : ctx.propagateModuleResizeToPinnedNeighbors(inst, prevWorldBox, prevWorldBoxesById);
 
-    const inRoom = opts?.skipLayoutValidation ? true : ctx.instanceFitsLayoutBounds(inst);
-    const overlapsModules = opts?.skipLayoutValidation ? false : ctx.anyOverlap(inst, null);
-    const overlapsWalls = opts?.skipLayoutValidation ? false : ctx.moduleOverlapsWalls(inst);
-    const overlapsWorktops = opts?.skipLayoutValidation ? false : ctx.moduleOverlapsKitchenWorktops(inst);
+    const inRoom = shouldValidateLayout ? ctx.instanceFitsLayoutBounds(inst) : true;
+    const overlapsModules = shouldValidateLayout ? ctx.anyOverlap(inst, null) : false;
+    const overlapsWalls = shouldValidateLayout ? ctx.moduleOverlapsWalls(inst) : false;
+    const overlapsWorktops = shouldValidateLayout ? ctx.moduleOverlapsKitchenWorktops(inst) : false;
     const overlaps = overlapsModules || overlapsWalls || overlapsWorktops;
     const movedNeighborInvalid =
-      !opts?.skipLayoutValidation &&
+      shouldValidateLayout &&
       propagated.movedIds.some((id) => {
         const other = ctx.findInstance(id);
         return !!other &&
@@ -198,19 +213,40 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
     }
 
     ctx.disposeObject3D(prevModule);
-    if (inst.kitchenGroupId) {
-      const group = ctx.S.kitchenGroups.find((item: { id: string; ctx: KitchenContext }) => item.id === inst.kitchenGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
-      inst.kitchenPlacement = ctx.inferKitchenPlacementBinding(inst, inst.kitchenGroupId, backOffsetMm);
-    }
+    refreshModuleKitchenPlacement({
+      instance: inst,
+      kitchenGroups: ctx.S.kitchenGroups,
+      defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
+      inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
+    });
     for (const neighborId of propagated.movedIds) {
       const neighbor = ctx.findInstance(neighborId);
-      if (!neighbor?.kitchenGroupId) continue;
-      const group = ctx.S.kitchenGroups.find((item: { id: string; ctx: KitchenContext }) => item.id === neighbor.kitchenGroupId) ?? null;
-      const backOffsetMm = group?.ctx.worktopBackOffsetMm ?? ctx.S.kitchenCtx.worktopBackOffsetMm;
-      neighbor.kitchenPlacement = ctx.inferKitchenPlacementBinding(neighbor, neighbor.kitchenGroupId, backOffsetMm);
+      if (!neighbor) continue;
+      refreshModuleKitchenPlacement({
+        instance: neighbor,
+        kitchenGroups: ctx.S.kitchenGroups,
+        defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
+        inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding
+      });
     }
-    ctx.updateLayoutPanel();
+    const affectedKitchenGroups = new Set<string>();
+    if (inst.kitchenGroupId) affectedKitchenGroups.add(inst.kitchenGroupId);
+    for (const neighborId of propagated.movedIds) {
+      const neighbor = ctx.findInstance(neighborId);
+      if (neighbor?.kitchenGroupId) affectedKitchenGroups.add(neighbor.kitchenGroupId);
+    }
+    for (const groupId of affectedKitchenGroups) ctx.syncKitchenRunEndClosures?.(groupId);
+    for (const groupId of affectedKitchenGroups) {
+      if (!ctx.rebuildKitchenGroupWorktops || rebuildingKitchenWorktops.has(groupId)) continue;
+      rebuildingKitchenWorktops.add(groupId);
+      try {
+        const kitchenCtx = ctx.S.kitchenGroups.find((group) => group.id === groupId)?.ctx ?? ctx.S.kitchenCtx;
+        ctx.rebuildKitchenGroupWorktops(groupId, kitchenCtx);
+      } finally {
+        rebuildingKitchenWorktops.delete(groupId);
+      }
+    }
+    if (!opts?.skipLayoutPanelUpdate) ctx.updateLayoutPanel();
     return true;
   }
 
