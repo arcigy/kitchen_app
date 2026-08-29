@@ -297,68 +297,67 @@ function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-function renderOptions(selected: string) {
-  return MATERIAL_PBR_OPTIONS.map((option) => `<option value="${escapeHtml(option.id)}" ${option.id === selected ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
-}
-
-function renderSurfaceOptions(selected: string) {
-  return SURFACE_PROFILES.map((profile) => `<option value="${profile}" ${profile === selected ? "selected" : ""}>${profile}</option>`).join("");
-}
-
-function renderDirectionOptions(selected: string) {
-  return GRAIN_DIRECTIONS.map((direction) => `<option value="${direction}" ${direction === selected ? "selected" : ""}>${direction}</option>`).join("");
-}
-
 function pbrPreviewUrl(materialId: string) {
   return pbrAssetUrl(MATERIAL_PBR_OPTIONS.find((option) => option.id === materialId)?.path ?? MATERIAL_PBR_OPTIONS[0].path);
 }
 
-function renderPanel(target: EditableTarget, draft: MaterialDraft, groupCount: number) {
+function labeledInput(form: HTMLFormElement, labelText: string, field: keyof MaterialDraft, type: "color" | "number", value: string, min?: string, max?: string, step?: string) {
+  const label = document.createElement("label");
+  label.append(document.createTextNode(labelText));
+  const input = document.createElement("input");
+  input.dataset.field = field;
+  input.type = type;
+  input.value = value;
+  if (min) input.min = min;
+  if (max) input.max = max;
+  if (step) input.step = step;
+  if (field === "roughnessOverride") input.placeholder = "auto";
+  label.appendChild(input);
+  form.appendChild(label);
+}
+
+function labeledSelect(form: HTMLFormElement, labelText: string, field: keyof MaterialDraft, values: readonly string[], selected: string) {
+  const label = document.createElement("label");
+  label.append(document.createTextNode(labelText));
+  const select = document.createElement("select");
+  select.dataset.field = field;
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = MATERIAL_PBR_OPTIONS.find((candidate) => candidate.id === value)?.label ?? value;
+    option.selected = value === selected;
+    select.appendChild(option);
+  }
+  label.appendChild(select);
+  form.appendChild(label);
+}
+
+function renderPanel(target: EditableTarget, draft: MaterialDraft, groupCount: number): HTMLElement {
   const payload = requestFromDraft(target.request, draft);
-  const previewStyle = `background:
-    linear-gradient(115deg, rgba(255,255,255,0.34), rgba(255,255,255,0) 36%, rgba(0,0,0,0.08) 72%),
-    repeating-linear-gradient(90deg, ${draft.grainColorHex}00 0 18px, ${draft.grainColorHex}${Math.round(draft.grainContrast * 75).toString(16).padStart(2, "0")} 19px 22px),
-    ${draft.baseColorHex};`;
-  return `
-    <section class="material-modify-panel" role="dialog" aria-label="Material modify">
-      <header class="material-modify-header">
-        <div>
-          <p>Visualisation / Material Modify</p>
-          <h2 data-material-modify-label></h2>
-          <span>${groupCount} scene part${groupCount === 1 ? "" : "s"} using this material group</span>
-        </div>
-        <button type="button" data-action="close">Close</button>
-      </header>
-      <div class="material-modify-body">
-        <div class="material-modify-preview">
-          <div class="material-modify-board" style="${previewStyle}"></div>
-          <img src="${pbrPreviewUrl(draft.materialId)}" alt="" />
-          <strong>Live preview color</strong>
-          <span>Blender uses this payload plus the selected internal PBR maps.</span>
-        </div>
-        <form class="material-modify-form">
-          <label>Internal PBR texture<select data-field="materialId">${renderOptions(draft.materialId)}</select></label>
-          <label>Surface profile<select data-field="surfaceProfile">${renderSurfaceOptions(draft.surfaceProfile)}</select></label>
-          <label>Base color<input data-field="baseColorHex" type="color" value="${draft.baseColorHex}"></label>
-          <label>Grain color<input data-field="grainColorHex" type="color" value="${draft.grainColorHex}"></label>
-          <label>Tint strength<input data-field="tintStrength" type="number" min="0" max="1" step="0.01" value="${formatNumber(draft.tintStrength)}"></label>
-          <label>Grain contrast<input data-field="grainContrast" type="number" min="0" max="1" step="0.01" value="${formatNumber(draft.grainContrast)}"></label>
-          <label>Roughness multiplier<input data-field="roughnessMultiplier" type="number" min="0" max="2" step="0.05" value="${formatNumber(draft.roughnessMultiplier)}"></label>
-          <label>Roughness override<input data-field="roughnessOverride" type="number" min="0" max="1" step="0.01" value="${draft.roughnessOverride}" placeholder="auto"></label>
-          <label>Bump multiplier<input data-field="bumpMultiplier" type="number" min="0" max="2" step="0.05" value="${formatNumber(draft.bumpMultiplier)}"></label>
-          <label>Grain depth<input data-field="grainDepth" type="number" min="0" max="2" step="0.05" value="${formatNumber(draft.grainDepth)}"></label>
-          <label>Coat multiplier<input data-field="coatMultiplier" type="number" min="0" max="2" step="0.05" value="${formatNumber(draft.coatMultiplier)}"></label>
-          <label>Tile size meters<input data-field="tileSizeMeters" type="number" min="0.1" max="10" step="0.05" value="${formatNumber(draft.tileSizeMeters)}"></label>
-          <label>Grain direction<select data-field="grainDirection">${renderDirectionOptions(draft.grainDirection)}</select></label>
-        </form>
-        <pre class="material-modify-payload"></pre>
-      </div>
-      <footer class="material-modify-footer">
-        <button type="button" data-action="cancel">Cancel</button>
-        <button type="button" data-action="apply">Apply to this material</button>
-      </footer>
-    </section>
-  `;
+  const panel = document.createElement("section");
+  panel.className = "material-modify-panel";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-label", "Material modify");
+  const header = document.createElement("header"); header.className = "material-modify-header";
+  const heading = document.createElement("div");
+  for (const [tag, value] of [["p", "Visualisation / Material Modify"], ["h2", target.label], ["span", `${groupCount} scene part${groupCount === 1 ? "" : "s"} using this material group`]] as const) { const element = document.createElement(tag); element.textContent = value; heading.appendChild(element); }
+  const close = document.createElement("button"); close.type = "button"; close.dataset.action = "close"; close.textContent = "Close"; header.append(heading, close);
+  const body = document.createElement("div"); body.className = "material-modify-body";
+  const preview = document.createElement("div"); preview.className = "material-modify-preview";
+  const board = document.createElement("div"); board.className = "material-modify-board"; board.style.background = `linear-gradient(115deg, rgba(255,255,255,0.34), rgba(255,255,255,0) 36%, rgba(0,0,0,0.08) 72%), repeating-linear-gradient(90deg, ${draft.grainColorHex}00 0 18px, ${draft.grainColorHex}${Math.round(draft.grainContrast * 75).toString(16).padStart(2, "0")} 19px 22px), ${draft.baseColorHex}`;
+  const image = document.createElement("img"); image.src = pbrPreviewUrl(draft.materialId); image.alt = ""; preview.append(board, image);
+  for (const [tag, value] of [["strong", "Live preview color"], ["span", "Blender uses this payload plus the selected internal PBR maps."]] as const) { const element = document.createElement(tag); element.textContent = value; preview.appendChild(element); }
+  const form = document.createElement("form"); form.className = "material-modify-form";
+  labeledSelect(form, "Internal PBR texture", "materialId", MATERIAL_PBR_OPTIONS.map((option) => option.id), draft.materialId); labeledSelect(form, "Surface profile", "surfaceProfile", SURFACE_PROFILES, draft.surfaceProfile);
+  labeledInput(form, "Base color", "baseColorHex", "color", draft.baseColorHex); labeledInput(form, "Grain color", "grainColorHex", "color", draft.grainColorHex);
+  for (const [label, field, value, min, max, step] of [["Tint strength", "tintStrength", formatNumber(draft.tintStrength), "0", "1", "0.01"], ["Grain contrast", "grainContrast", formatNumber(draft.grainContrast), "0", "1", "0.01"], ["Roughness multiplier", "roughnessMultiplier", formatNumber(draft.roughnessMultiplier), "0", "2", "0.05"], ["Roughness override", "roughnessOverride", draft.roughnessOverride, "0", "1", "0.01"], ["Bump multiplier", "bumpMultiplier", formatNumber(draft.bumpMultiplier), "0", "2", "0.05"], ["Grain depth", "grainDepth", formatNumber(draft.grainDepth), "0", "2", "0.05"], ["Coat multiplier", "coatMultiplier", formatNumber(draft.coatMultiplier), "0", "2", "0.05"], ["Tile size meters", "tileSizeMeters", formatNumber(draft.tileSizeMeters), "0.1", "10", "0.05"]] as const) labeledInput(form, label, field, "number", value, min, max, step);
+  labeledSelect(form, "Grain direction", "grainDirection", GRAIN_DIRECTIONS, draft.grainDirection);
+  const payloadView = document.createElement("pre"); payloadView.className = "material-modify-payload"; payloadView.textContent = JSON.stringify(payload, null, 2);
+  body.append(preview, form, payloadView);
+  const footer = document.createElement("footer"); footer.className = "material-modify-footer";
+  for (const [action, label] of [["cancel", "Cancel"], ["apply", "Apply to this material"]] as const) { const button = document.createElement("button"); button.type = "button"; button.dataset.action = action; button.textContent = label; footer.appendChild(button); }
+  panel.append(header, body, footer);
+  return panel;
 }
 
 export function createMaterialModifyController(ctx: MaterialModifyControllerContext) {
@@ -388,16 +387,7 @@ export function createMaterialModifyController(ctx: MaterialModifyControllerCont
 
     const render = () => {
       if (!overlay) return;
-      // lgtm[js/dom-text-reinterpreted-as-html]
-      // All dynamic text is assigned below through textContent. The remaining
-      // template values are constrained material IDs, enum values, hex colors,
-      // or finite numeric values created by draftFromRequest/updateDraft.
-      overlay.innerHTML = renderPanel(target, draft, group.length);
-      const label = overlay.querySelector<HTMLElement>("[data-material-modify-label]");
-      const payload = overlay.querySelector<HTMLElement>(".material-modify-payload");
-      if (!label || !payload) throw new Error("Material modify panel is incomplete.");
-      label.textContent = target.label;
-      payload.textContent = JSON.stringify(requestFromDraft(target.request, draft), null, 2);
+      overlay.replaceChildren(renderPanel(target, draft, group.length));
       bind();
     };
 
