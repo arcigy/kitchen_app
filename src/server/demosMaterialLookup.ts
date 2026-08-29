@@ -86,7 +86,8 @@ const SAFE_HTML_ENTITIES: Record<string, string> = {
 
 const decodeHtml = (value: string): string => {
   return value
-    .replace(/<[^>]*>/g, "")
+    .replaceAll("<", "")
+    .replaceAll(">", "")
     .replace(/&(?:nbsp|quot|#039|apos);/g, (entity) => SAFE_HTML_ENTITIES[entity] ?? "")
     .replace(/\s+/g, " ")
     .trim();

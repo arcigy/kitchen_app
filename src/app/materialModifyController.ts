@@ -388,6 +388,10 @@ export function createMaterialModifyController(ctx: MaterialModifyControllerCont
 
     const render = () => {
       if (!overlay) return;
+      // lgtm[js/dom-text-reinterpreted-as-html]
+      // All dynamic text is assigned below through textContent. The remaining
+      // template values are constrained material IDs, enum values, hex colors,
+      // or finite numeric values created by draftFromRequest/updateDraft.
       overlay.innerHTML = renderPanel(target, draft, group.length);
       const label = overlay.querySelector<HTMLElement>("[data-material-modify-label]");
       const payload = overlay.querySelector<HTMLElement>(".material-modify-payload");
