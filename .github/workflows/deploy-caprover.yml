@@ -3,6 +3,7 @@ name: Deploy to CapRover
 on:
   push:
     branches:
+      - main
       - develop
   workflow_dispatch:
 
@@ -17,7 +18,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: develop
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'develop' }}
     env:
       NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
 
@@ -26,6 +27,28 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+
+      - name: Select CapRover app
+        id: caprover_app
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            echo "app=$CAPROVER_PRODUCTION_APP" >> "$GITHUB_OUTPUT"
+            echo "url=$CAPROVER_PRODUCTION_APP_URL" >> "$GITHUB_OUTPUT"
+            echo "app_env=prod" >> "$GITHUB_OUTPUT"
+            echo "database_schema=prod" >> "$GITHUB_OUTPUT"
+            echo "object_prefix=prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=$CAPROVER_DEVELOP_APP" >> "$GITHUB_OUTPUT"
+            echo "url=$CAPROVER_DEVELOP_APP_URL" >> "$GITHUB_OUTPUT"
+            echo "app_env=dev" >> "$GITHUB_OUTPUT"
+            echo "database_schema=dev" >> "$GITHUB_OUTPUT"
+            echo "object_prefix=dev" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          CAPROVER_DEVELOP_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
+          CAPROVER_DEVELOP_APP_URL: ${{ vars.CAPROVER_APP_URL }}
+          CAPROVER_PRODUCTION_APP: ${{ vars.CAPROVER_PRODUCTION_APP }}
+          CAPROVER_PRODUCTION_APP_URL: ${{ vars.CAPROVER_PRODUCTION_APP_URL }}
 
       - name: Setup Node
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
@@ -103,12 +126,11 @@ jobs:
         env:
           CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
           CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
-          CAPROVER_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
-          CAPROVER_APP_URL: ${{ vars.CAPROVER_APP_URL }}
-          ARCIGY_DEPLOY_APP_ENV: dev
-          ARCIGY_DEPLOY_DATABASE_SCHEMA: dev
-          ARCIGY_DEPLOY_OBJECT_PREFIX: dev
-          ARCIGY_DEPLOY_STORAGE_PATH: /app/storage
+          CAPROVER_APP: ${{ steps.caprover_app.outputs.app }}
+          CAPROVER_APP_URL: ${{ steps.caprover_app.outputs.url }}
+          ARCIGY_DEPLOY_APP_ENV: ${{ steps.caprover_app.outputs.app_env }}
+          ARCIGY_DEPLOY_DATABASE_SCHEMA: ${{ steps.caprover_app.outputs.database_schema }}
+          ARCIGY_DEPLOY_OBJECT_PREFIX: ${{ steps.caprover_app.outputs.object_prefix }}
 
       - name: Inspect CapRover image capacity (read-only)
         run: |
@@ -137,7 +159,7 @@ jobs:
         env:
           CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
           CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
-          CAPROVER_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
+          CAPROVER_APP: ${{ steps.caprover_app.outputs.app }}
 
       - name: Verify deployed health and readiness
         id: readiness
@@ -145,8 +167,8 @@ jobs:
         run: |
           base_url="${CAPROVER_APP_URL%/}"
           for attempt in $(seq 1 18); do
-            if curl --fail --silent --show-error --max-time 10 "$base_url/health" >/dev/null && \
-               curl --fail --silent --show-error --max-time 10 "$base_url/ready" >/dev/null; then
+            if curl --fail --silent --show-error --max-time 10 "$base_url/health" | grep -q '"ok":true' && \
+               curl --fail --silent --show-error --max-time 10 "$base_url/ready" | grep -Eq '"ok":true.*"storage":"postgres"'; then
               echo "Deployment is healthy and ready."
               exit 0
             fi
@@ -155,7 +177,7 @@ jobs:
           echo "Deployment did not become healthy and ready in time."
           exit 1
         env:
-          CAPROVER_APP_URL: ${{ vars.CAPROVER_APP_URL }}
+          CAPROVER_APP_URL: ${{ steps.caprover_app.outputs.url }}
 
       - name: Notify deploy result
         if: always() && env.NTFY_TOPIC != ''
@@ -174,7 +196,7 @@ jobs:
           PY
           curl -fsS -X POST --data-binary @payload.json "https://ntfy.sh/$NTFY_TOPIC" || true
         env:
-          APP_NAME: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
+          APP_NAME: ${{ steps.caprover_app.outputs.app }}
           DEPLOY_STATUS: ${{ steps.deploy_caprover.outcome == 'success' && steps.readiness.outcome == 'success' && 'success' || 'failure' }}
 
       - name: Fail if deploy or readiness failed
