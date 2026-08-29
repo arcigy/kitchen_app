@@ -12,7 +12,6 @@ const expected: CapRoverDeployExpectation = {
   appEnv: "dev",
   databaseSchema: "dev",
   objectStoragePrefix: "dev",
-  storageContainerPath: "/app/storage",
   publicUrl: "https://arcigy-kitchen-develop.example.test/"
 };
 
@@ -22,11 +21,7 @@ function validPayload(overrides: Record<string, unknown> = {}) {
       rootDomain: "example.test",
       appDefinitions: [{
         appName: expected.appName,
-        hasPersistentData: true,
-        instanceCount: 1,
-        serviceUpdateOverride: "",
         customDomain: [],
-        volumes: [{ containerPath: "/app/storage/", volumeName: "arcigy-kitchen-develop-storage", mode: "rw" }],
         envVars: [
           { key: "APP_ENV", value: "dev" },
           { key: "DATABASE_SCHEMA", value: "dev" },
@@ -41,15 +36,13 @@ function validPayload(overrides: Record<string, unknown> = {}) {
 }
 
 describe("CapRover deployment preflight", () => {
-  it("accepts an isolated develop app with one durable storage mount", () => {
+  it("accepts an isolated PostgreSQL-backed develop app without local persistent storage", () => {
     expect(validateCapRoverDeployPreflight(validPayload(), expected)).toEqual({
       appName: expected.appName,
       appEnv: "dev",
       databaseSchema: "dev",
       objectStoragePrefix: "dev",
-      storageContainerPath: "/app/storage",
-      publicHost: "arcigy-kitchen-develop.example.test",
-      instanceCount: 1
+      publicHost: "arcigy-kitchen-develop.example.test"
     });
   });
 
@@ -71,19 +64,15 @@ describe("CapRover deployment preflight", () => {
     expect(() => validateCapRoverDeployPreflight(payload, expected)).toThrow("APP_ENV");
   });
 
-  it("rejects ephemeral, missing, read-only, and unprovable storage", () => {
-    expect(() => validateCapRoverDeployPreflight(validPayload({ hasPersistentData: false }), expected)).toThrow("not marked as persistent");
-    expect(() => validateCapRoverDeployPreflight(validPayload({ volumes: [] }), expected)).toThrow("no persistent mount");
+  it("rejects an app that is not backed by PostgreSQL", () => {
     expect(() => validateCapRoverDeployPreflight(validPayload({
-      volumes: [{ containerPath: "/app/storage", volumeName: "storage", mode: "ro" }]
-    }), expected)).toThrow("read-only");
-    expect(() => validateCapRoverDeployPreflight(validPayload({
-      serviceUpdateOverride: "services:\n  app:\n    volumes:\n      - other:/app/storage"
-    }), expected)).toThrow("cannot be proven safely");
-  });
-
-  it("requires one replica while runtime files use a local persistent volume", () => {
-    expect(() => validateCapRoverDeployPreflight(validPayload({ instanceCount: 2 }), expected)).toThrow("exactly one");
+      envVars: [
+        { key: "APP_ENV", value: "dev" },
+        { key: "DATABASE_SCHEMA", value: "dev" },
+        { key: "ARCIGY_OBJECT_STORAGE_PREFIX", value: "dev" },
+        { key: "KITCHEN_PROJECT_STORAGE", value: "file" }
+      ]
+    }), expected)).toThrow("KITCHEN_PROJECT_STORAGE");
   });
 
   it("binds post-deploy health checks to the selected app origin", () => {
@@ -100,7 +89,15 @@ describe("CapRover deployment preflight", () => {
   });
 
   it("never includes a database credential in validation errors", () => {
-    const payload = validPayload({ volumes: [] });
+    const payload = validPayload({
+      envVars: [
+        { key: "APP_ENV", value: "dev" },
+        { key: "DATABASE_SCHEMA", value: "dev" },
+        { key: "ARCIGY_OBJECT_STORAGE_PREFIX", value: "dev" },
+        { key: "KITCHEN_PROJECT_STORAGE", value: "postgres" },
+        { key: "POSTGRES_PASSWORD", value: "very-secret" }
+      ]
+    });
     try {
       validateCapRoverDeployPreflight(payload, expected);
       throw new Error("expected validation to fail");
