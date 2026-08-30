@@ -9,6 +9,7 @@ export type CapRoverDeployExpectation = {
   appEnv: "dev" | "prod";
   databaseSchema: string;
   objectStoragePrefix: string;
+  storageContainerPath: string;
   publicUrl: string;
 };
 
@@ -17,11 +18,18 @@ export type CapRoverDeployPreflightResult = {
   appEnv: "dev" | "prod";
   databaseSchema: string;
   objectStoragePrefix: string;
+  storageContainerPath: string;
   publicHost: string;
+  instanceCount: 1;
 };
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeContainerPath(value: string): string {
+  const normalized = value.trim().replace(/\\/g, "/").replace(/\/+$/g, "");
+  return normalized || "/";
 }
 
 function fail(message: string): never {
@@ -90,6 +98,30 @@ function hasDatabaseConnection(env: Map<string, string>): boolean {
     || ["KITCHEN_POSTGRES_HOST", "KITCHEN_POSTGRES_USER", "KITCHEN_POSTGRES_PASSWORD", "KITCHEN_POSTGRES_DB"].every((key) => !!env.get(key));
 }
 
+function assertDurableStorage(app: UnknownRecord, expectedPath: string): void {
+  if (app.hasPersistentData !== true) fail("target application is not marked as persistent.");
+  if (app.instanceCount !== 1) fail("file-backed persistent storage requires exactly one application replica.");
+  if (!Array.isArray(app.volumes)) fail("target application has no volumes array.");
+
+  const expected = normalizeContainerPath(expectedPath);
+  const mount = app.volumes.find((item) => isRecord(item)
+    && typeof item.containerPath === "string"
+    && normalizeContainerPath(item.containerPath) === expected);
+  if (!isRecord(mount)) fail(`target application has no persistent mount at ${expected}.`);
+  if (!(typeof mount.volumeName === "string" && mount.volumeName.trim())
+    && !(typeof mount.hostPath === "string" && mount.hostPath.trim())) {
+    fail(`persistent mount at ${expected} has no volumeName or hostPath.`);
+  }
+  if (typeof mount.mode === "string" && /^ro$/i.test(mount.mode.trim())) {
+    fail(`persistent mount at ${expected} is read-only.`);
+  }
+
+  if (typeof app.serviceUpdateOverride === "string"
+    && /(^|\n)\s*(volumes|mounts)\s*:/i.test(app.serviceUpdateOverride)) {
+    fail("serviceUpdateOverride changes volumes, so the persistent mount cannot be proven safely.");
+  }
+}
+
 export function validateCapRoverDeployPreflight(
   payload: unknown,
   expected: CapRoverDeployExpectation
@@ -106,13 +138,16 @@ export function validateCapRoverDeployPreflight(
   requireExactEnvironment(env, "ARCIGY_OBJECT_STORAGE_PREFIX", expected.objectStoragePrefix);
   requireExactEnvironment(env, "KITCHEN_PROJECT_STORAGE", "postgres");
   if (!hasDatabaseConnection(env)) fail("target application has no complete PostgreSQL connection configuration.");
+  assertDurableStorage(app, expected.storageContainerPath);
 
   return {
     appName: expected.appName,
     appEnv: expected.appEnv,
     databaseSchema: expected.databaseSchema,
     objectStoragePrefix: expected.objectStoragePrefix,
-    publicHost
+    storageContainerPath: normalizeContainerPath(expected.storageContainerPath),
+    publicHost,
+    instanceCount: 1
   };
 }
 
@@ -123,6 +158,7 @@ export function resolveCapRoverDeployExpectation(env: NodeJS.ProcessEnv = proces
     appEnv,
     databaseSchema: env.ARCIGY_DEPLOY_DATABASE_SCHEMA?.trim() || appEnv,
     objectStoragePrefix: env.ARCIGY_DEPLOY_OBJECT_PREFIX?.trim() || appEnv,
+    storageContainerPath: env.ARCIGY_DEPLOY_STORAGE_PATH?.trim() || "/app/storage",
     publicUrl: env.CAPROVER_APP_URL?.trim() || ""
   };
 }

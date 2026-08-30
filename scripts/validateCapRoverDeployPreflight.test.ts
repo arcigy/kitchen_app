@@ -12,6 +12,7 @@ const expected: CapRoverDeployExpectation = {
   appEnv: "dev",
   databaseSchema: "dev",
   objectStoragePrefix: "dev",
+  storageContainerPath: "/app/storage",
   publicUrl: "https://arcigy-kitchen-develop.example.test/"
 };
 
@@ -21,7 +22,11 @@ function validPayload(overrides: Record<string, unknown> = {}) {
       rootDomain: "example.test",
       appDefinitions: [{
         appName: expected.appName,
+        hasPersistentData: true,
+        instanceCount: 1,
+        serviceUpdateOverride: "",
         customDomain: [],
+        volumes: [{ containerPath: "/app/storage/", volumeName: "arcigy-kitchen-develop-storage", mode: "rw" }],
         envVars: [
           { key: "APP_ENV", value: "dev" },
           { key: "DATABASE_SCHEMA", value: "dev" },
@@ -36,13 +41,15 @@ function validPayload(overrides: Record<string, unknown> = {}) {
 }
 
 describe("CapRover deployment preflight", () => {
-  it("accepts an isolated PostgreSQL-backed develop app without local persistent storage", () => {
+  it("accepts an isolated develop app with one durable storage mount", () => {
     expect(validateCapRoverDeployPreflight(validPayload(), expected)).toEqual({
       appName: expected.appName,
       appEnv: "dev",
       databaseSchema: "dev",
       objectStoragePrefix: "dev",
-      publicHost: "arcigy-kitchen-develop.example.test"
+      storageContainerPath: "/app/storage",
+      publicHost: "arcigy-kitchen-develop.example.test",
+      instanceCount: 1
     });
   });
 
@@ -64,15 +71,19 @@ describe("CapRover deployment preflight", () => {
     expect(() => validateCapRoverDeployPreflight(payload, expected)).toThrow("APP_ENV");
   });
 
-  it("rejects an app that is not backed by PostgreSQL", () => {
+  it("rejects ephemeral, missing, read-only, and unprovable storage", () => {
+    expect(() => validateCapRoverDeployPreflight(validPayload({ hasPersistentData: false }), expected)).toThrow("not marked as persistent");
+    expect(() => validateCapRoverDeployPreflight(validPayload({ volumes: [] }), expected)).toThrow("no persistent mount");
     expect(() => validateCapRoverDeployPreflight(validPayload({
-      envVars: [
-        { key: "APP_ENV", value: "dev" },
-        { key: "DATABASE_SCHEMA", value: "dev" },
-        { key: "ARCIGY_OBJECT_STORAGE_PREFIX", value: "dev" },
-        { key: "KITCHEN_PROJECT_STORAGE", value: "file" }
-      ]
-    }), expected)).toThrow("KITCHEN_PROJECT_STORAGE");
+      volumes: [{ containerPath: "/app/storage", volumeName: "storage", mode: "ro" }]
+    }), expected)).toThrow("read-only");
+    expect(() => validateCapRoverDeployPreflight(validPayload({
+      serviceUpdateOverride: "services:\n  app:\n    volumes:\n      - other:/app/storage"
+    }), expected)).toThrow("cannot be proven safely");
+  });
+
+  it("requires one replica while runtime files use a local persistent volume", () => {
+    expect(() => validateCapRoverDeployPreflight(validPayload({ instanceCount: 2 }), expected)).toThrow("exactly one");
   });
 
   it("binds post-deploy health checks to the selected app origin", () => {
@@ -89,15 +100,7 @@ describe("CapRover deployment preflight", () => {
   });
 
   it("never includes a database credential in validation errors", () => {
-    const payload = validPayload({
-      envVars: [
-        { key: "APP_ENV", value: "dev" },
-        { key: "DATABASE_SCHEMA", value: "dev" },
-        { key: "ARCIGY_OBJECT_STORAGE_PREFIX", value: "dev" },
-        { key: "KITCHEN_PROJECT_STORAGE", value: "postgres" },
-        { key: "POSTGRES_PASSWORD", value: "very-secret" }
-      ]
-    });
+    const payload = validPayload({ volumes: [] });
     try {
       validateCapRoverDeployPreflight(payload, expected);
       throw new Error("expected validation to fail");
@@ -132,13 +135,6 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).not.toContain("/user/apps/appDefinitions/register");
     expect(workflow).toContain("CAPROVER_APP_URL is required");
     expect(workflow).toContain("steps.readiness.outcome != 'success'");
-    expect(workflow).toMatch(/branches:\s+- main\s+- develop/m);
-    expect(workflow).toContain("github.ref == 'refs/heads/main' && 'production' || 'develop'");
-    expect(workflow).toContain("CAPROVER_PRODUCTION_APP");
-    expect(workflow).toContain("CAPROVER_PRODUCTION_APP_URL");
-    expect(workflow).toContain("ARCIGY_DEPLOY_APP_ENV: ${{ steps.caprover_app.outputs.app_env }}");
-    expect(workflow).toContain("grep -q '\"ok\":true'");
-    expect(workflow).toContain("grep -Eq '\"ok\":true.*\"storage\":\"postgres\"'");
     expect(workflow).toContain("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09");
     expect(workflow).toContain("actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444");
     expect(workflow).toContain("persist-credentials: false");

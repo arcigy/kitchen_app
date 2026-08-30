@@ -8,9 +8,28 @@ type FeedbackReportControllerContext = {
   captureViewport?: () => Promise<string | null>;
   buildProjectSnapshot: () => unknown;
   getDiagnostics: () => Record<string, unknown>;
+  getDraftScope?: () => string;
+  storage?: Storage;
+  now?: () => number;
 };
 
+type FeedbackDraftV1 = {
+  version: 1;
+  open: true;
+  kind: FeedbackKind;
+  title: string;
+  description: string;
+  comment: string;
+  updatedAt: number;
+};
+
+const FEEDBACK_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+
 type RecentAction = { at: string; action: string };
+type RecentDiagnosticEvent = RecentAction & { recordedAt: number };
+
+const DIAGNOSTIC_TIMELINE_WINDOW_MS = 2 * 60 * 1000;
+const MAX_DIAGNOSTIC_TIMELINE_EVENTS = 50;
 
 const FEEDBACK_KINDS: ReadonlyArray<{ value: FeedbackKind; label: string }> = [
   { value: "bug", label: "Chyba" },
@@ -64,23 +83,84 @@ function safeShortcut(event: KeyboardEvent): string | null {
 }
 
 export function createFeedbackReportController(ctx: FeedbackReportControllerContext) {
-  const recentActions: RecentAction[] = [];
-  const recentRuntimeErrors: RecentAction[] = [];
+  let storage: Storage | null = ctx.storage ?? null;
+  if (!storage && typeof window !== "undefined") {
+    try { storage = window.sessionStorage; } catch { storage = null; }
+  }
+  const now = ctx.now ?? (() => Date.now());
+  const draftKey = () => `arcigy.feedback.draft.v1.${encodeURIComponent(ctx.getDraftScope?.() ?? "default")}`;
+  const clearDraft = () => storage?.removeItem(draftKey());
+  const readDraft = (): FeedbackDraftV1 | null => {
+    if (!storage) return null;
+    try {
+      const parsed = JSON.parse(storage.getItem(draftKey()) ?? "null") as Partial<FeedbackDraftV1> | null;
+      const updatedAt = Number(parsed?.updatedAt);
+      if (!parsed || parsed.version !== 1 || parsed.open !== true || !Number.isFinite(updatedAt) || now() - updatedAt > FEEDBACK_DRAFT_TTL_MS) {
+        if (parsed) clearDraft();
+        return null;
+      }
+      if (!["bug", "feature_request", "improvement", "question", "other"].includes(String(parsed.kind))) {
+        clearDraft();
+        return null;
+      }
+      return {
+        version: 1,
+        open: true,
+        kind: parsed.kind as FeedbackKind,
+        title: typeof parsed.title === "string" ? parsed.title : "",
+        description: typeof parsed.description === "string" ? parsed.description : "",
+        comment: typeof parsed.comment === "string" ? parsed.comment : "",
+        updatedAt
+      };
+    } catch {
+      clearDraft();
+      return null;
+    }
+  };
+  const persistDraft = (form: HTMLFormElement) => {
+    if (!storage) return;
+    const data = new FormData(form);
+    const draft: FeedbackDraftV1 = {
+      version: 1,
+      open: true,
+      kind: (data.get("kind") as FeedbackKind) || "bug",
+      title: String(data.get("title") ?? ""),
+      description: String(data.get("description") ?? ""),
+      comment: String(data.get("comment") ?? ""),
+      updatedAt: now()
+    };
+    try { storage.setItem(draftKey(), JSON.stringify(draft)); } catch { /* Storage quota/private mode: keep the form usable. */ }
+  };
+  const recentActions: RecentDiagnosticEvent[] = [];
+  const recentRuntimeErrors: RecentDiagnosticEvent[] = [];
+  const recordTime = () => Date.now();
+  const prune = (events: RecentDiagnosticEvent[], now: number) => {
+    const earliestAllowed = now - DIAGNOSTIC_TIMELINE_WINDOW_MS;
+    while (events.length > 0 && (events[0]!.recordedAt < earliestAllowed || events.length > MAX_DIAGNOSTIC_TIMELINE_EVENTS)) {
+      events.shift();
+    }
+  };
+  const publicEvents = (events: RecentDiagnosticEvent[], now: number): RecentAction[] => {
+    prune(events, now);
+    return events.map(({ at, action }) => ({ at, action }));
+  };
   const record = (action: string | null) => {
     if (!action) return;
-    recentActions.push({ at: new Date().toISOString(), action });
-    if (recentActions.length > 10) recentActions.shift();
+    const now = recordTime();
+    recentActions.push({ at: new Date(now).toISOString(), action, recordedAt: now });
+    prune(recentActions, now);
   };
   const recordRuntimeError = (value: unknown) => {
     const message = String(value instanceof Error ? value.message : value)
       .replace(/https?:\/\/[^\s?]+(?:\?[^\s]*)?/gu, "[url]")
       .slice(0, 500);
     if (!message) return;
-    recentRuntimeErrors.push({ at: new Date().toISOString(), action: message });
-    if (recentRuntimeErrors.length > 10) recentRuntimeErrors.shift();
+    const now = recordTime();
+    recentRuntimeErrors.push({ at: new Date(now).toISOString(), action: message, recordedAt: now });
+    prune(recentRuntimeErrors, now);
   };
 
-  const open = async () => {
+  const open = async (draft = readDraft()) => {
     ctx.trigger.disabled = true;
     let screenshotDataUrl: string | null = null;
     try {
@@ -96,22 +176,31 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
     overlay.innerHTML = `
       <section class="feedback-report-dialog" role="dialog" aria-modal="true" aria-labelledby="feedback-report-title">
         <header><h2 id="feedback-report-title">Nahlásiť problém</h2><button type="button" data-feedback-close aria-label="Zavrieť">×</button></header>
-        <p>Spolu s popisom sa pripojí screenshot celej viditeľnej Arcigy aplikácie, aktuálny snapshot projektu a technická diagnostika.</p>
+        <p>Spolu s popisom sa pripojí screenshot celej viditeľnej Arcigy aplikácie, aktuálny snapshot projektu a technická diagnostika vrátane posledných dvoch minút bezpečných akcií a chýb. Nezaznamenávajú sa texty z polí formulára ani obrazovka mimo Arcigy.</p>
         <form id="feedback-report-form" novalidate>
           <label>Typ<select name="kind">${FEEDBACK_KINDS.map((kind) => `<option value="${kind.value}">${kind.label}</option>`).join("")}</select></label>
           <label>Stručný názov problému<input name="title" maxlength="180" required></label>
           <label>Presný opis<textarea name="description" maxlength="8000" required></textarea></label>
           <label>Doplňujúci komentár<textarea name="comment" maxlength="4000"></textarea></label>
           ${screenshotDataUrl ? `<img class="feedback-report-preview" alt="Náhľad pripojeného screenshotu celej aplikácie" src="${screenshotDataUrl}">` : "<p>Screenshot celej viditeľnej Arcigy aplikácie nie je v tomto okamihu dostupný. Report sa neodošle bez neho.</p>"}
-          <label class="feedback-report-consent"><input type="checkbox" name="consent" required> Rozumiem, že môj projekt a technické údaje budú pripojené k Odoo úlohe.</label>
+          <label class="feedback-report-consent"><input type="checkbox" name="consent" required> Rozumiem, že môj projekt, technické údaje a bezpečná dvojminútová diagnostická stopa budú pripojené k Odoo úlohe.</label>
         </form>
         <footer><span data-feedback-status aria-live="polite"></span><button type="button" data-feedback-close>Zrušiť</button><button type="submit" form="feedback-report-form">Odoslať do podpory</button></footer>
       </section>`;
     const dialog = overlay.querySelector<HTMLElement>(".feedback-report-dialog")!;
     const form = dialog.querySelector<HTMLFormElement>("#feedback-report-form")!;
-    const close = () => overlay.remove();
+    const close = () => { clearDraft(); overlay.remove(); };
     overlay.querySelectorAll<HTMLElement>("[data-feedback-close]").forEach((button) => button.addEventListener("click", close));
     const title = form.elements.namedItem("title") as HTMLInputElement;
+    if (draft) {
+      (form.elements.namedItem("kind") as HTMLSelectElement).value = draft.kind;
+      title.value = draft.title;
+      (form.elements.namedItem("description") as HTMLTextAreaElement).value = draft.description;
+      (form.elements.namedItem("comment") as HTMLTextAreaElement).value = draft.comment;
+    }
+    form.addEventListener("input", () => persistDraft(form));
+    form.addEventListener("change", () => persistDraft(form));
+    persistDraft(form);
     const status = dialog.querySelector<HTMLElement>("[data-feedback-status]")!;
     const requestId = submissionId();
     form.addEventListener("submit", async (event) => {
@@ -135,7 +224,12 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
           consent: data.get("consent") === "on",
           screenshotDataUrl,
           projectSnapshot: ctx.buildProjectSnapshot(),
-          diagnostics: { ...ctx.getDiagnostics(), recentActions: [...recentActions], recentRuntimeErrors: [...recentRuntimeErrors] }
+          diagnostics: {
+            ...ctx.getDiagnostics(),
+            diagnosticTimeline: { windowSeconds: DIAGNOSTIC_TIMELINE_WINDOW_MS / 1000, storage: "in-memory" },
+            recentActions: publicEvents(recentActions, recordTime()),
+            recentRuntimeErrors: publicEvents(recentRuntimeErrors, recordTime())
+          }
         };
         const response = await fetch("/api/feedback-reports", {
           method: "POST",
@@ -145,6 +239,7 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
         });
         const result = await response.json() as { error?: string };
         if (!response.ok) throw new Error(result.error || "Odoslanie zlyhalo.");
+        clearDraft();
         status.textContent = "Ďakujeme. Požiadavka bola odoslaná do podpory.";
         window.setTimeout(close, 1200);
       } catch (error) {
@@ -160,11 +255,15 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
     ctx.trigger.textContent = "Nahlásiť problém";
     ctx.trigger.title = "Nahlásiť problém";
     ctx.trigger.setAttribute("aria-label", "Nahlásiť problém");
-    ctx.trigger.addEventListener("click", open);
+    ctx.trigger.addEventListener("click", () => { void open(); });
     document.addEventListener("click", (event) => record(safeActionFromEvent(event.target)), true);
     document.addEventListener("keydown", (event) => record(safeShortcut(event)), true);
     window.addEventListener("error", (event) => recordRuntimeError(event.error ?? event.message));
     window.addEventListener("unhandledrejection", (event) => recordRuntimeError(event.reason));
   };
-  return { mount };
+  const restorePendingDraft = async () => {
+    const draft = readDraft();
+    if (draft && !document.querySelector(".feedback-report-overlay")) await open(draft);
+  };
+  return { mount, restorePendingDraft };
 }

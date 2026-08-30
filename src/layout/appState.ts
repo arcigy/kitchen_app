@@ -121,6 +121,7 @@ export type LayoutSnapshot = {
     floorId?: string | null;
     columnId?: string | null;
     sectionId?: string | null;
+    kitchenGroupId?: string | null;
     instId: string | null;
     instIds: string[];
   };
@@ -318,6 +319,7 @@ export interface AppState {
   // Selection
   layoutTool: LayoutTool;
   selectedKind: SelectedKind;
+  selectedKitchenGroupId: string | null;
   selectedInstanceId: string | null;
   selectedWallId: string | null;
   selectedFloorId: string | null;
@@ -413,6 +415,7 @@ export function makeAppState(defaultParams: ModuleParams): AppState {
 
     layoutTool: "select",
     selectedKind: null,
+    selectedKitchenGroupId: null,
     selectedInstanceId: null,
     selectedWallId: null,
     selectedFloorId: null,

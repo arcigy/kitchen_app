@@ -102,9 +102,43 @@ describe("feedback report controller", () => {
     const init = fetchMock.mock.calls[0]![1]!;
     const payload = JSON.parse(String(init.body));
     expect(payload).toMatchObject({ kind: "bug", consent: true, screenshotDataUrl: PNG, projectSnapshot: { project: { id: "project-1" } } });
-    expect(payload.diagnostics).toEqual(expect.objectContaining({ selection: { id: "wall-1" }, recentActions: expect.any(Array), recentRuntimeErrors: expect.any(Array) }));
+    expect(payload.diagnostics).toEqual(expect.objectContaining({
+      selection: { id: "wall-1" },
+      diagnosticTimeline: { windowSeconds: 120, storage: "in-memory" },
+      recentActions: expect.any(Array),
+      recentRuntimeErrors: expect.any(Array)
+    }));
     expect(buildProjectSnapshot).toHaveBeenCalledOnce();
     expect(getDiagnostics).toHaveBeenCalledOnce();
+  });
+
+  it("keeps only the safe two-minute diagnostic timeline when the report is sent", async () => {
+    const now = vi.spyOn(Date, "now");
+    now.mockReturnValue(0);
+    const oldAction = document.createElement("button");
+    oldAction.setAttribute("aria-label", "Old step");
+    document.body.append(oldAction);
+    const { trigger } = await setup();
+    oldAction.click();
+    window.dispatchEvent(new ErrorEvent("error", { error: new Error("Stará chyba") }));
+
+    now.mockReturnValue(120_001);
+    const currentAction = document.createElement("button");
+    currentAction.setAttribute("aria-label", "Current step");
+    document.body.append(currentAction);
+    currentAction.click();
+    window.dispatchEvent(new ErrorEvent("error", { error: new Error("Aktuálna chyba") }));
+
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ ok: true }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await submit();
+
+    const payload = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
+    expect(payload.diagnostics.recentActions).toEqual(expect.arrayContaining([expect.objectContaining({ action: "button:Current step" })]));
+    expect(payload.diagnostics.recentActions).not.toEqual(expect.arrayContaining([expect.objectContaining({ action: "button:Old step" })]));
+    expect(payload.diagnostics.recentRuntimeErrors).toEqual([expect.objectContaining({ action: "Aktuálna chyba" })]);
+    expect(payload.diagnostics.recentRuntimeErrors).not.toEqual(expect.arrayContaining([expect.objectContaining({ action: "Stará chyba" })]));
+    expect(trigger).toBeDefined();
   });
 
   it("keeps the dialog open and exposes a safe error when delivery fails", async () => {
@@ -115,5 +149,46 @@ describe("feedback report controller", () => {
     expect(document.querySelector(".feedback-report-dialog")).not.toBeNull();
     expect(document.querySelector("[data-feedback-status]")?.textContent).toBe("Odoo je nedostupné.");
     expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+  });
+
+  it("restores a scoped draft after a refresh without restoring consent", async () => {
+    const storage = window.sessionStorage;
+    storage.clear();
+    const firstTrigger = document.createElement("button");
+    document.body.append(firstTrigger);
+    const first = createFeedbackReportController({
+      trigger: firstTrigger,
+      storage,
+      getDraftScope: () => "project-1",
+      captureViewport: vi.fn(async () => PNG),
+      buildProjectSnapshot: () => ({}),
+      getDiagnostics: () => ({})
+    });
+    first.mount();
+    firstTrigger.click();
+    await new Promise((resolve) => setTimeout(resolve));
+    const form = document.querySelector<HTMLFormElement>("#feedback-report-form")!;
+    (form.elements.namedItem("title") as HTMLInputElement).value = "Rozpracovaný report";
+    (form.elements.namedItem("description") as HTMLTextAreaElement).value = "Text pred refreshom";
+    (form.elements.namedItem("consent") as HTMLInputElement).checked = true;
+    form.dispatchEvent(new Event("input", { bubbles: true }));
+
+    document.body.replaceChildren();
+    const secondTrigger = document.createElement("button");
+    document.body.append(secondTrigger);
+    const second = createFeedbackReportController({
+      trigger: secondTrigger,
+      storage,
+      getDraftScope: () => "project-1",
+      captureViewport: vi.fn(async () => PNG),
+      buildProjectSnapshot: () => ({}),
+      getDiagnostics: () => ({})
+    });
+    second.mount();
+    await second.restorePendingDraft();
+
+    expect((document.querySelector("input[name='title']") as HTMLInputElement).value).toBe("Rozpracovaný report");
+    expect((document.querySelector("textarea[name='description']") as HTMLTextAreaElement).value).toBe("Text pred refreshom");
+    expect((document.querySelector("input[name='consent']") as HTMLInputElement).checked).toBe(false);
   });
 });

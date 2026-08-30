@@ -165,6 +165,7 @@ import {
 } from "./layout/worktopGeometry";
 import { makeDefaultKitchenContext, resolveContext } from "./layout/kitchenContext";
 import { createKitchenEditMode } from "./layout/kitchenEditMode";
+import { normalizeKitchenProjectAppState } from "./app/project/kitchenProjectRecovery";
 import { createWardrobeEditMode } from "./layout/wardrobeEditMode";
 import {
   updateUndoRedoUi,
@@ -201,7 +202,7 @@ import { createProjectPersistenceController, type ProjectPersistenceController }
 import { createProjectRecoveryLease, type ProjectRecoveryLease } from "./app/project/projectRecoveryLease";
 import { createProjectRecoveryStore, writeLastWorkspacePointer } from "./app/project/projectRecoveryStore";
 import { createProjectStateCodec, type RecoveryContributor } from "./app/project/projectStateCodec";
-import type { ProjectInteractionCheckpoint, ProjectRecoveryScope } from "./app/project/projectRecoveryTypes";
+import { projectRecoveryScopeKey, type ProjectInteractionCheckpoint, type ProjectRecoveryScope } from "./app/project/projectRecoveryTypes";
 import { createFeedbackReportController } from "./app/feedbackReportController";
 import { captureProjectPreview } from "./app/project/projectPreview";
 import { createLayoutExportPayload } from "./app/layoutExport";
@@ -828,6 +829,7 @@ export function startApp(initialArgs: AppArgs) {
   recordRecentActivity = (label) => recentActivityController.record(label);
   function syncSelectionState() {
     S.selectedKind = selectedKind;
+    S.selectedKitchenGroupId = selectedKitchenGroupId;
     S.selectedInstanceId = selectedInstanceId;
     S.selectedWallId = selectedWallId;
     S.selectedFloorId = selectedFloorId;
@@ -2290,6 +2292,7 @@ export function startApp(initialArgs: AppArgs) {
     setSelectedFloor,
     setSelectedColumn,
     setSelectedModule,
+    setSelectedKitchenGroup,
     updateSelectionHighlights,
     disposeObject3D,
     createInstance,
@@ -3293,7 +3296,8 @@ export function startApp(initialArgs: AppArgs) {
           ctx: cloneJson(group.ctx),
           instanceIds: [...group.instanceIds]
         })),
-        activeKitchenGroupId: S.activeKitchenGroupId
+        activeKitchenGroupId: S.activeKitchenGroupId,
+        activeEdit: kitchenMode?.captureActiveEdit() ?? null
       },
       modules: instances.map((inst) => ({
         id: inst.id,
@@ -3334,6 +3338,7 @@ export function startApp(initialArgs: AppArgs) {
       },
       selections: {
         selectedKind,
+        selectedKitchenGroupId,
         selectedInstanceId,
         selectedWallId,
         selectedFloorId,
@@ -3350,7 +3355,7 @@ export function startApp(initialArgs: AppArgs) {
 
   const restoreProjectAppState = async (
     appState: ProjectSaveFile["appState"],
-    restoreOptions: { recovery: boolean; historyTail: unknown[] }
+    restoreOptions: { recovery: boolean; historyTail: unknown[]; notice?: string | null }
   ) => {
     resetProjectInteractionStateForLoad();
     marginsPhaseController?.destroy();
@@ -3363,7 +3368,7 @@ export function startApp(initialArgs: AppArgs) {
       doors?: Array<{ id: string; params: DoorParams }>;
       counters?: { windowCounter?: number; doorCounter?: number };
     } | null;
-    const kitchen = appState.kitchen as { context?: unknown; groups?: Array<{ id: string; name: string; ctx: unknown; instanceIds: string[] }>; activeKitchenGroupId?: string | null } | null;
+    const kitchen = appState.kitchen as { context?: unknown; groups?: Array<{ id: string; name: string; ctx: unknown; instanceIds: string[] }>; activeKitchenGroupId?: string | null; activeEdit?: unknown } | null;
     const editor = appState.editor as { layoutTool?: unknown; activeViewerTab?: unknown; visibility?: unknown; dimensions?: unknown; wardrobe?: unknown } | null | undefined;
     const savedScene = appState.scene as {
       mode?: unknown;
@@ -3386,6 +3391,7 @@ export function startApp(initialArgs: AppArgs) {
       selectedFloorId?: unknown;
       selectedColumnId?: unknown;
       selectedSectionId?: unknown;
+      selectedKitchenGroupId?: unknown;
       selectedWallIds?: unknown;
       selectedInstanceIds?: unknown;
     } | null | undefined;
@@ -3399,7 +3405,7 @@ export function startApp(initialArgs: AppArgs) {
         instanceIds: [...group.instanceIds]
       });
     }
-    S.activeKitchenGroupId = kitchen?.activeKitchenGroupId ?? null;
+    S.activeKitchenGroupId = null;
     if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
     S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
     materialsPhaseController?.restoreSaveState(projectMaterialAssignments);
@@ -3521,11 +3527,14 @@ export function startApp(initialArgs: AppArgs) {
     const nextFloorId = validId(savedSelections?.selectedFloorId, new Set(floors.map((item) => item.id)));
     const nextColumnId = validId(savedSelections?.selectedColumnId, new Set(columns.map((item) => item.id)));
     const nextSectionId = validId(savedSelections?.selectedSectionId, new Set(sections.map((item) => item.id)));
+    const validKitchenGroupIds = new Set(S.kitchenGroups.map((item) => item.id));
+    const nextKitchenGroupId = validId(savedSelections?.selectedKitchenGroupId, validKitchenGroupIds);
     if (savedSelections?.selectedKind === "wall" && nextWallId) setSelectedWall(nextWallId);
     else if (savedSelections?.selectedKind === "module" && nextInstanceId) setSelectedModule(nextInstanceId);
     else if (savedSelections?.selectedKind === "floor" && nextFloorId) setSelectedFloor(nextFloorId);
     else if (savedSelections?.selectedKind === "column" && nextColumnId) setSelectedColumn(nextColumnId);
     else if (savedSelections?.selectedKind === "section" && nextSectionId) setSelectedSection(nextSectionId);
+    else if (savedSelections?.selectedKind === "kitchenGroup" && nextKitchenGroupId) setSelectedKitchenGroup(nextKitchenGroupId);
     else {
       selectedKind = null;
       syncSelectionState();
@@ -3540,7 +3549,10 @@ export function startApp(initialArgs: AppArgs) {
       validSelectedInstanceIds.forEach((id) => selectedInstanceIds.add(id));
       if (nextInstanceId) selectedInstanceIds.add(nextInstanceId);
     }
+    syncSelectionState();
     updateSelectionHighlights();
+    if (kitchen?.activeEdit) kitchenMode?.restoreActiveEdit(kitchen.activeEdit);
+    if (restoreOptions.notice) showToast(restoreOptions.notice, "info");
     if (savedScene?.mode === "build" || savedScene?.mode === "layout") setMode(savedScene.mode);
     // Restore the saved activity log after view/tool restoration, because
     // those UI setters intentionally record user actions during normal use.
@@ -3719,6 +3731,7 @@ export function startApp(initialArgs: AppArgs) {
   const projectStateCodec = createProjectStateCodec({
     captureAppState: (options) => buildProjectAppState(options),
     restoreAppState: restoreProjectAppState,
+    prepareAppStateForRestore: normalizeKitchenProjectAppState,
     interaction: interactionContributor,
     captureHistoryTail: () => S.history.past.slice(-12).map((snapshot) => cloneJson(snapshot))
   });
@@ -4061,8 +4074,9 @@ export function startApp(initialArgs: AppArgs) {
     redo(S, helpers);
   });
   tb.getQuickAction("cloud")?.addEventListener("click", () => showComingSoonDialog("Cloud synchronizácia"));
-  createFeedbackReportController({
+  const feedbackReportController = createFeedbackReportController({
     trigger: tb.getShareButton(),
+    getDraftScope: () => projectRecoveryScopeKey(activeRecoveryScope),
     buildProjectSnapshot: () => ({
       project: projectActions.getState().currentProject,
       saveRevision: projectActions.getState().saveRevision,
@@ -4078,7 +4092,8 @@ export function startApp(initialArgs: AppArgs) {
       viewport: { width: window.innerWidth, height: window.innerHeight, devicePixelRatio: window.devicePixelRatio },
       browser: navigator.userAgent
     })
-  }).mount();
+  });
+  feedbackReportController.mount();
   tb.getTab("file")?.addEventListener("click", () => showComingSoonDialog("Súbor"));
   const buildSelectionController = createBuildSelectionController({
     S,
@@ -4797,6 +4812,7 @@ export function startApp(initialArgs: AppArgs) {
   void initialRestore.then(() => {
     persistence.start();
     if (args.recoveryNotice) showToast(args.recoveryNotice, "info");
+    return feedbackReportController.restorePendingDraft();
   }).catch((error: unknown) => {
     showToast(`Recovery draft sa nepodarilo bezpečne obnoviť: ${error instanceof Error ? error.message : String(error)}`, "error");
     persistence.start();
