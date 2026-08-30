@@ -80,16 +80,32 @@ import type { KitchenRunDimensionSource } from "./kitchenRunDimensions";
 import { getKitchenWorktopSegmentDepthMm } from "./worktopGeometry";
 import type { KitchenWorktopSegmentRef } from "./worktopSegmentEditing";
 
-type GroupInstanceSnapshot = {
+export type GroupInstanceSnapshot = {
   id: string;
   params: ModuleParams;
   position: { x: number; y: number; z: number };
   rotationY: number;
 };
 
-type GroupWorktopSnapshot = {
+export type GroupWorktopSnapshot = {
   id: string;
   params: KitchenWorktopParams;
+};
+
+export type KitchenActiveEditSaveState = {
+  version: 1;
+  groupId: string;
+  origin: "new" | "existing";
+  activeName: string;
+  snapshotName: string;
+  editingExistingGroupId: string | null;
+  moduleEditLayer: KitchenModuleEditLayer;
+  activeTallEditorInstanceId: string | null;
+  activeTallEditorSnapshot: { instanceId: string; params: ModuleParams } | null;
+  selectedWorktopSegment: { worktopId: string; segmentIndex: number } | null;
+  kitchenCtxSnapshot: KitchenContext;
+  instanceSnapshots: GroupInstanceSnapshot[];
+  worktopSnapshots: GroupWorktopSnapshot[];
 };
 
 type KitchenMaterialLookupFamily =
@@ -3920,6 +3936,92 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     exitCommon();
   };
 
+  const captureActiveEdit = (): KitchenActiveEditSaveState | null => {
+    const groupId = args.S.activeKitchenGroupId;
+    if (!args.S.kitchenEditMode || !groupId || !kitchenCtxSnapshot) return null;
+    return {
+      version: 1,
+      groupId,
+      origin: editingExistingGroupId ? "existing" : "new",
+      activeName,
+      snapshotName,
+      editingExistingGroupId,
+      moduleEditLayer: activeModuleEditLayer,
+      activeTallEditorInstanceId,
+      activeTallEditorSnapshot: activeTallEditorSnapshot
+        ? { instanceId: activeTallEditorSnapshot.instanceId, params: structuredClone(activeTallEditorSnapshot.params) }
+        : null,
+      selectedWorktopSegment: selectedWorktopSegment ? { ...selectedWorktopSegment } : null,
+      kitchenCtxSnapshot: structuredClone(kitchenCtxSnapshot),
+      instanceSnapshots: structuredClone(instanceSnapshots),
+      worktopSnapshots: structuredClone(worktopSnapshots)
+    };
+  };
+
+  const validateActiveEdit = (value: unknown): value is KitchenActiveEditSaveState => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const candidate = value as Partial<KitchenActiveEditSaveState>;
+    return candidate.version === 1
+      && typeof candidate.groupId === "string"
+      && candidate.groupId.length > 0
+      && (candidate.origin === "new" || candidate.origin === "existing")
+      && typeof candidate.activeName === "string"
+      && typeof candidate.snapshotName === "string"
+      && (candidate.editingExistingGroupId === null || typeof candidate.editingExistingGroupId === "string")
+      && (candidate.moduleEditLayer === "base" || candidate.moduleEditLayer === "upper")
+      && (candidate.activeTallEditorInstanceId === null || typeof candidate.activeTallEditorInstanceId === "string")
+      && (candidate.activeTallEditorSnapshot === null || typeof candidate.activeTallEditorSnapshot === "object")
+      && (candidate.selectedWorktopSegment === null || typeof candidate.selectedWorktopSegment === "object")
+      && !!candidate.kitchenCtxSnapshot
+      && Array.isArray(candidate.instanceSnapshots)
+      && Array.isArray(candidate.worktopSnapshots);
+  };
+
+  const restoreActiveEdit = (value: unknown): boolean => {
+    if (!validateActiveEdit(value)) return false;
+    if (value.origin === "existing" && (!value.editingExistingGroupId || !findKitchenGroup(value.editingExistingGroupId))) return false;
+    const activeGroupId = value.groupId;
+    const activeInstance = value.activeTallEditorInstanceId
+      ? args.findInstance(value.activeTallEditorInstanceId)
+      : null;
+    if (activeInstance && activeInstance.kitchenGroupId !== activeGroupId) return false;
+    if (value.activeTallEditorSnapshot && value.activeTallEditorSnapshot.instanceId !== value.activeTallEditorInstanceId) return false;
+
+    args.ensureLayoutMode();
+    args.setToolSelect();
+    activeName = value.activeName;
+    snapshotName = value.snapshotName;
+    editingExistingGroupId = value.editingExistingGroupId;
+    activeModuleEditLayer = value.moduleEditLayer;
+    activeTallEditorInstanceId = activeInstance?.id ?? null;
+    activeTallEditorSnapshot = value.activeTallEditorSnapshot
+      ? { instanceId: value.activeTallEditorSnapshot.instanceId, params: structuredClone(value.activeTallEditorSnapshot.params) }
+      : null;
+    selectedWorktopSegment = value.selectedWorktopSegment ? { ...value.selectedWorktopSegment } : null;
+    kitchenCtxSnapshot = structuredClone(value.kitchenCtxSnapshot);
+    instanceSnapshots = structuredClone(value.instanceSnapshots);
+    worktopSnapshots = structuredClone(value.worktopSnapshots);
+    args.S.kitchenEditMode = true;
+    args.S.activeKitchenGroupId = activeGroupId;
+    syncInactiveModulePreviews();
+    ensureOverlay();
+    args.showKitchenTab();
+    addEscapeHandler();
+    attachTallEditorPointerHandlers();
+    if (activeTallEditorInstanceId) {
+      args.setSelectedModule(null);
+      args.buildClassicTopbar();
+    } else {
+      args.setSelectedModule(null);
+    }
+    args.setSelectedKitchenGroup(activeGroupId);
+    args.setUnderlayStatus("Kitchen: obnovená rozpracovaná úprava. Pokračuj v editácii alebo potvrď/zruš zmeny.");
+    renderModuleCatalog();
+    renderTallDimensionOverlay();
+    args.refreshProps();
+    return true;
+  };
+
   const buildKitchenRunGapBadges = (groupId: string) => {
     const grouped = new Map<string, Array<{ start: number; end: number }>>();
     for (const inst of args.S.instances) {
@@ -4621,6 +4723,9 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     enterModuleEditor,
     exitFinish,
     exitDiscard,
+    captureActiveEdit,
+    validateActiveEdit,
+    restoreActiveEdit,
     mountTopbar,
     mountModuleCatalog,
     findKitchenGroup,
