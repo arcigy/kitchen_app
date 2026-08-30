@@ -32,6 +32,32 @@ const makeState = (activeKitchenGroupId: string | null): ProjectSaveFile["appSta
   scene: {}
 });
 
+const makeWorktopOnlyState = (): ProjectSaveFile["appState"] => ({
+  ...makeState("kg-worktop-only"),
+  layout: {
+    snapshot: {
+      instances: [],
+      worktops: [{
+        id: "wt-only",
+        kitchenGroupId: "kg-worktop-only",
+        params: {
+          path: [
+            { x: -1563, z: 1431 },
+            { x: -1563, z: -110 },
+            { x: 1147, z: -110 },
+            { x: 1147, z: 2010 }
+          ],
+          depthMm: 620,
+          thicknessMm: 38,
+          heightMm: 820
+        }
+      }]
+    },
+    windows: [],
+    doors: []
+  }
+});
+
 describe("kitchen project recovery normalization", () => {
   it("reconstructs an orphan legacy kitchen and resumes it safely", () => {
     const prepared = normalizeKitchenProjectAppState(makeState("kg-orphan"));
@@ -41,6 +67,44 @@ describe("kitchen project recovery normalization", () => {
     expect(kitchen.activeKitchenGroupId).toBe("kg-orphan");
     expect(kitchen.activeEdit).toMatchObject({ origin: "existing", groupId: "kg-orphan" });
     expect(prepared.notice).toContain("obnovená");
+  });
+
+  it("reconstructs a worktop-only orphan and preserves its geometry", () => {
+    const prepared = normalizeKitchenProjectAppState(makeWorktopOnlyState());
+    const kitchen = prepared.appState.kitchen as {
+      groups: Array<{ id: string; instanceIds: string[] }>;
+      activeEdit?: {
+        origin: string;
+        groupId: string;
+        instanceSnapshots: unknown[];
+        worktopSnapshots: Array<{ id: string; params: { path: Array<{ x: number; z: number }> } }>;
+      };
+      activeKitchenGroupId: string | null;
+    };
+
+    expect(kitchen.groups).toEqual([{
+      id: "kg-worktop-only",
+      name: "Obnovená kuchyňa 1",
+      ctx: { name: "Kitchen" },
+      instanceIds: []
+    }]);
+    expect(kitchen.activeKitchenGroupId).toBe("kg-worktop-only");
+    expect(kitchen.activeEdit).toMatchObject({ origin: "existing", groupId: "kg-worktop-only" });
+    expect(kitchen.activeEdit?.instanceSnapshots).toEqual([]);
+    expect(kitchen.activeEdit?.worktopSnapshots).toEqual([{
+      id: "wt-only",
+      params: expect.objectContaining({
+        depthMm: 620,
+        thicknessMm: 38,
+        heightMm: 820,
+        path: [
+          { x: -1563, z: 1431 },
+          { x: -1563, z: -110 },
+          { x: 1147, z: -110 },
+          { x: 1147, z: 2010 }
+        ]
+      })
+    }]);
   });
 
   it("keeps a valid new active draft out of committed groups", () => {
