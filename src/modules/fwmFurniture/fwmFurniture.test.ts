@@ -2586,9 +2586,9 @@ describe("FWM furniture module packages", () => {
     expect(meshList.every((mesh) => typeof mesh.userData.partName === "string" && mesh.userData.partName.length > 0)).toBe(true);
 
     const bounds = new Box3().setFromObject(group);
-    expect((bounds.max.x - bounds.min.x) * 1000).toBeCloseTo(900, 1);
+    expect((bounds.max.x - bounds.min.x) * 1000).toBeCloseTo(1338, 1);
     expect((bounds.max.y - bounds.min.y) * 1000).toBeCloseTo(722, 1);
-    expect((bounds.max.z - bounds.min.z) * 1000).toBeCloseTo(900, 1);
+    expect((bounds.max.z - bounds.min.z) * 1000).toBeCloseTo(1338, 1);
 
     const frontMesh = meshList.find((mesh) => mesh.userData.materialGroup === "front");
     expect(frontMesh?.userData.materialSlotId).toBe("front");
@@ -2755,6 +2755,40 @@ describe("FWM furniture module packages", () => {
       expect(mesh?.userData.edgeBandingStrategy, boardName).toBe("explicit_visible_edges");
       expect(mesh?.userData.edgeBanding?.length, boardName).toBeGreaterThan(0);
     }
+  });
+
+  it("uses the additive v3 envelope for a new lower chamfered corner", () => {
+    const catalog = getSystemSeedCatalog();
+    const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_corner");
+    expect(modulePackage).toBeTruthy();
+    const defaults = createDefaultModulePackageParameters(modulePackage!) as FwmFurnitureParams;
+    const root = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: {
+        ...defaults,
+        variant: "corner_chamfered",
+        kitchenModuleRole: "low",
+        width: 580,
+        depth: 580,
+        height: 722,
+        frontChamferMm: 200,
+        frontChamferReferenceMm: 200,
+        backChamferMm: 0,
+        plinthHeight: 100,
+        plinthSetbackMm: 60
+      },
+      catalog
+    });
+    const bounds = objectBoundsMm(root);
+    const context = root.userData.groundTruthParametricContext as { geometryContractVersion: number };
+    expect(context.geometryContractVersion).toBe(3);
+    expect(bounds.width).toBeCloseTo(798, 1);
+    expect(bounds.depth).toBeCloseTo(798, 1);
+    const corner = root.getObjectByName("__kitchen_corner_anchor")!;
+    const xAnchor = root.getObjectByName("__kitchen_corner_x_anchor")!;
+    const zAnchor = root.getObjectByName("__kitchen_corner_z_anchor")!;
+    expect((corner.position.x - xAnchor.position.x) * 1000).toBeCloseTo(798, 1);
+    expect((zAnchor.position.z - corner.position.z) * 1000).toBeCloseTo(798, 1);
   });
 
   it("parametrizes the baked chamfered corner by coordinates without stretching the plinth height", () => {
