@@ -8,6 +8,7 @@ import type {
 import { arcigyOrganizationProfile, getSeededClientProfile } from "./client-repository";
 import { assertValidClientProfile } from "./client-validation";
 import { withSchemaClient } from "../database/postgres-client";
+import { normalizeFeatureRelease } from "../release/feature-release";
 
 type OrganizationRow = {
   organization_id: string;
@@ -27,6 +28,7 @@ type OrganizationUserRow = {
   is_active: boolean;
   role: string;
   permissions: unknown;
+  profile: unknown;
 };
 
 type OrganizationSettings = {
@@ -36,6 +38,9 @@ type OrganizationSettings = {
   branding?: ClientProfile["branding"];
   defaults?: ClientProfile["defaults"];
   roles?: OrganizationRoleDefinition[];
+  release?: unknown;
+  releaseChannel?: unknown;
+  enabledFeatures?: unknown;
 };
 
 function toIso(value: Date | string): string {
@@ -64,6 +69,7 @@ function normalizeDefaults(defaults: ClientProfile["defaults"] | undefined): Cli
 }
 
 function rowToUser(row: OrganizationUserRow): OrganizationUser {
+  const profile = readSettings(row.profile);
   return {
     id: row.user_id,
     name: row.name,
@@ -72,7 +78,10 @@ function rowToUser(row: OrganizationUserRow): OrganizationUser {
     role: normalizeOrganizationRole(row.role),
     permissions: normalizePermissions(row.permissions),
     photoUrl: row.photo_asset_id ?? "/organization/default-user.svg",
-    isActive: row.is_active
+    isActive: row.is_active,
+    release: profile.release || profile.releaseChannel || profile.enabledFeatures
+      ? normalizeFeatureRelease(profile.release ?? { channel: profile.releaseChannel, enabledFeatures: profile.enabledFeatures })
+      : undefined
   };
 }
 
@@ -104,7 +113,8 @@ export async function loadPostgresClientProfile(args: {
           u.photo_asset_id,
           u.is_active,
           m.role,
-          m.permissions
+          m.permissions,
+          u.profile
         FROM arcigy_organization_users u
         JOIN arcigy_organization_memberships m
           ON m.user_id = u.user_id
@@ -140,6 +150,9 @@ export async function loadPostgresClientProfile(args: {
         language: "sk",
         vatRate: 20
       },
+      release: settings.release || settings.releaseChannel || settings.enabledFeatures
+        ? normalizeFeatureRelease(settings.release ?? { channel: settings.releaseChannel, enabledFeatures: settings.enabledFeatures })
+        : undefined,
       createdAt: toIso(organization.created_at),
       updatedAt: toIso(organization.updated_at)
     };

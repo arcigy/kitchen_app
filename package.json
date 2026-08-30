@@ -69,6 +69,7 @@
     "db:audit-kitchen-module-geometry": "tsx scripts/auditKitchenModuleGeometryDimensions.ts",
     "db:assign-client-suppliers": "tsx scripts/assignClientSuppliers.ts",
     "db:set-client-currency": "tsx scripts/setClientCurrency.ts",
+    "db:set-feature-release": "tsx scripts/setFeatureRelease.ts",
     "odoo:feedback:setup": "tsx scripts/setupOdooFeedbackProject.ts --apply"
   },
   "dependencies": {

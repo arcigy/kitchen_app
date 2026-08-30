@@ -35,6 +35,8 @@ export type ClientProfile = {
     vatRate?: number;
   };
 
+  release?: FeatureReleaseSettings;
+
   createdAt: string;
   updatedAt: string;
 };
@@ -59,6 +61,11 @@ export type OrganizationPermission =
   | "organization:view"
   | "organization:manage";
 
+export type FeatureReleaseSettings = {
+  channel: "stable" | "founder";
+  enabledFeatures: string[];
+};
+
 export type OrganizationUser = {
   id: string;
   name: string;
@@ -68,6 +75,7 @@ export type OrganizationUser = {
   permissions: OrganizationPermission[];
   photoUrl: string;
   isActive: boolean;
+  release?: FeatureReleaseSettings;
 };
 
 export type OrganizationProfile = {
