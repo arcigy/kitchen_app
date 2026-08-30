@@ -344,14 +344,14 @@ function renderPanel(target: EditableTarget, draft: MaterialDraft, groupCount: n
           <label>Tint strength<input data-field="tintStrength" type="number" min="0" max="1" step="0.01" value="${formatNumber(draft.tintStrength)}"></label>
           <label>Grain contrast<input data-field="grainContrast" type="number" min="0" max="1" step="0.01" value="${formatNumber(draft.grainContrast)}"></label>
           <label>Roughness multiplier<input data-field="roughnessMultiplier" type="number" min="0" max="2" step="0.05" value="${formatNumber(draft.roughnessMultiplier)}"></label>
-          <label>Roughness override<input data-field="roughnessOverride" type="number" min="0" max="1" step="0.01" value="${draft.roughnessOverride}" placeholder="auto"></label>
+          <label>Roughness override<input data-field="roughnessOverride" type="number" min="0" max="1" step="0.01" value="${escapeHtml(draft.roughnessOverride)}" placeholder="auto"></label>
           <label>Bump multiplier<input data-field="bumpMultiplier" type="number" min="0" max="2" step="0.05" value="${formatNumber(draft.bumpMultiplier)}"></label>
           <label>Grain depth<input data-field="grainDepth" type="number" min="0" max="2" step="0.05" value="${formatNumber(draft.grainDepth)}"></label>
           <label>Coat multiplier<input data-field="coatMultiplier" type="number" min="0" max="2" step="0.05" value="${formatNumber(draft.coatMultiplier)}"></label>
           <label>Tile size meters<input data-field="tileSizeMeters" type="number" min="0.1" max="10" step="0.05" value="${formatNumber(draft.tileSizeMeters)}"></label>
           <label>Grain direction<select data-field="grainDirection">${renderDirectionOptions(draft.grainDirection)}</select></label>
         </form>
-        <pre class="material-modify-payload">${JSON.stringify(payload, null, 2)}</pre>
+        <pre class="material-modify-payload">${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
       </div>
       <footer class="material-modify-footer">
         <button type="button" data-action="cancel">Cancel</button>

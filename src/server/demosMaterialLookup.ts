@@ -79,15 +79,14 @@ const fetchText = async (url: string): Promise<string> => {
 
 const decodeHtml = (value: string): string => {
   return value
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, "\"")
-    .replace(/&#039;|&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, decimal: string) => String.fromCodePoint(Number.parseInt(decimal, 10)))
+    .replaceAll("<", "")
+    .replaceAll(">", "")
+    .replace(/&(?:nbsp|quot|#039|apos);/g, (entity) => ({
+      "&nbsp;": " ",
+      "&quot;": "\"",
+      "&#039;": "'",
+      "&apos;": "'"
+    })[entity] ?? "")
     .replace(/\s+/g, " ")
     .trim();
 };
