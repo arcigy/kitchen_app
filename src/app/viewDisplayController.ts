@@ -145,14 +145,6 @@ export function createViewDisplayController(scene: THREE.Scene) {
     material.needsUpdate = true;
   };
 
-  const offsetSolidSurfaceBehindEdges = (material: THREE.Material) => {
-    rememberMaterial(material);
-    material.polygonOffset = true;
-    material.polygonOffsetFactor = 1;
-    material.polygonOffsetUnits = 1;
-    material.needsUpdate = true;
-  };
-
   const suppressRealisticMaterial = (material: THREE.Material) => {
     rememberMaterial(material);
     if (!hasPbrControls(material)) return;
@@ -236,7 +228,6 @@ export function createViewDisplayController(scene: THREE.Scene) {
       restoreMaterialDisplay(material);
       if (mode === "solid") {
         suppressRealisticMaterial(material);
-        offsetSolidSurfaceBehindEdges(material);
       }
     });
   };
@@ -258,11 +249,10 @@ export function createViewDisplayController(scene: THREE.Scene) {
       else restoreMaterialDisplay(material);
       if (mode === "solid") {
         suppressRealisticMaterial(material);
-        offsetSolidSurfaceBehindEdges(material);
       }
     });
 
-    if (mode === "solid" || mode === "wireframe") {
+    if (mode === "wireframe") {
       ensureEdgeLine(mesh);
     } else {
       removeEdgeLine(mesh);
