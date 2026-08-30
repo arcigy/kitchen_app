@@ -26,9 +26,13 @@ import {
   type KitchenModuleEditLayer
 } from "./kitchenModuleRules";
 import {
+  applyKitchenPlanFillEmphasis,
   applyKitchenPlanOutlineEmphasis,
+  captureKitchenPlanFill,
   captureKitchenPlanOutline,
+  restoreKitchenPlanFill,
   restoreKitchenPlanOutline,
+  type KitchenPlanFillSnapshot,
   type KitchenPlanOutlineSnapshot,
 } from "./kitchenPlanPresentation";
 import {
@@ -449,6 +453,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     THREE.LineSegments,
     KitchenPlanOutlineSnapshot
   >();
+  const planFillSnapshots = new Map<THREE.Mesh, KitchenPlanFillSnapshot>();
   let snapshotName = "";
   let editingExistingGroupId: string | null = null;
   let activeTallEditorInstanceId: string | null = null;
@@ -1213,6 +1218,10 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   };
 
   const restoreKitchenPlanPresentation = () => {
+    for (const [fill, snapshot] of planFillSnapshots) {
+      restoreKitchenPlanFill(fill, snapshot);
+    }
+    planFillSnapshots.clear();
     for (const [outline, snapshot] of planOutlineSnapshots) {
       restoreKitchenPlanOutline(outline, snapshot);
     }
@@ -1249,10 +1258,14 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
           captureKitchenPlanOutline(inst.outline)
         );
       }
+      if (!planFillSnapshots.has(inst.pick)) {
+        planFillSnapshots.set(inst.pick, captureKitchenPlanFill(inst.pick));
+      }
       const emphasis = resolveKitchenModulePlanEmphasis(
         inst.params as Record<string, unknown>,
         activeModuleEditLayer
       );
+      applyKitchenPlanFillEmphasis(inst.pick, emphasis);
       applyKitchenPlanOutlineEmphasis(inst.outline, emphasis);
     }
   };
