@@ -2384,7 +2384,7 @@ function readGroundTruthVectorMm(value: unknown): THREE.Vector3 | null {
 }
 
 type ChamferedGroundTruthParametricContext = {
-  geometryContractVersion: 1 | 2;
+  geometryContractVersion: 1 | 2 | 3;
   width: number;
   depth: number;
   height: number;
@@ -2412,7 +2412,12 @@ function createChamferedGroundTruthParametricContext(params: FwmFurnitureParams)
   const boardThickness = Math.max(1, num(params, "boardThickness", 18));
   const frontFallback = num(params, "chamferMm", BASE_CORNER_CHAMFERED_SOURCE.chamferMm);
   const requestedFrontChamfer = num(params, "frontChamferMm", frontFallback);
-  const geometryContractVersion = num(params, "geometryContractVersion", 1) >= 2 ? 2 : 1;
+  const requestedContractVersion = num(params, "geometryContractVersion", 1);
+  const geometryContractVersion: 1 | 2 | 3 = requestedContractVersion >= 3
+    ? 3
+    : requestedContractVersion >= 2
+      ? 2
+      : 1;
   // V2 defines depth as the complete outside wall leg.  The old reference
   // field remains readable only for package snapshots authored before this
   // contract; new modules use the actual cut to divide the fixed envelope.
@@ -2438,7 +2443,10 @@ function createChamferedGroundTruthParametricContext(params: FwmFurnitureParams)
 }
 
 function chamferedReferenceTotalSpan(context: ChamferedGroundTruthParametricContext) {
-  if (context.geometryContractVersion >= 2) return Math.max(1, context.depth);
+  if (context.geometryContractVersion === 3) {
+    return Math.max(1, context.depth + context.frontChamferReferenceMm);
+  }
+  if (context.geometryContractVersion === 2) return Math.max(1, context.depth);
   return Math.abs(context.frontChamferReferenceMm - BASE_CORNER_CHAMFERED_SOURCE.chamferMm) > 0.001
     ? Math.max(1, context.depth + context.frontChamferReferenceMm)
     : Math.max(1, context.depth);
