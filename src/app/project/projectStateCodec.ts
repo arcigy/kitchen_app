@@ -25,9 +25,10 @@ export type ProjectStateCodec = {
 
 export function createProjectStateCodec(args: {
   captureAppState(options: { commitDraft: boolean; syncActivity: boolean; includePreview: boolean }): ProjectSaveFile["appState"];
-  restoreAppState(appState: ProjectSaveFile["appState"], options: { recovery: boolean; historyTail: unknown[] }): void | Promise<void>;
+  restoreAppState(appState: ProjectSaveFile["appState"], options: { recovery: boolean; historyTail: unknown[]; notice?: string | null }): void | Promise<void>;
   interaction: RecoveryContributor<ProjectInteractionCheckpoint | null>;
   captureHistoryTail(): unknown[];
+  prepareAppStateForRestore?: (appState: ProjectSaveFile["appState"]) => { appState: ProjectSaveFile["appState"]; notice?: string | null };
 }): ProjectStateCodec {
   const validateAppState = (appState: ProjectSaveFile["appState"]) => {
     validateProjectAppState(appState);
@@ -45,13 +46,19 @@ export function createProjectStateCodec(args: {
       };
     },
     async restoreServer(appState) {
-      validateAppState(appState);
+      const prepared = args.prepareAppStateForRestore?.(appState) ?? { appState };
+      validateAppState(prepared.appState);
       args.interaction.clear();
-      await args.restoreAppState(appState, { recovery: false, historyTail: [] });
+      const options: { recovery: false; historyTail: unknown[]; notice?: string | null } = { recovery: false, historyTail: [] };
+      if (prepared.notice !== undefined) options.notice = prepared.notice;
+      await args.restoreAppState(prepared.appState, options);
     },
     async restoreRecovery(capture) {
-      validateAppState(capture.appState);
-      await args.restoreAppState(capture.appState, { recovery: true, historyTail: capture.historyTail });
+      const prepared = args.prepareAppStateForRestore?.(capture.appState) ?? { appState: capture.appState };
+      validateAppState(prepared.appState);
+      const options: { recovery: true; historyTail: unknown[]; notice?: string | null } = { recovery: true, historyTail: capture.historyTail };
+      if (prepared.notice !== undefined) options.notice = prepared.notice;
+      await args.restoreAppState(prepared.appState, options);
       if (capture.interaction && args.interaction.validate(capture.interaction)) {
         await args.interaction.restore(capture.interaction);
       }

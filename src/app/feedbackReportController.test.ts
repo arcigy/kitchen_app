@@ -150,4 +150,45 @@ describe("feedback report controller", () => {
     expect(document.querySelector("[data-feedback-status]")?.textContent).toBe("Odoo je nedostupné.");
     expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
   });
+
+  it("restores a scoped draft after a refresh without restoring consent", async () => {
+    const storage = window.sessionStorage;
+    storage.clear();
+    const firstTrigger = document.createElement("button");
+    document.body.append(firstTrigger);
+    const first = createFeedbackReportController({
+      trigger: firstTrigger,
+      storage,
+      getDraftScope: () => "project-1",
+      captureViewport: vi.fn(async () => PNG),
+      buildProjectSnapshot: () => ({}),
+      getDiagnostics: () => ({})
+    });
+    first.mount();
+    firstTrigger.click();
+    await new Promise((resolve) => setTimeout(resolve));
+    const form = document.querySelector<HTMLFormElement>("#feedback-report-form")!;
+    (form.elements.namedItem("title") as HTMLInputElement).value = "Rozpracovaný report";
+    (form.elements.namedItem("description") as HTMLTextAreaElement).value = "Text pred refreshom";
+    (form.elements.namedItem("consent") as HTMLInputElement).checked = true;
+    form.dispatchEvent(new Event("input", { bubbles: true }));
+
+    document.body.replaceChildren();
+    const secondTrigger = document.createElement("button");
+    document.body.append(secondTrigger);
+    const second = createFeedbackReportController({
+      trigger: secondTrigger,
+      storage,
+      getDraftScope: () => "project-1",
+      captureViewport: vi.fn(async () => PNG),
+      buildProjectSnapshot: () => ({}),
+      getDiagnostics: () => ({})
+    });
+    second.mount();
+    await second.restorePendingDraft();
+
+    expect((document.querySelector("input[name='title']") as HTMLInputElement).value).toBe("Rozpracovaný report");
+    expect((document.querySelector("textarea[name='description']") as HTMLTextAreaElement).value).toBe("Text pred refreshom");
+    expect((document.querySelector("input[name='consent']") as HTMLInputElement).checked).toBe(false);
+  });
 });

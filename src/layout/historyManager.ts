@@ -55,6 +55,7 @@ export interface HistoryHelpers {
   updateLayoutPanel: () => void;
   layoutRoot: THREE.Group;
   setSelectedSection?: (id: string | null) => void;
+  setSelectedKitchenGroup?: (id: string | null) => void;
 }
 
 const stableJson = (value: unknown): string => {
@@ -124,11 +125,12 @@ const getRestoredInstanceY = (S: AppState, m: LayoutSnapshot["instances"][number
   return 0;
 };
 
-export const clearSelectionBeforeSnapshotRestore = (S: AppState, helpers: Pick<HistoryHelpers, "setSelectedWall" | "setSelectedModule" | "setSelectedColumn" | "setSelectedSection" | "updateSelectionHighlights">) => {
+export const clearSelectionBeforeSnapshotRestore = (S: AppState, helpers: Pick<HistoryHelpers, "setSelectedWall" | "setSelectedModule" | "setSelectedColumn" | "setSelectedSection" | "setSelectedKitchenGroup" | "updateSelectionHighlights">) => {
   helpers.setSelectedWall(null);
   helpers.setSelectedModule(null);
   helpers.setSelectedColumn?.(null);
   helpers.setSelectedSection?.(null);
+  helpers.setSelectedKitchenGroup?.(null);
   S.selectedWallIds.clear();
   S.selectedInstanceIds.clear();
   helpers.updateSelectionHighlights();
@@ -234,6 +236,8 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
     helpers.setSelectedSection?.(snap.selected.sectionId);
   } else if (snap.selected.kind === "module" && snap.selected.instId && S.instances.some((i) => i.id === snap.selected.instId)) {
     helpers.setSelectedModule(snap.selected.instId);
+  } else if (snap.selected.kind === "kitchenGroup" && snap.selected.kitchenGroupId) {
+    helpers.setSelectedKitchenGroup?.(snap.selected.kitchenGroupId);
   } else {
     helpers.setSelectedWall(null);
     helpers.setSelectedModule(null);
@@ -296,6 +300,7 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
       floorId: S.selectedFloorId,
       columnId: S.selectedColumnId,
       sectionId: S.selectedSectionId,
+      kitchenGroupId: S.selectedKitchenGroupId,
       instId: S.selectedInstanceId,
       instIds: Array.from(S.selectedInstanceIds)
     }

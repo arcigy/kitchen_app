@@ -179,9 +179,33 @@ export function validateProjectAppState(appState: unknown): void {
     }
   }
 
+  const activeEdit = isObject(kitchen?.activeEdit) ? kitchen.activeEdit : null;
+  const activeEditGroupId = typeof activeEdit?.groupId === "string" && activeEdit.groupId.trim()
+    ? activeEdit.groupId
+    : null;
+  if (activeEdit) {
+    if (activeEdit.version !== 1) throw new Error("Project save active kitchen edit has unsupported version.");
+    if (!activeEditGroupId) throw new Error("Project save active kitchen edit is missing groupId.");
+    if (activeEdit.origin !== "new" && activeEdit.origin !== "existing") {
+      throw new Error(`Project save active kitchen edit ${activeEditGroupId} has unsupported origin.`);
+    }
+    if (activeEdit.origin === "existing" && !groupIds.has(activeEditGroupId)) {
+      throw new Error(`Project save active kitchen edit ${activeEditGroupId} references missing kitchen group.`);
+    }
+  }
+  const activeKitchenGroupId = typeof kitchen?.activeKitchenGroupId === "string" ? kitchen.activeKitchenGroupId : null;
+  // Older v2 snapshots could contain only activeKitchenGroupId plus orphan
+  // geometry. The app-level restore normalizer repairs that shape before use.
+  const legacyOrphanCompatibility = !activeEdit && !!activeKitchenGroupId && groupIds.size === 0;
+  if (activeKitchenGroupId && activeKitchenGroupId !== activeEditGroupId && !legacyOrphanCompatibility) {
+    throw new Error("Project save activeKitchenGroupId does not match active kitchen edit.");
+  }
+  const validKitchenGroupIds = new Set(groupIds);
+  if (activeEdit?.origin === "new" && activeEditGroupId) validKitchenGroupIds.add(activeEditGroupId);
+
   for (const worktop of worktops) {
     const kitchenGroupId = typeof worktop.kitchenGroupId === "string" ? worktop.kitchenGroupId : null;
-    if (kitchenGroupId && groupIds.size && !groupIds.has(kitchenGroupId)) {
+    if (kitchenGroupId && !validKitchenGroupIds.has(kitchenGroupId) && !legacyOrphanCompatibility) {
       throw new Error(`Project save worktop ${idOf(worktop)} references missing kitchen group ${kitchenGroupId}.`);
     }
   }
@@ -189,7 +213,7 @@ export function validateProjectAppState(appState: unknown): void {
   for (const instance of instances) {
     const id = idOf(instance);
     const kitchenGroupId = typeof instance.kitchenGroupId === "string" ? instance.kitchenGroupId : null;
-    if (kitchenGroupId && groupIds.size && !groupIds.has(kitchenGroupId)) {
+    if (kitchenGroupId && !validKitchenGroupIds.has(kitchenGroupId) && !legacyOrphanCompatibility) {
       throw new Error(`Project save instance ${id} references missing kitchen group ${kitchenGroupId}.`);
     }
     const placement = isObject(instance.kitchenPlacement) ? instance.kitchenPlacement : null;
