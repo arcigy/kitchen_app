@@ -102,9 +102,43 @@ describe("feedback report controller", () => {
     const init = fetchMock.mock.calls[0]![1]!;
     const payload = JSON.parse(String(init.body));
     expect(payload).toMatchObject({ kind: "bug", consent: true, screenshotDataUrl: PNG, projectSnapshot: { project: { id: "project-1" } } });
-    expect(payload.diagnostics).toEqual(expect.objectContaining({ selection: { id: "wall-1" }, recentActions: expect.any(Array), recentRuntimeErrors: expect.any(Array) }));
+    expect(payload.diagnostics).toEqual(expect.objectContaining({
+      selection: { id: "wall-1" },
+      diagnosticTimeline: { windowSeconds: 120, storage: "in-memory" },
+      recentActions: expect.any(Array),
+      recentRuntimeErrors: expect.any(Array)
+    }));
     expect(buildProjectSnapshot).toHaveBeenCalledOnce();
     expect(getDiagnostics).toHaveBeenCalledOnce();
+  });
+
+  it("keeps only the safe two-minute diagnostic timeline when the report is sent", async () => {
+    const now = vi.spyOn(Date, "now");
+    now.mockReturnValue(0);
+    const oldAction = document.createElement("button");
+    oldAction.setAttribute("aria-label", "Old step");
+    document.body.append(oldAction);
+    const { trigger } = await setup();
+    oldAction.click();
+    window.dispatchEvent(new ErrorEvent("error", { error: new Error("Stará chyba") }));
+
+    now.mockReturnValue(120_001);
+    const currentAction = document.createElement("button");
+    currentAction.setAttribute("aria-label", "Current step");
+    document.body.append(currentAction);
+    currentAction.click();
+    window.dispatchEvent(new ErrorEvent("error", { error: new Error("Aktuálna chyba") }));
+
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ ok: true }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await submit();
+
+    const payload = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
+    expect(payload.diagnostics.recentActions).toEqual(expect.arrayContaining([expect.objectContaining({ action: "button:Current step" })]));
+    expect(payload.diagnostics.recentActions).not.toEqual(expect.arrayContaining([expect.objectContaining({ action: "button:Old step" })]));
+    expect(payload.diagnostics.recentRuntimeErrors).toEqual([expect.objectContaining({ action: "Aktuálna chyba" })]);
+    expect(payload.diagnostics.recentRuntimeErrors).not.toEqual(expect.arrayContaining([expect.objectContaining({ action: "Stará chyba" })]));
+    expect(trigger).toBeDefined();
   });
 
   it("keeps the dialog open and exposes a safe error when delivery fails", async () => {
