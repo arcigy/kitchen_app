@@ -126,6 +126,9 @@ export function createViewModeController(ctx: ViewModeControllerContext) {
       outlineMaterial.depthTest = !enabled;
       inst.outline.visible = enabled && (isFloorplanView || isDetailOrthoView);
     }
+    // ensurePickAndOutline resets the pick material for raycasting; reapply
+    // the kitchen floorplan fill after rebuilding the plan geometry.
+    ctx.setPlanPresentation(isFloorplanView);
 
     for (const windowInst of ctx.windows) {
       windowInst.outline.visible = false;
