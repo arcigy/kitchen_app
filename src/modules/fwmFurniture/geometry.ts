@@ -3123,11 +3123,26 @@ function addChamferedDiagonalPlinthClipSet(
   const paramKeys = ["clipComponentId", "legComponentId", "frontChamferMm", "plinthHeight", "plinthSetbackMm", "depth"];
   const collar = addCornerStyleClipCollar(clipGroup, `${clipGroup.name}_collar`, { x: 0, y: 40, z: 1.768 }, clipMaterial, paramKeys);
   const pad = addBox(clipGroup, `${clipGroup.name}_pad`, { width: 30, height: 35, depth: 25 }, { x: 0, y: 40, z: 7 }, clipMaterial, paramKeys);
-  const arm = addBox(clipGroup, `${clipGroup.name}_arm`, { width: 30, height: 35, depth: 48 }, { x: 0, y: 39, z: 38 }, clipMaterial, paramKeys);
+  // Keep the diagonal set on the same approved plinth-clip component envelope
+  // as the straight/corner cabinet families. The previous 48 mm arm was a
+  // one-off extension and remained visible outside the diagonal plinth after
+  // the v3 additive footprint grew; it was not part of the catalog component.
+  const arm = addBox(clipGroup, `${clipGroup.name}_arm`, { width: 30, height: 35, depth: 25 }, { x: 0, y: 39, z: 26.5 }, clipMaterial, paramKeys);
 
-  for (const [mesh, suffix] of [[collar, "collar"], [pad, "pad"], [arm, "arm"]] as const) {
+  const clipMeshes = [[collar, "collar"], [pad, "pad"], [arm, "arm"]] as const;
+  const clipMeshNames = clipMeshes.map(([mesh]) => mesh.name);
+  const legAllowOverlapWith = new Set<string>(
+    Array.isArray(leg.userData.allowOverlapWith) ? leg.userData.allowOverlapWith.filter((name): name is string => typeof name === "string") : []
+  );
+  for (const clipMeshName of clipMeshNames) legAllowOverlapWith.add(clipMeshName);
+  leg.userData.allowOverlapWith = [...legAllowOverlapWith];
+
+  for (const [mesh, suffix] of clipMeshes) {
     tagChamferedRuntimeHardware(mesh, `diagonal_plinth_clip_${label}_${suffix}`);
     markComponent(mesh, clipComponent, "clipComponentId");
+    // The three meshes form one reusable clip component and intentionally
+    // contact its supporting leg. Record those joins for geometry auditing.
+    mesh.userData.allowOverlapWith = [leg.name, ...clipMeshNames.filter((name) => name !== mesh.name)];
   }
 }
 

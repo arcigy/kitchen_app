@@ -41,4 +41,31 @@ describe("view display controller", () => {
 
     controller.dispose();
   });
+
+  it("makes a newly synchronized preview material opaque in Solid and restores it for Realistic", () => {
+    const scene = new THREE.Scene();
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.35,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+    scene.add(mesh);
+
+    const controller = createViewDisplayController(scene);
+    controller.setMode("solid");
+
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
+    expect(material.depthWrite).toBe(true);
+    expect(mesh.children.some((child) => child instanceof THREE.LineSegments)).toBe(false);
+
+    controller.setMode("realistic");
+
+    expect(material.transparent).toBe(true);
+    expect(material.opacity).toBe(0.35);
+    expect(material.depthWrite).toBe(false);
+    controller.dispose();
+  });
 });

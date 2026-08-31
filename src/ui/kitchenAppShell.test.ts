@@ -23,6 +23,8 @@ describe("kitchen app bottom bar", () => {
 
     expect(root.querySelector("[data-bottom-views]")).not.toBeNull();
     expect(root.querySelector("[data-open-bom-panel]")).not.toBeNull();
+    expect(root.querySelector("[data-recalculate-project-price]")).not.toBeNull();
+    expect(root.querySelector("[data-project-pricing-summary]")).not.toBeNull();
     expect(root.querySelector(".archux-sheet")).not.toBeNull();
     expect(root.querySelector("[data-recent-activity]")).not.toBeNull();
     expect(root.querySelectorAll("[data-bottom-default]")).toHaveLength(4);
