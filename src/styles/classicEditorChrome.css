@@ -685,82 +685,93 @@
 
 .archux-live-price {
   display: grid;
-  grid-template-columns: minmax(128px, 0.9fr) minmax(120px, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 7px 18px;
-  align-items: start;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
 }
 
 .archux-live-price strong {
   grid-column: 1 / -1;
 }
 
-.archux-price-total {
+.archux-pricing-summary {
   min-width: 0;
   padding: 11px 12px;
-  border: 1px solid rgba(102, 85, 255, 0.14);
+  border: 1px solid rgba(102, 85, 255, 0.16);
   border-radius: 10px;
-  background: linear-gradient(135deg, #f2efff, #ffffff);
+  background: linear-gradient(135deg, #f3f1ff, #ffffff);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
 }
 
-.archux-price-total span,
-.archux-bom-preview > span {
-  display: block;
-  color: #667085;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+.archux-pricing-summary__state {
+  min-height: 16px;
+  margin: 0 0 9px;
+  color: #59657a;
+  font-size: 11px;
+  font-weight: 650;
 }
 
-.archux-price-total b {
+.archux-pricing-summary__metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, 0.7fr));
+  gap: 7px;
+}
+
+.archux-pricing-summary__metrics > div {
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.archux-pricing-summary__metrics span {
+  display: block;
+  overflow: hidden;
+  color: #667085;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.archux-pricing-summary__metrics b {
   display: block;
   margin-top: 3px;
+  overflow: hidden;
   color: #172033;
-  font-size: 22px;
-  line-height: 1.05;
-}
-
-.archux-price-breakdown {
-  min-width: 0;
-}
-
-.archux-price-breakdown p,
-.archux-bom-preview p {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 5px;
-  color: #667085;
-  font-size: 11px;
-}
-
-.archux-price-breakdown b,
-.archux-bom-preview b {
-  color: #344054;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.archux-bom-preview {
-  grid-column: 1 / -1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.archux-bom-preview > div {
-  max-height: 46px;
-  margin-top: 5px;
-  overflow-y: auto;
-  padding-right: 4px;
-  scrollbar-width: thin;
-}
-
-.archux-bom-preview p span {
-  min-width: 0;
-  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.archux-pricing-summary__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.archux-pricing-summary__recalculate {
+  flex: 1;
+  border: 0;
+  border-radius: 7px;
+  background: #5a45e8;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
+.archux-pricing-summary__recalculate:hover:not(:disabled) {
+  background: #4935cf;
+}
+
+.archux-pricing-summary__recalculate:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .archux-sheet div {

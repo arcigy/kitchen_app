@@ -154,6 +154,17 @@ export function createViewDisplayController(scene: THREE.Scene) {
     material.needsUpdate = true;
   };
 
+  const makeSolidSurfaceOpaque = (material: THREE.Material) => {
+    // A newly inserted module can inherit a transparent preview material while
+    // the display mode is already Solid. Restore alone preserves that preview
+    // flag, leaving the cabinet looking like a permanent wireframe. Solid is
+    // deliberately an opaque presentation mode for all renderable surfaces.
+    material.transparent = false;
+    material.opacity = 1;
+    material.depthWrite = true;
+    material.needsUpdate = true;
+  };
+
   const hideSurfaceForWireframe = (material: THREE.Material) => {
     rememberMaterial(material);
     if (hasWireframe(material)) {
@@ -246,8 +257,14 @@ export function createViewDisplayController(scene: THREE.Scene) {
     }
     eachMaterial(mesh.material, (material) => {
       if (mode === "wireframe") hideSurfaceForWireframe(material);
-      else restoreMaterialDisplay(material);
+      else {
+        // Capture the authored material before Solid normalizes temporary
+        // preview transparency, so Realistic can still restore it exactly.
+        if (mode === "solid") rememberMaterial(material);
+        restoreMaterialDisplay(material);
+      }
       if (mode === "solid") {
+        makeSolidSurfaceOpaque(material);
         suppressRealisticMaterial(material);
       }
     });

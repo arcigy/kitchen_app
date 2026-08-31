@@ -2744,7 +2744,9 @@ describe("FWM furniture module packages", () => {
       }
       for (const boardName of ["diagonal_plinth_clip_left_arm", "diagonal_plinth_clip_right_arm"]) {
         const arm = objectBoundsMm(getMeshByBoardName(root, boardName)!);
-        expect(arm.maxZ - arm.minX, boardName).toBeGreaterThanOrEqual(plinthFrontLine + 25);
+        // Approved clip arms clear the diagonal plinth by the standard
+        // component envelope, not the former custom 48 mm protrusion.
+        expect(arm.maxZ - arm.minX, boardName).toBeGreaterThanOrEqual(plinthFrontLine + 20);
       }
     };
     assertDiagonalHardwareBehindPlinth(base);
@@ -2789,6 +2791,54 @@ describe("FWM furniture module packages", () => {
     const zAnchor = root.getObjectByName("__kitchen_corner_z_anchor")!;
     expect((corner.position.x - xAnchor.position.x) * 1000).toBeCloseTo(798, 1);
     expect((zAnchor.position.z - corner.position.z) * 1000).toBeCloseTo(798, 1);
+  });
+
+  it("keeps v3 diagonal plinth clips on the approved component envelope and attached to their legs", () => {
+    const catalog = getSystemSeedCatalog();
+    const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_corner");
+    expect(modulePackage).toBeTruthy();
+    const defaults = createDefaultModulePackageParameters(modulePackage!) as FwmFurnitureParams;
+    const root = buildModulePackageGeometryFromPackage({
+      modulePackage: modulePackage!,
+      parameters: {
+        ...defaults,
+        variant: "corner_chamfered",
+        kitchenModuleRole: "low",
+        width: 580,
+        depth: 580,
+        height: 722,
+        frontChamferMm: 200,
+        frontChamferReferenceMm: 200,
+        backChamferMm: 0,
+        plinthHeight: 100,
+        plinthSetbackMm: 60
+      },
+      catalog
+    });
+
+    for (const label of ["left", "right"] as const) {
+      const leg = getMeshByBoardName(root, `leg_diagonal_${label}`)!;
+      const clipGroup = getObjectNamed(root, `corner_chamfered_diagonal_plinth_clip_${label}`)!;
+      const collar = getMeshByBoardName(root, `diagonal_plinth_clip_${label}_collar`)!;
+      const pad = getMeshByBoardName(root, `diagonal_plinth_clip_${label}_pad`)!;
+      const arm = getMeshByBoardName(root, `diagonal_plinth_clip_${label}_arm`)!;
+      const legBounds = objectBoundsMm(leg);
+
+      expect(clipGroup.rotation.y).toBeCloseTo(-Math.PI / 4, 6);
+      expect(clipGroup.position.x * 1000).toBeCloseTo((legBounds.minX + legBounds.maxX) / 2, 1);
+      expect(clipGroup.position.z * 1000).toBeCloseTo((legBounds.minZ + legBounds.maxZ) / 2, 1);
+      pad.geometry.computeBoundingBox();
+      arm.geometry.computeBoundingBox();
+      expect((pad.geometry.boundingBox!.max.z - pad.geometry.boundingBox!.min.z) * 1000).toBeCloseTo(25, 6);
+      expect((arm.geometry.boundingBox!.max.z - arm.geometry.boundingBox!.min.z) * 1000).toBeCloseTo(25, 6);
+      expect(arm.position.z * 1000).toBeCloseTo(26.5, 6);
+
+      for (const clipPart of [collar, pad, arm]) {
+        expect(clipPart.userData.componentType).toBe("plinth_clip");
+        expect(clipPart.userData.allowOverlapWith).toContain(leg.name);
+      }
+      expect(leg.userData.allowOverlapWith).toEqual(expect.arrayContaining([collar.name, pad.name, arm.name]));
+    }
   });
 
   it("parametrizes the baked chamfered corner by coordinates without stretching the plinth height", () => {
@@ -2977,8 +3027,8 @@ describe("FWM furniture module packages", () => {
       .map((point) => point.z - point.x));
     expect(smallerFrontChamferDiagonalLeg.maxZ - smallerFrontChamferDiagonalLeg.minX).toBeLessThanOrEqual(plinthFrontLine + 2);
     expect(smallerFrontChamferDiagonalLegRight.maxZ - smallerFrontChamferDiagonalLegRight.minX).toBeLessThanOrEqual(plinthFrontLine + 2);
-    expect(smallerFrontChamferLeftClipArm.maxZ - smallerFrontChamferLeftClipArm.minX).toBeGreaterThanOrEqual(plinthFrontLine + 25);
-    expect(smallerFrontChamferRightClipArm.maxZ - smallerFrontChamferRightClipArm.minX).toBeGreaterThanOrEqual(plinthFrontLine + 25);
+    expect(smallerFrontChamferLeftClipArm.maxZ - smallerFrontChamferLeftClipArm.minX).toBeGreaterThanOrEqual(plinthFrontLine + 20);
+    expect(smallerFrontChamferRightClipArm.maxZ - smallerFrontChamferRightClipArm.minX).toBeGreaterThanOrEqual(plinthFrontLine + 20);
     expect(Math.abs(((smallerFrontChamferLeftClip.minX + smallerFrontChamferLeftClip.maxX) / 2) - ((smallerFrontChamferDiagonalLeg.minX + smallerFrontChamferDiagonalLeg.maxX) / 2))).toBeLessThan(15);
     expect((smallerFrontChamferLeftClip.minZ + smallerFrontChamferLeftClip.maxZ) / 2).toBeGreaterThan((smallerFrontChamferDiagonalLeg.minZ + smallerFrontChamferDiagonalLeg.maxZ) / 2);
     expect(Math.abs(((smallerFrontChamferRightClip.minX + smallerFrontChamferRightClip.maxX) / 2) - ((smallerFrontChamferDiagonalLegRight.minX + smallerFrontChamferDiagonalLegRight.maxX) / 2))).toBeLessThan(15);

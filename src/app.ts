@@ -115,6 +115,7 @@ import type { PhotoPathTracer } from "./rendering/photoPathTracer";
 import { createTopbar } from "./ui/createTopbar";
 import { showComingSoonDialog } from "./ui/comingSoonDialog";
 import { openBomPanel, openPricingCatalog } from "./app/projectPanels";
+import { createProjectPricingSummaryController } from "./app/projectPricingSummaryController";
 import {
   cloneFloorSegments,
   floorBoundaryToSegments,
@@ -809,6 +810,19 @@ export function startApp(initialArgs: AppArgs) {
 
   document.querySelector<HTMLButtonElement>("[data-open-bom-panel]")?.addEventListener("click", () => {
     openBomPanelForState({ instances, kitchenWorktops, customFurniture, kitchenCtx: S.kitchenCtx });
+  });
+
+  createProjectPricingSummaryController({
+    root: document,
+    getPricingInput: () => ({
+      instances,
+      worktops: kitchenWorktops,
+      customFurniture,
+      kitchenContext: S.kitchenCtx,
+      catalog: clientCatalog,
+      quoteSettings: projectMarginSettings,
+      currency: args.clientProfile?.defaults.currency ?? "EUR"
+    })
   });
 
   const recentActivityController = createRecentActivityController({
@@ -3133,7 +3147,12 @@ export function startApp(initialArgs: AppArgs) {
 
   let createInstanceRebuilderResult!: ReturnType<typeof createInstanceRebuilder>;
   function rebuildInstance(...args: Parameters<ReturnType<typeof createInstanceRebuilder>["rebuildInstance"]>) {
-    return createInstanceRebuilderResult.rebuildInstance(...args);
+    const rebuilt = createInstanceRebuilderResult.rebuildInstance(...args);
+    // Rebuilding resets the plan pick to its invisible raycast material. The
+    // kitchen editor owns the visible footprint treatment and reapplies it only
+    // while its floorplan is active.
+    kitchenMode?.syncPlanPresentation();
+    return rebuilt;
   }
 
   const moduleSelectionController = createModuleSelectionController({
@@ -4919,6 +4938,9 @@ export function startApp(initialArgs: AppArgs) {
     const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
     outlineMaterial.opacity = isFloorplanView ? 0.95 : 0.98;
     outlineMaterial.depthTest = viewMode !== "2d";
+    // Placement also rebuilds the pick polygon, so restore the kitchen-owned
+    // floorplan fill after the generic raycast setup has completed.
+    kitchenMode?.syncPlanPresentation();
   }
 
   let createMeasureValueCommitterResult!: ReturnType<typeof createMeasureValueCommitter>;

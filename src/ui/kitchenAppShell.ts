@@ -180,21 +180,17 @@ export function renderKitchenAppShell(root: HTMLElement): void {
         </section>
         <section class="archux-area archux-live-price" data-bottom-default>
           <strong>${t("BOM / pricing")}</strong>
-          <div class="archux-price-total">
-            <span>${t("Status")}</span>
-            <b>${t("On demand")}</b>
-          </div>
-          <div class="archux-price-breakdown">
-            <p><span>${t("Live calculation")}</span><b>${t("Off")}</b></p>
-            <p><span>${t("Refresh impact")}</span><b>${t("Reduced")}</b></p>
-            <p><span>${t("100+ modules")}</span><b>${t("Ready")}</b></p>
-          </div>
-          <div class="archux-bom-preview">
-            <span>${t("BOM items")}</span>
-            <div>
-              <p><span>${t("Calculated only when opened")}</span><b>${t("Manual")}</b></p>
+          <div class="archux-pricing-summary" data-project-pricing-summary aria-live="polite">
+            <p class="archux-pricing-summary__state" data-project-pricing-state>Prepočítať cenu podľa aktuálneho návrhu.</p>
+            <div class="archux-pricing-summary__metrics">
+              <div><span>Cena projektu</span><b data-project-pricing-final-price>—</b></div>
+              <div><span>Položky</span><b data-project-pricing-item-count>—</b></div>
+              <div><span>Bez ceny</span><b data-project-pricing-missing-count>—</b></div>
             </div>
-            <button class="archux-activity-open" type="button" data-open-bom-panel>${t("Open BOM")}</button>
+            <div class="archux-pricing-summary__actions">
+              <button class="archux-pricing-summary__recalculate" type="button" data-recalculate-project-price>Prepočítať cenu</button>
+              <button class="archux-activity-open" type="button" data-open-bom-panel>${t("Open BOM")}</button>
+            </div>
           </div>
         </section>
         <section class="archux-sheet" data-bottom-default>
