@@ -674,6 +674,21 @@ describe("createSelectionController", () => {
     expect(ctx.updateSelectionHighlights).toHaveBeenCalled();
   });
 
+  it("adds and removes walls from an additive selection without keyboard modifiers", () => {
+    const ctx = createContext();
+    ctx.walls.push({ ...ctx.walls[0]!, id: "wall-2" });
+    const controller = createSelectionController(ctx);
+
+    controller.setSelectedWall("wall");
+    controller.setSelectedWall("wall-2", { additive: true });
+    expect(Array.from(ctx.selectedWallIds)).toEqual(["wall", "wall-2"]);
+    expect(ctx.selectedWallId).toBe("wall-2");
+
+    controller.setSelectedWall("wall", { additive: true });
+    expect(Array.from(ctx.selectedWallIds)).toEqual(["wall-2"]);
+    expect(ctx.selectedWallId).toBe("wall-2");
+  });
+
   it("clears previous entity ids when selecting a window", () => {
     const ctx = createContext();
     const controller = createSelectionController(ctx);

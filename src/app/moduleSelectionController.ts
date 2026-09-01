@@ -26,6 +26,8 @@ type ModuleSelectionControllerContext = {
   getKitchenMode: () => KitchenModeSelectionApi | null;
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
   isModuleAlignLocked?: (id: string) => boolean;
+  isMobileAdditiveSelection?: () => boolean;
+  consumeMobileAdditiveSelection?: () => void;
   setSelectedKitchenGroup: (groupId: string | null) => void;
   setSelectedModule: (id: string | null, options?: { additive?: boolean }) => void;
 };
@@ -53,7 +55,10 @@ export function createModuleSelectionController(ctx: ModuleSelectionControllerCo
     cancelPendingMarqueeHit(ev.pointerId);
 
     if (selectOwningKitchenGroup(inst.kitchenGroupId)) return true;
-    ctx.setSelectedModule(selectableId, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey });
+    const keyboardAdditive = ev.shiftKey || ev.ctrlKey || ev.metaKey;
+    const mobileAdditive = ctx.isMobileAdditiveSelection?.() ?? false;
+    ctx.setSelectedModule(selectableId, { additive: keyboardAdditive || mobileAdditive || undefined });
+    if (mobileAdditive && !keyboardAdditive) ctx.consumeMobileAdditiveSelection?.();
     return true;
   };
 

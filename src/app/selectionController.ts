@@ -57,6 +57,10 @@ export type SelectWallCommandContext = {
   walls: WallInstance[];
 };
 
+export type SelectWallOptions = {
+  additive?: boolean;
+};
+
 export type SelectKitchenGroupCommandContext = {
   applySelection: SelectionApplyCommand;
   instances: LayoutInstance[];
@@ -596,7 +600,39 @@ export function createSelectionController(ctx: SelectionControllerContext) {
     }, id);
   }
 
-  function setSelectedWall(id: string | null) {
+  function setSelectedWall(id: string | null, options?: SelectWallOptions) {
+    const selectedId = id && ctx.pinnedWallIds.has(id) ? null : id;
+    if (options?.additive && selectedId) {
+      const wall = ctx.walls.find((item) => item.id === selectedId) ?? null;
+      if (!wall) return;
+      const previousKind = ctx.selectedKind;
+      const previousWallSelected = previousKind === "wall" || ctx.selectedWallIds.size > 0 || !!ctx.selectedWallId;
+      const previousSectionSelected = previousKind === "section" || !!ctx.selectedSectionId;
+      ensureSelectableTool();
+      if (ctx.selectedKind !== "wall") {
+        clearSelectedEntityIds();
+        clearObjectSelectionVisuals();
+        ctx.selectedKind = "wall";
+      }
+      if (ctx.selectedWallIds.has(selectedId)) {
+        ctx.selectedWallIds.delete(selectedId);
+        const nextPrimary = Array.from(ctx.selectedWallIds).at(-1) ?? null;
+        ctx.selectedWallId = nextPrimary;
+        ctx.selectedKind = nextPrimary ? "wall" : null;
+      } else {
+        ctx.selectedWallIds.add(selectedId);
+        ctx.selectedWallId = selectedId;
+        ctx.selectedKind = "wall";
+      }
+      clearUnderlayBox();
+      afterSelectionChanged({
+        ...getSelectionSideEffects(ctx.selectedKind, ctx.selectedWallId),
+        previousKind,
+        previousWallSelected,
+        previousSectionSelected
+      });
+      return;
+    }
     runSelectWallCommand({
       applySelection,
       pinnedWallIds: ctx.pinnedWallIds,

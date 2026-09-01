@@ -104,7 +104,7 @@ import type {
 import type { ModuleParams } from "./model/cabinetTypes";
 import { normalizeModuleParams, normalizeModuleParamsForSource, validateModule } from "./model/cabinetTypes";
 import { buildModule } from "./geometry/buildModule";
-import { createScene } from "./core/scene";
+import { createScene, resolveRendererPixelRatio } from "./core/scene";
 import { createPartPanel } from "./ui/createPartPanel";
 import { createLayoutPanel } from "./ui/createLayoutPanel";
 import { createEditorShell } from "./ui/createEditorShell";
@@ -184,6 +184,7 @@ import {
   commitPlacement,
   mountPlacementControls,
   rebuildGhost,
+  rotateActivePlacement,
   scheduleRebuildGhost,
   type PlacementHelpers
 } from "./layout/placementManager";
@@ -193,6 +194,8 @@ import {
   staysOutsideKitchenWorktopFootprint
 } from "./layout/kitchenModuleRules";
 import { createViewNavigation } from "./app/viewNavigation";
+import { createRenderLifecycleController } from "./app/renderLifecycleController";
+import { createRendererInteractionQualityController } from "./app/rendererInteractionQuality";
 import { createExportActions } from "./app/exportActions";
 import { createProjectActions } from "./app/project/projectActions";
 import { createMaterialsPhaseController } from "./app/materialsPhaseController";
@@ -262,6 +265,8 @@ import { createWallEditHudUpdater } from "./app/wallEditHudUpdater";
 import { createWindowControlsController } from "./app/windowControlsController";
 import { createDoorControlsController } from "./app/doorControlsController";
 import { createClassicTopbarController } from "./app/classicTopbarController";
+import { mountMobileWorkspaceShell } from "./ui/mobileWorkspaceShell";
+import { createMobileCommandHudController } from "./app/mobileCommandHudController";
 import { createWorkspaceNavigationController } from "./app/workspaceNavigationController";
 import { createMeasureSelectionActions } from "./app/measureSelectionActions";
 import { createRoomWallDefinitions } from "./app/wallDefinitions";
@@ -380,6 +385,21 @@ export function startApp(initialArgs: AppArgs) {
   renderer.localClippingEnabled = true;
   const temporaryDimensions = createTemporaryDimensionManager(renderer, cam());
   temporaryDimensions.setUnitScale(1000);
+  const fullRendererPixelRatio = resolveRendererPixelRatio(
+    window.devicePixelRatio || 1,
+    window.matchMedia?.("(pointer: coarse)").matches ?? false
+  );
+  const rendererInteractionQuality = createRendererInteractionQualityController({
+    fullPixelRatio: fullRendererPixelRatio,
+    reducedPixelRatio: Math.min(1, fullRendererPixelRatio),
+    setPixelRatio: (pixelRatio) => {
+      renderer.setPixelRatio(pixelRatio);
+      const width = args.viewerEl.clientWidth;
+      const height = args.viewerEl.clientHeight;
+      setSize(width, height);
+      temporaryDimensions.setSize(width, height);
+    }
+  });
 
   setDaylightIntensity(9);
 
@@ -405,6 +425,7 @@ export function startApp(initialArgs: AppArgs) {
 
   type LayoutTool = "select" | "wall" | "led" | "align" | "trim" | "measure" | "section" | "dimension";
   let layoutTool: LayoutTool = "select";
+  let mobileAdditiveSelection = false;
   let viewNavigation: ReturnType<typeof createViewNavigation>;
   let detailViewController!: ReturnType<typeof createDetailViewController>;
   let cameraPlacementController!: ReturnType<typeof createCameraPlacementController>;
@@ -1321,6 +1342,10 @@ export function startApp(initialArgs: AppArgs) {
     getState: () => ({ mode, viewMode, activeViewerTab }),
     getViewerToolMode,
     setViewerPanActive,
+    setNavigationInteractionActive: (active) => {
+      if (active) rendererInteractionQuality.beginInteraction();
+      else rendererInteractionQuality.endInteraction();
+    },
     isTypingTarget,
     isInteractionBlocked: () =>
       dragState.active ||
@@ -1340,6 +1365,30 @@ export function startApp(initialArgs: AppArgs) {
       marquee.pending ||
       Boolean(floorEdit.drag) ||
       underlayDragState.active,
+    canStartSingleTouchOrbit: () =>
+      mode === "layout" &&
+      viewMode === "3d" &&
+      layoutTool === "select" &&
+      !placement.active &&
+      !transformState.kind &&
+      !floorEdit.active &&
+      !measureState.enabled &&
+      !isColumnPlacementActive() &&
+      !isDoorPlacementActive() &&
+      !isWindowPlacementActive(),
+    cancelEditorTouchInteraction: () => {
+      marquee.active = false;
+      marquee.pending = false;
+      marquee.pointerId = null;
+      marquee.hitSomething = false;
+      marqueeEl.style.display = "none";
+      dragState.active = false;
+      windowDragState.active = false;
+      doorDragState.active = false;
+      wallEditHud.drag = null;
+      floorEdit.drag = null;
+      underlayDragState.active = false;
+    },
     focusProvider: navigationFocusProvider,
     refreshDetailView: () => {
       detailViewController.activeDetailClipPlanes = [];
@@ -2717,7 +2766,7 @@ export function startApp(initialArgs: AppArgs) {
     fitSelectedKitchenModuleToGap,
     modulePackages,
     get wardrobeMode() { return wardrobeMode; },
-    layoutTool,
+    get layoutTool() { return layoutTool; },
     openBomPanel: (panelArgs) => openBomPanelForState(panelArgs),
     openPricingCatalog: () => openPricingCatalogForState(),
     openUnderlayPanel,
@@ -2762,6 +2811,18 @@ export function startApp(initialArgs: AppArgs) {
     }
   });
   syncClassicTopbarVisibility = createClassicTopbarControllerResult.syncClassicTopbarVisibility;
+  let mobileSaveProject: (() => void | Promise<void>) | null = null;
+  mountMobileWorkspaceShell({
+    root: document.getElementById("app") ?? document.body,
+    registry: createClassicTopbarControllerResult.commandRegistry,
+    openProjectManager: args.openProjectManager ?? (() => undefined),
+    saveProject: () => {
+      if (mobileSaveProject) return mobileSaveProject();
+    },
+    getActiveToolLabel: () => layoutTool === "select" ? "Select" : layoutTool,
+    getMobileAdditiveSelection: () => mobileAdditiveSelection,
+    setMobileAdditiveSelection: (enabled) => { mobileAdditiveSelection = enabled; }
+  });
 
   kitchenMode = createKitchenEditMode({
     S,
@@ -2945,7 +3006,9 @@ export function startApp(initialArgs: AppArgs) {
   function setSelectedUnderlay() { return selectionController.setSelectedUnderlay(); }
   function setSelectedSection(id: string | null) { return selectionController.setSelectedSection(id); }
   function setSelectedColumn(id: string | null) { return selectionController.setSelectedColumn(id); }
-  function setSelectedWall(id: string | null) { return selectionController.setSelectedWall(id); }
+  function setSelectedWall(...args: Parameters<ReturnType<typeof createSelectionController>["setSelectedWall"]>) {
+    return selectionController.setSelectedWall(...args);
+  }
   function setSelectedFloor(id: string | null) { return selectionController.setSelectedFloor(id); }
   function clearSelection() { return selectionController.clearSelection(); }
 
@@ -3172,6 +3235,8 @@ export function startApp(initialArgs: AppArgs) {
     getKitchenMode: () => kitchenMode,
     getModuleLocalBackCenter,
     isModuleAlignLocked: (id) => isObjectInLockedAlignLock(S.alignLocks, "module", id),
+    isMobileAdditiveSelection: () => mobileAdditiveSelection,
+    consumeMobileAdditiveSelection: () => { mobileAdditiveSelection = false; },
     setSelectedKitchenGroup,
     setSelectedModule
   });
@@ -4075,6 +4140,7 @@ export function startApp(initialArgs: AppArgs) {
       await recoveryStore.deleteActive(activeRecoveryScope);
     }
   });
+  mobileSaveProject = () => projectMenuActions.saveProject();
   tb.getQuickAction("save")?.addEventListener("click", () => {
     void projectMenuActions.saveProject();
   });
@@ -4199,15 +4265,20 @@ export function startApp(initialArgs: AppArgs) {
     onLanguageChange: (language) => companyLanguageController.changeLanguage(language)
   });
 
-  const ro = new ResizeObserver(() => {
+  const resizeRendererForViewport = () => {
     const w = args.viewerEl.clientWidth;
     const h = args.viewerEl.clientHeight;
     setSize(w, h);
     temporaryDimensions.setSize(w, h);
     ssgi?.setSize(w, h);
     photo?.setSize(w, h);
-  });
+  };
+  const ro = new ResizeObserver(resizeRendererForViewport);
   ro.observe(args.viewerEl);
+  const renderLifecycle = createRenderLifecycleController({
+    canvas: renderer.domElement,
+    onResume: resizeRendererForViewport
+  });
 
   // Quick edit dimension value (double click)
   renderer.domElement.addEventListener("dblclick", (ev) => {
@@ -4341,7 +4412,7 @@ export function startApp(initialArgs: AppArgs) {
     validateModule
   });
 
-  installKeyboardInputHandlers({
+  const keyboardInputController = installKeyboardInputHandlers({
     S,
     get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
     addWall,
@@ -4470,6 +4541,8 @@ export function startApp(initialArgs: AppArgs) {
     beginKitchenWorktopSelection,
     findSelectableFloorplanWorktopAtPoint,
     beginModuleSelection,
+    isMobileAdditiveSelection: () => mobileAdditiveSelection,
+    consumeMobileAdditiveSelection: () => { mobileAdditiveSelection = false; },
     updateSelectionHover,
     bindingFromPlanSnap,
     get cabinetGroup() { return cabinetGroup; }, set cabinetGroup(next) { cabinetGroup = next; },
@@ -4668,6 +4741,31 @@ export function startApp(initialArgs: AppArgs) {
     worldToScreen
   });
 
+  const resolveCurrentActiveContextCommand = () => resolveActiveContextCommand({
+    layoutTool,
+    transformKind: transformState.kind,
+    transformMoveSnapDisabled: transformState.moveSnapDisabled,
+    floorBoundaryActive: floorEdit.active,
+    placementActive: placement.active,
+    columnPlacementActive: isColumnPlacementActive(),
+    windowPlacementActive: isWindowPlacementActive(),
+    doorPlacementActive: isDoorPlacementActive(),
+    kitchenWorktopActive: kitchenWorktopDraw.active,
+    orthoEnabled: drawOrthoEnabled,
+    cancelTransform: () => clearTransform(),
+    cancelFloorBoundary: discardFloorBoundaryEdit,
+    finishFloorBoundary: finishFloorBoundaryEdit,
+    cancelPlacement: () => cancelPlacement(S, placementHelpers),
+    cancelColumnPlacement: () => { cancelColumnPlacement(); },
+    cancelWindowPlacement: () => { cancelWindowPlacement(); },
+    cancelDoorPlacement: () => { cancelDoorPlacement(); },
+    cancelKitchenWorktop: () => cancelKitchenWorktopDraw(),
+    cancelLayoutTool: setToolSelect,
+    rotatePlacement: () => { rotateActivePlacement(S, placementHelpers); },
+    toggleMoveSnap: () => { transformState.moveSnapDisabled = !transformState.moveSnapDisabled; },
+    toggleOrtho: toggleDrawOrthoMode
+  });
+
   const editorContextMenuController = createEditorContextMenuController({
     canvas: renderer.domElement,
     menu: getAppContextMenuController(),
@@ -4679,29 +4777,7 @@ export function startApp(initialArgs: AppArgs) {
       selectionCount: selectedInstanceIds.size + selectedWallIds.size || (selectedKind ? 1 : 0),
       hasHiddenObjects: visibilityController.hasHiddenObjects(),
       selectedHasHidden: visibilityController.selectedHasHidden(),
-      activeCommand: resolveActiveContextCommand({
-        layoutTool,
-        transformKind: transformState.kind,
-        transformMoveSnapDisabled: transformState.moveSnapDisabled,
-        floorBoundaryActive: floorEdit.active,
-        placementActive: placement.active,
-        columnPlacementActive: isColumnPlacementActive(),
-        windowPlacementActive: isWindowPlacementActive(),
-        doorPlacementActive: isDoorPlacementActive(),
-        kitchenWorktopActive: kitchenWorktopDraw.active,
-        orthoEnabled: drawOrthoEnabled,
-        cancelTransform: () => clearTransform(),
-        cancelFloorBoundary: discardFloorBoundaryEdit,
-        finishFloorBoundary: finishFloorBoundaryEdit,
-        cancelPlacement: () => cancelPlacement(S, placementHelpers),
-        cancelColumnPlacement: () => { cancelColumnPlacement(); },
-        cancelWindowPlacement: () => { cancelWindowPlacement(); },
-        cancelDoorPlacement: () => { cancelDoorPlacement(); },
-        cancelKitchenWorktop: () => cancelKitchenWorktopDraw(),
-        cancelLayoutTool: setToolSelect,
-        toggleMoveSnap: () => { transformState.moveSnapDisabled = !transformState.moveSnapDisabled; },
-        toggleOrtho: toggleDrawOrthoMode
-      })
+      activeCommand: resolveCurrentActiveContextCommand()
     }),
     resolveCanvasTarget: pointerInputHandlers.resolveContextTarget,
     openProperties: mountProps,
@@ -4724,6 +4800,11 @@ export function startApp(initialArgs: AppArgs) {
   const appContextMenuRoot = document.getElementById("app");
   if (appContextMenuRoot) {
     getAppContextMenuController().register(appContextMenuRoot, () => editorContextMenuController.resolveGlobalItems());
+    createMobileCommandHudController({
+      root: appContextMenuRoot,
+      getActiveCommand: resolveCurrentActiveContextCommand,
+      applyNumericValue: keyboardInputController.applyNumericValue
+    });
   }
 
   createViewModeControllerResult = createViewModeController({
@@ -5332,6 +5413,10 @@ export function startApp(initialArgs: AppArgs) {
   };
 
   const tick = () => {
+    if (!renderLifecycle.canRender()) {
+      requestAnimationFrame(tick);
+      return;
+    }
     const dt = Math.min(0.05, navClock.getDelta());
     visibilityController.sync();
     kitchenMode?.syncPlanPresentation?.();

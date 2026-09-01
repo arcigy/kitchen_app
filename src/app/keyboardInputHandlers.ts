@@ -1293,4 +1293,31 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
   window.addEventListener("keydown", (ev) => {
     runKeyboardInputCommand(ctx, ev);
   });
+
+  const applyNumericValue = (raw: string) => {
+    const normalized = raw.trim().replace(",", ".");
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) return false;
+    const keys = [...normalized, "Enter"];
+    if (ctx.S.kitchenEditMode && ctx.kitchenWorktopDraw.active && ctx.mode === "layout" && ctx.viewMode === "2d") {
+      ctx.kitchenWorktopDraw.typedMm = "";
+      return keys.every((key) => runKitchenWorktopTypedInputCommand(ctx, { key }));
+    }
+    if (ctx.transformState.kind) {
+      ctx.transformState.typed = "";
+      return keys.every((key) => runLayoutTransformKeyboardCommand(ctx, {
+        key,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault: () => undefined
+      }));
+    }
+    if (ctx.layoutTool === "wall" && ctx.wallDraw.active && ctx.wallDraw.a && ctx.viewMode === "2d") {
+      ctx.wallDraw.typedMm = "";
+      return keys.every((key) => runWallTypedLengthCommand(ctx, { key }));
+    }
+    return false;
+  };
+
+  return { applyNumericValue };
 }
