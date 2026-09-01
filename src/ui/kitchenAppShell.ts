@@ -47,6 +47,7 @@ const navItems: Array<{ id: string; label: string; iconId: ActionIconId }> = [
 export function renderKitchenAppShell(root: HTMLElement): void {
   root.className = "archux-app";
   root.innerHTML = `
+    <header id="ribbon" aria-label="${t("Ribbon toolbar")}"></header>
     <header class="arcigy-mobile-header" data-mobile-header aria-label="${t("Mobile workspace header")}">
       <button type="button" data-mobile-projects aria-label="${t("Projects")}">‹</button>
       <div class="arcigy-mobile-header__title">
@@ -61,7 +62,6 @@ export function renderKitchenAppShell(root: HTMLElement): void {
         </div>
       </div>
     </header>
-    <header id="ribbon" aria-label="${t("Ribbon toolbar")}"></header>
 
     <div id="main" class="archux-main" role="main">
       <nav class="archux-side-nav" aria-label="${t("Main navigation")}">

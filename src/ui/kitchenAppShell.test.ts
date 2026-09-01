@@ -26,6 +26,18 @@ describe("kitchen app bottom bar", () => {
     expect(root.querySelector("[data-mobile-save]")).not.toBeNull();
   });
 
+  it("keeps desktop ribbon controls before hidden mobile controls in document order", () => {
+    const root = document.createElement("div");
+
+    renderKitchenAppShell(root);
+
+    const ribbon = root.querySelector("#ribbon");
+    const mobileHeader = root.querySelector("[data-mobile-header]");
+    expect(ribbon).not.toBeNull();
+    expect(mobileHeader).not.toBeNull();
+    expect(Boolean(ribbon?.compareDocumentPosition(mobileHeader) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+
   it("keeps the view cube orbit without compass letters", () => {
     const root = document.createElement("div");
 
