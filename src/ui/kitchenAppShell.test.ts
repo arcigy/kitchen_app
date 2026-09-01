@@ -33,9 +33,8 @@ describe("kitchen app bottom bar", () => {
 
     const ribbon = root.querySelector("#ribbon");
     const mobileHeader = root.querySelector("[data-mobile-header]");
-    expect(ribbon).not.toBeNull();
-    expect(mobileHeader).not.toBeNull();
-    expect(Boolean(ribbon?.compareDocumentPosition(mobileHeader) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    if (!ribbon || !mobileHeader) throw new Error("Expected ribbon and mobile header");
+    expect(Boolean(ribbon.compareDocumentPosition(mobileHeader) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 
   it("keeps the view cube orbit without compass letters", () => {
