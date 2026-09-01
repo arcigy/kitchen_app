@@ -6,6 +6,37 @@ import { describe, expect, it } from "vitest";
 import { renderKitchenAppShell } from "./kitchenAppShell";
 
 describe("kitchen app bottom bar", () => {
+  it("offers every desktop workspace from the compact mobile workspace switcher", () => {
+    const root = document.createElement("div");
+
+    renderKitchenAppShell(root);
+
+    expect(Array.from(root.querySelectorAll<HTMLButtonElement>("[data-mobile-workspace]")).map((button) => button.dataset.mobileWorkspace)).toEqual([
+      "design",
+      "sheets",
+      "documents",
+      "visualisation",
+      "schedules",
+      "margins",
+      "materials",
+      "settings"
+    ]);
+    expect(root.querySelector<HTMLButtonElement>("[data-mobile-workspace-toggle]")?.getAttribute("aria-expanded")).toBe("false");
+    expect(root.querySelector("[data-mobile-project-overview]")).not.toBeNull();
+    expect(root.querySelector("[data-mobile-save]")).not.toBeNull();
+  });
+
+  it("keeps desktop ribbon controls before hidden mobile controls in document order", () => {
+    const root = document.createElement("div");
+
+    renderKitchenAppShell(root);
+
+    const ribbon = root.querySelector("#ribbon");
+    const mobileHeader = root.querySelector("[data-mobile-header]");
+    if (!ribbon || !mobileHeader) throw new Error("Expected ribbon and mobile header");
+    expect(Boolean(ribbon.compareDocumentPosition(mobileHeader) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+
   it("keeps the view cube orbit without compass letters", () => {
     const root = document.createElement("div");
 

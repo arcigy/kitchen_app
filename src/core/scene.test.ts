@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { SCENE_RENDERER_OPTIONS } from "./scene";
+import { resolveRendererPixelRatio } from "./scene";
 
-describe("scene renderer options", () => {
-  it("keeps the rendered framebuffer available for feedback screenshots", () => {
-    expect(SCENE_RENDERER_OPTIONS.preserveDrawingBuffer).toBe(true);
+describe("renderer pixel ratio", () => {
+  it("caps touch rendering below the desktop cap while preserving normal displays", () => {
+    expect(resolveRendererPixelRatio(3, true)).toBe(1.5);
+    expect(resolveRendererPixelRatio(3, false)).toBe(2);
+    expect(resolveRendererPixelRatio(1.25, true)).toBe(1.25);
   });
 });

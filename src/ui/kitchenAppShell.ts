@@ -48,6 +48,20 @@ export function renderKitchenAppShell(root: HTMLElement): void {
   root.className = "archux-app";
   root.innerHTML = `
     <header id="ribbon" aria-label="${t("Ribbon toolbar")}"></header>
+    <header class="arcigy-mobile-header" data-mobile-header aria-label="${t("Mobile workspace header")}">
+      <button type="button" data-mobile-projects aria-label="${t("Projects")}">‹</button>
+      <div class="arcigy-mobile-header__title">
+        <strong>${t("Arcigy project")}</strong>
+        <span aria-live="polite">${t("Workspace ready")}</span>
+      </div>
+      <button type="button" class="arcigy-mobile-save" data-mobile-save aria-label="${t("Save project")}">${t("Save")}</button>
+      <div class="arcigy-mobile-workspace-switcher">
+        <button type="button" data-mobile-workspace-toggle aria-haspopup="menu" aria-expanded="false">${t("Design")} ▾</button>
+        <div class="arcigy-mobile-workspace-menu" data-mobile-workspace-menu role="menu" hidden>
+          ${navItems.map((item) => `<button type="button" role="menuitem" data-mobile-workspace="${item.id}">${t(item.label)}</button>`).join("")}
+        </div>
+      </div>
+    </header>
 
     <div id="main" class="archux-main" role="main">
       <nav class="archux-side-nav" aria-label="${t("Main navigation")}">
@@ -208,5 +222,40 @@ export function renderKitchenAppShell(root: HTMLElement): void {
         </section>
       </footer>
     </div>
+
+    <button class="arcigy-mobile-scrim" type="button" data-mobile-scrim aria-label="${t("Close panel")}" hidden></button>
+    <section class="arcigy-mobile-command-sheet" data-mobile-command-sheet aria-label="${t("All commands")}">
+      <header>
+        <strong>${t("All commands")}</strong>
+        <button type="button" data-mobile-multi-select aria-pressed="false">${t("Multi-select")}</button>
+        <button type="button" data-mobile-project-overview>${t("Project overview")}</button>
+        <button type="button" data-mobile-sheet-close aria-label="${t("Close")}">×</button>
+      </header>
+      <label class="arcigy-mobile-command-search">
+        <span>${t("Search commands")}</span>
+        <input type="search" data-mobile-command-search placeholder="${t("Search commands")}" autocomplete="off" />
+      </label>
+      <div class="arcigy-mobile-command-list" data-mobile-command-list></div>
+    </section>
+
+    <div class="arcigy-mobile-command-hud" data-mobile-command-hud role="toolbar" aria-label="${t("Active command")}">
+      <strong data-mobile-hud-label></strong>
+      <label class="arcigy-mobile-hud-value"><span>${t("Value")}</span><input type="text" inputmode="decimal" data-mobile-hud-value aria-label="${t("Numeric value")}" /></label>
+      <button type="button" data-mobile-hud-apply>${t("Apply")}</button>
+      <button type="button" data-mobile-hud-back>${t("Back")}</button>
+      <button type="button" data-mobile-hud-snap>Snap</button>
+      <button type="button" data-mobile-hud-ortho>Ortho</button>
+      <button type="button" data-mobile-hud-alternate></button>
+      <button type="button" data-mobile-hud-finish>${t("Finish")}</button>
+      <button type="button" data-mobile-hud-cancel>${t("Cancel")}</button>
+    </div>
+
+    <nav class="arcigy-mobile-dock" data-mobile-dock aria-label="${t("Mobile editor controls")}">
+      <button type="button" data-mobile-panel="commands" aria-expanded="false"><b data-mobile-active-tool>${t("Select")}</b><span>${t("Tool")}</span></button>
+      <button type="button" data-mobile-command="undo"><b>↶</b><span>${t("Undo")}</span></button>
+      <button type="button" data-mobile-command="redo"><b>↷</b><span>${t("Redo")}</span></button>
+      <button type="button" data-mobile-panel="properties" aria-expanded="false"><b>☷</b><span>${t("Properties")}</span></button>
+      <button type="button" data-mobile-panel="commands" aria-expanded="false"><b>•••</b><span>${t("More")}</span></button>
+    </nav>
   `;
 }

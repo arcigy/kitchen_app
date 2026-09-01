@@ -9,6 +9,7 @@ import "./styles/classicEditorChrome.css";
 import "./styles/contextMenu.css";
 import "./style.css";
 import "./styles/chatbot.css";
+import "./styles/mobileEditor.css";
 import { renderKitchenAppShell } from "./ui/kitchenAppShell";
 import { createChatbotDock, renderChatbotOnly } from "./ui/chatbot/chatbotShell";
 import type { ClientContext } from "./core/client/client-context";

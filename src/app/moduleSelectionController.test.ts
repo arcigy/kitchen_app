@@ -58,4 +58,24 @@ describe("module selection controller", () => {
     expect(dragState.id).toBeNull();
     expect(setPointerCapture).not.toHaveBeenCalled();
   });
+
+  it("consumes the one-shot mobile additive selection after adding a module", () => {
+    const inst = moduleInstance("m1");
+    const setSelectedModule = vi.fn();
+    const consumeMobileAdditiveSelection = vi.fn();
+    const controller = createModuleSelectionController({
+      instances: [inst], pinnedInstanceIds: new Set(), raycaster: new THREE.Raycaster(), groundPlane: new THREE.Plane(),
+      renderer: { domElement: {} } as THREE.WebGLRenderer,
+      dragState: { active: false, id: null, offset: new THREE.Vector3(), lastValid: new THREE.Vector3() },
+      marquee: { active: false, pending: false, pointerId: null, hitSomething: false }, marqueeEl: { style: { display: "" } } as HTMLElement,
+      findInstance: () => inst, getCamera: () => new THREE.OrthographicCamera(), getMode: () => "layout", getViewMode: () => "2d",
+      getKitchenEditMode: () => false, getKitchenMode: () => null, getModuleLocalBackCenter: () => new THREE.Vector3(),
+      setSelectedKitchenGroup: vi.fn(), setSelectedModule, isMobileAdditiveSelection: () => true, consumeMobileAdditiveSelection
+    });
+
+    controller.beginModuleSelection("m1", { pointerId: 7, shiftKey: false, ctrlKey: false, metaKey: false } as PointerEvent);
+
+    expect(setSelectedModule).toHaveBeenCalledWith("m1", { additive: true });
+    expect(consumeMobileAdditiveSelection).toHaveBeenCalledOnce();
+  });
 });
