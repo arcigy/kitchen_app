@@ -10,6 +10,7 @@ import "./styles/contextMenu.css";
 import "./style.css";
 import "./styles/chatbot.css";
 import "./styles/mobileEditor.css";
+import "./styles/userActivity.css";
 import { renderKitchenAppShell } from "./ui/kitchenAppShell";
 import { createChatbotDock, renderChatbotOnly } from "./ui/chatbot/chatbotShell";
 import type { ClientContext } from "./core/client/client-context";
@@ -18,6 +19,7 @@ import type { ProjectMetadata } from "./core/project/project-types";
 import type { ProjectSaveFile } from "./core/project-save/project-save-types";
 import { browserJourneyNow, reportBrowserJourney, type BrowserJourneyMetric } from "./app/clientJourneyTelemetry";
 import { sampleBrowserRuntimeMemory, startBrowserRuntimeTelemetry } from "./app/browserRuntimeTelemetry";
+import { startUserActivityTracking } from "./app/userActivityTracker";
 import { installStaleAssetRecovery } from "./app/staleAssetRecovery";
 import { installIconTooltips } from "./ui/iconTooltips";
 import { mountLoadingSkeleton, type LoadingSkeletonHandle } from "./ui/loadingSkeleton";
@@ -115,6 +117,7 @@ async function start(): Promise<void> {
   const session = await requireClientSession(appRoot);
   const clientContext = createClientContext(session);
   startBrowserRuntimeTelemetry();
+  void startUserActivityTracking();
   setBootStatus("Prihlásenie potvrdené");
 
   if (window.location.pathname === "/material-proof") {

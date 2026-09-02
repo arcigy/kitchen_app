@@ -5,12 +5,14 @@ import process from "node:process";
 import { requireClientContextFromCookie } from "../core/client/session-cookie";
 import type { UserService } from "../core/auth/user-service";
 import type { AuthSessionStore } from "../core/auth/auth-session-store";
+import type { UserActivityRepository } from "../core/user-activity/user-activity-types";
 import { createStorageService, readScopedStorageFile } from "../core/storage/storageService";
 import { createServerProjectRepository } from "./projectRepository";
 import {
   createServerAuthSessionStore,
   createServerCatalogRepository,
   createServerModulePackageRepository,
+  createServerUserActivityRepository,
   createServerUserService
 } from "./serverRepositories";
 import { runBlenderExport } from "./blender/runBlenderExport";
@@ -28,6 +30,7 @@ import { assertWorkerRuntimeEnvironment } from "./workerRuntimeEnvironment";
 import { ClientCatalogBootstrapResponseCache } from "./clientCatalogBootstrapResponseCache";
 import { ClientModulePackagesResponseCache } from "./clientModulePackagesResponseCache";
 import { isBlenderDesktopOpenAllowed, openFileInDesktop, resolveTenantBlenderOutputPath } from "./blender/blenderOutputAccess";
+import { startUserActivityReconciliation } from "./userActivityReconciliation";
 
 const DEFAULT_PROJECT_ROOT = process.cwd();
 type WorkerServerDependencies = {
@@ -35,6 +38,7 @@ type WorkerServerDependencies = {
   authSessionStore?: AuthSessionStore;
   projectRoot?: string;
   requestBudget?: HttpRequestBudget;
+  userActivityRepository?: UserActivityRepository;
 };
 
 const readJsonBody = readJsonRequestBody;
@@ -529,6 +533,8 @@ export function startWorkerServer(
   const requestMetrics = createHttpRequestMetrics();
   const clientJourneyMetrics = createClientJourneyMetrics();
   const requestBudget = dependencies.requestBudget ?? createHttpRequestBudget();
+  const userActivityRepository = dependencies.userActivityRepository ?? createServerUserActivityRepository();
+  const stopUserActivityReconciliation = startUserActivityReconciliation(userActivityRepository);
   const getClientContext = (cookieHeader: string | string[] | undefined) =>
     getValidatedClientContext(cookieHeader, userService, authSessionStore);
   const server = http.createServer(createWorkerRequestHandler({
@@ -552,6 +558,7 @@ export function startWorkerServer(
       clientCatalogBootstrapResponseCache,
       clientModulePackagesResponseCache,
       catalogLookupCache,
+      userActivityRepository,
       createCatalogRepository: () => createServerCatalogRepository(projectRoot),
       createModulePackageRepository: () => createServerModulePackageRepository(projectRoot),
       handleCatalog: (request, response) => handleCatalog(request, response, userService, authSessionStore, projectRoot),
@@ -569,6 +576,7 @@ export function startWorkerServer(
   }));
 
   server.once("close", () => {
+    stopUserActivityReconciliation();
     catalogLookupCache.dispose();
     clientCatalogBootstrapResponseCache.clear();
     clientModulePackagesResponseCache.clear();

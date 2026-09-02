@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_activity_presence_search" model="ir.ui.view">
+        <field name="name">arcigy.user.activity.presence.search</field>
+        <field name="model">arcigy.user.activity.presence</field>
+        <field name="arch" type="xml">
+            <search string="User Presence">
+                <field name="user_external_id"/>
+                <field name="client_external_id"/>
+                <field name="state"/>
+                <field name="environment"/>
+                <filter name="active" string="Active" domain="[('state', '=', 'active')]"/>
+                <filter name="idle" string="Idle" domain="[('state', '=', 'idle')]"/>
+                <filter name="offline" string="Offline" domain="[('state', '=', 'offline')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_client" string="Client" context="{'group_by': 'client_external_id'}"/>
+                    <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
+                    <filter name="group_environment" string="Environment" context="{'group_by': 'environment'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_activity_presence_list" model="ir.ui.view">
+        <field name="name">arcigy.user.activity.presence.list</field>
+        <field name="model">arcigy.user.activity.presence</field>
+        <field name="arch" type="xml">
+            <list string="Current User Presence" create="0" edit="0" delete="0"
+                  decoration-success="state == 'active'" decoration-warning="state == 'idle'" decoration-muted="state == 'offline'">
+                <field name="user_external_id" string="User"/>
+                <field name="client_external_id" string="Client"/>
+                <field name="state"/>
+                <field name="environment"/>
+                <field name="last_seen_at"/>
+                <field name="source_updated_at" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_activity_presence_form" model="ir.ui.view">
+        <field name="name">arcigy.user.activity.presence.form</field>
+        <field name="model">arcigy.user.activity.presence</field>
+        <field name="arch" type="xml">
+            <form string="User Presence" create="0" edit="0" delete="0">
+                <sheet>
+                    <group>
+                        <field name="user_external_id"/>
+                        <field name="client_external_id"/>
+                        <field name="state"/>
+                        <field name="environment"/>
+                        <field name="last_seen_at"/>
+                        <field name="source_updated_at"/>
+                        <field name="external_key" groups="base.group_system"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_activity_daily_search" model="ir.ui.view">
+        <field name="name">arcigy.user.activity.daily.search</field>
+        <field name="model">arcigy.user.activity.daily</field>
+        <field name="arch" type="xml">
+            <search string="Daily User Activity">
+                <field name="user_external_id"/>
+                <field name="client_external_id"/>
+                <field name="activity_date"/>
+                <field name="environment"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_user" string="User" context="{'group_by': 'user_external_id'}"/>
+                    <filter name="group_client" string="Client" context="{'group_by': 'client_external_id'}"/>
+                    <filter name="group_day" string="Day" context="{'group_by': 'activity_date:day'}"/>
+                    <filter name="group_month" string="Month" context="{'group_by': 'activity_date:month'}"/>
+                    <filter name="group_environment" string="Environment" context="{'group_by': 'environment'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_activity_daily_list" model="ir.ui.view">
+        <field name="name">arcigy.user.activity.daily.list</field>
+        <field name="model">arcigy.user.activity.daily</field>
+        <field name="arch" type="xml">
+            <list string="Daily User Activity" create="0" edit="0" delete="0">
+                <field name="activity_date"/>
+                <field name="environment"/>
+                <field name="user_external_id" string="User"/>
+                <field name="client_external_id" string="Client"/>
+                <field name="active_hours" sum="Total hours"/>
+                <field name="session_count" sum="Sessions"/>
+                <field name="first_active_at"/>
+                <field name="last_active_at"/>
+                <field name="time_zone" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_activity_daily_pivot" model="ir.ui.view">
+        <field name="name">arcigy.user.activity.daily.pivot</field>
+        <field name="model">arcigy.user.activity.daily</field>
+        <field name="arch" type="xml">
+            <pivot string="Daily User Activity">
+                <field name="user_external_id" type="row"/>
+                <field name="environment" type="row"/>
+                <field name="activity_date" type="col" interval="day"/>
+                <field name="active_hours" type="measure"/>
+                <field name="session_count" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_activity_interval_list" model="ir.ui.view">
+        <field name="name">arcigy.user.activity.interval.list</field>
+        <field name="model">arcigy.user.activity.interval</field>
+        <field name="arch" type="xml">
+            <list string="User Activity Intervals" create="0" edit="0" delete="0">
+                <field name="started_at"/>
+                <field name="environment"/>
+                <field name="ended_at"/>
+                <field name="user_external_id" string="User"/>
+                <field name="client_external_id" string="Client"/>
+                <field name="active_hours" sum="Total hours"/>
+                <field name="activity_date"/>
+                <field name="time_zone" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_activity_presence" model="ir.actions.act_window">
+        <field name="name">Current Presence</field>
+        <field name="res_model">arcigy.user.activity.presence</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_activity_presence_search"/>
+    </record>
+    <record id="action_activity_daily" model="ir.actions.act_window">
+        <field name="name">Daily Activity</field>
+        <field name="res_model">arcigy.user.activity.daily</field>
+        <field name="view_mode">list,pivot</field>
+        <field name="search_view_id" ref="view_activity_daily_search"/>
+    </record>
+    <record id="action_activity_intervals" model="ir.actions.act_window">
+        <field name="name">Activity Intervals</field>
+        <field name="res_model">arcigy.user.activity.interval</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <menuitem id="menu_user_activity_root" name="Arcigy Activity" sequence="70"
+              groups="arcigy_user_activity.group_user_activity_manager"/>
+    <menuitem id="menu_activity_presence" name="Current Presence" parent="menu_user_activity_root"
+              action="action_activity_presence" sequence="10"/>
+    <menuitem id="menu_activity_daily" name="Daily Activity" parent="menu_user_activity_root"
+              action="action_activity_daily" sequence="20"/>
+    <menuitem id="menu_activity_intervals" name="Intervals" parent="menu_user_activity_root"
+              action="action_activity_intervals" sequence="30"/>
+</odoo>
