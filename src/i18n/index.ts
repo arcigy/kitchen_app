@@ -33,7 +33,11 @@ const EXACT_CS_TEXT: Record<string, string> = {
   "Open assistant": "Otevřít asistenta", "Arcigy assistant": "Asistent Arcigy", "Close assistant": "Zavřít asistenta",
   "Assistant message": "Zpráva pro asistenta", "Send message": "Odeslat zprávu", "Add attachment": "Přidat přílohu",
   "Preview context": "Náhled kontextu", Voice: "Hlas", "Assistant options": "Možnosti asistenta",
-  "Arcigy kitchen offer": "Nabídka kuchyně Arcigy", Generated: "Vygenerováno", Page: "Strana"
+  "Arcigy kitchen offer": "Nabídka kuchyně Arcigy", Generated: "Vygenerováno", Page: "Strana",
+  "Activity tracking: active": "Evidence aktivity: aktivní",
+  "Activity tracking: idle": "Evidence aktivity: nečinný",
+  "Activity tracking: outside the app": "Evidence aktivity: mimo aplikaci",
+  "Arcigy records foreground activity and idle intervals for this signed-in account. It does not capture typed text, pointer coordinates, screenshots, project contents, or customer data.": "Arcigy eviduje aktivitu v popředí a intervaly nečinnosti tohoto přihlášeného účtu. Nezachytává psaný text, souřadnice ukazatele, snímky obrazovky, obsah projektů ani zákaznická data."
 };
 
 const EXACT_SK_TEXT: Record<string, string> = {
@@ -110,6 +114,10 @@ const EXACT_SK_TEXT: Record<string, string> = {
   "Sheet preview": "Náhľad výkresu",
   "A101 - Floor plan level 1": "A101 – Pôdorys úrovne 1",
   "Recent activity": "Nedávna aktivita",
+  "Activity tracking: active": "Evidencia aktivity: aktívny",
+  "Activity tracking: idle": "Evidencia aktivity: nečinný",
+  "Activity tracking: outside the app": "Evidencia aktivity: mimo aplikácie",
+  "Arcigy records foreground activity and idle intervals for this signed-in account. It does not capture typed text, pointer coordinates, screenshots, project contents, or customer data.": "Arcigy eviduje aktivitu v popredí a intervaly nečinnosti tohto prihláseného účtu. Nezachytáva písaný text, súradnice ukazovateľa, snímky obrazovky, obsah projektov ani zákaznícke dáta.",
   "No recent changes": "Žiadne nedávne zmeny",
   now: "teraz",
   "0 changes": "0 zmien",
