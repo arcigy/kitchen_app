@@ -1,4 +1,4 @@
-import type { ProjectMaterialsView } from "../../../src/core/project-materials/project-material-types";
+import type { ProjectMaterialWarning, ProjectMaterialsView } from "../../../src/core/project-materials/project-material-types";
 import type { SupplierId } from "../../../src/core/supplier-bridge/supplier-bridge-types";
 import {
   attachSupplierBridgeSession,
@@ -34,6 +34,7 @@ type AssignmentDependencies = {
 export type ExtensionAssignmentResult = {
   sessionId: string;
   materials: ProjectMaterialsView | null;
+  warnings: ProjectMaterialWarning[];
   refreshError: unknown | null;
 };
 
@@ -80,10 +81,15 @@ export async function runExtensionAssignment(
 
   try {
     const materials = await deps.loadMaterials(input.baseUrl, input.accessToken, input.projectId);
-    return { sessionId: creation.view.session.id, materials, refreshError: null };
+    return {
+      sessionId: creation.view.session.id,
+      materials,
+      warnings: (materials.warnings ?? []).filter((warning) => warning.affectedObjectId === input.target.id && warning.id.startsWith("supplier-")),
+      refreshError: null
+    };
   } catch (refreshError) {
     // Confirmation is the commit boundary. A failed read-after-write must never be
     // presented as a failed assignment or encourage the user to submit a duplicate.
-    return { sessionId: creation.view.session.id, materials: null, refreshError };
+    return { sessionId: creation.view.session.id, materials: null, warnings: [], refreshError };
   }
 }

@@ -284,6 +284,7 @@ import { createWallEditDragController } from "./app/wallEditDragController";
 import { createViewPropertiesController } from "./app/viewPropertiesController";
 import { createModuleSelectionController } from "./app/moduleSelectionController";
 import { syncProjectMaterialAssignmentsToLayout } from "./app/projectMaterialLayoutSync";
+import { createProjectMaterialRuntimeCatalog } from "./app/projectMaterialRuntimeCatalog";
 import { createLayoutActionsController } from "./app/layoutActionsController";
 import { createWindowInstanceController } from "./app/windowInstanceController";
 import { createDoorInstanceController } from "./app/doorInstanceController";
@@ -313,7 +314,8 @@ import { showToast } from "./ui/toast";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
-  const clientCatalog = args.clientCatalog;
+  const projectMaterialRuntimeCatalog = createProjectMaterialRuntimeCatalog(args.clientCatalog);
+  const clientCatalog = projectMaterialRuntimeCatalog.catalog;
   const modulePackages = args.modulePackages;
   let projectMaterialAssignments: ProjectMaterialAssignmentsState = createEmptyProjectMaterialAssignmentsState();
   let projectMarginSettings: ProjectMarginSettingsState = createDefaultProjectMarginSettingsState();
@@ -2377,6 +2379,7 @@ export function startApp(initialArgs: AppArgs) {
       if (!state) return;
       projectMaterialAssignments = cloneJson(state);
       S.projectMaterialAssignments = cloneJson(state);
+      projectMaterialRuntimeCatalog.applyProjectAssignments(projectMaterialAssignments);
       materialsPhaseController?.restoreSaveState(state);
     },
     clearToolHud,
@@ -3445,6 +3448,7 @@ export function startApp(initialArgs: AppArgs) {
     marginsPhaseController?.destroy();
     projectMaterialAssignments = cloneJson(appState.materialAssignments);
     S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
+    projectMaterialRuntimeCatalog.applyProjectAssignments(projectMaterialAssignments);
     projectMarginSettings = normalizeProjectMarginSettingsState(appState.quoteSettings);
     const layout = appState.layout as {
       snapshot?: unknown;
@@ -3492,6 +3496,7 @@ export function startApp(initialArgs: AppArgs) {
     S.activeKitchenGroupId = null;
     if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
     S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
+    projectMaterialRuntimeCatalog.applyProjectAssignments(projectMaterialAssignments);
     materialsPhaseController?.restoreSaveState(projectMaterialAssignments);
     if (!layout?.snapshot) throw new Error("Project save is missing layout snapshot.");
     restoreLayoutSnapshot(S, helpers, layout.snapshot as Parameters<typeof restoreLayoutSnapshot>[2]);
@@ -3885,6 +3890,7 @@ export function startApp(initialArgs: AppArgs) {
   });
   if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
   S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
+  projectMaterialRuntimeCatalog.applyProjectAssignments(projectMaterialAssignments);
   const applyCommittedProjectMaterialAssignments = (assignments: ProjectMaterialAssignmentsState) => {
     const result = syncProjectMaterialAssignmentsToLayout({
       catalog: clientCatalog,
@@ -3928,6 +3934,7 @@ export function startApp(initialArgs: AppArgs) {
     onViewChanged: (view) => {
       projectMaterialAssignments = cloneJson(view.assignments);
       S.projectMaterialAssignments = cloneJson(view.assignments);
+      projectMaterialRuntimeCatalog.applyProjectAssignments(view.assignments);
       materialWarningListEl.innerHTML = renderMaterialWarnings(view.warnings);
     },
     onAssignmentsCommitted: (assignments) => {
@@ -3968,6 +3975,7 @@ export function startApp(initialArgs: AppArgs) {
     onMaterialsChanged: (view) => {
       projectMaterialAssignments = cloneJson(view.assignments);
       S.projectMaterialAssignments = cloneJson(view.assignments);
+      projectMaterialRuntimeCatalog.applyProjectAssignments(view.assignments);
     },
     onMaterialsCommitted: (view) => {
       projectMaterialAssignments = cloneJson(view.assignments);

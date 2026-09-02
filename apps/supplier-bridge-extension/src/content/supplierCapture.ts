@@ -61,6 +61,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, _sender, sendResponse: (resp
             manufacturer: result.product.manufacturer,
             decorCode: result.product.decorCode,
             surfaceCode: result.product.surfaceCode,
+            previewColorHex: result.product.previewColorHex ?? null,
             productType: result.product.productType,
             thicknessMm: result.product.thicknessMm,
             widthMm: result.product.dimensions?.widthMm ?? null,

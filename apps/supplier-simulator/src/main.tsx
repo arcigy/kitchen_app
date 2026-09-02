@@ -12,7 +12,7 @@ type SimulatorLanguage = "sk" | "cs" | "en";
 
 type ProductData = {
   id: string; code: string; name: string; manufacturer: string; decor: string; surface: string; productType: string;
-  thickness: number; width: number; length: number; available: boolean; price: string | null; unit: string;
+  colorHex: string; thickness: number; width: number; length: number; available: boolean; price: string | null; unit: string;
 };
 
 function query(): URLSearchParams { return new URLSearchParams(window.location.search); }
@@ -36,6 +36,8 @@ function fixture(index = 0): ProductData {
   const manufacturer = params.get("manufacturer") || "Ficta Boards";
   const surface = params.get("surface") || "SM";
   const productType = params.get("productType") || "laminated-board";
+  const requestedColor = params.get("color") || "#B31B34";
+  const colorHex = /^#[0-9a-fA-F]{6}$/.test(requestedColor) ? requestedColor.toUpperCase() : "#B31B34";
   const parsedThickness = Number(params.get("thickness") || "18");
   return {
     id: `board-${index + 1}`,
@@ -45,6 +47,7 @@ function fixture(index = 0): ProductData {
     decor: index ? `${decor}-${index + 1}` : decor,
     surface,
     productType,
+    colorHex,
     thickness: Number.isFinite(parsedThickness) ? parsedThickness : 18,
     width: 2070,
     length: 2800,
@@ -70,9 +73,10 @@ function Product({ data, language, delayed = false, brokenSelector = false }: { 
   return <article className="product" {...attrs}
     data-product-code={data.code} data-display-name={data.name} data-manufacturer={data.manufacturer}
     data-decor-code={data.decor} data-surface-code={data.surface} data-product-type={data.productType}
+    data-preview-color-hex={data.colorHex}
     data-thickness-mm={data.thickness} data-width-mm={data.width} data-length-mm={data.length}
     data-availability={data.available ? "available" : "unavailable"}>
-    <div className="board" aria-hidden="true"><span>{data.decor}</span></div>
+    <div className="board" aria-hidden="true" style={{ backgroundColor: data.colorHex }}><span>{data.decor}</span></div>
     <div className="product__body"><div className="brand">{data.manufacturer}</div><h2 data-diagnostic-product-name>{data.name}</h2>
       <p className="code" data-diagnostic-product-code>{data.code}</p><p>{data.productType} · {data.thickness} mm · {data.width} × {data.length} mm</p>
       <p data-diagnostic-availability className={data.available ? "available" : "unavailable"}>{data.available ? copy(language, "Skladom", "Skladem", "Available") : copy(language, "Nedostupné", "Nedostupné", "Unavailable")}</p>
