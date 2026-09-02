@@ -50,7 +50,7 @@ jobs:
             -m POST \
             -d "$payload" \
             -o caprover-password-rotation.json
-          node -e 'const r=require("./caprover-password-rotation.json"); if (!r || r.status !== 100) process.exit(1); console.log("CapRover master password synchronized.")'
+          node -e 'const r=require("./caprover-password-rotation.json"); const summary={status:r?.status ?? null, description:String(r?.description ?? r?.message ?? "").replace(/[A-Za-z0-9_-]{24,}/g,"[REDACTED]").slice(0,300)}; console.log(JSON.stringify(summary)); if (!r || r.status !== 100) process.exit(1); console.log("CapRover master password synchronized.")'
           rm -f caprover-password-rotation.json
 
   diagnose-runtime:
