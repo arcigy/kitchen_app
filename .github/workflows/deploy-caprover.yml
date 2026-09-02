@@ -5,6 +5,12 @@ on:
     branches:
       - develop
   workflow_dispatch:
+    inputs:
+      diagnostics_only:
+        description: Read redacted runtime diagnostics without deploying
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -14,7 +20,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  diagnose-runtime:
+    if: github.event_name == 'workflow_dispatch' && inputs.diagnostics_only
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: develop
+    steps:
+      - name: Read redacted runtime startup diagnostics
+        env:
+          APP_NAME: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}
+          CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
+          CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f caprover-runtime-logs.json' EXIT
+
+          npx caprover@2.3.1 api \
+            -u "$CAPROVER_SERVER" \
+            -p "$CAPROVER_PASSWORD" \
+            -t "/user/apps/appData/${APP_NAME}/logs?encoding=utf-8" \
+            -m GET \
+            -d '{}' \
+            -o caprover-runtime-logs.json
+
+          node <<'NODE'
+          const payload = JSON.parse(require('node:fs').readFileSync('caprover-runtime-logs.json', 'utf8'));
+          const logs = String(payload?.data?.logs ?? '');
+          const redact = (line) => line
+            .replace(/(?:postgres(?:ql)?:\/\/)[^\s"']+/gi, '[REDACTED_DATABASE_URL]')
+            .replace(/\b(password|token|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
+            .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [REDACTED]');
+          const diagnostic = logs
+            .split(/\r?\n/)
+            .filter((line) => /\b(error|fatal|failed|exception|uncaught|err_|worker|nginx|tsx|node)\b/i.test(line))
+            .slice(-160)
+            .map(redact);
+          console.log(diagnostic.length ? diagnostic.join('\n') : 'No matching runtime error lines were returned by CapRover.');
+          NODE
+
   deploy:
+    if: github.event_name != 'workflow_dispatch' || !inputs.diagnostics_only
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: develop
