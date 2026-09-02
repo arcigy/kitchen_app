@@ -1591,7 +1591,94 @@ describe("multi-client worker isolation", () => {
         supplierProductCode: "MOCK-BRIDGE-001"
       }
     });
-  }, 30_000);
+
+    const assignExactBoard = async (
+      category: "corpus" | "worktop",
+      supplierProductCode: string,
+      previewColorHex: string,
+      thicknessMm: number
+    ): Promise<void> => {
+      const session = await requestWorker(controller!.port, `/api/projects/${projectId}/supplier-sync-sessions`, {
+        method: "POST",
+        cookie,
+        body: {
+          supplierId: "demos",
+          projectId,
+          lookups: [{
+            requestId: `bridge-${category}-${supplierProductCode}`,
+            projectId,
+            materialAssignmentId: `material-assignment:${category}`,
+            supplierId: "demos",
+            supplierProductId: supplierProductCode,
+            expectedProductType: category === "worktop" ? "worktop" : "board",
+            expectedThicknessMm: thicknessMm
+          }]
+        }
+      });
+      expect(session.status).toBe(201);
+      const sessionBody = session.body as {
+        bridgeToken: string;
+        view: { session: { id: string }; currentItem: { id: string } };
+      };
+      const attachment = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${sessionBody.view.session.id}/attach`, {
+        method: "POST",
+        body: { bridgeToken: sessionBody.bridgeToken }
+      });
+      expect(attachment.status).toBe(200);
+      const bridgeAccessToken = (attachment.body as { accessToken: string }).accessToken;
+      const candidate = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${sessionBody.view.session.id}/candidates`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${bridgeAccessToken}` },
+        body: {
+          submissionId: `capture-${category}-${supplierProductCode}`,
+          syncItemId: sessionBody.view.currentItem.id,
+          supplierProductCode,
+          normalizedProduct: {
+            displayName: `Bridge ${category} ${supplierProductCode}`,
+            manufacturer: "Arcigy Test",
+            decorCode: supplierProductCode,
+            surfaceCode: "MAT",
+            previewColorHex,
+            productType: category === "worktop" ? "worktop" : "board",
+            thicknessMm,
+            widthMm: 2_070,
+            lengthMm: 2_800,
+            availability: "available"
+          },
+          sourcePageType: "product",
+          sourcePath: `/product/${supplierProductCode.toLowerCase()}`,
+          observedAt: "2026-09-02T12:00:00.000Z",
+          price: null
+        }
+      });
+      expect(candidate.status).toBe(201);
+      const candidateId = (candidate.body as { candidate: { id: string } }).candidate.id;
+      const confirmation = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${sessionBody.view.session.id}/confirm`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${bridgeAccessToken}` },
+        body: { syncItemId: sessionBody.view.currentItem.id, candidateId }
+      });
+      expect(confirmation.status).toBe(200);
+    };
+
+    // These are the same three Bridge HTTP calls used by the Chrome extension.
+    // The later Corpus assignment must not replace the already committed Worktop snapshot.
+    await assignExactBoard("worktop", "MOCK-WORKTOP-GREEN-38", "#238636", 38);
+    await assignExactBoard("corpus", "MOCK-CORPUS-BLUE-18", "#2451A6", 18);
+
+    const afterRepeatedBridgeAssignments = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { cookie });
+    const repeatedAssignments = (afterRepeatedBridgeAssignments.body as { view: { assignments: { assignments: Array<Record<string, unknown>> } } }).view.assignments.assignments;
+    expect(repeatedAssignments.find((assignment) => assignment.assignmentId === "material-assignment:worktop")).toMatchObject({
+      materialId: "supplier-material:demos:MOCK-WORKTOP-GREEN-38",
+      thicknessMm: 38,
+      snapshots: { material: { definition: { preview: { colorHex: "#238636" }, defaultThicknessMm: 38 } } }
+    });
+    expect(repeatedAssignments.find((assignment) => assignment.assignmentId === "material-assignment:corpus")).toMatchObject({
+      materialId: "supplier-material:demos:MOCK-CORPUS-BLUE-18",
+      thicknessMm: 18,
+      snapshots: { material: { definition: { preview: { colorHex: "#2451A6" }, defaultThicknessMm: 18 } } }
+    });
+  }, 60_000);
 
   it("rejects clientId in project create payload", async () => {
     const response = await requestWorker(controller!.port, "/api/projects", {
