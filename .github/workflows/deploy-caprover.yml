@@ -66,7 +66,7 @@ jobs:
           CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
         run: |
           set -euo pipefail
-          trap 'rm -f caprover-runtime-logs.json' EXIT
+          trap 'rm -f caprover-runtime-logs.json caprover-build-status.json caprover-nodes.json' EXIT
 
           npx caprover@2.3.1 api \
             -u "$CAPROVER_SERVER" \
@@ -75,6 +75,22 @@ jobs:
             -m GET \
             -d '{}' \
             -o caprover-runtime-logs.json
+
+          npx caprover@2.3.1 api \
+            -u "$CAPROVER_SERVER" \
+            -p "$CAPROVER_PASSWORD" \
+            -t "/user/apps/appData/${APP_NAME}/" \
+            -m GET \
+            -d '{}' \
+            -o caprover-build-status.json
+
+          npx caprover@2.3.1 api \
+            -u "$CAPROVER_SERVER" \
+            -p "$CAPROVER_PASSWORD" \
+            -t "/user/system/nodes/" \
+            -m GET \
+            -d '{}' \
+            -o caprover-nodes.json
 
           node <<'NODE'
           const payload = JSON.parse(require('node:fs').readFileSync('caprover-runtime-logs.json', 'utf8'));
@@ -90,6 +106,23 @@ jobs:
             .map(redact);
           console.log(`CapRover returned ${logs.length} runtime-log characters.`);
           console.log(tail.length ? tail.join('\n') : 'CapRover returned no runtime-log lines.');
+          const build = JSON.parse(require('node:fs').readFileSync('caprover-build-status.json', 'utf8'))?.data ?? {};
+          const nodes = JSON.parse(require('node:fs').readFileSync('caprover-nodes.json', 'utf8'))?.data?.nodes ?? [];
+          console.log(JSON.stringify({
+            build: {
+              isAppBuilding: !!build.isAppBuilding,
+              isBuildFailed: !!build.isBuildFailed,
+              logTail: String(build.logs ?? '').split(/\r?\n/).slice(-30).map(redact),
+            },
+            nodes: nodes.map((node) => ({
+              hostname: node.hostname,
+              type: node.type,
+              state: node.state,
+              availability: node.status,
+              architecture: node.architecture,
+              memoryBytes: node.memoryBytes,
+            })),
+          }));
           NODE
 
   deploy:
