@@ -8,6 +8,7 @@ import {
   createServerAuthSessionStore,
   createServerCatalogRepository,
   createServerModulePackageRepository,
+  createServerUserActivityRepository,
   createServerUserService
 } from "../src/server/serverRepositories";
 import { createClientCatalogService } from "../src/core/catalog/catalog-service";
@@ -31,11 +32,13 @@ import {
   openFileInDesktop,
   resolveTenantBlenderOutputPath
 } from "../src/server/blender/blenderOutputAccess";
+import { startUserActivityReconciliation } from "../src/server/userActivityReconciliation";
 
 assertWorkerRuntimeEnvironment();
 const PROJECT_ROOT = process.cwd();
 const serverUserService = createServerUserService();
 const serverAuthSessionStore = createServerAuthSessionStore();
+const serverUserActivityRepository = createServerUserActivityRepository();
 const catalogLookupCache = new CatalogExactLookupCache();
 const DEMOS_PREVIEW_COLOR_CACHE_PATH = path.join(PROJECT_ROOT, "backend/materials/demos_preview_color_cache.json");
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -710,6 +713,7 @@ export function startWorkerServer() {
   const requestBudget = createHttpRequestBudget();
   const clientCatalogBootstrapResponseCache = new ClientCatalogBootstrapResponseCache();
   const clientModulePackagesResponseCache = new ClientModulePackagesResponseCache();
+  const stopUserActivityReconciliation = startUserActivityReconciliation(serverUserActivityRepository);
   const server = http.createServer(createWorkerRequestHandler({
     host,
     port,
@@ -731,6 +735,7 @@ export function startWorkerServer() {
       clientCatalogBootstrapResponseCache,
       clientModulePackagesResponseCache,
       catalogLookupCache,
+      userActivityRepository: serverUserActivityRepository,
       createCatalogRepository: () => createServerCatalogRepository(PROJECT_ROOT),
       createModulePackageRepository: () => createServerModulePackageRepository(PROJECT_ROOT),
       handleCatalog,
@@ -767,4 +772,5 @@ export function startWorkerServer() {
   server.listen(port, host, () => {
     console.log(`[blender-worker] listening on http://${host}:${port}`);
   });
+  server.once("close", stopUserActivityReconciliation);
 }

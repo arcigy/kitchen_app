@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="group_user_activity_integration" model="res.groups">
+        <field name="name">Arcigy Activity Integration Bot</field>
+    </record>
+    <record id="group_user_activity_manager" model="res.groups">
+        <field name="name">Arcigy Activity Manager</field>
+        <field name="implied_ids" eval="[(4, ref('group_user_activity_integration'))]"/>
+    </record>
+</odoo>
