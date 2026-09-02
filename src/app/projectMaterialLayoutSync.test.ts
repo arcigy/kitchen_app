@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createSystemCatalogSeed } from "../core/catalog/catalog-bootstrap";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ProjectMaterialAssignment, ProjectMaterialAssignmentsState, ProjectMaterialScope } from "../core/project-materials/project-material-types";
+import { createProjectMaterialRuntimeCatalog } from "./projectMaterialRuntimeCatalog";
 import { syncProjectMaterialAssignmentsToLayout } from "./projectMaterialLayoutSync";
 
 const catalog = (): ClientCatalog => ({ clientId: "client_test", ...createSystemCatalogSeed() });
@@ -60,7 +61,7 @@ describe("project material layout projection", () => {
     expect(result.worktopIds).toEqual([]);
   });
 
-  it("applies confirmed supplier thickness without retaining an untrusted supplier colour", () => {
+  it("projects a confirmed supplier board once its project runtime catalog snapshot is available", () => {
     const module = { id: "m1", params: { commercialSelections: { boardMaterials: { side: "stale" }, boardThicknesses: { side: 99 } } } };
     const scopes: ProjectMaterialScope[] = [{
       id: "module:m1", kind: "module", label: "Module", items: [{
@@ -69,18 +70,24 @@ describe("project material layout projection", () => {
       }]
     }];
     const supplier = assignment("supplier-material:demos:SUP-25");
+    supplier.thicknessMm = 25;
     supplier.snapshots.material = {
       definition: {
         ...catalog().materials.find((item) => item.materialType === "board" && item.isActive)!,
         id: "supplier-material:demos:SUP-25",
-        metadata: { supplierThicknessMm: 25 }
+        supplierSource: { supplier: "demos", supplierProductId: "SUP-25" },
+        metadata: { supplierThicknessMm: 25 },
+        availableThicknessesMm: [25],
+        defaultThicknessMm: 25
       },
       unitPrice: null, currency: "EUR", priceListId: null, capturedAt: "2026-08-10T00:00:00.000Z"
     };
+    const runtime = createProjectMaterialRuntimeCatalog(catalog());
+    runtime.applyProjectAssignments({ schemaVersion: 2, initialized: true, revision: 1, assignments: [supplier] });
     syncProjectMaterialAssignmentsToLayout({
-      catalog: catalog(), instances: [module] as never, worktops: [], customFurniture: [],
+      catalog: runtime.catalog, instances: [module] as never, worktops: [], customFurniture: [],
       rebuildModule: () => true, rebuildWorktop: () => undefined, rebuildCustomFurniture: () => undefined
     }, { schemaVersion: 2, initialized: true, revision: 1, assignments: [supplier] }, scopes);
-    expect(module.params.commercialSelections).toEqual({ boardMaterials: {}, boardThicknesses: { side: 25 } });
+    expect(module.params.commercialSelections).toEqual({ boardMaterials: { side: "supplier-material:demos:SUP-25" }, boardThicknesses: { side: 25 } });
   });
 });

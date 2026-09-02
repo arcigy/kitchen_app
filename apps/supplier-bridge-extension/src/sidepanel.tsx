@@ -218,9 +218,10 @@ function App(): React.JSX.Element {
         target
       });
       if (result.materials) setMaterials(result.materials);
+      const supplierWarning = result.warnings.map((warning) => warning.title).join(" ");
       setMessage(result.refreshError
         ? copy(`${context.candidate.normalizedProduct.displayName} bol uložený. Zoznam sa teraz nepodarilo obnoviť; po opätovnom načítaní projektu sa zobrazí zeleno.`, `${context.candidate.normalizedProduct.displayName} byl uložen. Seznam se nyní nepodařilo obnovit; po opětovném načtení projektu se zobrazí zeleně.`, `${context.candidate.normalizedProduct.displayName} was saved. The list could not be refreshed; it will appear green after reloading the project.`)
-        : copy(`${context.candidate.normalizedProduct.displayName} bol priradený: ${target.group} · ${target.label}.`, `${context.candidate.normalizedProduct.displayName} byl přiřazen: ${target.group} · ${target.label}.`, `${context.candidate.normalizedProduct.displayName} was assigned to: ${target.group} · ${target.label}.`));
+        : `${copy(`${context.candidate.normalizedProduct.displayName} bol priradený: ${target.group} · ${target.label}.`, `${context.candidate.normalizedProduct.displayName} byl přiřazen: ${target.group} · ${target.label}.`, `${context.candidate.normalizedProduct.displayName} was assigned to: ${target.group} · ${target.label}.`)}${supplierWarning ? ` ${supplierWarning}.` : ""}`);
       setLastDebug({
         stage: result.refreshError ? "assigned_refresh_pending" : "assigned",
         startedAt,

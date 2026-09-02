@@ -114,6 +114,8 @@ export type NormalizedSupplierProduct = {
   manufacturer: string | null;
   decorCode: string | null;
   surfaceCode: string | null;
+  /** Exact preview colour exposed by the supplier or its approved catalog record. Never inferred from a decor name. */
+  previewColorHex?: string | null;
   productType: string | null;
   thicknessMm: number | null;
   widthMm: number | null;

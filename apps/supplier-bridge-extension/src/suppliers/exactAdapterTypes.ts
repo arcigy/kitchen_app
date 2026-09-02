@@ -46,6 +46,8 @@ export type SupplierProductLookupResult = {
     description: string | null;
     decorCode: string | null;
     surfaceCode: string | null;
+    /** Explicit #RRGGBB swatch value when the verified supplier page exposes one. */
+    previewColorHex?: string | null;
     thicknessMm: number | null;
     dimensions: { widthMm: number | null; lengthMm: number | null; depthMm: number | null } | null;
     availability: { status: "available" | "limited" | "unavailable" | "on_request" | "unknown"; rawText: string | null };

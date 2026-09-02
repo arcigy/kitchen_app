@@ -79,7 +79,7 @@ describe("standalone extension assignment flow", () => {
     const { deps, materials } = fixtures();
     const result = await runExtensionAssignment(input, deps);
 
-    expect(result).toEqual({ sessionId: "session-1", materials, refreshError: null });
+    expect(result).toEqual({ sessionId: "session-1", materials, warnings: [], refreshError: null });
     expect(deps.createSession).toHaveBeenCalledWith(input.baseUrl, input.accessToken, input.projectId, input.supplierId, expect.objectContaining({
       materialAssignmentId: target.id,
       supplierProductId: candidate.supplierProductCode,
@@ -97,7 +97,7 @@ describe("standalone extension assignment flow", () => {
 
     const result = await runExtensionAssignment(input, deps);
 
-    expect(result).toEqual({ sessionId: "session-1", materials: null, refreshError: refreshFailure });
+    expect(result).toEqual({ sessionId: "session-1", materials: null, warnings: [], refreshError: refreshFailure });
     expect(deps.confirmCandidate).toHaveBeenCalledTimes(1);
   });
 
