@@ -11,6 +11,11 @@ on:
         required: true
         default: false
         type: boolean
+      rotate_master_password:
+        description: Synchronize the CapRover master password from a staged secret
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -20,6 +25,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  rotate-caprover-master-password:
+    if: github.event_name == 'workflow_dispatch' && inputs.rotate_master_password
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: develop
+    steps:
+      - name: Synchronize CapRover master password
+        env:
+          CAPROVER_SERVER: ${{ secrets.CAPROVER_SERVER }}
+          CAPROVER_PASSWORD: ${{ secrets.CAPROVER_PASSWORD }}
+          CAPROVER_PASSWORD_NEXT: ${{ secrets.CAPROVER_PASSWORD_NEXT }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CAPROVER_PASSWORD_NEXT" ]; then
+            echo "CAPROVER_PASSWORD_NEXT is required."
+            exit 1
+          fi
+          payload="$(node -e 'process.stdout.write(JSON.stringify({oldPassword: process.env.CAPROVER_PASSWORD, newPassword: process.env.CAPROVER_PASSWORD_NEXT}))')"
+          npx caprover@2.3.1 api \
+            -u "$CAPROVER_SERVER" \
+            -p "$CAPROVER_PASSWORD" \
+            -t /user/changepassword/ \
+            -m POST \
+            -d "$payload" \
+            -o caprover-password-rotation.json
+          node -e 'const r=require("./caprover-password-rotation.json"); if (!r || r.status !== 100) process.exit(1); console.log("CapRover master password synchronized.")'
+          rm -f caprover-password-rotation.json
+
   diagnose-runtime:
     if: github.event_name == 'workflow_dispatch' && inputs.diagnostics_only
     runs-on: ubuntu-latest
@@ -60,7 +93,7 @@ jobs:
           NODE
 
   deploy:
-    if: github.event_name != 'workflow_dispatch' || !inputs.diagnostics_only
+    if: github.event_name != 'workflow_dispatch' || (!inputs.diagnostics_only && !inputs.rotate_master_password)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: develop
