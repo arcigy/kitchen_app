@@ -284,6 +284,7 @@ import { createWallEditDragController } from "./app/wallEditDragController";
 import { createViewPropertiesController } from "./app/viewPropertiesController";
 import { createModuleSelectionController } from "./app/moduleSelectionController";
 import { syncProjectMaterialAssignmentsToLayout } from "./app/projectMaterialLayoutSync";
+import { syncProjectMaterialAssignmentsToKitchenContexts } from "./app/projectMaterialKitchenContextSync";
 import { createProjectMaterialRuntimeCatalog } from "./app/projectMaterialRuntimeCatalog";
 import { createLayoutActionsController } from "./app/layoutActionsController";
 import { createWindowInstanceController } from "./app/windowInstanceController";
@@ -3497,6 +3498,12 @@ export function startApp(initialArgs: AppArgs) {
     if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
     S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
     projectMaterialRuntimeCatalog.applyProjectAssignments(projectMaterialAssignments);
+    syncProjectMaterialAssignmentsToKitchenContexts({
+      catalog: clientCatalog,
+      assignments: projectMaterialAssignments,
+      kitchenContext: S.kitchenCtx,
+      kitchenGroups: S.kitchenGroups
+    });
     materialsPhaseController?.restoreSaveState(projectMaterialAssignments);
     if (!layout?.snapshot) throw new Error("Project save is missing layout snapshot.");
     restoreLayoutSnapshot(S, helpers, layout.snapshot as Parameters<typeof restoreLayoutSnapshot>[2]);
@@ -3892,6 +3899,15 @@ export function startApp(initialArgs: AppArgs) {
   S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
   projectMaterialRuntimeCatalog.applyProjectAssignments(projectMaterialAssignments);
   const applyCommittedProjectMaterialAssignments = (assignments: ProjectMaterialAssignmentsState) => {
+    // The supplier refresh and assignment callbacks are independent. Refresh the
+    // per-project runtime catalog here as well, before a module rebuild needs it.
+    projectMaterialRuntimeCatalog.applyProjectAssignments(assignments);
+    const contextSync = syncProjectMaterialAssignmentsToKitchenContexts({
+      catalog: clientCatalog,
+      assignments,
+      kitchenContext: S.kitchenCtx,
+      kitchenGroups: S.kitchenGroups
+    });
     const result = syncProjectMaterialAssignmentsToLayout({
       catalog: clientCatalog,
       instances: S.instances,
@@ -3908,7 +3924,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenGroups: S.kitchenGroups,
       catalog: clientCatalog
     }));
-    if (result.moduleIds.length || result.worktopIds.length || result.customFurnitureIds.length) {
+    if (contextSync.changed || result.moduleIds.length || result.worktopIds.length || result.customFurnitureIds.length) {
       updateLayoutPanel();
       commitHistory(S);
     }

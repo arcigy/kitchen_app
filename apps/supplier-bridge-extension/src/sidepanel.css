@@ -63,6 +63,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .target__heading strong { color: #292c3e; }
 .target__check { flex: 0 0 auto; padding: 2px 5px; border-radius: 999px; background: #d9f3e5; color: #176941 !important; font-weight: 800; }
 .target__material { color: #176941 !important; font-size: 10px !important; font-weight: 750; line-height: 1.35; }
+.target__swatch { display: inline-block; width: 11px; height: 11px; margin: 0 5px 0 0; border: 1px solid rgba(23, 105, 65, .4); border-radius: 2px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35); }
 .target__empty { color: #83879a; }
 .target__details { color: #4e5468 !important; line-height: 1.35; }
 .target__price { color: #176941 !important; font-weight: 700; }

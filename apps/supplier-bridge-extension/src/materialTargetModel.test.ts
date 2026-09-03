@@ -15,7 +15,7 @@ const view: ProjectMaterialsView = {
       customValues: { supplierBridge: { supplierProductCode: "175718", rawPriceText: "52,80 EUR", rawUnitText: "ks" } },
       source: "user",
       snapshots: { material: {
-        definition: { displayName: "Egger H3303 ST10" } as MaterialDefinition,
+        definition: { displayName: "Egger H3303 ST10", preview: { colorHex: "#b31b34" } } as MaterialDefinition,
         unitPrice: null,
         currency: "EUR",
         priceListId: null,
@@ -79,6 +79,7 @@ describe("extension material target model", () => {
       assignedText: "Egger H3303 ST10 · 175718",
       assignedProductCode: "175718",
       assignedPrice: "52,80 EUR / ks",
+      assignedColorHex: "#B31B34",
       inherited: false
     });
   });

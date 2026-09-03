@@ -276,7 +276,10 @@ function App(): React.JSX.Element {
         {target.assigned && <span className="target__check">✓ {target.inherited ? copy("Zdedené", "Zděděno", "Inherited") : copy("Priradené", "Přiřazeno", "Assigned")}</span>}
       </span>
       <span className={target.assigned ? "target__material" : "target__empty"}>
-        {busy === target.id ? copy("Ukladám…", "Ukládám…", "Saving…") : target.assignedText}
+        {busy === target.id ? copy("Ukladám…", "Ukládám…", "Saving…") : <>
+          {target.assignedColorHex && <span className="target__swatch" title={copy(`Farba materiálu ${target.assignedColorHex}`, `Barva materiálu ${target.assignedColorHex}`, `Material colour ${target.assignedColorHex}`)} style={{ backgroundColor: target.assignedColorHex }} />}
+          {target.assignedText}
+        </>}
       </span>
       {(target.description || target.quantity != null) && <small className="target__details">
         {[target.description, target.quantity != null && target.unit ? `${target.quantity} ${target.unit}` : null].filter(Boolean).join(" · ")}
