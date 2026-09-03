@@ -22,6 +22,7 @@ const target: ExtensionMaterialTarget = {
   assignedText: "Nepriradené",
   assignedProductCode: null,
   assignedPrice: null,
+  assignedColorHex: null,
   inherited: false
 };
 
