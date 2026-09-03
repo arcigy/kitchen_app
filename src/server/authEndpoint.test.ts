@@ -188,6 +188,27 @@ describe("auth endpoints", () => {
     expect(revoked.statusCode).toBe(401);
   });
 
+  it("authenticates the Bridge against the exact organization and username", async () => {
+    const otherBranislav = {
+      ...seedAuthUsers[1]!,
+      userId: "user_other_branislav",
+      organizationName: "Other Company",
+      clientId: "client_other",
+      passwordHash: seedAuthUsers[0]!.passwordHash
+    };
+    const login = mockRes();
+    await handleExtensionAuthLogin(
+      mockReq(),
+      login,
+      readBody({ company: "Arcigy Kitchen", username: "branislav", password: "branislav2026" }),
+      sendJson,
+      { userService: createTestUserService([...seedAuthUsers, otherBranislav]), authSessionStore: createInMemoryAuthSessionStore(), loginRateLimiter: createLoginRateLimiter() }
+    );
+
+    expect(login.statusCode).toBe(200);
+    expect(login.body).toMatchObject({ session: { clientId: "client_arcigy_demo", displayName: "Branislav" } });
+  });
+
   it("logs in Andrej with organization credentials", async () => {
     const res = mockRes();
     await handleAuthLogin(mockReq(), res, readAuthBody("andrej", "andrej2026"), sendJson, {

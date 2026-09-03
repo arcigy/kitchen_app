@@ -49,6 +49,7 @@ async function requestSupplierPermission(supplierId: string, language: SupplierB
 function App(): React.JSX.Element {
   const [account, setAccount] = useState<SupplierBridgeAccount | null>(null);
   const [origin, setOrigin] = useState(defaultOrigin());
+  const [company, setCompany] = useState("Arcigy firma");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [projects, setProjects] = useState<ProjectMetadata[]>([]);
@@ -139,7 +140,7 @@ function App(): React.JSX.Element {
   const login = async (event: React.FormEvent) => {
     event.preventDefault(); setBusy("login"); setError(null); setMessage(null);
     try {
-      const result = await loginExtension(origin, username, password);
+      const result = await loginExtension(origin, company, username, password);
       const next: SupplierBridgeAccount = { version: 1, baseUrl: origin, accessToken: result.accessToken, ...result.session };
       await saveSupplierBridgeAccount(next);
       setPassword(""); setAccount(next);
@@ -313,10 +314,11 @@ function App(): React.JSX.Element {
       <h1>{copy("Prihlásenie do Arcigy", "Přihlášení do Arcigy", "Sign in to Arcigy")}</h1>
       <p className="muted">{copy("Použite rovnaké meno a heslo ako v aplikácii. Heslo sa neukladá.", "Použijte stejné uživatelské jméno a heslo jako v aplikaci. Heslo se neukládá.", "Use the same username and password as in the app. The password is not stored.")}</p>
       <label className="field">{copy("Prostredie", "Prostředí", "Environment")}<select value={origin} onChange={(event) => setOrigin(event.target.value)}>{supplierBridgeBuild.arcigyOrigins.map((value) => <option key={value} value={value}>{value.includes("develop") ? "Develop" : copy("Produkcia", "Produkce", "Production")}</option>)}</select></label>
+      <label className="field">{copy("Firma", "Firma", "Company")}<input autoComplete="organization" value={company} onChange={(event) => setCompany(event.target.value)} /></label>
       <label className="field">{copy("Používateľ", "Uživatel", "User")}<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>
       <label className="field">{copy("Heslo", "Heslo", "Password")}<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
       {error && <p className="notice notice--error" role="alert">{error}</p>}
-      <button className="button button--primary" disabled={busy !== null || !username || !password}>{busy === "login" ? copy("Prihlasujem…", "Přihlašuji…", "Signing in…") : copy("Prihlásiť", "Přihlásit", "Sign in")}</button>
+      <button className="button button--primary" disabled={busy !== null || !company.trim() || !username || !password}>{busy === "login" ? copy("Prihlasujem…", "Přihlašuji…", "Signing in…") : copy("Prihlásiť", "Přihlásit", "Sign in")}</button>
     </form>
   </main>;
 

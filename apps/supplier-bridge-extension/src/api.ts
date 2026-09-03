@@ -121,10 +121,15 @@ function authSession(value: unknown): ExtensionAuthSession | null {
   return input as ExtensionAuthSession;
 }
 
-export async function loginExtension(baseUrl: string, username: string, password: string): Promise<{ accessToken: string; session: ExtensionAuthSession }> {
+export async function loginExtension(
+  baseUrl: string,
+  company: string,
+  username: string,
+  password: string
+): Promise<{ accessToken: string; session: ExtensionAuthSession }> {
   const body = record(await requestJson(`${baseUrl}/api/auth/extension-login`, {
     method: "POST",
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({ company, username, password })
   }));
   const session = authSession(body?.session);
   if (!body || typeof body.accessToken !== "string" || !session) throw new Error("Arcigy login response is invalid.");
