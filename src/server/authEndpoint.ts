@@ -96,13 +96,18 @@ export async function handleExtensionAuthLogin(
   const loginRateLimiter = dependencies.loginRateLimiter ?? defaultLoginRateLimiter;
   const authSessionStore = dependencies.authSessionStore ?? defaultAuthSessionStore;
   const body = await readJsonBody(req);
+  const company = getStringField(body, "company");
   const username = getStringField(body, "username");
   const password = getStringField(body, "password");
   if (!username || !password) return sendJson(res, 400, { ok: false, error: INVALID_CREDENTIALS });
 
   const rateLimitKey = getLoginRateLimitKey(req, "extension", username, dependencies.trustedProxyHops);
   if (loginRateLimiter.isLimited(rateLimitKey)) return sendJson(res, 429, { ok: false, error: INVALID_CREDENTIALS });
-  const authenticatedSession = await userService.authenticateByUsername(username, password);
+  // New Bridge clients submit the same company discriminator as the main app.
+  // Retain the username-only path for already-installed extension builds.
+  const authenticatedSession = company?.trim()
+    ? await userService.authenticate(company, username, password)
+    : await userService.authenticateByUsername(username, password);
   if (!authenticatedSession) {
     loginRateLimiter.recordFailure(rateLimitKey);
     return sendJson(res, 401, { ok: false, error: INVALID_CREDENTIALS });
