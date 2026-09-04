@@ -84,8 +84,8 @@
     "react-dom": "^19.2.7",
     "realism-effects": "^1.1.2",
     "sharp": "^0.35.4",
-    "three": "^0.168.0",
-    "three-gpu-pathtracer": "0.0.20",
+    "three": "^0.185.1",
+    "three-gpu-pathtracer": "0.0.24",
     "three-mesh-bvh": "^0.9.9",
     "tsx": "^4.23.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
