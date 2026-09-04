@@ -13,7 +13,7 @@ const mode = process.argv.includes("--mode") ? process.argv[process.argv.indexOf
 if (mode !== "debug" && mode !== "production") throw new Error("Use --mode debug or --mode production.");
 const buildMode: BuildMode = mode;
 const debug = buildMode === "debug";
-const version = "0.3.11";
+const version = "0.3.12";
 const releaseOrigins = supplierBridgeReleaseOrigins();
 const debugArcigyOrigins = ["http://127.0.0.1:5180", "http://localhost:5180", "http://127.0.0.1:5184", "http://localhost:5184"];
 const debugSimulatorOrigins = ["http://127.0.0.1:5192", "http://localhost:5192", "http://127.0.0.1:5195", "http://localhost:5195"];
@@ -75,7 +75,7 @@ const manifest = {
   name: debug ? "Arcigy Supplier Bridge (Debug)" : "Arcigy Supplier Bridge",
   version,
   description: "Sign in to Arcigy, choose a project, and assign the current supplier product to an exact material target.",
-  homepage_url: "https://kitchenapp.178.104.175.242.sslip.io/",
+  homepage_url: "https://app.arcigy.cloud/",
   icons: { 128: "icon-128.png" },
   minimum_chrome_version: "116",
   action: { default_title: "Open Arcigy Supplier Bridge" },

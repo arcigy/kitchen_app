@@ -13,6 +13,11 @@ describe("supplier bridge release origins", () => {
     ]);
   });
 
+  it("uses the public TLS-validated production origin for Bridge login", () => {
+    expect(DEFAULT_SUPPLIER_BRIDGE_PRODUCTION_ORIGIN).toBe("https://app.arcigy.cloud");
+    expect(DEFAULT_SUPPLIER_BRIDGE_PRODUCTION_ORIGIN).not.toContain("sslip.io");
+  });
+
   it("allows an explicit audited origin list and removes duplicates", () => {
     expect(supplierBridgeReleaseOrigins({
       SUPPLIER_BRIDGE_ARCIGY_ORIGINS: "https://one.example, https://two.example/, https://one.example"
