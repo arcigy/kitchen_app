@@ -308,7 +308,7 @@ describe("multi-client worker isolation", () => {
 
     const login = await requestWorker(controller!.port, "/api/auth/extension-login", {
       method: "POST",
-      body: { username: "arcigy", password: "kitchen2026" }
+      body: { company: "Arcigy Kitchen", username: "arcigy", password: "kitchen2026" }
     });
     expect(login.status).toBe(200);
     const accessToken = (login.body as { accessToken: string }).accessToken;

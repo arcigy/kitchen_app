@@ -75,7 +75,7 @@ const manifest = {
   name: debug ? "Arcigy Supplier Bridge (Debug)" : "Arcigy Supplier Bridge",
   version,
   description: "Sign in to Arcigy, choose a project, and assign the current supplier product to an exact material target.",
-  homepage_url: "https://kitchenapp.178.104.175.242.sslip.io/",
+  homepage_url: "https://app.arcigy.cloud/",
   icons: { 128: "icon-128.png" },
   minimum_chrome_version: "116",
   action: { default_title: "Open Arcigy Supplier Bridge" },
