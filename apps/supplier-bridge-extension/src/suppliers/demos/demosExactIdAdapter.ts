@@ -51,7 +51,10 @@ function definitionValue(document: Document, label: string): string | null {
 }
 
 function previewImageUrl(document: Document): string | null {
-  const candidates = [...document.querySelectorAll<HTMLImageElement>('[itemprop="image"], .box-detail__image img, .box-detail__gallery img')];
+  // Current Démos product pages put their primary material image directly on
+  // the image element (`img.image-product`), outside the older gallery/image
+  // wrappers. Keep all selectors: Démos still serves both page variants.
+  const candidates = [...document.querySelectorAll<HTMLImageElement>('[itemprop="image"], img.image-product, .box-detail__image img, .box-detail__gallery img')];
   for (const image of candidates) {
     const source = image.currentSrc || image.getAttribute("data-zoom-image") || image.getAttribute("data-src") || image.getAttribute("src") || image.src;
     try {
