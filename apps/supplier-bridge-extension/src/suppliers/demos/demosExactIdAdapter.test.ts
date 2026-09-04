@@ -83,6 +83,36 @@ describe("Démos exact-ID read-only adapter", () => {
     } });
   });
 
+  it("captures the primary image from the live Démos product-page markup", () => {
+    // Captured from product 365157 on 2026-09-04 while signed in to Démos.
+    // Its image is deliberately not inside .box-detail__image or a gallery.
+    document.body.innerHTML = `
+      <h1 class="box-detail__top__title">MDFL 125 BS Royal Blue 2800/2070/10</h1>
+      <strong class="box-detail__top__code__value">365157</strong>
+      <img class="image-product" alt="MDFL 125 BS Royal Blue 2800/2070/10" src="https://www.demos24plus.com/content/images/product/default/203052.jpeg">
+      <div class="box-detail-add__availability">Po objednání: do 4 týdnů</div>
+      <dl><dt>Jednotka (MJ)</dt><dd>ks</dd></dl>
+      <table class="table-params"><tbody>
+        <tr><td>Formát materiálu (mm)</td><td>2800 x 2070</td></tr>
+        <tr><td>Tloušťka materiálu (mm)</td><td>10</td></tr>
+        <tr><td>Barevný odstín</td><td>Modrá</td></tr>
+        <tr><td>Název dekoru</td><td>Royal Blue</td></tr>
+      </tbody></table>
+    `;
+
+    expect(demosExactIdAdapter.extractExactProduct(document, {
+      requestedProductId: "365157", expectedProductType: "board", expectedManufacturer: null, expectedThicknessMm: 10
+    })).toMatchObject({ ok: true, result: {
+      product: {
+        name: "MDFL 125 BS Royal Blue 2800/2070/10",
+        productType: "board",
+        previewImageUrl: "https://www.demos24plus.com/content/images/product/default/203052.jpeg",
+        thicknessMm: 10,
+        dimensions: { widthMm: 2070, lengthMm: 2800, depthMm: null }
+      }
+    } });
+  });
+
   it("uses the board thickness instead of an earlier veneer-thickness parameter", () => {
     document.body.innerHTML = `
       <h1 class="box-detail__top__title">DTDD Dub Radial LINEA 2800/2070/19</h1>

@@ -13,7 +13,7 @@ const mode = process.argv.includes("--mode") ? process.argv[process.argv.indexOf
 if (mode !== "debug" && mode !== "production") throw new Error("Use --mode debug or --mode production.");
 const buildMode: BuildMode = mode;
 const debug = buildMode === "debug";
-const version = "0.3.14";
+const version = "0.3.15";
 const releaseOrigins = supplierBridgeReleaseOrigins();
 const debugArcigyOrigins = ["http://127.0.0.1:5180", "http://localhost:5180", "http://127.0.0.1:5184", "http://localhost:5184"];
 const debugSimulatorOrigins = ["http://127.0.0.1:5192", "http://localhost:5192", "http://127.0.0.1:5195", "http://localhost:5195"];
