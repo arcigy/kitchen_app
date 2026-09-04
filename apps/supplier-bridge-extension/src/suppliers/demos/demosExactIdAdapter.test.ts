@@ -34,6 +34,7 @@ describe("Démos exact-ID read-only adapter", () => {
       <input id="js-product-search-autocomplete-input-lbx"><a href="/cart/">Cart</a>
       <h1 class="box-detail__top__title">HDF White 2800/2070/3</h1>
       <strong class="box-detail__top__code__value">59678</strong>
+      <div class="box-detail__image"><img itemprop="image" src="/content/images/product/default/365157.jpg"></div>
       <div class="box-detail-add__prices">
         <span class="js-online-base-price-without-vat">100,00 Kč</span>
         <span class="js-online-partner-price-without-vat">50,00 Kč</span>
@@ -53,7 +54,7 @@ describe("Démos exact-ID read-only adapter", () => {
     expect(extracted).toMatchObject({ ok: true, result: {
       exactIdMatch: true,
       foundProductId: "59678",
-      product: { manufacturer: "Kronospan", decorCode: "101", surfaceCode: "PE", thicknessMm: 3, availability: { status: "available" } },
+      product: { manufacturer: "Kronospan", decorCode: "101", surfaceCode: "PE", previewImageUrl: "https://www.demos24plus.com/content/images/product/default/365157.jpg", thicknessMm: 3, availability: { status: "available" } },
       pricing: { customerPrice: { amount: 50, currency: "CZK", basis: "piece", vatMode: "excluded" }, listPrice: { amount: 100 }, normalizedPrice: { unit: "m2", confidence: "calculated" } }
     } });
     expect(extracted.result!.pricing.normalizedPrice!.amount).toBeCloseTo(50 / 5.796, 6);

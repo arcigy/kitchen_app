@@ -1626,6 +1626,16 @@ describe("multi-client worker isolation", () => {
       });
       expect(attachment.status).toBe(200);
       const bridgeAccessToken = (attachment.body as { accessToken: string }).accessToken;
+      const rejectedPreview = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${sessionBody.view.session.id}/preview-color`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${bridgeAccessToken}` },
+        body: {
+          syncItemId: sessionBody.view.currentItem.id,
+          imageUrl: "https://example.test/not-a-demos-image.jpg"
+        }
+      });
+      expect(rejectedPreview.status).toBe(422);
+      expect(rejectedPreview.body).toMatchObject({ code: "SUPPLIER_PREVIEW_IMAGE_UNAVAILABLE" });
       const candidate = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${sessionBody.view.session.id}/candidates`, {
         method: "POST",
         headers: { Authorization: `Bearer ${bridgeAccessToken}` },

@@ -68,6 +68,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, _sender, sendResponse: (resp
             lengthMm: result.product.dimensions?.lengthMm ?? null,
             availability: result.product.availability.status === "available" ? "available" : result.product.availability.status === "unavailable" ? "unavailable" : "unknown"
           },
+          ...(result.product.previewImageUrl ? { previewImageUrl: result.product.previewImageUrl } : {}),
           sourcePageType: pageType,
           sourcePath: new URL(result.source.pageUrl).pathname,
           observedAt: result.source.observedAt,

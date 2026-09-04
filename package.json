@@ -83,6 +83,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "realism-effects": "^1.1.2",
+    "sharp": "^0.35.4",
     "three": "^0.168.0",
     "three-gpu-pathtracer": "0.0.20",
     "three-mesh-bvh": "^0.9.9",

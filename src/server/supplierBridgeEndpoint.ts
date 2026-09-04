@@ -26,6 +26,7 @@ import {
 import { clientSessionHeaderFromRequest } from "./requestAuthentication";
 import { SupplierBridgePersistenceError } from "../core/supplier-bridge/supplier-bridge-postgres-repository";
 import { supplierExpectedProductTypeForMaterialCategory } from "../core/supplier-bridge/supplier-target-contract";
+import { resolveDemosPreviewImageColor, SupplierPreviewImageError } from "./supplierBridgePreviewImage";
 
 type SupplierBridgeEndpointDeps = {
   projectRoot: string;
@@ -44,7 +45,7 @@ type WebRoute = {
 type ExtensionRoute = {
   kind: "extension";
   sessionId: string;
-  action: "attach" | "status" | "candidate" | "confirm" | "skip" | "cancel";
+  action: "attach" | "status" | "preview_color" | "candidate" | "confirm" | "skip" | "cancel";
 };
 
 type Route = WebRoute | ExtensionRoute | { kind: "configuration" };
@@ -75,11 +76,11 @@ function parseRoute(pathname: string): Route | null {
     if (!sessionId) return null;
     if (parts.length === 4) return { kind: "extension", sessionId, action: "status" };
     const action = parts[4];
-    if (action === "attach" || action === "candidates" || action === "confirm" || action === "skip" || action === "cancel") {
+    if (action === "attach" || action === "preview-color" || action === "candidates" || action === "confirm" || action === "skip" || action === "cancel") {
       return {
         kind: "extension",
         sessionId,
-        action: action === "candidates" ? "candidate" : action
+        action: action === "preview-color" ? "preview_color" : action === "candidates" ? "candidate" : action
       };
     }
   }
@@ -107,6 +108,14 @@ function bearerToken(req: http.IncomingMessage): string {
     throw new SupplierBridgeServiceError("Supplier bridge access token is required.", 401);
   }
   return requiredText(raw.slice("Bearer ".length), "Supplier bridge access token");
+}
+
+function previewColorRequest(value: unknown): { syncItemId: string; imageUrl: string } {
+  const body = record(value, "supplier bridge preview image");
+  return {
+    syncItemId: requiredText(body.syncItemId, "supplier bridge preview image.syncItemId", 200),
+    imageUrl: requiredText(body.imageUrl, "supplier bridge preview image.imageUrl", 2_048)
+  };
 }
 
 function materialText(metadata: Record<string, unknown>, key: string): string | null {
@@ -322,6 +331,15 @@ export async function handleSupplierBridgeApi(
       deps.sendJson(res, 200, { ok: true, view: await service.getSessionForExtension(route.sessionId, accessToken) });
       return true;
     }
+    if (route.action === "preview_color" && req.method === "POST") {
+      const request = previewColorRequest(await deps.readJsonBody(req));
+      const view = await service.getSessionForExtension(route.sessionId, accessToken);
+      const item = view.items.find((candidate) => candidate.id === request.syncItemId);
+      const supplierId = item?.exactLookup?.supplierId ?? view.session.supplierId;
+      if (!item || supplierId !== "demos") throw new SupplierBridgeServiceError("Démos preview image is not authorized for this material target.", 403);
+      deps.sendJson(res, 200, { ok: true, previewColorHex: await resolveDemosPreviewImageColor(request.imageUrl) });
+      return true;
+    }
     if (route.action === "candidate" && req.method === "POST") {
       const result = await service.submitCandidate(
         route.sessionId,
@@ -363,6 +381,10 @@ export async function handleSupplierBridgeApi(
     }
     if (error instanceof SupplierBridgeValidationError) {
       deps.sendJson(res, 400, { ok: false, error: error.message });
+      return true;
+    }
+    if (error instanceof SupplierPreviewImageError) {
+      deps.sendJson(res, 422, { ok: false, error: error.message, code: "SUPPLIER_PREVIEW_IMAGE_UNAVAILABLE" });
       return true;
     }
     if (error instanceof SupplierBridgePersistenceError) {

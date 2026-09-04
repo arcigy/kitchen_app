@@ -49,6 +49,20 @@ function definitionValue(document: Document, label: string): string | null {
   return term ? cleanText(term.nextElementSibling) || null : null;
 }
 
+function previewImageUrl(document: Document): string | null {
+  const candidates = [...document.querySelectorAll<HTMLImageElement>('[itemprop="image"], .box-detail__image img, .box-detail__gallery img')];
+  for (const image of candidates) {
+    const source = image.currentSrc || image.getAttribute("data-zoom-image") || image.getAttribute("data-src") || image.getAttribute("src") || image.src;
+    try {
+      const url = new URL(source, origin);
+      if (url.protocol === "https:" && url.origin === origin) return url.toString();
+    } catch {
+      // A broken preview is non-blocking; product metadata remains valid.
+    }
+  }
+  return null;
+}
+
 function localizedNumber(raw: string | null): number | null {
   if (!raw) return null;
   const match = raw.replace(/\u00a0/g, " ").match(/-?\d[\d\s.]*[,.]\d+|-?\d+/);
@@ -155,6 +169,7 @@ function detailExtraction(document: Document, context: ExactProductExtractionCon
       description: null,
       decorCode: firstParameter(parameters, /Číslo dekoru|Název dekoru/i),
       surfaceCode: firstParameter(parameters, /Struktura/i),
+      previewImageUrl: previewImageUrl(document),
       thicknessMm: localizedNumber(materialThickness(parameters)),
       dimensions: productDimensions,
       availability: availability(availabilityText)
