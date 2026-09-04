@@ -7,6 +7,7 @@ import type {
 } from "../../../src/core/supplier-bridge/supplier-bridge-types";
 import { validateSupplierCandidateSubmission } from "../../../src/core/supplier-bridge/supplier-bridge-validation";
 import { parseSupplierSyncSessionView } from "../../../src/core/supplier-bridge/supplier-session-view-validation";
+import { isSupportedDemosPreviewImageUrl } from "./suppliers/demos/demosPreviewImageUrl";
 
 export const BRIDGE_CHANNEL = "arcigy-supplier-bridge" as const;
 
@@ -180,7 +181,7 @@ function safeDemosPreviewImageUrl(value: unknown, supplierId: string): string | 
   if (supplierId !== "demos" || typeof value !== "string" || value.length > 2_048) return null;
   try {
     const parsed = new URL(value);
-    return parsed.protocol === "https:" && parsed.hostname === "www.demos24plus.com" ? parsed.toString() : null;
+    return isSupportedDemosPreviewImageUrl(parsed.toString()) ? parsed.toString() : null;
   } catch {
     return null;
   }

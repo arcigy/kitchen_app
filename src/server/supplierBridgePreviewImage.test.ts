@@ -26,4 +26,16 @@ describe("Démos supplier preview image colour", () => {
     await expect(resolveDemosPreviewImageColor("https://example.test/image.jpg", { fetchImpl })).rejects.toBeInstanceOf(SupplierPreviewImageError);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  it("accepts the real Démos Slovak product-image CDN but rejects other paths", async () => {
+    const image = await sharp({ create: { width: 12, height: 12, channels: 3, background: { r: 179, g: 27, b: 52 } } }).png().toBuffer();
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(new Uint8Array(image), {
+      status: 200,
+      headers: { "Content-Type": "image/png", "Content-Length": String(image.byteLength) }
+    }));
+
+    await expect(resolveDemosPreviewImageColor("https://www.demos-trade.sk/content/images/product/original/279469.jpg", { fetchImpl })).resolves.toBe("#B31B34");
+    await expect(resolveDemosPreviewImageColor("https://www.demos-trade.sk/other/image.jpg", { fetchImpl })).rejects.toBeInstanceOf(SupplierPreviewImageError);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 });

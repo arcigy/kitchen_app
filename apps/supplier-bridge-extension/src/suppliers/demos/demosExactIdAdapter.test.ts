@@ -60,6 +60,29 @@ describe("Démos exact-ID read-only adapter", () => {
     expect(extracted.result!.pricing.normalizedPrice!.amount).toBeCloseTo(50 / 5.796, 6);
   });
 
+  it("keeps a Démos product image hosted on the Slovak image CDN for backend colour extraction", () => {
+    document.body.innerHTML = `
+      <h1 class="box-detail__top__title">DTD Červená 2800/2070/18</h1>
+      <strong class="box-detail__top__code__value">279469</strong>
+      <div class="box-detail__image"><img itemprop="image" src="https://www.demos-trade.sk/content/images/product/original/279469.jpg"></div>
+      <div class="box-detail-add__availability">Skladem</div>
+      <dl><dt>Jednotka (MJ)</dt><dd>ks</dd></dl>
+      <table class="table-params"><tbody>
+        <tr><td>Formát materiálu (mm)</td><td>2800 x 2070</td></tr>
+        <tr><td>Tloušťka materiálu (mm)</td><td>18</td></tr>
+      </tbody></table>
+    `;
+
+    expect(demosExactIdAdapter.extractExactProduct(document, {
+      requestedProductId: "279469", expectedProductType: "board", expectedManufacturer: null, expectedThicknessMm: 18
+    })).toMatchObject({ ok: true, result: {
+      product: {
+        previewImageUrl: "https://www.demos-trade.sk/content/images/product/original/279469.jpg",
+        thicknessMm: 18
+      }
+    } });
+  });
+
   it("uses the board thickness instead of an earlier veneer-thickness parameter", () => {
     document.body.innerHTML = `
       <h1 class="box-detail__top__title">DTDD Dub Radial LINEA 2800/2070/19</h1>

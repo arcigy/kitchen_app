@@ -2,7 +2,11 @@ import sharp from "sharp";
 import { createHash } from "node:crypto";
 import { fetchExternalBytes } from "./external-http";
 
-const DEMOS_IMAGE_HOST = "www.demos24plus.com";
+const DEMOS_IMAGE_HOSTS = new Set([
+  "www.demos24plus.com",
+  "www.demos-trade.cz",
+  "www.demos-trade.sk"
+]);
 const IMAGE_TIMEOUT_MS = 8_000;
 const IMAGE_MAX_BYTES = 4 * 1024 * 1024;
 const COLOR_CACHE_TTL_MS = 15 * 60 * 1_000;
@@ -25,7 +29,7 @@ export class SupplierPreviewImageError extends Error {}
 function supportedDemosImageUrl(value: string): URL | null {
   try {
     const parsed = new URL(value);
-    if (parsed.protocol !== "https:" || parsed.hostname !== DEMOS_IMAGE_HOST) return null;
+    if (parsed.protocol !== "https:" || !DEMOS_IMAGE_HOSTS.has(parsed.hostname) || !parsed.pathname.startsWith("/content/images/product/")) return null;
     return parsed;
   } catch {
     return null;
