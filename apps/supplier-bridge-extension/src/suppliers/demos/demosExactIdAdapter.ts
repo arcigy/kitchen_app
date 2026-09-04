@@ -1,6 +1,7 @@
 import type { SupplierPriceBasis } from "../../../../../src/core/supplier-bridge/supplier-bridge-types";
 import { supplierPortals } from "../../config";
 import { waitForStableElement } from "../../content/waitForStableElement";
+import { isSupportedDemosPreviewImageUrl } from "./demosPreviewImageUrl";
 import type {
   ExactIdSupplierAdapter,
   ExactProductExtractionContext,
@@ -55,7 +56,7 @@ function previewImageUrl(document: Document): string | null {
     const source = image.currentSrc || image.getAttribute("data-zoom-image") || image.getAttribute("data-src") || image.getAttribute("src") || image.src;
     try {
       const url = new URL(source, origin);
-      if (url.protocol === "https:" && url.origin === origin) return url.toString();
+      if (isSupportedDemosPreviewImageUrl(url.toString())) return url.toString();
     } catch {
       // A broken preview is non-blocking; product metadata remains valid.
     }
