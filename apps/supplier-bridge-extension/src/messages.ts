@@ -119,6 +119,8 @@ export type CapturedSupplierCandidate = {
   sourcePageType: SupplierSourcePageType;
   sourcePath: string;
   observedAt: string;
+  /** Lives only for the immediate service-worker request; it is never submitted as candidate data. */
+  previewImageUrl?: string | null;
   price: Omit<SupplierPriceObservation, "id" | "syncItemId" | "candidateId" | "tenantId" | "supplierId" | "supplierProductCode"> | null;
 };
 
@@ -171,6 +173,17 @@ function record(value: unknown): Record<string, unknown> | null {
 
 function safeText(value: unknown, maxLength = 8_192): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= maxLength;
+}
+
+function safeDemosPreviewImageUrl(value: unknown, supplierId: string): string | null {
+  if (value === undefined || value === null) return null;
+  if (supplierId !== "demos" || typeof value !== "string" || value.length > 2_048) return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && parsed.hostname === "www.demos24plus.com" ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 export function parseArcigyWindowRequest(value: unknown): ArcigyWindowRequest | null {
@@ -303,12 +316,14 @@ export function parseSupplierPageCapture(value: unknown): SupplierPageCapture | 
         observedAt: candidate.observedAt,
         price: candidate.price ?? null
       });
+      const previewImageUrl = safeDemosPreviewImageUrl(candidate.previewImageUrl, input.supplierId);
       candidates.push({
         supplierProductCode: validated.supplierProductCode,
         normalizedProduct: validated.normalizedProduct,
         sourcePageType: validated.sourcePageType,
         sourcePath: validated.sourcePath,
         observedAt: validated.observedAt,
+        ...(previewImageUrl ? { previewImageUrl } : {}),
         price: validated.price
       });
     } catch {

@@ -48,6 +48,8 @@ export type SupplierProductLookupResult = {
     surfaceCode: string | null;
     /** Explicit #RRGGBB swatch value when the verified supplier page exposes one. */
     previewColorHex?: string | null;
+    /** Ephemeral supplier photo URL. It is sent only for colour extraction and is never persisted by Arcigy. */
+    previewImageUrl?: string | null;
     thicknessMm: number | null;
     dimensions: { widthMm: number | null; lengthMm: number | null; depthMm: number | null } | null;
     availability: { status: "available" | "limited" | "unavailable" | "on_request" | "unknown"; rawText: string | null };

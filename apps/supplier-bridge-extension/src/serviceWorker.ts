@@ -4,6 +4,7 @@ import {
   cancelSupplierBridgeSession,
   confirmSupplierCandidate,
   loadSupplierBridgeSession,
+  resolveSupplierPreviewImageColor,
   skipSupplierSyncItem,
   submitSupplierCandidate,
   SupplierBridgeApiError
@@ -296,11 +297,25 @@ async function captureCurrentPage(syncItemId?: string): Promise<BridgeRuntimeRes
   }
   let view = progress.view;
   for (const candidate of capture.candidates) {
+    let previewColorHex = candidate.normalizedProduct.previewColorHex;
+    if (candidate.previewImageUrl && candidate.normalizedProduct.productType === "board") {
+      try {
+        previewColorHex = await resolveSupplierPreviewImageColor(
+          progress.backendBaseUrl,
+          progress.sessionId,
+          accessToken,
+          item.id,
+          candidate.previewImageUrl
+        );
+      } catch {
+        capture.warnings.push("Démos preview image could not be sampled; the existing material colour was retained.");
+      }
+    }
     const submission: SupplierCandidateSubmission = {
       submissionId: submissionId(progress.sessionId, item.id, candidate.supplierProductCode, candidate.sourcePath),
       syncItemId: item.id,
       supplierProductCode: candidate.supplierProductCode,
-      normalizedProduct: candidate.normalizedProduct,
+      normalizedProduct: { ...candidate.normalizedProduct, previewColorHex },
       sourcePageType: candidate.sourcePageType,
       sourcePath: candidate.sourcePath,
       observedAt: candidate.observedAt,
