@@ -72,7 +72,10 @@ export async function runExtensionAssignment(
   const supplierIdForBackend = __SUPPLIER_BRIDGE_DEBUG__ && input.supplierId === "mock-supplier"
     ? "demos"
     : input.supplierId;
-  const demosSurfaceMaterial = supplierIdForBackend === "demos" && ["board", "worktop"].includes(input.candidate.normalizedProduct.productType ?? "");
+  // The debug supplier intentionally reuses the Démos backend contract, but it
+  // does not serve Démos product images. Never turn that test-only mapping into
+  // a production preview-image requirement.
+  const demosSurfaceMaterial = input.supplierId === "demos" && ["board", "worktop"].includes(input.candidate.normalizedProduct.productType ?? "");
   if (demosSurfaceMaterial && !input.candidate.previewImageUrl) {
     throw new SupplierPreviewColorRequiredError("Démos plošný materiál nemá overený produktový obrázok. Materiál nebol priradený, aby sa do modelu nezapísala nesprávna farba.");
   }
