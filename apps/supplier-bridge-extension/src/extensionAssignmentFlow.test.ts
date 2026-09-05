@@ -111,7 +111,7 @@ describe("standalone extension assignment flow", () => {
   it("uses the verified backend supplier only for the debug simulator fixture", async () => {
     const { deps } = fixtures();
 
-    await runExtensionAssignment({ ...input, supplierId: "mock-supplier" }, deps);
+    const result = await runExtensionAssignment({ ...input, supplierId: "mock-supplier", candidate: { ...candidate, previewImageUrl: undefined } }, deps);
 
     expect(deps.createSession).toHaveBeenCalledWith(
       input.baseUrl,
@@ -120,6 +120,8 @@ describe("standalone extension assignment flow", () => {
       "demos",
       expect.anything()
     );
+    expect(result.previewColor).toEqual({ status: "not_required", colorHex: null, imageFound: false });
+    expect(deps.resolvePreviewColor).not.toHaveBeenCalled();
   });
 
   it("refuses to silently assign a Démos surface material without a product image", async () => {
