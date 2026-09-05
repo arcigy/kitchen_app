@@ -101,6 +101,10 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .link { margin: 3px auto; border: 0; background: none; color: #a13742; font-size: 11px; text-decoration: underline; }
 .notice { padding: 9px 10px; border-radius: 8px; background: #e7f6ee; color: #176941; font-size: 11px; }
 .notice--error, .error { background: #fff0f0; color: #a02d37; }
+.preview-status { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: #2a6847; line-height: 1.35; }
+.preview-status--derived { color: #176941; font-weight: 750; }
+.preview-status--error { color: #a02d37; }
+.preview-status__swatch { display: inline-block; flex: 0 0 auto; width: 13px; height: 13px; border: 1px solid rgba(23, 105, 65, .45); border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .4); }
 .success { color: #177143; }
 .diagnostic summary { cursor: pointer; font-size: 13px; font-weight: 750; }
 .diagnostic__fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 9px 0; }
