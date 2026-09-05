@@ -33,6 +33,11 @@ import {
 } from "./materialTargetModel";
 import "./sidepanel.css";
 
+type PreviewColorDiagnostic = {
+  status: "image_found" | "derived" | "not_required" | "missing" | "failed";
+  colorHex: string | null;
+};
+
 function defaultOrigin(): string {
   return supplierBridgeBuild.arcigyOrigins.find((origin) => origin.includes("develop")) ?? supplierBridgeBuild.arcigyOrigins[0] ?? "";
 }
@@ -63,6 +68,7 @@ function App(): React.JSX.Element {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastDebug, setLastDebug] = useState<Record<string, unknown>>({});
+  const [previewColor, setPreviewColor] = useState<PreviewColorDiagnostic | null>(null);
   const [language, setLanguage] = useState<SupplierBridgeLanguage>("sk");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const assigningRef = useRef(false);
@@ -84,6 +90,7 @@ function App(): React.JSX.Element {
     setSuppliers([]);
     setSupplierId("");
     setCapture(null);
+    setPreviewColor(null);
     setExpandedGroups(new Set());
   }, []);
 
@@ -177,7 +184,7 @@ function App(): React.JSX.Element {
           : target?.category === "hinge" ? "hinge"
             : target?.category === "runner" ? "drawer_system"
               : target && ["corpus", "front", "plinth", "back", "drawer_bottom"].includes(target.category) ? "board"
-                : "hardware";
+                : "unknown";
       const raw: unknown = await chrome.runtime.sendMessage({ channel: BRIDGE_CHANNEL, type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT", expectedProductType, expectedManufacturer: null, expectedThicknessMm: target?.expectedThicknessMm ?? null });
       const response = parseBridgeRuntimeResponse(raw);
       if (!response?.ok || !response.capture) throw new Error(response?.message ?? response?.errorCode ?? copy("Produkt sa nepodarilo načítať.", "Produkt se nepodařilo načíst.", "The product could not be read."));
@@ -185,11 +192,18 @@ function App(): React.JSX.Element {
       if (!suppliers.some((supplier) => supplier.supplierId === response.capture!.supplierId)) throw new Error(copy("Tento dodávateľ nie je povolený pre klienta.", "Tento dodavatel není pro klienta povolen.", "This supplier is not enabled for the client."));
       setSupplierId(response.capture.supplierId);
       setCapture(response.capture);
+      const captured = response.capture.candidates[0] ?? null;
+      const demosSurfaceMaterial = response.capture.supplierId === "demos" && ["board", "worktop"].includes(captured?.normalizedProduct.productType ?? "");
+      const imageFound = Boolean(captured?.previewImageUrl);
+      setPreviewColor(demosSurfaceMaterial
+        ? { status: imageFound ? "image_found" : "missing", colorHex: null }
+        : { status: "not_required", colorHex: null });
       setMessage(copy("Produkt načítaný. Teraz vyberte, kam ho chcete priradiť.", "Produkt je načten. Nyní vyberte, kam jej chcete přiřadit.", "Product loaded. Now choose where to assign it."));
-      setLastDebug({ stage: "capture", supplierId: response.capture.supplierId, productCode: response.capture.candidates[0]?.supplierProductCode });
-      return response.capture.candidates[0] ?? null;
+      setLastDebug({ stage: "capture", supplierId: response.capture.supplierId, productCode: captured?.supplierProductCode, productType: captured?.normalizedProduct.productType, previewImageFound: imageFound, previewColorStatus: demosSurfaceMaterial ? (imageFound ? "pending" : "missing") : "not_required" });
+      return captured;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : copy("Produkt sa nepodarilo načítať.", "Produkt se nepodařilo načíst.", "The product could not be read."));
+      setPreviewColor({ status: "failed", colorHex: null });
       setLastDebug({ stage: "capture", error: cause instanceof Error ? cause.message : String(cause) });
       return null;
     } finally { setBusy(null); }
@@ -219,6 +233,7 @@ function App(): React.JSX.Element {
         target
       });
       if (result.materials) setMaterials(result.materials);
+      setPreviewColor({ status: result.previewColor.status, colorHex: result.previewColor.colorHex });
       const supplierWarning = result.warnings.map((warning) => warning.title).join(" ");
       setMessage(result.refreshError
         ? copy(`${context.candidate.normalizedProduct.displayName} bol uložený. Zoznam sa teraz nepodarilo obnoviť; po opätovnom načítaní projektu sa zobrazí zeleno.`, `${context.candidate.normalizedProduct.displayName} byl uložen. Seznam se nyní nepodařilo obnovit; po opětovném načtení projektu se zobrazí zeleně.`, `${context.candidate.normalizedProduct.displayName} was saved. The list could not be refreshed; it will appear green after reloading the project.`)
@@ -231,6 +246,10 @@ function App(): React.JSX.Element {
         supplierId: context.supplierId,
         productCode: context.candidate.supplierProductCode,
         sessionId: result.sessionId,
+        previewImageFound: result.previewColor.imageFound,
+        previewColorStatus: result.previewColor.status,
+        previewColorHex: result.previewColor.colorHex,
+        modelRefresh: result.refreshError ? "pending" : "refreshed",
         ...(result.refreshError ? { refreshError: result.refreshError instanceof Error ? result.refreshError.message : String(result.refreshError) } : {})
       });
     } catch (cause) {
@@ -241,6 +260,7 @@ function App(): React.JSX.Element {
       }
       const api = cause instanceof SupplierBridgeApiError ? { status: cause.status, requestId: cause.requestId, code: cause.code } : {};
       setError(cause instanceof Error ? cause.message : copy("Priradenie materiálu zlyhalo.", "Přiřazení materiálu se nezdařilo.", "Material assignment failed."));
+      if (context.supplierId === "demos" && ["board", "worktop"].includes(context.candidate.normalizedProduct.productType ?? "")) setPreviewColor({ status: "failed", colorHex: null });
       setLastDebug({ stage: "assign", startedAt, projectId: context.project.projectId, targetId: target.id, supplierId: context.supplierId, productCode: context.candidate.supplierProductCode, ...api, error: cause instanceof Error ? cause.message : String(cause) });
       await loadExtensionProjectMaterials(context.account.baseUrl, context.account.accessToken, context.project.projectId)
         .then(setMaterials)
@@ -277,7 +297,9 @@ function App(): React.JSX.Element {
         {target.assigned && <span className="target__check">✓ {target.inherited ? copy("Zdedené", "Zděděno", "Inherited") : copy("Priradené", "Přiřazeno", "Assigned")}</span>}
       </span>
       <span className={target.assigned ? "target__material" : "target__empty"}>
-        {busy === target.id ? copy("Ukladám…", "Ukládám…", "Saving…") : <>
+        {busy === target.id ? (target.category === "corpus" || target.category === "front" || target.category === "plinth" || target.category === "back" || target.category === "drawer_bottom" || target.category === "worktop"
+          ? copy("Čítam farbu dosky…", "Čtu barvu desky…", "Reading board colour…")
+          : copy("Ukladám…", "Ukládám…", "Saving…")) : <>
           {target.assignedColorHex && <span className="target__swatch" title={copy(`Farba materiálu ${target.assignedColorHex}`, `Barva materiálu ${target.assignedColorHex}`, `Material colour ${target.assignedColorHex}`)} style={{ backgroundColor: target.assignedColorHex }} />}
           {target.assignedText}
         </>}
@@ -333,7 +355,12 @@ function App(): React.JSX.Element {
       <div className="eyebrow">{copy("2. Dodávateľ a produkt", "2. Dodavatel a produkt", "2. Supplier and product")}</div>
       <label className="field">{copy("Dodávateľ", "Dodavatel", "Supplier")}<select disabled={busy !== null} value={supplierId} onChange={(event) => { setSupplierId(event.target.value); setCapture(null); setMessage(null); setError(null); }}>{suppliers.map((supplier) => <option key={supplier.supplierId} value={supplier.supplierId}>{supplier.displayName}</option>)}</select></label>
       <div className="privacy-disclosure__actions"><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void openSupplier()}>{copy("Otvoriť dodávateľa", "Otevřít dodavatele", "Open supplier")}</button><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void captureProduct()}>{busy === "capture" ? copy("Načítavam…", "Načítám…", "Loading…") : copy("Skontrolovať otvorený produkt", "Zkontrolovat otevřený produkt", "Check open product")}</button></div>
-      {selectedCandidate && <div className="notice notice--success"><strong>{selectedCandidate.normalizedProduct.displayName}</strong><br /><span>{selectedCandidate.supplierProductCode}</span></div>}
+      {selectedCandidate && <div className="notice notice--success"><strong>{selectedCandidate.normalizedProduct.displayName}</strong><br /><span>{selectedCandidate.supplierProductCode}</span>
+        {previewColor?.status === "image_found" && <small className="preview-status" data-preview-color-status="image_found">{copy("Obrázok plošného materiálu bol nájdený. Farba sa odčíta pri priradení.", "Obrázek plošného materiálu byl nalezen. Barva se načte při přiřazení.", "The surface-material image was found. Its colour will be read on assignment.")}</small>}
+        {previewColor?.status === "derived" && previewColor.colorHex && <small className="preview-status preview-status--derived" data-preview-color-status="derived"><span className="preview-status__swatch" style={{ backgroundColor: previewColor.colorHex }} />{copy(`Farba odčítaná z obrázka: ${previewColor.colorHex}`, `Barva načtená z obrázku: ${previewColor.colorHex}`, `Colour read from image: ${previewColor.colorHex}`)}</small>}
+        {previewColor?.status === "missing" && <small className="preview-status preview-status--error" data-preview-color-status="missing">{copy("Obrázok dosky nebol nájdený; priradenie sa z bezpečnostných dôvodov zastaví.", "Obrázek desky nebyl nalezen; přiřazení se z bezpečnostních důvodů zastaví.", "The board image was not found; assignment will stop to avoid an incorrect colour.")}</small>}
+        {previewColor?.status === "failed" && <small className="preview-status preview-status--error" data-preview-color-status="failed">{copy("Farbu sa nepodarilo overiť; materiál nebol priradený.", "Barvu se nepodařilo ověřit; materiál nebyl přiřazen.", "The colour could not be verified; the material was not assigned.")}</small>}
+      </div>}
     </section>
     <section className="card">
       <div className="eyebrow">{copy("3. Kam materiál priradiť?", "3. Kam materiál přiřadit?", "3. Where should the material be assigned?")}</div>

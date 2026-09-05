@@ -27,6 +27,7 @@ import { clientSessionHeaderFromRequest } from "./requestAuthentication";
 import { SupplierBridgePersistenceError } from "../core/supplier-bridge/supplier-bridge-postgres-repository";
 import { supplierExpectedProductTypeForMaterialCategory } from "../core/supplier-bridge/supplier-target-contract";
 import { resolveDemosPreviewImageColor, SupplierPreviewImageError } from "./supplierBridgePreviewImage";
+import { logSupplierBridge } from "../core/supplier-bridge/supplier-bridge-logger";
 
 type SupplierBridgeEndpointDeps = {
   projectRoot: string;
@@ -337,7 +338,16 @@ export async function handleSupplierBridgeApi(
       const item = view.items.find((candidate) => candidate.id === request.syncItemId);
       const supplierId = item?.exactLookup?.supplierId ?? view.session.supplierId;
       if (!item || supplierId !== "demos") throw new SupplierBridgeServiceError("Démos preview image is not authorized for this material target.", 403);
-      deps.sendJson(res, 200, { ok: true, previewColorHex: await resolveDemosPreviewImageColor(request.imageUrl) });
+      const startedAt = Date.now();
+      logSupplierBridge("info", { event: "preview_color_requested", sessionId: route.sessionId, syncItemId: item.id, status: "requested" });
+      try {
+        const previewColorHex = await resolveDemosPreviewImageColor(request.imageUrl);
+        logSupplierBridge("info", { event: "preview_color_resolved", sessionId: route.sessionId, syncItemId: item.id, status: "derived", durationMs: Date.now() - startedAt, previewColorApplied: true });
+        deps.sendJson(res, 200, { ok: true, previewColorHex });
+      } catch (error) {
+        logSupplierBridge("warn", { event: "preview_color_unavailable", sessionId: route.sessionId, syncItemId: item.id, status: "unavailable", durationMs: Date.now() - startedAt, errorCode: error instanceof SupplierPreviewImageError ? "SUPPLIER_PREVIEW_IMAGE_UNAVAILABLE" : "SUPPLIER_PREVIEW_IMAGE_FAILED" });
+        throw error;
+      }
       return true;
     }
     if (route.action === "candidate" && req.method === "POST") {

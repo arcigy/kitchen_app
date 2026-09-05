@@ -39,6 +39,7 @@ const candidate: CapturedSupplierCandidate = {
     lengthMm: null,
     availability: "unknown"
   },
+  previewImageUrl: "https://www.demos24plus.com/content/images/product/default/175718.jpeg",
   sourcePageType: "product",
   sourcePath: "/produkt/175718",
   observedAt: "2026-07-18T17:55:17.000Z",
@@ -57,6 +58,7 @@ function fixtures() {
     deps: {
       createSession: vi.fn().mockResolvedValue({ view, bridgeToken: "bridge-token" } as unknown as SupplierBridgeSessionCreation),
       attachSession: vi.fn().mockResolvedValue({ view, accessToken: "bridge-access" } as unknown as SupplierBridgeAttachment),
+      resolvePreviewColor: vi.fn().mockResolvedValue("#005595"),
       submitCandidate: vi.fn().mockResolvedValue({ view, candidate: view.candidates[0], idempotent: false }),
       confirmCandidate: vi.fn().mockResolvedValue(view),
       loadMaterials: vi.fn().mockResolvedValue(materials),
@@ -80,13 +82,17 @@ describe("standalone extension assignment flow", () => {
     const { deps, materials } = fixtures();
     const result = await runExtensionAssignment(input, deps);
 
-    expect(result).toEqual({ sessionId: "session-1", materials, warnings: [], refreshError: null });
+    expect(result).toEqual({ sessionId: "session-1", materials, warnings: [], refreshError: null, previewColor: { status: "derived", colorHex: "#005595", imageFound: true } });
     expect(deps.createSession).toHaveBeenCalledWith(input.baseUrl, input.accessToken, input.projectId, input.supplierId, expect.objectContaining({
       materialAssignmentId: target.id,
       supplierProductId: candidate.supplierProductCode,
       requestId: "extension-request-1"
     }));
     expect(deps.confirmCandidate).toHaveBeenCalledTimes(1);
+    expect(deps.resolvePreviewColor).toHaveBeenCalledWith(input.baseUrl, "session-1", "bridge-access", "item-1", candidate.previewImageUrl);
+    expect(deps.submitCandidate).toHaveBeenCalledWith(input.baseUrl, "session-1", "bridge-access", expect.objectContaining({
+      normalizedProduct: expect.objectContaining({ previewColorHex: "#005595" })
+    }));
     expect(deps.notifyProjectMaterialsChanged).toHaveBeenCalledWith(input.baseUrl, input.projectId);
     expect(deps.loadMaterials).toHaveBeenCalledTimes(1);
   });
@@ -98,7 +104,7 @@ describe("standalone extension assignment flow", () => {
 
     const result = await runExtensionAssignment(input, deps);
 
-    expect(result).toEqual({ sessionId: "session-1", materials: null, warnings: [], refreshError: refreshFailure });
+    expect(result).toEqual({ sessionId: "session-1", materials: null, warnings: [], refreshError: refreshFailure, previewColor: { status: "derived", colorHex: "#005595", imageFound: true } });
     expect(deps.confirmCandidate).toHaveBeenCalledTimes(1);
   });
 
@@ -114,6 +120,44 @@ describe("standalone extension assignment flow", () => {
       "demos",
       expect.anything()
     );
+  });
+
+  it("refuses to silently assign a Démos surface material without a product image", async () => {
+    const { deps } = fixtures();
+
+    await expect(runExtensionAssignment({
+      ...input,
+      candidate: { ...candidate, previewImageUrl: undefined }
+    }, deps)).rejects.toThrow("nemá overený produktový obrázok");
+
+    expect(deps.createSession).not.toHaveBeenCalled();
+    expect(deps.submitCandidate).not.toHaveBeenCalled();
+  });
+
+  it("does not sample a supplier image for components", async () => {
+    const { deps } = fixtures();
+
+    const result = await runExtensionAssignment({
+      ...input,
+      target: { ...target, category: "hinge", expectedThicknessMm: null },
+      candidate: { ...candidate, normalizedProduct: { ...candidate.normalizedProduct, productType: "hinge" } }
+    }, deps);
+
+    expect(result.previewColor).toEqual({ status: "not_required", colorHex: null, imageFound: true });
+    expect(deps.resolvePreviewColor).not.toHaveBeenCalled();
+  });
+
+  it("samples the supplier image for a worktop as a surface material", async () => {
+    const { deps } = fixtures();
+
+    const result = await runExtensionAssignment({
+      ...input,
+      target: { ...target, category: "worktop", expectedThicknessMm: 38 },
+      candidate: { ...candidate, normalizedProduct: { ...candidate.normalizedProduct, productType: "worktop", thicknessMm: 38 } }
+    }, deps);
+
+    expect(result.previewColor).toEqual({ status: "derived", colorHex: "#005595", imageFound: true });
+    expect(deps.resolvePreviewColor).toHaveBeenCalledTimes(1);
   });
 
   it("sends a runner target without a board-thickness expectation", async () => {
