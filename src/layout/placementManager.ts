@@ -179,6 +179,7 @@ export const rebuildGhost = (S: AppState, helpers: PlacementHelpers, cursorWorld
     helpers.setPlacementAdjacencyPreview?.(null);
   }
 
+  g.kitchenPlacement = placementKitchenBinding;
   const shouldCheckRoomBounds = constrainedPlacement?.enforceRoomBounds ?? true;
   const enforceRoomBounds = constrainedPlacement ? shouldCheckRoomBounds : false;
   const shouldCheckWallOverlap = constrainedPlacement?.enforceWallOverlap ?? true;

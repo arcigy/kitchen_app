@@ -8,6 +8,7 @@ import type { ModuleParams } from "../model/cabinetTypes";
 import type { AppState } from "../layout/appState";
 import { findKitchenPlacementGroup, resolveKitchenPlacementBackOffset } from "./moduleKitchenPlacement";
 import { getLockedModuleNeighborIdsForSide, getLockedResizeAnchorSide, isProtectedAlignModule } from "./alignLocks";
+import { getKitchenModuleRole } from '../layout/kitchenModuleRules';
 
 type PolygonPoint = [number, number];
 type PolygonRing = PolygonPoint[];
@@ -32,6 +33,10 @@ export type ModulePlacementSnapOptions = {
 export type AdjacentModuleInfo = ModuleAdjacencyInfo & { other: LayoutInstance };
 
 export type ModulePlacementHelpersContext = {
+  hasRequiredWallSupport?: (inst: LayoutInstance) => boolean;
+  resolveUpperWallMove?: (inst: LayoutInstance, desired: THREE.Vector3) => {
+    position: THREE.Vector3; rotationY: number; valid: boolean; kitchenPlacement: LayoutInstance['kitchenPlacement'];
+  } | null;
   instances: LayoutInstance[];
   kitchenWorktops: KitchenWorktopInstance[];
   walls: WallInstance[];
@@ -265,6 +270,10 @@ function moduleOverlapsWalls(inst: LayoutInstance) {
   return false;
 }
 
+function moduleViolatesWallConstraints(inst: LayoutInstance) {
+  return !(ctx.hasRequiredWallSupport?.(inst) ?? true) || moduleOverlapsWalls(inst);
+}
+
 function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, opts?: ModulePlacementSnapOptions) {
   if (isCornerKitchenModule(moving)) {
     return { position: desired.clone(), link: null };
@@ -293,24 +302,35 @@ function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, op
   let best = desired.clone();
   let bestScore = Infinity;
   let bestLink: ModuleAdjacencyLink | null = null;
+  const initialRotation = moving.root.rotation.y;
+  const initialBinding = moving.kitchenPlacement;
+  let bestRotation = initialRotation;
+  let bestBinding = initialBinding;
   const enforceWallConstraints = opts?.enforceWallConstraints ?? true;
   const enforceWallOverlap = opts?.enforceWallOverlap ?? true;
   for (const c of candidates) {
+    moving.root.rotation.y = initialRotation;
+    moving.kitchenPlacement = initialBinding;
     const clamped = enforceWallConstraints ? applyWallConstraints(moving, c.pos) : c.pos.clone();
     const prev = moving.root.position.clone();
     moving.root.position.copy(clamped);
     const overlaps =
       (opts?.ignoreIds ? anyOverlapIgnoring(moving, opts.ignoreIds) : anyOverlap(moving, null)) ||
-      (enforceWallOverlap ? moduleOverlapsWalls(moving) : false);
+      (enforceWallOverlap ? moduleViolatesWallConstraints(moving) : false);
     moving.root.position.copy(prev);
     if (overlaps) continue;
     if (c.score < bestScore) {
       bestScore = c.score;
       best = clamped;
       bestLink = c.link ?? null;
+      bestRotation = moving.root.rotation.y;
+      bestBinding = moving.kitchenPlacement;
     }
   }
 
+  moving.root.rotation.y = bestRotation;
+  moving.kitchenPlacement = bestBinding;
+  moving.root.updateMatrixWorld(true);
   return { position: best, link: bestLink };
 }
 
@@ -689,6 +709,13 @@ function updateModuleAdjacencyVisuals() {
 }
 
 function applyWallConstraints(moving: LayoutInstance, desired: THREE.Vector3) {
+  const upper = ctx.resolveUpperWallMove?.(moving, desired);
+  if (upper) {
+    if (!upper.valid) return desired.clone();
+    moving.root.rotation.y = upper.rotationY;
+    moving.kitchenPlacement = upper.kitchenPlacement;
+    return upper.position.clone();
+  }
   const snapDist = 0.03; // 30mm
 
   const currentPos = moving.root.position.clone();
@@ -732,6 +759,7 @@ function applyWallConstraints(moving: LayoutInstance, desired: THREE.Vector3) {
 }
 
 function autoOrientModuleToRoomWallIfSnapped(inst: LayoutInstance, ignoreIds?: Set<string>) {
+  if (getKitchenModuleRole(inst.params) === 'upper') return;
   const snapDist = 0.03; // 30mm
   const box = instanceLayoutWorldBox(inst);
   const dxL = -roomBounds.halfW - box.min.x;
@@ -777,6 +805,7 @@ function autoOrientModuleToRoomWallIfSnapped(inst: LayoutInstance, ignoreIds?: S
     worktopWorldRing,
     moduleOverlapsKitchenWorktops,
     moduleOverlapsWalls,
+    moduleViolatesWallConstraints,
     snapPositionDetailed,
     collectPinnedPushChain,
     collectPinnedPushChainFromBoxes,

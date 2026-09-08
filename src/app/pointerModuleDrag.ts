@@ -106,6 +106,9 @@ export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGround
   if (!inst) return false;
   if (params.isModuleAlignLocked?.(instanceId)) return true;
 
+  const previousRotation = inst.root.rotation.y;
+  const previousBinding = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
+
   const finalPos = resolvePointerModuleDragFinalPosition({
     dragState: params.dragState,
     hitPoint: params.hitPoint,
@@ -125,6 +128,9 @@ export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGround
       pushed,
       findInstance: params.findInstance
     });
+    inst.root.rotation.y = previousRotation;
+    inst.kitchenPlacement = previousBinding;
+    inst.root.updateMatrixWorld(true);
     return true;
   }
 

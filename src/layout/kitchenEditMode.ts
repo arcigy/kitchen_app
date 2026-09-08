@@ -3700,7 +3700,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     attachTallEditorPointerHandlers();
     args.setSelectedModule(focusInstanceId);
     args.setUnderlayStatus(
-      "Kitchen: click a dimension to edit width or position. M = Move, A = Align; snapping is active and modules stay inside the worktop.",
+      "Kitchen: click a dimension to edit width or position. M = Move, A = Align; base modules follow the worktop and upper modules require drawn walls.",
     );
     if (activeTallStackEditorInstance()) args.buildClassicTopbar();
     renderModuleCatalog();

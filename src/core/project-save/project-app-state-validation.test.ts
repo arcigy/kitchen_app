@@ -35,6 +35,13 @@ const state = (groupId: string | null, edit: unknown = activeEdit) => ({
 });
 
 describe("project app state kitchen references", () => {
+  it('rejects a persisted upper attachment to a missing wall', () => {
+    const saved = state(null, null);
+    const invalid = { ...saved, layout: { ...saved.layout, snapshot: { ...saved.layout.snapshot,
+      instances: [{ id: 'upper', kitchenPlacement: { kind: 'wall', wallId: 'missing', wallSide: 'left', segmentIndex: 0, offsetAlongM: 1 } }]
+    } } };
+    expect(() => validateProjectAppState(invalid)).toThrow(/missing wall/);
+  });
   it("accepts references owned by a new active edit", () => {
     expect(() => validateProjectAppState(state("kg-draft"))).not.toThrow();
   });

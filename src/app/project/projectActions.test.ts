@@ -59,6 +59,26 @@ function saveWithRevision(saveRevision: number): ProjectSaveFile {
 describe("project actions", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it("tracks first snapshot availability only after a successful save, including legacy loaded projects", async () => {
+    const actions = createProjectActions({ buildAppState: () => appState, restoreSave: vi.fn(), onProjectChanged: vi.fn(), initialProject: project });
+    expect(actions.getState().hasServerSnapshot).toBe(false);
+    vi.mocked(saveProject).mockRejectedValueOnce(new Error("offline"));
+    await expect(actions.save({ background: true })).rejects.toThrow("offline");
+    expect(actions.getState().hasServerSnapshot).toBe(false);
+    vi.mocked(saveProject).mockResolvedValueOnce(saveWithRevision(1));
+    await actions.save({ background: true });
+    expect(actions.getState().hasServerSnapshot).toBe(true);
+    vi.mocked(createProject).mockResolvedValueOnce({ ...project, projectId: "new-project" });
+    await actions.create({ name: "New project", address: "Main 1", contactName: "Jane" });
+    expect(actions.getState().hasServerSnapshot).toBe(false);
+    const legacy = { ...saveWithRevision(1), integrity: { savedAt: "2026-01-01T00:00:00.000Z" } } as ProjectSaveFile;
+    vi.mocked(loadProject).mockResolvedValueOnce(legacy);
+    await actions.loadById(project.projectId);
+    expect(actions.getState().hasServerSnapshot).toBe(true);
+    const reopened = createProjectActions({ buildAppState: () => appState, restoreSave: vi.fn(), onProjectChanged: vi.fn(), initialProjectSave: legacy });
+    expect(reopened.getState().hasServerSnapshot).toBe(true);
+  });
+
   it("continues from the loaded save revision while starting a fresh editing session", async () => {
     const initialProjectSave = saveWithRevision(7);
     vi.mocked(saveProject).mockResolvedValue(saveWithRevision(8));

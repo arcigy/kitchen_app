@@ -1186,6 +1186,8 @@ export function startApp(initialArgs: AppArgs) {
   const getKitchenPlacementConstraint = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["getKitchenPlacementConstraint"]>) => kitchenPlacementController.getKitchenPlacementConstraint(...args);
 
   kitchenPlacementController = createKitchenPlacementController({
+    setStatus: message => setUnderlayStatus(message),
+    hasModuleCollision: (inst) => modulePlacementHelpers.anyOverlap(inst, null),
     S,
     walls,
     instances,
@@ -1212,6 +1214,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   const layoutSceneQueries = createLayoutSceneQueries({
+    hasRequiredWallSupport: kitchenPlacementController.hasRequiredKitchenWallSupport,
     instances,
     kitchenWorktops,
     walls,
@@ -1768,6 +1771,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   wallController = createWallController({
+    reconcileMountedModules: () => kitchenPlacementController.reconcileMountedModules(),
     walls,
     instances,
     kitchenWorktops,
@@ -1784,7 +1788,7 @@ export function startApp(initialArgs: AppArgs) {
     cam,
     getModuleLocalBackCenter,
     getKitchenWorktopGuidePathForAlign,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: (inst) => modulePlacementHelpers.moduleOverlapsWalls(inst),
     setUnderlayStatus,
     showWallSnapMarkersFor,
     getViewMode: () => viewMode,
@@ -2207,7 +2211,7 @@ export function startApp(initialArgs: AppArgs) {
     kitchenWorktops,
     measureState,
     moduleOverlapsKitchenWorktops,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     mountActiveViewProps,
     mountPlacementControls,
     pinnedInstanceIds,
@@ -2370,6 +2374,7 @@ export function startApp(initialArgs: AppArgs) {
     restoreColumns: restoreColumnsFromSnapshot,
     restoreSections: restoreSectionsFromSnapshot,
     restoreWorktops: restoreKitchenWorktopsFromSnapshot,
+    restoreKitchenModulePlacements: () => kitchenPlacementController.restoreKitchenModulePlacements(),
     restoreLedStripGroups: (groups, ledStripCounter) => {
       S.ledStripGroups.splice(0, S.ledStripGroups.length, ...groups);
       S.ledStripCounter = ledStripCounter ?? S.ledStripCounter;
@@ -2396,7 +2401,7 @@ export function startApp(initialArgs: AppArgs) {
   function anyOverlapIgnoring(moving: LayoutInstance, ignoreIds: Set<string>) { return modulePlacementHelpers.anyOverlapIgnoring(moving, ignoreIds); }
   function moduleWorldRing(inst: LayoutInstance) { return modulePlacementHelpers.moduleWorldRing(inst); }
   function moduleOverlapsKitchenWorktops(inst: LayoutInstance) { return modulePlacementHelpers.moduleOverlapsKitchenWorktops(inst); }
-  function moduleOverlapsWalls(inst: LayoutInstance) { return modulePlacementHelpers.moduleOverlapsWalls(inst); }
+  function moduleViolatesWallConstraints(inst: LayoutInstance) { return modulePlacementHelpers.moduleViolatesWallConstraints(inst); }
   function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, opts?: ModulePlacementSnapOptions) { return modulePlacementHelpers.snapPositionDetailed(moving, desired, opts); }
   function collectAdjacentModuleInfos(inst: LayoutInstance, referenceBox = instanceWorldBox(inst)) { return modulePlacementHelpers.collectAdjacentModuleInfos(inst, referenceBox); }
   function chooseResizeAnchorSide(inst: LayoutInstance, infos: AdjacentModuleInfo[]) { return modulePlacementHelpers.chooseResizeAnchorSide(inst, infos); }
@@ -2425,7 +2430,7 @@ export function startApp(initialArgs: AppArgs) {
     roomContainsBoxXZ,
     instanceWorldBox,
     anyOverlap,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     moduleOverlapsKitchenWorktops,
     autoOrientModuleToRoomWallIfSnapped,
     resolveModuleAdjacencySnap,
@@ -3249,6 +3254,8 @@ export function startApp(initialArgs: AppArgs) {
   const selectInstanceById = moduleSelectionController.selectInstanceById;
 
   modulePlacementHelpers = createModulePlacementHelpers({
+    hasRequiredWallSupport: kitchenPlacementController.hasRequiredKitchenWallSupport,
+    resolveUpperWallMove: kitchenPlacementController.resolveUpperWallMove,
     instances,
     kitchenWorktops,
     walls,
@@ -3889,6 +3896,7 @@ export function startApp(initialArgs: AppArgs) {
       }
       tb.setProjectLabel(project ? project.name : args.clientProfile?.company.name ?? "Workspace");
       projectHeader.render(project, status);
+      moduleCommercialPropsController?.refreshAfterSave();
       void supplierBridgeController?.syncProjectContext().catch(() => undefined);
     },
     initialProject: args.initialProject,
@@ -3977,6 +3985,7 @@ export function startApp(initialArgs: AppArgs) {
   });
   moduleCommercialPropsController = createModuleCommercialPropsController({
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
+    hasSavedProject: () => projectActions.getState().hasServerSnapshot !== false,
     getModuleScope: (instanceId) => buildProjectMaterialScopes({
       instances: S.instances,
       worktops: S.kitchenWorktops,
@@ -4366,7 +4375,7 @@ export function startApp(initialArgs: AppArgs) {
     mmDist,
     get mode() { return mode; },
     moduleOverlapsKitchenWorktops,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     getKitchenGuideSegmentInfo,
     mountProps,
     nudgePinnedModuleChain,
@@ -4401,6 +4410,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   createInstanceRebuilderResult = createInstanceRebuilder({
+    hasRequiredWallSupport: kitchenPlacementController.hasRequiredKitchenWallSupport,
     S,
     anyOverlap,
     applyWallConstraints,
@@ -4421,7 +4431,7 @@ export function startApp(initialArgs: AppArgs) {
     isCornerKitchenModule,
     get lastRebuildDebug() { return lastRebuildDebug; }, set lastRebuildDebug(next) { lastRebuildDebug = next; },
     moduleOverlapsKitchenWorktops,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     moduleRootLocalBox,
     normalizeModuleParamsForSource,
     preserveAnchoredResizeSide,
@@ -4490,7 +4500,7 @@ export function startApp(initialArgs: AppArgs) {
     mirrorKitchenWorktopDraw,
     get mode() { return mode; }, set mode(next) { mode = next; },
     moduleOverlapsKitchenWorktops,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     mountProps,
     nudgePinnedModuleChain,
     pinnedWallIds,
@@ -4654,7 +4664,7 @@ export function startApp(initialArgs: AppArgs) {
     measureState,
     get mode() { return mode; }, set mode(next) { mode = next; },
     moduleOverlapsKitchenWorktops,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     mountProps,
     mountWindowControls,
     moveFloorEditSegment,
@@ -4990,7 +5000,7 @@ export function startApp(initialArgs: AppArgs) {
     findInstance,
     instanceFitsRoom,
     anyOverlap,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     moduleOverlapsKitchenWorktops,
     inferKitchenPlacementBinding,
     rebuildFloor,

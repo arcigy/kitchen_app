@@ -103,6 +103,32 @@ afterEach(() => {
 });
 
 describe("module commercial properties controller", () => {
+  it("does not request commercial data before the first project snapshot and loads it after saving", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    let saved = false;
+    const loadMaterials = vi.fn(async () => materialsView([assignment("oak", "Dub")]));
+    const loadMargins = vi.fn(async () => marginsView());
+    const controller = createModuleCommercialPropsController({
+      getProjectId: () => "new-project",
+      hasSavedProject: () => saved,
+      getModuleScope: () => scope,
+      api: { loadMaterials, loadMargins }
+    });
+    controller.mount(host, "module-1");
+    await controller.flushPending();
+    expect(loadMaterials).not.toHaveBeenCalled();
+    expect(loadMargins).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("uložení projektu");
+    expect(host.querySelector<HTMLInputElement>("[data-module-commercial-material-input]")?.disabled).toBe(true);
+    saved = true;
+    controller.refreshAfterSave();
+    await controller.flushPending();
+    expect(loadMaterials).toHaveBeenCalledOnce();
+    expect(loadMargins).toHaveBeenCalledOnce();
+    expect(host.querySelector<HTMLInputElement>("[data-module-commercial-material-input]")?.value).toBe("Dub");
+  });
+
   it("copies a current project material to the stable module item and updates its exact margin target", async () => {
     const oak = assignment("oak", "Dub");
     const white = assignment("white", "Biela", "material-assignment:module:other:corpus:right-side");

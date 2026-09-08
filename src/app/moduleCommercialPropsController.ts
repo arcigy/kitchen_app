@@ -42,6 +42,7 @@ export type ModuleCommercialPropsApi = {
 
 export type ModuleCommercialPropsControllerArgs = {
   getProjectId: () => string | null;
+  hasSavedProject?: () => boolean;
   getModuleScope: (instanceId: string) => ProjectMaterialScope | null;
   ensureProjectSaved?: () => Promise<void>;
   onMaterialsChanged?: (view: ProjectMaterialsView) => void;
@@ -53,6 +54,7 @@ export type ModuleCommercialPropsControllerArgs = {
 
 export type ModuleCommercialPropsHandle = {
   mount: (host: HTMLElement, instanceId: string) => void;
+  refreshAfterSave: () => void;
   flushPending: () => Promise<void>;
   destroy: () => void;
 };
@@ -264,6 +266,7 @@ export function createModuleCommercialPropsController(
   let loadAbort: AbortController | null = null;
   let destroyed = false;
   let mutationTail: Promise<void> = Promise.resolve();
+  let pendingSnapshotLoad: (() => Promise<void>) | null = null;
   const pending = new Set<Promise<void>>();
 
   const track = (operation: Promise<void>) => {
@@ -272,6 +275,7 @@ export function createModuleCommercialPropsController(
   };
 
   const mount = (host: HTMLElement, instanceId: string) => {
+    pendingSnapshotLoad = null;
     generation += 1;
     const ownGeneration = generation;
     loadAbort?.abort();
@@ -299,6 +303,17 @@ export function createModuleCommercialPropsController(
         render();
         return;
       }
+      // Creating a project first stores metadata. Do not query snapshot-backed
+      // prices before its first save, and do not commit the kitchen draft merely
+      // because a module was selected. Resume this panel when saving succeeds.
+      if (args.hasSavedProject?.() === false) {
+        state.loading = false;
+        state.notice = "Materiály a marže sa načítajú po prvom uložení projektu.";
+        pendingSnapshotLoad = () => reload();
+        render();
+        return;
+      }
+      pendingSnapshotLoad = null;
       loadAbort?.abort();
       const abort = new AbortController();
       loadAbort = abort;
@@ -510,11 +525,18 @@ export function createModuleCommercialPropsController(
 
   return {
     mount,
+    refreshAfterSave() {
+      if (!pendingSnapshotLoad || args.hasSavedProject?.() === false || destroyed) return;
+      const load = pendingSnapshotLoad;
+      pendingSnapshotLoad = null;
+      track(load());
+    },
     async flushPending() {
       while (pending.size > 0) await Promise.allSettled([...pending]);
       await mutationTail;
     },
     destroy() {
+      pendingSnapshotLoad = null;
       destroyed = true;
       generation += 1;
       loadAbort?.abort();

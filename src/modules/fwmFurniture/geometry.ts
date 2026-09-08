@@ -1442,6 +1442,9 @@ function buildOpenEndCabinet(group: THREE.Group, params: FwmFurnitureParams, cat
   const radius = num(params, "cornerRadiusMm", Math.min(width, depth) * 0.45);
   const chamfer = num(params, "chamferMm", Math.min(width, depth) * 0.42);
   const footprint = openEndFootprintPoints({ width, depth, side, shape, radiusMm: radius, chamferMm: chamfer });
+  // The same outer contour drives the carcass and the editor outline/picking.
+  // A single back or side panel is only a part of this cabinet's footprint.
+  group.userData.kitchenPlanFootprintMm = footprint.map(point => ({ ...point }));
   const innerWidth = Math.max(1, width - 2 * t);
   const innerDepth = Math.max(1, depth - back);
   const innerFootprint = openEndFootprintPoints({
@@ -1903,6 +1906,11 @@ function buildCatalogWallCorner90Cabinet(group: THREE.Group, params: FwmFurnitur
   const maxZ = legLength / 2;
   const frontOuter = minX + cabinetDepth;
   const frontInner = frontOuter - frontT;
+  // Placement uses the CLOSED outside of the doors, not the shallower top board.
+  group.userData.kitchenPlanFootprintMm = [
+    {x:minX,z:minZ}, {x:maxX,z:minZ}, {x:maxX,z:frontOuter},
+    {x:frontOuter,z:frontOuter}, {x:frontOuter,z:maxZ}, {x:minX,z:maxZ}
+  ];
   const body = makeMaterial(params, catalog, "body");
   const backMat = makeMaterial(params, catalog, "back");
   const frontMat = makeUniformPreviewMaterial(makeMaterial(params, catalog, "front"));
