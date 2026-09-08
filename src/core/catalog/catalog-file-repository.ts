@@ -18,6 +18,24 @@ import {
 } from "./catalog-repository";
 import { validateClientCatalog } from "./catalog-validation";
 import { invalidateCatalogExactLookupCaches } from "./catalog-exact-lookup";
+import { createSystemCatalogLegacyDefaults } from "./catalog-bootstrap";
+
+// Requests construct separate repositories. Coordinate the complete catalog
+// operation by tenant directory, so readers cannot observe our partial saves or
+// race another request seeding the same files. PostgreSQL owns multi-process use.
+const catalogOperations = new Map<string, Promise<void>>();
+function withCatalogAccess<T>(projectRoot: string, ctx: ClientContext, action: () => Promise<T>): Promise<T> {
+  const directory = path.resolve(resolveClientCatalogPath(projectRoot, ctx));
+  const key = process.platform === "win32" ? directory.toLowerCase() : directory;
+  const previous = catalogOperations.get(key) ?? Promise.resolve();
+  const operation = previous.then(action);
+  const completed = operation.then(() => undefined, () => undefined);
+  catalogOperations.set(key, completed);
+  void completed.then(() => {
+    if (catalogOperations.get(key) === completed) catalogOperations.delete(key);
+  });
+  return operation;
+}
 
 export function getCatalogFileNames() {
   return {
@@ -73,7 +91,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
       readJson<ClientCatalog["meta"]>(ctx, names.meta)
     ]);
     if (!materials || !hardware || !components || !componentGeometry || !modules || !priceList || !kitchenDefaults) return null;
-    const seed = memory.getCatalogForClient(ctx.clientId);
+    const seed = createSystemCatalogLegacyDefaults();
     return validateClientCatalog({
       clientId: ctx.clientId,
       materials,
@@ -92,7 +110,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
   async function writeCatalog(ctx: ClientContext, catalog: ClientCatalog): Promise<void> {
     const validated = validateClientCatalog(catalog);
     assertCatalogClient(ctx, validated);
-    await Promise.all([
+    const writes = await Promise.allSettled([
       writeJson(ctx, names.materials, validated.materials),
       writeJson(ctx, names.hardware, validated.hardware),
       writeJson(ctx, names.components, validated.components),
@@ -104,18 +122,20 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
       writeJson(ctx, names.meta, validated.meta)
     ]);
     invalidateCatalogExactLookupCaches(ctx.clientId);
+    // Do not release the tenant queue while a sibling write is still running.
+    const failure = writes.find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
   }
 
   async function ensureSystemModulePackages(ctx: ClientContext, catalog: ClientCatalog): Promise<ClientCatalog> {
     const existingPackages = await modulePackageRepository.listPackages(ctx);
-    const existingPackageIds = new Set(existingPackages.map((modulePackage) => modulePackage.module.modulePackageId));
+    const packagesById = new Map(existingPackages.map((modulePackage) => [modulePackage.module.modulePackageId, modulePackage]));
     const nextModules = [...catalog.modules];
     let changed = false;
 
     for (const template of systemModulePackageTemplates) {
-      const persisted = existingPackageIds.has(template.module.modulePackageId)
-        ? await modulePackageRepository.getPackage(ctx, template.module.modulePackageId)
-        : await modulePackageRepository.savePackage(ctx, structuredClone(template), { source: "system-template" });
+      const persisted = packagesById.get(template.module.modulePackageId)
+        ?? await modulePackageRepository.savePackage(ctx, structuredClone(template), { source: "system-template" });
       if (!persisted) continue;
 
       const packageHash = computeModulePackageHash(persisted);
@@ -180,7 +200,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
     });
   }
 
-  const ensureCatalogExists = async (ctx: ClientContext): Promise<ClientCatalog> => {
+  const ensureCatalogExists = (ctx: ClientContext): Promise<ClientCatalog> => withCatalogAccess(projectRoot, ctx, async () => {
     const existing = await readCatalog(ctx);
     if (existing) {
       const withCurrentSystemData = ensureCurrentSystemCatalogData(existing);
@@ -189,9 +209,12 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
       return repaired;
     }
     const baseSeed = memory.getCatalogForClient(ctx.clientId);
-    const seededPackages = await Promise.all(systemModulePackageTemplates.map((modulePackage) =>
+    const packageWrites = await Promise.allSettled(systemModulePackageTemplates.map((modulePackage) =>
       modulePackageRepository.savePackage(ctx, structuredClone(modulePackage), { source: "system-template" })
     ));
+    const failedPackage = packageWrites.find((result) => result.status === "rejected");
+    if (failedPackage?.status === "rejected") throw failedPackage.reason;
+    const seededPackages = packageWrites.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
     const seeded: ClientCatalog = {
       ...baseSeed,
       modules: seededPackages.map((modulePackage) =>
@@ -204,35 +227,38 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
     };
     await writeCatalog(ctx, seeded);
     return seeded;
-  };
+  });
 
   return {
     getCatalogForClient(clientId: string): ClientCatalog {
       return memory.getCatalogForClient(clientId);
     },
     async getRevision(ctx) {
-      const meta = await readJson<ClientCatalog["meta"]>(ctx, names.meta);
-      if (!meta) return null;
-      try {
-        const entries = await Promise.all(Object.values(names).map(async (fileName) => {
-          const info = await stat(filePath(ctx, fileName));
-          return `${fileName}\u0000${info.size}\u0000${info.mtimeMs}`;
-        }));
-        return {
-          catalogVersion: meta.catalogVersion,
-          updatedAt: meta.updatedAt,
-          storageRevision: createHash("sha256").update(entries.join("\n")).digest("hex")
-        };
-      } catch (error: unknown) {
-        if ((error as { code?: string }).code === "ENOENT") return null;
-        throw error;
-      }
+      return withCatalogAccess(projectRoot, ctx, async () => {
+        const meta = await readJson<ClientCatalog["meta"]>(ctx, names.meta);
+        if (!meta) return null;
+        try {
+          const entries = await Promise.all(Object.values(names).map(async (fileName) => {
+            const info = await stat(filePath(ctx, fileName));
+            return `${fileName}\u0000${info.size}\u0000${info.mtimeMs}`;
+          }));
+          return {
+            catalogVersion: meta.catalogVersion,
+            updatedAt: meta.updatedAt,
+            storageRevision: createHash("sha256").update(entries.join("\n")).digest("hex")
+          };
+        } catch (error: unknown) {
+          if ((error as { code?: string }).code === "ENOENT") return null;
+          throw error;
+        }
+      });
     },
     async getCatalog(ctx) {
-      return (await readCatalog(ctx)) ?? memory.getCatalogForClient(ctx.clientId);
+      return withCatalogAccess(projectRoot, ctx, async () =>
+        (await readCatalog(ctx)) ?? memory.getCatalogForClient(ctx.clientId));
     },
     async saveCatalog(ctx, catalog) {
-      await writeCatalog(ctx, catalog);
+      await withCatalogAccess(projectRoot, ctx, () => writeCatalog(ctx, catalog));
     },
     ensureCatalogExists,
     async getMaterialById(ctx, materialId) {
