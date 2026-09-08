@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { registerTechnicalMaterial, unregisterTechnicalMaterial } from "./viewportAppearance";
 
 export type ViewDisplayMode = "solid" | "realistic" | "wireframe";
 
@@ -181,6 +182,7 @@ export function createViewDisplayController(scene: THREE.Scene) {
     if (!edge) return;
     edge.removeFromParent();
     edge.geometry.dispose();
+    unregisterTechnicalMaterial(scene, edge.material);
     edge.material.dispose();
     edgeLines.delete(mesh);
     edgeMeshes.delete(mesh);
@@ -210,6 +212,8 @@ export function createViewDisplayController(scene: THREE.Scene) {
 
     edge.visible = true;
     edge.material.color.setHex(mesh.userData.visibilityHiddenPreview ? HIDDEN_PREVIEW_COLOR : 0x1d2630);
+    if (mesh.userData.visibilityHiddenPreview) unregisterTechnicalMaterial(scene, edge.material);
+    else registerTechnicalMaterial(scene, edge.material);
   };
 
   const applyOpeningMeshDisplay = (mesh: THREE.Mesh) => {

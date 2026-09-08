@@ -17,6 +17,7 @@ const LOCALES: Record<AppLanguage, AppLocale> = {
 };
 
 const EXACT_CS_TEXT: Record<string, string> = {
+  Appearance: "Vzhled", "System theme": "Systémová", "Light theme": "Světlá", "Dark theme": "Tmavá",
   ...CZECH_SYSTEM_TEXT,
   File: "Soubor", Architecture: "Architektura", Modify: "Upravit", View: "Zobrazení", Manage: "Správa",
   Layout: "Rozvržení", Edit: "Úpravy", Project: "Projekt", Select: "Vybrat", Wall: "Stěna",
@@ -41,6 +42,7 @@ const EXACT_CS_TEXT: Record<string, string> = {
 };
 
 const EXACT_SK_TEXT: Record<string, string> = {
+  Appearance: "Vzhľad", "System theme": "Systémová", "Light theme": "Svetlá", "Dark theme": "Tmavá",
   "Local recovery draft – server will be verified on open": "Lokálny obnovovací koncept – server sa overí pri otvorení.",
   "Local recovery data are not shown without a valid sign-in.": "Lokálne obnovovacie dáta sa bez platného prihlásenia nezobrazujú.",
   "Server is unavailable. Marked local recovery projects are shown.": "Server nie je dostupný. Zobrazujú sa označené lokálne obnovovacie projekty.",

@@ -1,6 +1,6 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { requireClientSession, resolveLoginFailureMessage } from "./authController";
-import { FakeElement, installFakeDocument } from "./testUtils/propertiesPanelHarness";
 
 describe("resolveLoginFailureMessage", () => {
   it("explains when the local auth server is unavailable", () => {
@@ -19,16 +19,17 @@ describe("resolveLoginFailureMessage", () => {
 
 describe("requireClientSession login form", () => {
   afterEach(() => {
+    document.body.replaceChildren();
     vi.unstubAllGlobals();
   });
 
   it("renders the current login inputs and submit button when no server session exists", async () => {
-    installFakeDocument();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("", { status: 401 }))
     );
-    const root = new FakeElement() as FakeElement & HTMLElement;
+    const root = document.createElement("div");
+    document.body.append(root);
 
     void requireClientSession(root);
     await Promise.resolve();
@@ -41,7 +42,7 @@ describe("requireClientSession login form", () => {
     const form = content.children[1]!;
     expect(form.className).toBe("auth-form");
 
-    const companyInput = form.children[0]!.children[1]!;
+    const companyInput = form.children[0]!.children[1]! as HTMLInputElement;
     expect(companyInput.type).toBe("text");
     expect(companyInput.value).toBe("");
     expect(companyInput.name).toBe("company");
@@ -49,7 +50,7 @@ describe("requireClientSession login form", () => {
     expect(companyInput.placeholder).toBe("Zadajte firmu");
     expect(companyInput.required).toBe(true);
 
-    const usernameInput = form.children[1]!.children[1]!;
+    const usernameInput = form.children[1]!.children[1]! as HTMLInputElement;
     expect(usernameInput.type).toBe("text");
     expect(usernameInput.value).toBe("");
     expect(usernameInput.name).toBe("username");
@@ -57,24 +58,25 @@ describe("requireClientSession login form", () => {
     expect(usernameInput.placeholder).toBe("Zadajte meno používateľa");
     expect(usernameInput.required).toBe(true);
 
-    const passwordInput = form.children[2]!.children[1]!;
+    const passwordInput = form.children[2]!.children[1]! as HTMLInputElement;
     expect(passwordInput.type).toBe("password");
     expect(passwordInput.placeholder).toBe("Zadajte heslo");
     expect(passwordInput.name).toBe("password");
     expect(passwordInput.autocomplete).toBe("current-password");
     expect(passwordInput.required).toBe(true);
 
-    const submit = form.children[4]!;
+    const submit = form.children[4]! as HTMLButtonElement;
     expect(submit.type).toBe("submit");
     expect(submit.textContent).toBe("Prihlásiť sa do pracoviska");
     expect(form.children).toHaveLength(5);
+    expect(root.querySelectorAll('.theme-picker input[type="radio"]')).toHaveLength(3);
+    expect(root.querySelector<HTMLInputElement>('.theme-picker input[value="system"]')?.checked).toBe(true);
     expect(content.textContent).not.toContain("Dostupné účty");
     expect(content.textContent).not.toContain("Branislav");
     expect(content.textContent).not.toContain("Andrej");
   });
 
   it("sends company, username, and password to the browser login endpoint", async () => {
-    installFakeDocument();
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response("", { status: 401 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -90,19 +92,20 @@ describe("requireClientSession login form", () => {
         }
       }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
-    const root = new FakeElement() as FakeElement & HTMLElement;
+    const root = document.createElement("div");
+    document.body.append(root);
     const sessionPromise = requireClientSession(root);
     await Promise.resolve();
     await Promise.resolve();
 
     const form = root.children[0]!.children[1]!.children[1]!;
-    const companyInput = form.children[0]!.children[1]!;
-    const usernameInput = form.children[1]!.children[1]!;
-    const passwordInput = form.children[2]!.children[1]!;
+    const companyInput = form.children[0]!.children[1]! as HTMLInputElement;
+    const usernameInput = form.children[1]!.children[1]! as HTMLInputElement;
+    const passwordInput = form.children[2]!.children[1]! as HTMLInputElement;
     companyInput.value = "Arcigy Kitchen";
     usernameInput.value = "arcigy";
     passwordInput.value = "test-password";
-    form.dispatch("submit", { preventDefault: () => undefined });
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 
     await expect(sessionPromise).resolves.toMatchObject({ clientId: "client-test", userId: "user-test" });
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/auth/login", expect.objectContaining({

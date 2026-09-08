@@ -4,12 +4,12 @@
   display: grid;
   grid-template-columns: minmax(360px, 1.08fr) minmax(340px, 0.92fr);
   overflow: hidden;
-  border: 1px solid rgba(226, 232, 240, 0.96);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(var(--border-rgb), 0.96);
+  border-radius: var(--radius-panel);
+  background: rgba(var(--surface-rgb), 0.92);
   box-shadow:
-    0 28px 90px rgba(32, 38, 62, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    0 28px 90px rgba(var(--shadow-rgb), 0.18),
+    inset 0 1px 0 rgba(var(--highlight-rgb), 0.78);
   backdrop-filter: blur(22px);
 }
 
@@ -23,7 +23,7 @@
   overflow: hidden;
   color: #fff;
   background:
-    linear-gradient(135deg, rgba(26, 34, 64, 0.94), rgba(71, 68, 190, 0.92)),
+    linear-gradient(135deg, rgba(26, 34, 64, 0.94), rgba(var(--accent-rgb), 0.92)),
     #111827;
 }
 
@@ -57,8 +57,8 @@
   height: 46px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #8d73ff, #6251ec);
+  border-radius: var(--radius-panel);
+  background: var(--accent-gradient);
   color: #fff;
   font-size: 28px;
   font-weight: 950;
@@ -123,8 +123,8 @@
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(rgba(91, 105, 255, 0.14) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91, 105, 255, 0.14) 1px, transparent 1px),
+    linear-gradient(rgba(var(--accent-rgb), 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.14) 1px, transparent 1px),
     #f8faff;
   background-size: 24px 24px;
 }
@@ -133,8 +133,8 @@
   position: absolute;
   display: block;
   border-radius: 7px;
-  background: linear-gradient(135deg, rgba(132, 105, 255, 0.24), rgba(37, 114, 220, 0.16));
-  box-shadow: inset 0 0 0 1px rgba(98, 81, 236, 0.28);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.24), rgba(var(--accent-rgb), 0.16));
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.28);
 }
 
 .auth-preview-canvas span:nth-child(1) {
@@ -157,7 +157,7 @@
   width: 68%;
   height: 3px;
   border-radius: 999px;
-  background: #6655ff;
+  background: var(--accent-start);
 }
 
 .auth-visual-meta {
@@ -183,15 +183,15 @@
   width: max-content;
   padding: 5px 9px;
   border-radius: 999px;
-  background: #efecff;
-  color: #5847e8;
+  background: var(--accent-soft);
+  color: var(--accent);
   font-size: 11px;
   font-weight: 900;
 }
 
 .auth-heading h1 {
   margin: 0;
-  color: #101828;
+  color: var(--text);
   font-size: clamp(34px, 4.8vw, 48px);
   line-height: 1;
   font-weight: 950;
@@ -201,7 +201,7 @@
 .auth-heading p {
   max-width: 360px;
   margin: 0;
-  color: #667085;
+  color: var(--muted);
   font-size: 14px;
   line-height: 1.55;
   font-weight: 650;
@@ -215,7 +215,7 @@
 .auth-form label {
   display: grid;
   gap: 7px;
-  color: #344054;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 850;
 }
@@ -224,37 +224,37 @@
   width: 100%;
   height: 46px;
   padding: 0 13px;
-  border: 1px solid #d8deea;
-  border-radius: 12px;
-  background: #ffffff;
-  color: #172033;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
   font: inherit;
   font-size: 14px;
   font-weight: 700;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 rgba(var(--highlight-rgb), 0.9);
 }
 
 .auth-form input:focus {
-  outline: 3px solid rgba(102, 85, 255, 0.14);
-  border-color: #6655ff;
+  outline: 3px solid rgba(var(--accent-rgb), 0.14);
+  border-color: var(--accent-border);
 }
 
 .auth-form > button {
   height: 48px;
   border: 0;
-  border-radius: 13px;
-  background: linear-gradient(135deg, #8469ff, #5e49f0);
-  color: #ffffff;
+  border-radius: var(--radius-control);
+  background: var(--accent-gradient);
+  color: var(--on-accent);
   font: inherit;
   font-size: 14px;
   font-weight: 900;
   cursor: pointer;
-  box-shadow: 0 16px 34px rgba(94, 73, 240, 0.26);
+  box-shadow: 0 16px 34px rgba(var(--accent-rgb), 0.26);
 }
 
 .auth-form > button:hover:not(:disabled) {
   filter: brightness(1.03);
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .auth-form button:disabled {
@@ -264,7 +264,7 @@
 
 .auth-error {
   min-height: 18px;
-  color: #d92d20;
+  color: var(--danger);
   font-size: 12px;
   font-weight: 800;
 }
@@ -301,14 +301,14 @@
   display: grid;
   grid-template-columns: 272px minmax(0, 1fr);
   overflow: hidden;
-  background: #ececec;
+  background: var(--bg);
 }
 
 .archux-app {
   background:
-    radial-gradient(circle at 50% 0%, rgba(110, 88, 255, 0.07), transparent 42%),
-    #f4f6fb;
-  color: #151a27;
+    radial-gradient(circle at 50% 0%, rgba(var(--accent-rgb), 0.07), transparent 42%),
+    var(--bg);
+  color: var(--text);
 }
 
 #ribbon {
@@ -334,8 +334,8 @@
   gap: 12px;
   padding: 0 20px;
   border: 0;
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 12px 38px rgba(32, 38, 62, 0.08);
+  background: rgba(var(--surface-rgb), 0.84);
+  box-shadow: 0 12px 38px rgba(var(--shadow-rgb), 0.08);
   backdrop-filter: blur(20px);
 }
 
@@ -343,10 +343,10 @@
   width: 46px;
   height: 46px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #7d60ff, #5847e8);
-  color: #fff;
+  background: var(--accent-gradient);
+  color: var(--on-accent);
   font-size: 28px;
-  box-shadow: 0 10px 24px rgba(95, 73, 232, 0.28);
+  box-shadow: 0 10px 24px rgba(var(--accent-rgb), 0.28);
 }
 
 .revit-product {
@@ -364,8 +364,8 @@
 .revit-product span {
   padding: 4px 7px;
   border-radius: 7px;
-  background: #8f7bff;
-  color: #fff;
+  background: var(--accent-start);
+  color: var(--on-accent);
   font-size: 10px;
   font-weight: 800;
 }
@@ -380,7 +380,7 @@
 .revit-account span {
   width: 24px;
   height: 24px;
-  border: 2px solid #1f2937;
+  border: 2px solid var(--text);
   border-radius: 6px;
   opacity: 0.78;
 }
@@ -400,14 +400,14 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #334155;
+  color: var(--text-secondary);
   box-shadow: none;
 }
 
 .revit-quick-actions button:hover {
   border: 0;
   background: transparent;
-  color: #111827;
+  color: var(--text);
 }
 
 .revit-quick-actions svg {
@@ -423,19 +423,19 @@
 .revit-quick-actions i {
   width: 1px;
   height: 28px;
-  background: #e5e9f2;
+  background: var(--surface-3);
 }
 
 .revit-windowtitle {
   justify-self: center;
-  color: #070b14;
+  color: var(--text);
   font-size: 15px;
   font-weight: 800;
 }
 
 .revit-projectlabel {
   min-width: 0;
-  color: #697386;
+  color: var(--muted);
   text-align: right;
 }
 
@@ -449,26 +449,24 @@
   height: 34px;
   border-width: 1px;
   border-radius: 50%;
-  background: #f5f7fb;
+  background: var(--surface-2);
 }
 
 .revit-account button {
   min-width: 98px;
   height: 40px;
   border: 0;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #8d73ff, #6251ec);
-  color: #fff;
+  border-radius: var(--radius-control);
+  background: var(--accent-gradient);
+  color: var(--on-accent);
   font-weight: 800;
-  box-shadow: 0 9px 22px rgba(98, 81, 236, 0.28);
+  box-shadow: 0 9px 22px rgba(var(--accent-rgb), 0.28);
 }
 
 .project-header {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #697386;
+  color: var(--muted);
   font-size: 11px;
 }
-
-.revit-tabs,
