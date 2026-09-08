@@ -26,7 +26,7 @@
   #app.archux-app {
     display: grid;
     grid-template-rows: calc(var(--arcigy-mobile-header-height) + env(safe-area-inset-top, 0px)) minmax(0, 1fr) calc(var(--arcigy-mobile-dock-height) + env(safe-area-inset-bottom, 0px));
-    background: #eef1f7;
+    background: var(--bg);
   }
 
   .arcigy-mobile-header {
@@ -37,9 +37,9 @@
     gap: 8px;
     min-width: 0;
     padding: env(safe-area-inset-top, 0px) max(8px, env(safe-area-inset-right, 0px)) 0 max(8px, env(safe-area-inset-left, 0px));
-    border-bottom: 1px solid #dfe4ee;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 4px 18px rgba(31, 37, 58, 0.08);
+    border-bottom: 1px solid var(--border-2);
+    background: rgba(var(--surface-rgb), 0.96);
+    box-shadow: 0 4px 18px rgba(var(--shadow-rgb), 0.08);
   }
 
   .arcigy-mobile-header button,
@@ -52,9 +52,9 @@
 
   .arcigy-mobile-header > button {
     border: 0;
-    border-radius: 12px;
-    background: #f2f0ff;
-    color: #5847e8;
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+    color: var(--accent);
     font-size: 28px;
   }
 
@@ -72,24 +72,24 @@
   }
 
   .arcigy-mobile-header__title strong { font-size: 13px; }
-  .arcigy-mobile-header__title span { color: #667085; font-size: 10px; }
+  .arcigy-mobile-header__title span { color: var(--muted); font-size: 10px; }
 
   .arcigy-mobile-workspace-switcher { position: relative; }
   .arcigy-mobile-workspace-switcher > button {
     padding: 0 12px;
-    border: 1px solid #e1e5ee;
-    border-radius: 11px;
-    background: #fff;
-    color: #172033;
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--text);
     font-weight: 750;
   }
 
   .arcigy-mobile-save {
     padding: 0 9px;
-    border: 1px solid #e1e5ee;
+    border: 1px solid var(--border-2);
     border-radius: 11px;
-    background: #fff;
-    color: #5847e8;
+    background: var(--surface);
+    color: var(--accent);
     font-size: 11px;
     font-weight: 800;
   }
@@ -103,17 +103,17 @@
     max-height: calc(100dvh - 130px);
     overflow-y: auto;
     padding: 7px;
-    border: 1px solid #e0e5ef;
+    border: 1px solid var(--border-2);
     border-radius: 14px;
-    background: #fff;
-    box-shadow: 0 18px 48px rgba(31, 37, 58, 0.22);
+    background: var(--surface);
+    box-shadow: 0 18px 48px rgba(var(--shadow-rgb), 0.22);
   }
 
   .arcigy-mobile-workspace-menu button {
     width: 100%;
     padding: 0 12px;
     border: 0;
-    border-radius: 9px;
+    border-radius: var(--radius-control);
     background: transparent;
     text-align: left;
   }
@@ -179,10 +179,10 @@
     display: none !important;
     overflow: auto !important;
     overscroll-behavior: contain;
-    border: 1px solid rgba(220, 226, 238, 0.95) !important;
+    border: 1px solid rgba(var(--border-rgb), 0.95) !important;
     border-radius: 18px !important;
-    background: #fff !important;
-    box-shadow: 0 24px 70px rgba(31, 37, 58, 0.24) !important;
+    background: var(--surface) !important;
+    box-shadow: 0 24px 70px rgba(var(--shadow-rgb), 0.24) !important;
   }
 
   #properties.arcigy-mobile-sheet--open,
@@ -202,7 +202,7 @@
   .archux-bottom > section {
     min-height: 120px;
     border-right: 0;
-    border-bottom: 1px solid #edf0f6;
+    border-bottom: 1px solid var(--border-2);
   }
 
   .arcigy-mobile-scrim {
@@ -212,7 +212,7 @@
     width: 100%;
     height: 100%;
     border: 0;
-    background: rgba(18, 24, 40, 0.28);
+    background: rgba(var(--text-rgb), 0.28);
     backdrop-filter: blur(2px);
   }
 
@@ -230,10 +230,10 @@
     align-items: center;
     gap: 5px;
     padding: 5px;
-    border: 1px solid #dfe4ee;
+    border: 1px solid var(--border-2);
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.97);
-    box-shadow: 0 12px 34px rgba(31, 37, 58, 0.16);
+    background: rgba(var(--surface-rgb), 0.97);
+    box-shadow: 0 12px 34px rgba(var(--shadow-rgb), 0.16);
   }
 
   [data-mobile-command-active] .arcigy-mobile-command-hud { display: grid; }
@@ -255,8 +255,8 @@
     min-width: 0;
     height: 44px;
     padding: 0 7px;
-    border: 1px solid #dfe4ee;
-    border-radius: 10px;
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius-control);
     font-size: 16px;
   }
   .arcigy-mobile-command-hud button {
@@ -264,15 +264,15 @@
     min-height: 44px;
     padding: 0 9px;
     border: 0;
-    border-radius: 10px;
-    background: #f2f4f8;
-    color: #172033;
+    border-radius: var(--radius-control);
+    background: var(--surface-2);
+    color: var(--text);
     font-size: 11px;
     font-weight: 800;
   }
-  .arcigy-mobile-command-hud button[aria-pressed="true"] { background: #efecff; color: #5847e8; }
-  .arcigy-mobile-command-hud [data-mobile-hud-finish] { background: #6655ff; color: #fff; }
-  .arcigy-mobile-command-hud [data-mobile-hud-cancel] { color: #b42318; }
+  .arcigy-mobile-command-hud button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+  .arcigy-mobile-command-hud [data-mobile-hud-finish] { background: var(--accent-start); color: var(--on-accent); }
+  .arcigy-mobile-command-hud [data-mobile-hud-cancel] { color: var(--danger); }
 
   .arcigy-mobile-command-sheet {
     padding: 12px;
@@ -286,22 +286,22 @@
     align-items: center;
     justify-content: space-between;
     padding: 4px 0 8px;
-    background: #fff;
+    background: var(--surface);
   }
 
   .arcigy-mobile-command-sheet > header strong { font-size: 16px; }
   .arcigy-mobile-command-sheet > header button {
     border: 0;
     border-radius: 12px;
-    background: #f2f4f8;
+    background: var(--surface-2);
     font-size: 24px;
   }
 
   .arcigy-mobile-command-sheet > header [data-mobile-project-overview] {
     margin-left: auto;
     padding: 0 10px;
-    background: #efecff;
-    color: #5847e8;
+    background: var(--accent-soft);
+    color: var(--accent);
     font-size: 12px;
     font-weight: 750;
   }
@@ -328,7 +328,7 @@
     min-height: 0;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
-    border-radius: 16px;
+    border-radius: var(--radius-dialog);
   }
 
   .workspace-overlay .workspace-dialog > :not(.workspace-dialog-header) {
@@ -346,7 +346,7 @@
   .arcigy-mobile-command-search {
     display: grid;
     gap: 5px;
-    color: #667085;
+    color: var(--muted);
     font-size: 11px;
     font-weight: 750;
   }
@@ -354,15 +354,15 @@
   .arcigy-mobile-command-search input {
     min-height: 46px;
     padding: 0 13px;
-    border: 1px solid #dfe4ee;
-    border-radius: 12px;
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius-control);
     font: inherit;
     font-size: 16px;
   }
 
   .arcigy-mobile-command-group h3 {
     margin: 16px 0 8px;
-    color: #667085;
+    color: var(--muted);
     font-size: 11px;
     letter-spacing: .04em;
     text-transform: uppercase;
@@ -381,18 +381,18 @@
     place-items: center;
     gap: 5px;
     padding: 8px 5px;
-    border: 1px solid #e3e7f0;
+    border: 1px solid var(--border-2);
     border-radius: 12px;
-    background: #fbfcff;
-    color: #172033;
+    background: var(--surface-2);
+    color: var(--text);
     font-size: 11px;
     font-weight: 750;
   }
 
   .arcigy-mobile-command[aria-pressed="true"] {
-    border-color: #8c7bff;
-    background: #efecff;
-    color: #5847e8;
+    border-color: var(--accent-border);
+    background: var(--accent-soft);
+    color: var(--accent);
   }
 
   .arcigy-mobile-command__icon {
@@ -412,9 +412,9 @@
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     padding: 2px max(4px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(4px, env(safe-area-inset-left, 0px));
-    border-top: 1px solid #dfe4ee;
-    background: rgba(255, 255, 255, 0.97);
-    box-shadow: 0 -5px 20px rgba(31, 37, 58, 0.1);
+    border-top: 1px solid var(--border-2);
+    background: rgba(var(--surface-rgb), 0.97);
+    box-shadow: 0 -5px 20px rgba(var(--shadow-rgb), 0.1);
   }
 
   .arcigy-mobile-dock button {
@@ -425,12 +425,12 @@
     gap: 1px;
     padding: 3px 2px;
     border: 0;
-    border-radius: 10px;
+    border-radius: var(--radius-control);
     background: transparent;
-    color: #344054;
+    color: var(--text-secondary);
   }
 
-  .arcigy-mobile-dock button[aria-expanded="true"] { background: #efecff; color: #5847e8; }
+  .arcigy-mobile-dock button[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
   .arcigy-mobile-dock b { max-width: 100%; overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
   .arcigy-mobile-dock span { font-size: 9px; font-weight: 750; }
 
@@ -458,7 +458,7 @@
     padding: 8px;
     overflow: auto;
     border-radius: 18px;
-    box-shadow: 0 -8px 30px rgba(31, 37, 58, .22);
+    box-shadow: 0 -8px 30px rgba(var(--shadow-rgb), 0.22);
     -webkit-overflow-scrolling: touch;
   }
 
@@ -493,7 +493,7 @@
     max-height: none;
     margin: 4px 0 8px;
     padding: 4px;
-    border: 1px solid #e3e7f0;
+    border: 1px solid var(--border-2);
     border-radius: 12px;
     box-shadow: none;
   }

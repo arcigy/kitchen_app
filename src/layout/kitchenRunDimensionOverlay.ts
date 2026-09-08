@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getTechnicalColors } from "../app/viewportAppearance";
 import { drawProjectedDimension } from "../app/dimensionDrawing";
 import {
   resolveKitchenRunDimensionChain,
@@ -64,8 +65,6 @@ type ActiveEdit =
 const BASE_DIMENSION_OFFSET_MM = 240;
 const TOTAL_DIMENSION_EXTRA_MM = 170;
 const BLOCKER_PADDING_M = 0.08;
-const BASE_COLOR = "#333333";
-const ACTIVE_COLOR = "#000fff";
 
 function segmentIntersectsBounds(
   start: { x: number; z: number },
@@ -281,6 +280,7 @@ export function createKitchenRunDimensionOverlay(ctx: KitchenRunDimensionOverlay
     const camera = ctx.getCamera();
     camera.updateMatrixWorld(true);
     const nextSignature = JSON.stringify({
+      appearance: getTechnicalColors(),
       size: [Math.round(rect.width), Math.round(rect.height)],
       selectedModuleIds,
       selectedWorktopSegment,
@@ -362,11 +362,11 @@ export function createKitchenRunDimensionOverlay(ctx: KitchenRunDimensionOverlay
         stroke(
           screen(worktopEdgeWorldAt(source, 0, 0)),
           screen(worktopEdgeWorldAt(source, worktopEdgeLengthMm, 0)),
-          ACTIVE_COLOR,
+          getTechnicalColors().active,
           3
         );
       }
-      const outerColor = worktopSelected || worktopAdjacent ? ACTIVE_COLOR : BASE_COLOR;
+      const outerColor = worktopSelected || worktopAdjacent ? getTechnicalColors().active : getTechnicalColors().line;
       if (source.worktopId) addLabelHit(drawProjectedDimension(drawing, {
         start: outerStart, end: outerEnd,
         extensionStart: screen(worktopEdgeWorldAt(source, 0, 0)),
@@ -378,7 +378,7 @@ export function createKitchenRunDimensionOverlay(ctx: KitchenRunDimensionOverlay
         const a = screen(worldAt(source, segment.startMm, innerOffsetMm));
         const b = screen(worldAt(source, segment.endMm, innerOffsetMm));
         const selected = !!segment.moduleId && selectedModuleIds.includes(segment.moduleId);
-        const color = selected || segment.editable?.startsWith("gap") ? ACTIVE_COLOR : BASE_COLOR;
+        const color = selected || segment.editable?.startsWith("gap") ? getTechnicalColors().active : getTechnicalColors().line;
         const label = drawProjectedDimension(drawing, {
           start: a, end: b,
           extensionStart: screen(worldAt(source, segment.startMm, 0)),

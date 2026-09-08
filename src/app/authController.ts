@@ -1,6 +1,7 @@
 import type { AuthenticatedClientSession } from "../core/client/client-types";
 import { getCurrentLanguage, setCurrentLanguage, t } from "../i18n";
 import { createButtonElement, createInputElement } from "./propsPanelElements";
+import { createThemePicker } from "../ui/theme/themePicker";
 
 type AuthApiResponse = {
   ok: boolean;
@@ -160,11 +161,11 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
   error.id = "auth-error";
   error.setAttribute("role", "alert");
 
-  const submit = createButtonElement(t("Sign in to workspace"), { type: "submit" });
+  const submit = createButtonElement(t("Sign in to workspace"), { type: "submit", variant: "primary" });
 
   form.setAttribute("aria-describedby", error.id);
   form.append(companyLabel, usernameLabel, passwordLabel, error, submit);
-  content.append(heading, form);
+  content.append(heading, form, createThemePicker());
   panel.append(visual, content);
   root.appendChild(panel);
   passwordInput.focus();

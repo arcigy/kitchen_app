@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getTechnicalColors } from "./viewportAppearance";
 
 export type DimensionPoint = { x: number; y: number };
 export type DimensionOffsetDirection = "bottom" | "top" | "left" | "right";
@@ -166,8 +167,8 @@ export class DimensionOverlay {
 
     const ctx = this.ctx;
     ctx.save();
-    ctx.strokeStyle = "#333333";
-    ctx.fillStyle = "#333333";
+    ctx.strokeStyle = getTechnicalColors().line;
+    ctx.fillStyle = getTechnicalColors().line;
     ctx.lineWidth = DIMENSION_LINE_WIDTH_WORLD;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -195,8 +196,8 @@ export class DimensionOverlay {
     const dir = { x: dx / length, y: dy / length };
     const ctx = this.ctx;
     ctx.save();
-    ctx.strokeStyle = "#333333";
-    ctx.fillStyle = "#333333";
+    ctx.strokeStyle = getTechnicalColors().line;
+    ctx.fillStyle = getTechnicalColors().line;
     ctx.lineWidth = DIMENSION_LINE_WIDTH_WORLD;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -224,14 +225,14 @@ export class DimensionOverlay {
     const midpoint = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
     const angle = Math.acos(Math.max(-1, Math.min(1, dx / length))) * (dy < 0 ? -1 : 1);
     this.ctx.save();
-    this.ctx.fillStyle = "#333333";
+    this.ctx.fillStyle = getTechnicalColors().line;
     this.drawReadableText(String(Math.round(length * this.unitScale)), midpoint, angle);
     this.ctx.restore();
   }
 
   drawLine(lineData: DimensionLineData, _index = 0) {
     const ctx = this.ctx;
-    const color = lineData.selected ? "#000fff" : "#333333";
+    const color = lineData.selected ? getTechnicalColors().active : getTechnicalColors().line;
     const pointRadius = lineData.pointRadius ?? 3;
 
     ctx.save();
@@ -300,7 +301,7 @@ export class DimensionOverlay {
     ctx.rotate(angle);
     ctx.scale(1, -1);
     ctx.font = `${DIMENSION_FONT_WORLD}px serif`;
-    ctx.fillStyle = "#333333";
+    ctx.fillStyle = getTechnicalColors().line;
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText(text, 0, -DIMENSION_TEXT_NUDGE_WORLD);

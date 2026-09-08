@@ -1,3 +1,4 @@
+import "./styles/designTokens.css";
 import "./styles/base.css";
 import "./styles/appBoot.css";
 import "./styles/loadingSkeleton.css";
@@ -11,6 +12,8 @@ import "./style.css";
 import "./styles/chatbot.css";
 import "./styles/mobileEditor.css";
 import "./styles/userActivity.css";
+import "./styles/appearance.css";
+import { getThemeController } from "./ui/theme/themeController";
 import { renderKitchenAppShell } from "./ui/kitchenAppShell";
 import { createChatbotDock, renderChatbotOnly } from "./ui/chatbot/chatbotShell";
 import type { ClientContext } from "./core/client/client-context";
@@ -26,6 +29,7 @@ import { mountLoadingSkeleton, type LoadingSkeletonHandle } from "./ui/loadingSk
 import type { ProjectRecoveryEnvelopeV1, ProjectRecoveryScope } from "./app/project/projectRecoveryTypes";
 import { clearLastWorkspacePointer } from "./app/project/projectRecoveryStore";
 
+getThemeController();
 installStaleAssetRecovery();
 installIconTooltips();
 
@@ -46,7 +50,7 @@ void start().catch((error: unknown) => {
   workspaceSkeleton?.clear();
   const message = error instanceof Error ? error.message : String(error);
   appRoot.innerHTML = `
-    <div style="padding:16px;font-family:sans-serif;color:#111">
+    <div style="padding:16px;font-family:sans-serif;color:var(--text)">
       <strong>App start failed</strong>
       <pre style="white-space:pre-wrap">${escapeHtml(message)}</pre>
     </div>
