@@ -746,6 +746,7 @@ async function runUpperFlapContextCases(page) {
     addModule: false
   });
   const groupId = created.group.id;
+  await page.evaluate(() => window.__kitchenDebug.createWall({ aMm: { x: -2000, z: -50 }, bMm: { x: 6000, z: -50 }, thicknessMm: 100 }));
   await addKitchenModule(page, groupId, { type: "flap_shelves_low", segmentIndex: 0, offsetAlongMm: 1300 });
   await evalApi(
     page,
@@ -1040,6 +1041,7 @@ async function runUpperFlapModuleParameterCases(page) {
       addModule: false
     });
     const groupId = created.group.id;
+    await page.evaluate(() => window.__kitchenDebug.createWall({ aMm: { x: -2000, z: -50 }, bMm: { x: 6000, z: -50 }, thicknessMm: 100 }));
     await addKitchenModule(page, groupId, { type: "flap_shelves_low", segmentIndex: 0, offsetAlongMm: 1300 });
     const beforeSnap = await snapshot(page, groupId);
     const beforeFlap = beforeSnap.instances.find((inst) => inst.params.type === "flap_shelves_low");

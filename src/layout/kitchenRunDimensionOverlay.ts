@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { drawProjectedDimension } from "../app/dimensionDrawing";
 import {
   resolveKitchenRunDimensionChain,
   type KitchenRunDimensionSegment,
@@ -63,8 +64,6 @@ type ActiveEdit =
 const BASE_DIMENSION_OFFSET_MM = 240;
 const TOTAL_DIMENSION_EXTRA_MM = 170;
 const BLOCKER_PADDING_M = 0.08;
-const LABEL_HIT_WIDTH_PX = 58;
-const LABEL_HIT_HEIGHT_PX = 30;
 const BASE_COLOR = "#333333";
 const ACTIVE_COLOR = "#000fff";
 
@@ -147,7 +146,7 @@ export function resolveKitchenWorktopDimensionEdit(
   source: Pick<KitchenRunDimensionSource, "worktopId" | "segmentIndex">
 ) {
   if (
-    selected?.worktopId === source.worktopId &&
+    selected && selected.worktopId === source.worktopId &&
     Math.abs(selected.segmentIndex - source.segmentIndex) === 1
   ) {
     return {
@@ -254,6 +253,7 @@ export function createKitchenRunDimensionOverlay(ctx: KitchenRunDimensionOverlay
   };
 
   const showWorktopInput = (event: PointerEvent, source: KitchenRunDimensionSource) => {
+    if (!source.worktopId) return;
     const selected = ctx.getSelectedWorktopSegment();
     const edit = resolveKitchenWorktopDimensionEdit(selected, source);
     activeEdit = { kind: "worktop", worktopId: source.worktopId, ...edit };
@@ -284,25 +284,12 @@ export function createKitchenRunDimensionOverlay(ctx: KitchenRunDimensionOverlay
       size: [Math.round(rect.width), Math.round(rect.height)],
       selectedModuleIds,
       selectedWorktopSegment,
-      sources: sources.map((source) => [
-        source.id,
-        Math.round(source.lengthMm),
-        Math.round(getWorktopEdgeLengthMm(source)),
-        Math.round((source.worktopEdgeStart ?? source.start).x * 1000),
-        Math.round((source.worktopEdgeStart ?? source.start).z * 1000),
-        Math.round((source.worktopEdgeEnd ?? source.end).x * 1000),
-        Math.round((source.worktopEdgeEnd ?? source.end).z * 1000),
-        Math.round(source.reservedStartMm),
-        Math.round(source.reservedEndMm),
-        source.reservedStartArm?.moduleId ?? "",
-        source.reservedStartArm?.axis ?? "",
-        source.reservedEndArm?.moduleId ?? "",
-        source.reservedEndArm?.axis ?? "",
-        ...source.modules.flatMap((module) => [module.id, Math.round(module.centerMm), Math.round(module.widthMm)])
-      ]),
-      blockers: blockers.map((blocker) => [blocker.id, blocker.minX, blocker.maxX, blocker.minZ, blocker.maxZ].map((value) => typeof value === "number" ? Math.round(value * 1000) : value)),
-      camera: [...camera.matrixWorld.elements, ...camera.projectionMatrix.elements].map((value) => Math.round(value * 10000))
-    });
+      sources,
+      blockers,
+      camera: [...camera.matrixWorld.elements, ...camera.projectionMatrix.elements]
+    // Quantize only the render-cache key. Physical geometry and editable
+    // millimetres retain full precision; sub-pixel noise must not detach hits.
+    }, (_key, value) => typeof value === 'number' ? Math.round(value * 1e9) / 1e9 : value);
     if (nextSignature === signature && root.style.display === "block") return;
     signature = nextSignature;
     root.style.display = "block";
@@ -327,28 +314,17 @@ export function createKitchenRunDimensionOverlay(ctx: KitchenRunDimensionOverlay
       drawing.lineTo(b.x, b.y);
       drawing.stroke();
     };
-    const text = (value: string, a: THREE.Vector2, b: THREE.Vector2, color: string) => {
-      const midX = (a.x + b.x) / 2;
-      const midY = (a.y + b.y) / 2;
-      let angle = Math.atan2(b.y - a.y, b.x - a.x);
-      if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
-      drawing.save();
-      drawing.translate(midX, midY);
-      drawing.rotate(angle);
-      drawing.font = "600 12px Inter, Arial, sans-serif";
-      drawing.textAlign = "center";
-      drawing.textBaseline = "middle";
-      const width = drawing.measureText(value).width + 8;
-      drawing.fillStyle = "rgba(255,255,255,0.92)";
-      drawing.fillRect(-width / 2, -9, width, 18);
-      drawing.fillStyle = color;
-      drawing.fillText(value, 0, 0);
-      drawing.restore();
-    };
-    const tick = (point: THREE.Vector2, direction: THREE.Vector2, color: string, width = 1.2) => {
-      const perpendicular = new THREE.Vector2(-direction.y, direction.x).normalize().multiplyScalar(5);
-      const along = direction.clone().normalize().multiplyScalar(3);
-      stroke(point.clone().sub(perpendicular).sub(along), point.clone().add(perpendicular).add(along), color, width);
+    const addLabelHit = (bounds: ReturnType<typeof drawProjectedDimension>, onPointerDown: (event: PointerEvent) => void) => {
+      if (!bounds) return;
+      const hit = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      for (const [key, value] of Object.entries(bounds)) hit.setAttribute(key, String(value));
+      hit.setAttribute("fill", "transparent");
+      hit.style.pointerEvents = "auto";
+      hit.style.cursor = "text";
+      hit.addEventListener("pointerdown", (event) => {
+        event.preventDefault(); event.stopPropagation(); onPointerDown(event);
+      });
+      hitSvg.appendChild(hit);
     };
 
     for (const source of sources) {
@@ -363,16 +339,12 @@ export function createKitchenRunDimensionOverlay(ctx: KitchenRunDimensionOverlay
         modules: source.modules,
         selectedModuleIds
       });
-      const direction = screen(worktopEdgeWorldAt(source, worktopEdgeLengthMm, outerOffsetMm))
-        .sub(screen(worktopEdgeWorldAt(source, 0, outerOffsetMm)))
-        .normalize();
-      const innerStart = screen(worldAt(source, 0, innerOffsetMm));
-      const innerEnd = screen(worldAt(source, source.lengthMm, innerOffsetMm));
       const outerStart = screen(worktopEdgeWorldAt(source, 0, outerOffsetMm));
       const outerEnd = screen(worktopEdgeWorldAt(source, worktopEdgeLengthMm, outerOffsetMm));
-      const worktopSelected = selectedWorktopSegment?.worktopId === source.worktopId &&
+      const pixelsPerMeter = outerStart.distanceTo(outerEnd) / (worktopEdgeLengthMm / 1000);
+      const worktopSelected = !!selectedWorktopSegment && selectedWorktopSegment.worktopId === source.worktopId &&
         selectedWorktopSegment.segmentIndex === source.segmentIndex;
-      const worktopAdjacent = selectedWorktopSegment?.worktopId === source.worktopId &&
+      const worktopAdjacent = !!selectedWorktopSegment && selectedWorktopSegment.worktopId === source.worktopId &&
         Math.abs(selectedWorktopSegment.segmentIndex - source.segmentIndex) === 1;
       if (worktopSelected) {
         const selectedPolygon = [
@@ -394,62 +366,31 @@ export function createKitchenRunDimensionOverlay(ctx: KitchenRunDimensionOverlay
           3
         );
       }
-      stroke(screen(worktopEdgeWorldAt(source, 0, 0)), outerStart, BASE_COLOR, 0.9);
-      stroke(screen(worktopEdgeWorldAt(source, worktopEdgeLengthMm, 0)), outerEnd, BASE_COLOR, 0.9);
       const outerColor = worktopSelected || worktopAdjacent ? ACTIVE_COLOR : BASE_COLOR;
-      stroke(outerStart, outerEnd, outerColor, worktopSelected || worktopAdjacent ? 1.8 : 1.25);
-      tick(outerStart, direction, outerColor);
-      tick(outerEnd, direction, outerColor);
-      text(String(Math.round(worktopEdgeLengthMm)), outerStart, outerEnd, outerColor);
-      const outerCenter = outerStart.clone().add(outerEnd).multiplyScalar(0.5);
-      const outerHit = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      outerHit.setAttribute("x", String(outerCenter.x - LABEL_HIT_WIDTH_PX / 2));
-      outerHit.setAttribute("y", String(outerCenter.y - LABEL_HIT_HEIGHT_PX / 2));
-      outerHit.setAttribute("width", String(LABEL_HIT_WIDTH_PX));
-      outerHit.setAttribute("height", String(LABEL_HIT_HEIGHT_PX));
-      outerHit.setAttribute("fill", "transparent");
-      outerHit.style.pointerEvents = "auto";
-      outerHit.style.cursor = "text";
-      outerHit.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        showWorktopInput(event, source);
-      });
-      hitSvg.appendChild(outerHit);
+      if (source.worktopId) addLabelHit(drawProjectedDimension(drawing, {
+        start: outerStart, end: outerEnd,
+        extensionStart: screen(worktopEdgeWorldAt(source, 0, 0)),
+        extensionEnd: screen(worktopEdgeWorldAt(source, worktopEdgeLengthMm, 0)),
+        pixelsPerMeter, text: String(Math.round(worktopEdgeLengthMm)), color: outerColor
+      }), event => showWorktopInput(event, source));
       if (source.modules.length === 0 && !source.reservedStartArm && !source.reservedEndArm) continue;
-      stroke(innerStart, innerEnd, BASE_COLOR, 1.05);
-
-      const boundaries = new Set<number>([0, source.lengthMm]);
       for (const segment of chain.segments) {
-        boundaries.add(segment.startMm);
-        boundaries.add(segment.endMm);
         const a = screen(worldAt(source, segment.startMm, innerOffsetMm));
         const b = screen(worldAt(source, segment.endMm, innerOffsetMm));
         const selected = !!segment.moduleId && selectedModuleIds.includes(segment.moduleId);
         const color = selected || segment.editable?.startsWith("gap") ? ACTIVE_COLOR : BASE_COLOR;
-        text(String(Math.round(segment.valueMm)), a, b, color);
-        if (!segment.editable || !segment.moduleId) continue;
-        const center = a.clone().add(b).multiplyScalar(0.5);
-        const hit = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        hit.setAttribute("x", String(center.x - LABEL_HIT_WIDTH_PX / 2));
-        hit.setAttribute("y", String(center.y - LABEL_HIT_HEIGHT_PX / 2));
-        hit.setAttribute("width", String(LABEL_HIT_WIDTH_PX));
-        hit.setAttribute("height", String(LABEL_HIT_HEIGHT_PX));
-        hit.setAttribute("fill", "transparent");
-        hit.style.pointerEvents = "auto";
-        hit.style.cursor = "text";
-        hit.addEventListener("pointerdown", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          showInput(event, segment);
+        const label = drawProjectedDimension(drawing, {
+          start: a, end: b,
+          extensionStart: screen(worldAt(source, segment.startMm, 0)),
+          extensionEnd: screen(worldAt(source, segment.endMm, 0)),
+          pixelsPerMeter, text: String(Math.round(segment.valueMm)), color
         });
-        hitSvg.appendChild(hit);
-      }
-      for (const boundaryMm of boundaries) {
-        tick(screen(worldAt(source, boundaryMm, innerOffsetMm)), direction, BASE_COLOR);
+        if (!segment.editable || !segment.moduleId) continue;
+        addLabelHit(label, event => showInput(event, segment));
       }
     }
-    root.replaceChildren(canvas, hitSvg, input);
+    // These nodes stay mounted. Reparenting the focused input here would
+    // blur it on the first selection/camera refresh, before the user can type.
   };
 
   return {

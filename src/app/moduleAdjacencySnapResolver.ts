@@ -67,7 +67,12 @@ export function createModuleAdjacencySnapResolver(ctx: ModuleAdjacencySnapResolv
       const prevPos = moving.root.position.clone();
       const prevRot = moving.root.rotation.y;
       const prevKitchenPlacement = moving.kitchenPlacement ? structuredClone(moving.kitchenPlacement) : null;
-      const projectedBinding = opts?.preferredKitchenPlacement ?? null;
+      let projectedBinding = opts?.preferredKitchenPlacement ?? null;
+      if (projectedBinding?.kind === 'wall') {
+        moving.root.position.copy(result.position); moving.root.updateMatrixWorld(true);
+        const inferred = ctx.inferKitchenPlacementBinding(moving, effectiveGroupId, backOffsetMm);
+        if (inferred?.kind === 'wall' && inferred.wallId === projectedBinding.wallId && inferred.wallSide === projectedBinding.wallSide) projectedBinding = inferred;
+      }
       if (projectedBinding) {
         moving.kitchenPlacement = structuredClone(projectedBinding);
         if (ctx.applyKitchenPlacementBinding(moving, projectedBinding, backOffsetMm)) {

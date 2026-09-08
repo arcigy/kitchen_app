@@ -32,7 +32,10 @@ export type KitchenRunDimensionChain = {
 export type KitchenRunDimensionSource = {
   id: string;
   groupId: string;
-  worktopId: string;
+  worktopId?: string;
+  wallId?: string;
+  wallSide?: 'left' | 'right';
+  wallStartM?: number;
   segmentIndex: number;
   lengthMm: number;
   worktopDepthMm: number;

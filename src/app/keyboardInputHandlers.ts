@@ -1224,6 +1224,7 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
     }
     if (ev.key === "Escape") {
       if (runPlacementShortcutCommand(ctx, ev)) return true;
+      if (runActivePlacementEscapeCommand(ctx, ev)) return true;
       if (runClearSelectionShortcutCommand(ctx, ev)) return true;
     }
     return true;
@@ -1250,6 +1251,11 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
     ev.preventDefault();
     ev.stopPropagation();
     ev.stopImmediatePropagation();
+    return true;
+  }
+
+  if (runActivePlacementEscapeCommand(ctx, ev)) {
+    ev.preventDefault();
     return true;
   }
 

@@ -82,6 +82,8 @@ export type ColumnInstance = {
 };
 
 export type LayoutSnapshot = {
+  /** Optional for projects/history created before kitchen context snapshots. */
+  kitchen?: { context: KitchenContext; groups: KitchenGroup[] };
   /** Optional so snapshots created before project material assignments remain readable. */
   materialAssignments?: ProjectMaterialAssignmentsState;
   wallCounter: number;
@@ -214,11 +216,16 @@ export type KitchenWorktopInstance = {
 };
 
 export type KitchenPlacementBinding = {
-  worktopId: string;
-  kind?: "segment" | "corner";
+  worktopId?: string;
+  kind?: "segment" | "corner" | "wall" | "wall-corner";
   segmentIndex: number;
   offsetAlongM: number;
   cornerIndex?: number | null;
+  /** Physical wall face attachment; worktop references remain compatible. */
+  wallId?: string;
+  wallSide?: "left" | "right";
+  secondWallId?: string;
+  secondWallSide?: "left" | "right";
 };
 
 export type LayoutInstance = {

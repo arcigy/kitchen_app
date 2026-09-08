@@ -28,6 +28,21 @@ const createInstance = (): LayoutInstance => {
 };
 
 describe("createLayoutSceneQueries", () => {
+  it('uses actual wall support for uppers beyond the default room rectangle', () => {
+    const inst = createInstance();
+    inst.params = { ...inst.params, kitchenModuleRole: 'top' } as LayoutInstance['params'];
+    inst.root.position.set(5, 1.4, 0); inst.root.updateMatrixWorld(true);
+    let supported = true;
+    const ctx = { instances: [inst], kitchenWorktops: [], walls: [], columns: [], floors: [], sections: [],
+      roomBounds: { halfW: 2, halfD: 2 }, getWindowInst: () => null, getWindowInsts: () => [],
+      getDoorInst: () => null, getDoorInsts: () => [], getViewMode: () => '2d' as const,
+      getActiveViewerTab: () => 'floorplan', getModuleLocalBackCenter: () => new THREE.Vector3(),
+      hasRequiredWallSupport: () => supported };
+    const queries = createLayoutSceneQueries(ctx);
+    expect(queries.instanceFitsRoom(inst)).toBe(true);
+    supported = false;
+    expect(queries.instanceFitsRoom(inst)).toBe(false);
+  });
   it("uses real module geometry for 2d elevation picks instead of floorplan pick mesh", () => {
     const inst = createInstance();
     let activeViewerTab = "floorplan";

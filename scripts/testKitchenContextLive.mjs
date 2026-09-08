@@ -10,7 +10,7 @@ const kitchenInputAliases = {
   "Worktop back offset (mm)": ["Worktop back offset (mm)", "Zadné odsadenie pracovnej dosky (mm)"]
 };
 
-async function setKitchenInput(page, label, value) {
+async function setKitchenInput(page, label, value, groupId) {
   const result = await page.evaluate(({ label, value }) => {
     const labels = window.__kitchenInputAliases?.[label] ?? [label];
     const rows = [...document.querySelectorAll("div")];
@@ -31,6 +31,14 @@ async function setKitchenInput(page, label, value) {
   if (!result?.ok) {
     throw new Error(JSON.stringify(result, null, 2));
   }
+  // The editor intentionally debounces typing. Observe completion without
+  // mutating state through a debug snapshot or sleeping an arbitrary duration.
+  const key = {
+    "Height (mm)": "heightMm", "Worktop depth (mm)": "worktopDepthMm",
+    "Worktop front offset (mm)": "worktopFrontOffsetMm", "Worktop back offset (mm)": "worktopBackOffsetMm"
+  }[label];
+  await page.waitForFunction(({key,value,groupId}) => window.__kitchenDebug.snapshot(groupId).group?.ctx[key] === value,
+    {key,value:Number(value),groupId}, {timeout:5000});
 }
 
 function mmFromM(value) {
@@ -124,7 +132,7 @@ async function main() {
     expectEqual(beforeModule.structuralDepthMm, 580, "initial structural module depth");
     expectNear(beforeBackZ, beforeGuideZ, 1, "initial module back on guide");
 
-    await setKitchenInput(page, "Height (mm)", 900);
+    await setKitchenInput(page, "Height (mm)", 900, groupId);
     const afterHeight = await snapshot(page, groupId);
     const heightModule = getPrimaryModule(afterHeight);
     const heightWorktop = getPrimaryWorktop(afterHeight);
@@ -135,7 +143,7 @@ async function main() {
     expectEqual(heightModule.params.heightCarcass, 862, "height module carcass");
     expectNear(mmFromM(heightModule.worldBackCenterM.z), beforeGuideZ, 1, "height preserves back anchor");
 
-    await setKitchenInput(page, "Worktop depth (mm)", 700);
+    await setKitchenInput(page, "Worktop depth (mm)", 700, groupId);
     const afterDepth = await snapshot(page, groupId);
     const depthModule = getPrimaryModule(afterDepth);
     const depthWorktop = getPrimaryWorktop(afterDepth);
@@ -146,12 +154,14 @@ async function main() {
     expectEqual(depthModule.structuralDepthMm, 660, "depth structural");
     expectNear(mmFromM(depthModule.worldBackCenterM.z), beforeGuideZ, 1, "depth preserves back anchor");
     expectNear(mmFromM(depthModule.positionM.x), beforePos.x, 1, "depth preserves module root x");
-    expectNear(mmFromM(depthModule.positionM.z), beforePos.z, 1, "depth preserves module root z");
+    // Centered geometry must move its persisted root by half the depth delta
+    // while the physical back stays fixed. A stable root hid a lost child offset.
+    expectNear(mmFromM(depthModule.positionM.z), beforePos.z + (660 - 580) / 2, 1, "depth keeps serialized root consistent with geometry");
     expectEqual(depthModule.kitchenPlacement.worktopId, beforeModule.kitchenPlacement.worktopId, "depth keeps worktop binding");
     expectEqual(depthModule.kitchenPlacement.segmentIndex, beforeModule.kitchenPlacement.segmentIndex, "depth keeps segment binding");
     expectNear(depthModule.kitchenPlacement.offsetAlongM, beforeModule.kitchenPlacement.offsetAlongM, 0.001, "depth keeps offset binding");
 
-    await setKitchenInput(page, "Worktop front offset (mm)", 50);
+    await setKitchenInput(page, "Worktop front offset (mm)", 50, groupId);
     const afterFront = await snapshot(page, groupId);
     const frontModule = getPrimaryModule(afterFront);
     const frontWorktop = getPrimaryWorktop(afterFront);
@@ -169,7 +179,7 @@ async function main() {
     expectEqual(frontModule.kitchenPlacement.segmentIndex, beforeModule.kitchenPlacement.segmentIndex, "front offset keeps segment binding");
     expectNear(frontModule.kitchenPlacement.offsetAlongM, beforeModule.kitchenPlacement.offsetAlongM, 0.001, "front offset keeps offset binding");
 
-    await setKitchenInput(page, "Worktop back offset (mm)", 40);
+    await setKitchenInput(page, "Worktop back offset (mm)", 40, groupId);
     const afterBack = await snapshot(page, groupId);
     const backModule = getPrimaryModule(afterBack);
     const backWorktop = getPrimaryWorktop(afterBack);

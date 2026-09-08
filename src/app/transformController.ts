@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getKitchenModuleRole } from '../layout/kitchenModuleRules';
 import type { DoorParams, KitchenWorktopInstance, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallParams, WindowParams } from "./localTypes";
 import type { AppState } from "../layout/appState";
 import type { StartTransformOptions, TransformClearOptions, TransformKind, TransformState } from "./transformStateTypes";
@@ -570,7 +571,7 @@ export function createTransformController(ctx: TransformControllerContext) {
         const st = ctx.transformState.startInstances.get(id);
         if (!inst || !st) continue;
         const startKitchenPlacement = st.kitchenPlacement ?? null;
-        if (startKitchenPlacement && inst.kitchenGroupId) {
+        if (startKitchenPlacement && inst.kitchenGroupId && getKitchenModuleRole(inst.params) !== 'upper') {
           const backOffsetMm = resolveKitchenPlacementBackOffset({
             kitchenGroupId: inst.kitchenGroupId,
             kitchenGroups: ctx.S.kitchenGroups,

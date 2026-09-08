@@ -94,6 +94,7 @@ type WallCutoutBounds = {
 };
 
 export type WallControllerContext = {
+  reconcileMountedModules?: () => boolean;
   walls: WallInstance[];
   instances: LayoutInstance[];
   kitchenWorktops: KitchenWorktopInstance[];
@@ -142,6 +143,28 @@ export type WallControllerContext = {
 };
 
 export function createWallController(ctx: WallControllerContext) {
+  const acceptedWallParams = new WeakMap<WallInstance, WallParams>();
+  const hasMountedModules = (wallId: string) => ctx.instances.some(inst =>
+    inst.kitchenPlacement?.wallId === wallId || inst.kitchenPlacement?.secondWallId === wallId);
+  const wallGeometryKey = (params: WallParams) => JSON.stringify([
+    params.aMm, params.bMm, params.heightMm, params.thicknessMm, params.justification, params.exteriorSign
+  ]);
+  const reconcileMountedWallEdit = () => {
+    const changes = ctx.walls.flatMap(wall => {
+      const previous = acceptedWallParams.get(wall);
+      return previous && wallGeometryKey(previous) !== wallGeometryKey(wall.params) ? [{ wall, previous }] : [];
+    });
+    if (changes.some(change => hasMountedModules(change.wall.id)) && ctx.reconcileMountedModules) {
+      // Old solved edges belong to the previous wall shape. Reconciliation must
+      // use current physical offsets before the new network is rendered.
+      ctx.wallSolvedOutlines.clear();
+      if (!ctx.reconcileMountedModules()) {
+        for (const { wall, previous } of changes) wall.params = structuredClone(previous);
+        ctx.setUnderlayStatus('Úprava steny zrušená: vrchné moduly by stratili oporu alebo by sa prekrývali.');
+      }
+    }
+    for (const wall of ctx.walls) acceptedWallParams.set(wall, structuredClone(wall.params));
+  };
   const walls = ctx.walls;
   const instances = ctx.instances;
   const kitchenWorktops = ctx.kitchenWorktops;
@@ -658,7 +681,7 @@ export function createWallController(ctx: WallControllerContext) {
     };
 
     for (const wall of [...walls]) {
-      if (pinnedWallIds.has(wall.id) || attachedWallIds.has(wall.id)) continue;
+      if (pinnedWallIds.has(wall.id) || attachedWallIds.has(wall.id) || hasMountedModules(wall.id)) continue;
       const lenMm = mmDist(wall.params.aMm, wall.params.bMm);
       const microLimitMm = Math.max(wallJoinTolMm, Math.max(1, wall.params.thicknessMm));
       if (lenMm > microLimitMm) continue;
@@ -732,6 +755,7 @@ export function createWallController(ctx: WallControllerContext) {
           const keep = walls[i];
           const remove = walls[j];
           if (!keep || !remove) continue;
+          if (hasMountedModules(keep.id) || hasMountedModules(remove.id)) continue;
           if (pinnedWallIds.has(keep.id) || pinnedWallIds.has(remove.id)) continue;
           if (attachedWallIds.has(keep.id) || attachedWallIds.has(remove.id)) continue;
           if (!sameStyle(keep, remove)) continue;
@@ -822,6 +846,10 @@ export function createWallController(ctx: WallControllerContext) {
   }
 
   function removeWall(w: WallInstance) {
+    if (hasMountedModules(w.id)) {
+      ctx.setUnderlayStatus('Stena podopiera vrchné moduly. Najprv ich presuňte alebo odstráňte.');
+      return;
+    }
     freezeRemainingWallEndsAtDeletedJoin(w);
     layoutRoot.remove(w.root);
     w.outline.geometry.dispose();
@@ -840,6 +868,10 @@ export function createWallController(ctx: WallControllerContext) {
   }
 
   function splitWallAtMm(w: WallInstance, p: { x: number; z: number }) {
+    if (hasMountedModules(w.id)) {
+      ctx.setUnderlayStatus('Rozdelenie steny je blokované jej vrchnými modulmi.');
+      return;
+    }
     const which = wallEndpointWhich(w, p, wallJoinTolMm);
     if (which) {
       setWallEndpointMm(w, which, p);
@@ -1426,6 +1458,7 @@ export function createWallController(ctx: WallControllerContext) {
   }
 
   function rebuildWallPlanMesh() {
+    reconcileMountedWallEdit();
     for (const [, line] of wallPlanMeshes) {
       wallPlanGroup.remove(line);
       line.geometry.dispose();
@@ -2207,6 +2240,7 @@ export function createWallController(ctx: WallControllerContext) {
   }
 
   function rebuildWall(w: WallInstance) {
+    reconcileMountedWallEdit();
     w.params.heightMm = Math.max(1, Math.round(w.params.heightMm ?? w.heightMm ?? wallDefault.heightMm));
     w.heightMm = w.params.heightMm;
     syncWallIfcMetadata(w);

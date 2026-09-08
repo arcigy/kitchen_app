@@ -24,6 +24,7 @@ export type RebuildDebugState = {
 } | null;
 
 type InstanceRebuilderContext = {
+  hasRequiredWallSupport?: (inst: LayoutInstance) => boolean;
   S: AppState;
   anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
   applyWallConstraints: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
@@ -83,6 +84,8 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
     const errors = ctx.validateModule(normalizedParams);
     ctx.renderErrors(ctx.args.errorsEl, errors);
     if (errors.length > 0) {
+      // A rejected edit must not persist dimensions that were never built.
+      if (opts?.previousParams) inst.params = structuredClone(opts.previousParams);
       ctx.lastRebuildDebug = { ok: false, stage: "validate", errors: structuredClone(errors) };
       return false;
     }
@@ -95,6 +98,7 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
       ? ctx.chooseResizeAnchorSide(inst, prevAdjacencyInfos) ?? ctx.inferTallResizeAnchorSide(inst)
       : null;
     const prevPos = inst.root.position.clone();
+    const prevRotation = inst.root.rotation.y;
     const prevKitchenPlacement = inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null;
     const prevLocalAnchor = ctx.getModuleLocalKitchenAnchor(inst).clone();
     const prevWorldAnchor = prevLocalAnchor.clone().applyMatrix4(inst.root.matrixWorld);
@@ -115,18 +119,18 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
 
     const next = ctx.buildModule(inst.params);
     next.name = `moduleGeom_${inst.id}`;
+    // A rebuild replaces only geometry. It must retain the active 2D/3D
+    // presentation state selected by the editor.
+    next.visible = prevModule.visible;
     ctx.tagModuleGeometry(next, inst.id);
 
     inst.root.remove(prevModule);
     inst.module = next;
     inst.root.add(inst.module);
     inst.localBox = ctx.moduleRootLocalBox(inst.root, inst.module);
-    if (opts?.preserveBackAnchor) {
-      const nextLocalAnchor = ctx.getModuleLocalKitchenAnchor(inst);
-      const delta = prevLocalAnchor.clone().sub(nextLocalAnchor);
-      inst.module.position.add(delta);
-      inst.localBox = ctx.moduleRootLocalBox(inst.root, inst.module);
-    }
+    // Preserve the world anchor by moving the persisted instance root below.
+    // Offsetting module.position here is lost on rebuild / JSON restore and
+    // shifts a centered cabinet by half the depth change (580 → 710: 65 mm).
     ctx.ensurePickAndOutline(inst);
     const keepRootPositionStable = shouldValidateLayout && ctx.footprintExtentsMatchXZ(prevWorldBox, ctx.instanceWorldBox(inst));
     if (shouldValidateLayout && !keepRootPositionStable) ctx.preserveAnchoredResizeSide(inst, prevWorldBox, resizeAnchorSide);
@@ -151,7 +155,8 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
     const overlapsModules = shouldValidateLayout ? ctx.anyOverlap(inst, null) : false;
     const overlapsWalls = shouldValidateLayout ? ctx.moduleOverlapsWalls(inst) : false;
     const overlapsWorktops = shouldValidateLayout ? ctx.moduleOverlapsKitchenWorktops(inst) : false;
-    const overlaps = overlapsModules || overlapsWalls || overlapsWorktops;
+    const supported = ctx.hasRequiredWallSupport?.(inst) ?? true;
+    const overlaps = overlapsModules || overlapsWalls || overlapsWorktops || !supported;
     const movedNeighborInvalid =
       shouldValidateLayout &&
       propagated.movedIds.some((id) => {
@@ -194,6 +199,7 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
       ctx.tagModuleGeometry(inst.module, inst.id);
       inst.localBox = prevBox;
       inst.root.position.copy(prevPos);
+      inst.root.rotation.y = prevRotation;
       inst.kitchenPlacement = prevKitchenPlacement ? structuredClone(prevKitchenPlacement) : null;
       inst.root.add(inst.module);
       for (const other of ctx.instances) {
@@ -203,7 +209,7 @@ export function createInstanceRebuilder(ctx: InstanceRebuilderContext) {
       }
       ctx.ensurePickAndOutline(inst);
       ctx.renderErrors(ctx.args.errorsEl, [
-        !inRoom
+        !supported ? 'Vrchný modul musí zostať opretý o nakreslenú stenu v celej šírke a výške.' : !inRoom
           ? "Module doesn't fit inside the room bounds in layout mode."
           : overlaps || movedNeighborInvalid
             ? "Module overlaps wall/another module in layout mode."

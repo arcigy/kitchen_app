@@ -10,7 +10,8 @@ import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 import { makeDefaultKitchenContext, resolveContext, type KitchenContext } from "../layout/kitchenContext";
 import { applyKitchenContextToModuleParams } from "../layout/kitchenMaterialSync";
 import { captureLayoutSnapshot, commitHistory } from "../layout/historyManager";
-import { cancelPlacement, type PlacementHelpers } from "../layout/placementManager";
+import { addInstance, cancelPlacement, type PlacementHelpers } from "../layout/placementManager";
+import { getKitchenModuleRole } from '../layout/kitchenModuleRules';
 import { normalizeModuleParamsForSource, type ModuleParams } from "../model/cabinetTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { createDefaultModulePackageParameters } from "../core/module-package/runtime/module-runtime-adapter";
@@ -126,7 +127,7 @@ type KitchenDebugApiContext = {
     kitchenGroupId: string,
     opts?: { skipHistory?: boolean; id?: string }
   ) => KitchenWorktopInstance;
-  rebuildKitchenGroupLayout: (groupId: string, nextCtx: KitchenContext, prevCtx?: KitchenContext) => void;
+  rebuildKitchenGroupLayout: (groupId: string, nextCtx: KitchenContext, prevCtx?: KitchenContext) => boolean | void;
   setToolMeasure: () => void;
   addWall: (a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) => WallInstance | null;
   setWallEndpointMm: (wall: WallInstance, which: "a" | "b", point: FloorBoundaryPoint) => void;
@@ -365,7 +366,7 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
   };
 
   const getDebugKitchenSnapshot = (groupId: string | null) => {
-    ctx.getKitchenMode()?.flushPendingContext?.();
+    // Diagnostics observe the editor without flushing pending edits.
     const kitchenGroups = S.kitchenGroups;
     const allWorktops = kitchenWorktops;
     const allInstances = instances;
@@ -448,7 +449,18 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     const inst = createInstance(nextParams);
     inst.kitchenGroupId = groupId;
 
-    if (nextParams.type === "corner_shelf_lower") {
+    if (getKitchenModuleRole(nextParams) === 'upper') {
+      const info = getKitchenGuideSegmentInfo(worktop, opts?.segmentIndex ?? 0, 0);
+      if (!info) throw new Error('Debug guide segment not available.');
+      const cursor = info.start.clone().addScaledVector(info.dir, (opts?.offsetAlongMm ?? 700) / 1000).addScaledVector(info.frontNormal, .16);
+      const candidate = placementHelpers.resolvePlacementConstraint?.(inst, cursor);
+      if (!candidate?.valid || !candidate.kitchenPlacement) {
+        placementHelpers.disposeObject3D(inst.root);
+        throw new Error(candidate?.statusText ?? 'Upper module needs a drawn wall.');
+      }
+      inst.kitchenPlacement = candidate.kitchenPlacement;
+      inst.root.position.copy(candidate.position); inst.root.rotation.y = candidate.rotationY; inst.root.updateMatrixWorld(true);
+    } else if (nextParams.type === "corner_shelf_lower") {
       const guidePath = getKitchenWorktopBackGuidePath(worktop.params, backOffsetMm);
       let info = null as ReturnType<typeof getKitchenCornerPlacementInfo> | null;
       const requestedCornerIndex = typeof opts?.cornerIndex === "number" ? Math.round(opts.cornerIndex) : null;
@@ -716,7 +728,11 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     if (S.activeKitchenGroupId === groupId || ctx.getSelectedKitchenGroupId() === groupId) {
       S.kitchenCtx = structuredClone(nextCtx);
     }
-    rebuildKitchenGroupLayout(groupId, nextCtx, prevCtx);
+    const rebuilt = rebuildKitchenGroupLayout(groupId, nextCtx, prevCtx);
+    if (rebuilt === false) {
+      group.ctx = structuredClone(prevCtx);
+      if (S.activeKitchenGroupId === groupId || ctx.getSelectedKitchenGroupId() === groupId) S.kitchenCtx = structuredClone(prevCtx);
+    }
     mountProps();
     return getDebugKitchenSnapshot(groupId);
   };
@@ -1101,6 +1117,11 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     planSnap: debugPlanSnap,
     measureState: debugMeasureState,
     viewState: debugViewState,
+    startModulePlacement: (type: ModuleParams['type'], modulePackageId?: string, initialParams?: ModuleParams) =>
+      addInstance(S, placementHelpers, type, { modulePackageId, initialParams }),
+    placementState: () => ({ active: placement.active, valid: placement.ghostValid,
+      binding: placement.ghost?.kitchenPlacement ? structuredClone(placement.ghost.kitchenPlacement) : null,
+      position: placement.ghost?.root.position.toArray() ?? null }),
     layoutSnapshot: debugLayoutSnapshot
   };
 }

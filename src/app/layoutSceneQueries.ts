@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getKitchenModuleRole } from '../layout/kitchenModuleRules';
 import { worldToScreen } from "./sharedUtils";
 import type { PlanSnapResult } from "./planSnap";
 import type {
@@ -23,6 +24,7 @@ type RoomBounds = {
 };
 
 type LayoutSceneQueriesContext = {
+  hasRequiredWallSupport?: (inst: LayoutInstance) => boolean;
   instances: LayoutInstance[];
   kitchenWorktops: KitchenWorktopInstance[];
   walls: WallInstance[];
@@ -54,7 +56,8 @@ export function createLayoutSceneQueries(ctx: LayoutSceneQueriesContext) {
     box.max.z <= ctx.roomBounds.halfD + eps
   );
 
-  const instanceFitsRoom = (inst: LayoutInstance) => roomContainsBoxXZ(instanceLayoutWorldBox(inst));
+  const instanceFitsRoom = (inst: LayoutInstance) => getKitchenModuleRole(inst.params) === 'upper' && ctx.hasRequiredWallSupport
+    ? ctx.hasRequiredWallSupport(inst) : roomContainsBoxXZ(instanceLayoutWorldBox(inst));
 
   const instanceFitsLayoutBounds = (inst: LayoutInstance) => {
     if (inst.kitchenGroupId) return true;
