@@ -1074,6 +1074,11 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
         planOverlayVisible: sceneDebug.planOverlayVisible,
         planAmbientVisible: sceneDebug.planAmbientVisible
       },
+      modules: instances.map((inst) => ({
+        id: inst.id,
+        meshVisible: inst.module.visible,
+        outlineVisible: inst.outline.visible
+      })),
       walls: walls.map((wall) => ({
         id: wall.id,
         meshVisible: wall.mesh.visible,

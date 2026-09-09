@@ -1223,7 +1223,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     }
     planFillSnapshots.clear();
     for (const [outline, snapshot] of planOutlineSnapshots) {
-      restoreKitchenPlanOutline(outline, snapshot);
+      restoreKitchenPlanOutline(outline, snapshot, args.getViewMode?.() ?? "3d");
     }
     planOutlineSnapshots.clear();
   };

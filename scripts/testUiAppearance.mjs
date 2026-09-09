@@ -126,6 +126,17 @@ try {
     assert.deepEqual(await page.evaluate(() => window.__kitchenDebug.layoutSnapshot()), before, "Appearance changed project data");
     await page.getByRole("button", { name: "3D", exact: true }).click();
     await page.waitForFunction(() => window.__kitchenDebug.viewState().viewMode === "3d");
+    await page.waitForFunction(() => {
+      const modules = window.__kitchenDebug.viewState().modules;
+      return modules.length > 0 && modules.every(module => module.meshVisible && !module.outlineVisible);
+    });
+    const modes = await page.locator(".viewer-display-menu [data-mode]").evaluateAll(items => items.map(item => item.dataset.mode));
+    assert.deepEqual(modes, ["solid", "realistic"], "Only surface display modes may be offered");
+    for (const mode of ["realistic", "solid"]) {
+      await page.locator(".viewer-display-button").click();
+      await page.locator(`.viewer-display-menu [data-mode="${mode}"]`).click();
+      assert.equal(await page.locator(".viewer-display-menu-active").getAttribute("data-mode"), mode);
+    }
     await audit(page, `editor-3d-${value}`);
     await page.getByRole("button", { name: "Pôdorys", exact: true }).click();
     await page.locator('[data-workspace-nav="materials"]').click();

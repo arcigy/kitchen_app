@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { captureViewportOutput, getTechnicalColors, registerTechnicalMaterial, unregisterTechnicalMaterial, renderEditorViewport, useProjectViewportAppearance, withViewportAppearance } from "./viewportAppearance";
+import { captureViewportOutput, getTechnicalColors, renderEditorViewport, useProjectViewportAppearance, withViewportAppearance } from "./viewportAppearance";
 
 afterEach(() => { delete document.documentElement.dataset.theme; });
 describe("viewport appearance isolation", () => {
@@ -54,18 +54,16 @@ describe("viewport appearance isolation", () => {
     expect(getTechnicalColors("dark")).toEqual({ line: "#d4dfed", active: "#78b6ff" });
     expect(getTechnicalColors("light").line).toBe("#333333");
   });
-  it("adapts only registered wireframe lines and restores their original color and opacity for outputs", () => {
+  it("leaves annotation and selection lines unchanged in both themes", () => {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#f5f5f5");
     const material = new THREE.LineBasicMaterial({ color: "#1d2630", opacity: 0.55 });
-    registerTechnicalMaterial(scene, material);
-    withViewportAppearance(scene, "dark", () => {
-      expect(material.color.getHexString()).toBe("d4dfed");
-      expect(material.opacity).toBe(0.8);
-    });
-    expect(material.color.getHexString()).toBe("1d2630");
-    expect(material.opacity).toBe(0.55);
-    unregisterTechnicalMaterial(scene, material);
-    withViewportAppearance(scene, "dark", () => expect(material.color.getHexString()).toBe("1d2630"));
+    scene.add(new THREE.LineSegments(new THREE.BufferGeometry(), material));
+    for (const theme of ["light", "dark"] as const) {
+      withViewportAppearance(scene, theme, () => {
+        expect(material.color.getHexString()).toBe("1d2630");
+        expect(material.opacity).toBe(0.55);
+      });
+    }
   });
 });

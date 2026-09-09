@@ -122,18 +122,21 @@ export function applyKitchenPlanOutlineEmphasis(
 
 export function restoreKitchenPlanOutline(
   outline: THREE.LineSegments,
-  snapshot: KitchenPlanOutlineSnapshot
+  snapshot: KitchenPlanOutlineSnapshot,
+  viewMode: "2d" | "3d"
 ) {
   const material = getOutlineMaterial(outline);
   material.color.copy(snapshot.color);
   material.transparent = snapshot.transparent;
   material.opacity = snapshot.opacity;
-  material.depthTest = snapshot.depthTest;
+  material.depthTest = viewMode === "3d" ? true : snapshot.depthTest;
   material.depthWrite = snapshot.depthWrite;
   material.colorWrite = snapshot.colorWrite;
   material.visible = snapshot.materialVisible;
   material.needsUpdate = true;
   outline.renderOrder = snapshot.renderOrder;
-  outline.visible = snapshot.outlineVisible;
+  // A floorplan snapshot must not undo the navigation controller's 3D state.
+  // Its depth-disabled outline otherwise draws every cabinet edge through faces.
+  outline.visible = viewMode === "3d" ? false : snapshot.outlineVisible;
   outline.frustumCulled = snapshot.frustumCulled;
 }
