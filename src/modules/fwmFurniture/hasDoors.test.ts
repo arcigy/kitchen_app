@@ -1,3 +1,4 @@
+import { describeFwmModuleHeight } from "./heightPresentation";
 import { describe, expect, it } from "vitest";
 import { Box3, Mesh, type Object3D } from "three";
 import { getSystemSeedCatalog } from "../../core/catalog/catalog-repository";
@@ -67,5 +68,36 @@ describe("door assembly removal", () => {
     expect(without.pricing.finalPrice).toBeLessThan(before.pricing.finalPrice);
     expect(calculate(true).quoteBom.items).toEqual(before.quoteBom.items);
     expect(calculate(true).pricing.finalPrice).toBe(before.pricing.finalPrice);
+  });
+});
+
+
+describe("cabinet height explanations", () => {
+  it.each([
+    ["fwm_catalog_base_doors", { height: 820, heightCarcass: 782, plinthHeight: 150, worktopThicknessMm: 38, requiresWorktop: true }, 782, 150],
+    ["fwm_catalog_base_corner", { height: 820, heightCarcass: 782, plinthHeight: 150, worktopThicknessMm: 38, requiresWorktop: true, variant: "corner_1d" }, 782, 150],
+    ["fwm_catalog_tall_cabinet", { height: 2080, plinthHeight: 150, requiresWorktop: false }, 2080, 150],
+    ["fwm_catalog_wall_cabinet", { height: 700, plinthHeight: 0, requiresWorktop: false }, 700, 0],
+    ["fwm_catalog_base_doors", { height: 720, plinthHeight: 0, requiresWorktop: false }, 720, 0],
+  ] as Array<[string, Record<string, unknown>, number, number]>)("%s describes the actual geometry without mutating dimensions", (type, overrides, height, plinth) => {
+    const modulePackage = systemModulePackageTemplates.find(item => item.module.moduleType === type)!;
+    const parameters = { ...createDefaultModulePackageParameters(modulePackage), ...overrides, type };
+    const before = structuredClone(parameters);
+    const description = describeFwmModuleHeight(parameters, 1400)!;
+    const geometry = buildModulePackageGeometryFromPackage({ modulePackage, parameters, catalog: getSystemSeedCatalog() });
+    const bounds = new Box3().setFromObject(geometry);
+    expect(description.cabinetHeightMm).toBe(height);
+    expect(description.plinthHeightMm).toBe(plinth);
+    expect(bounds.max.y * 1000).toBeCloseTo(height, 0);
+    expect(description.summary).toContain(`${height} mm`);
+    if (type === "fwm_catalog_wall_cabinet") {
+      expect(description.summary).toContain("1400 mm");
+      expect(description.summary).toContain("2100 mm");
+    }
+    expect(parameters).toEqual(before);
+  });
+  it("does not apply DELFI geometry semantics to unrelated client modules", () => {
+    expect(describeFwmModuleHeight({ type: "pino_side_cabinet", height: 800 })).toBeNull();
+    expect(describeFwmModuleHeight({ type: "fwm_catalog_worktop", height: 38 })).toBeNull();
   });
 });

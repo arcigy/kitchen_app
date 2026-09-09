@@ -17,6 +17,25 @@ const LOCALES: Record<AppLanguage, AppLocale> = {
 };
 
 const EXACT_CS_TEXT: Record<string, string> = {
+  Carcass: "Korpus",
+  Plinth: "Sokl",
+  "Height to worktop surface (mm)": "Výška po horní hranu pracovní desky (mm)",
+  "Upper cabinet bottom above floor (mm)": "Spodní hrana horních skříněk nad podlahou (mm)",
+  "Upper cabinet height (mm)": "Výška horních skříněk (mm)",
+  "Tall cabinet height including plinth (mm)": "Výška vysokých skříněk včetně soklu (mm)",
+  "Bottom edge above floor": "Spodní hrana nad podlahou",
+  "Top edge above floor": "Horní hrana nad podlahou",
+  "The bottom edge above floor is set separately in the kitchen.": "Výška spodní hrany nad podlahou se nastavuje samostatně v kuchyni.",
+  "Upper cabinet height": "Výška horní skříňky",
+  "Cabinet size from bottom to top. Mounting height is a separate value.": "Rozměr skříňky od spodní po horní hranu. Výška zavěšení je samostatná hodnota.",
+  "Cabinet height": "Výška skříňky",
+  "Height including worktop": "Výška sestavy s pracovní deskou",
+  "Cabinet height including plinth": "Výška skříňky včetně soklu",
+  "Height reaches the worktop surface. The breakdown shows the cabinet and plinth separately.": "Výška sahá po horní hranu pracovní desky. Rozpis ukazuje skříňku a sokl samostatně.",
+  "Full cabinet height from floor, including plinth and excluding worktop.": "Celková výška skříňky od podlahy včetně soklu, bez pracovní desky.",
+  "Cabinet including plinth, excluding worktop": "Skříňka včetně soklu, bez pracovní desky",
+  "Complete height": "Celá sestava",
+
   "Fit gap width": "Šířka do mezery",
   "Resize the selected module width to fill the gap between its neighbors.": "Změní šířku vybrané skříňky tak, aby vyplnila mezeru mezi sousedy.",
   Appearance: "Vzhled", "System theme": "Systémová", "Light theme": "Světlá", "Dark theme": "Tmavá",
@@ -44,6 +63,25 @@ const EXACT_CS_TEXT: Record<string, string> = {
 };
 
 const EXACT_SK_TEXT: Record<string, string> = {
+  Carcass: "Korpus",
+  Plinth: "Sokel",
+  "Height to worktop surface (mm)": "Výška po hornú hranu pracovnej dosky (mm)",
+  "Upper cabinet bottom above floor (mm)": "Spodná hrana horných skriniek nad podlahou (mm)",
+  "Upper cabinet height (mm)": "Výška horných skriniek (mm)",
+  "Tall cabinet height including plinth (mm)": "Výška vysokých skriniek vrátane sokla (mm)",
+  "Bottom edge above floor": "Spodná hrana nad podlahou",
+  "Top edge above floor": "Horná hrana nad podlahou",
+  "The bottom edge above floor is set separately in the kitchen.": "Výška spodnej hrany nad podlahou sa nastavuje samostatne v kuchyni.",
+  "Upper cabinet height": "Výška hornej skrinky",
+  "Cabinet size from bottom to top. Mounting height is a separate value.": "Rozmer skrinky od spodnej po hornú hranu. Výška zavesenia je samostatná hodnota.",
+  "Cabinet height": "Výška skrinky",
+  "Height including worktop": "Výška zostavy s pracovnou doskou",
+  "Cabinet height including plinth": "Výška skrinky vrátane sokla",
+  "Height reaches the worktop surface. The breakdown shows the cabinet and plinth separately.": "Výška siaha po hornú hranu pracovnej dosky. Rozpis ukazuje skrinku a sokel samostatne.",
+  "Full cabinet height from floor, including plinth and excluding worktop.": "Celková výška skrinky od podlahy vrátane sokla, bez pracovnej dosky.",
+  "Cabinet including plinth, excluding worktop": "Skrinka vrátane sokla, bez pracovnej dosky",
+  "Complete height": "Celá zostava",
+
   "Fit gap width": "Šírka do medzery",
   "Resize the selected module width to fill the gap between its neighbors.": "Zmení šírku vybranej skrinky tak, aby vyplnila medzeru medzi susedmi.",
   Appearance: "Vzhľad", "System theme": "Systémová", "Light theme": "Svetlá", "Dark theme": "Tmavá",

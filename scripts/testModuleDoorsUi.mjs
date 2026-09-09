@@ -48,6 +48,13 @@ try {
   const doorToggle = () => page.getByRole('checkbox', { name: 'Dvierka', exact: true });
   await doorToggle().waitFor();
   assert(await doorToggle().isChecked(), 'Old/default cabinet keeps its doors');
+  const summary = page.locator('[data-module-height-summary]');
+  assert((await summary.textContent()).includes('782 mm'), 'Height explanation shows cabinet including plinth and excluding worktop');
+  assert((await summary.textContent()).includes('632 mm') && (await summary.textContent()).includes('150 mm'), 'Height explanation separates carcass and plinth');
+  assert((await summary.textContent()).includes('820 mm') && (await summary.textContent()).includes('38 mm'), 'Height explanation keeps assembly and worktop dimensions clear');
+  assert(await page.getByRole('spinbutton', { name: /Výška zostavy s pracovnou doskou|Height including worktop/ }).count() === 1, 'Height input label matches its stored assembly value');
+  await summary.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${out}/height-summary.png` });
   const before = await module();
   assert(before.parts.some(part => /^door_/.test(part.name)), 'Cabinet initially has actual door parts');
   await doorToggle().uncheck();
