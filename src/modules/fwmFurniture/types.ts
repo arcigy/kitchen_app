@@ -15,6 +15,7 @@ const DEFAULT_TALL_STACK_SLOTS: Array<{ type: (typeof TALL_STACK_SLOT_TYPES)[num
 
 export type FwmFurnitureParams = {
   type: FwmFurnitureModuleType;
+  hasDoors?: boolean;
 } & Record<string, PortableJsonValue>;
 
 function num(value: unknown, fallback: number) {
@@ -177,6 +178,7 @@ export function makeDefaultFwmFurnitureParams(type: FwmFurnitureModuleType): Fwm
     drawer4FrontHeightMm: 40,
     drawer5FrontHeightMm: 40,
     doorCount: spec.doors ?? 0,
+    hasDoors: true,
     shelfCount: spec.shelves ?? 0,
     shelfGaps: "",
     tallStackMode: type === "fwm_catalog_tall_cabinet" ? "builder" : "fixed",
@@ -419,6 +421,7 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
     delete next[`drawer${index}SystemBackHeightMm`];
   }
   next.doorCount = count(next.doorCount, spec.doors ?? 0, 12);
+  next.hasDoors = bool(next.hasDoors, true);
   next.shelfCount = count(next.shelfCount, spec.shelves ?? 0, 16);
   if (spec.moduleType === "fwm_catalog_tall_cabinet") {
     next.tallStackMode = ["fixed", "builder"].includes(text(next.tallStackMode, "builder")) ? text(next.tallStackMode, "builder") : "builder";

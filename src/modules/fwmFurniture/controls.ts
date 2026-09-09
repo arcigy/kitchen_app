@@ -26,6 +26,7 @@ const NUMBER_KEYS = [
 ] as const;
 
 const CHECKBOX_KEYS = [
+  "hasDoors",
   "opened",
   "hasWorktop",
   "hasPlinth"
@@ -79,13 +80,14 @@ export function createFwmFurnitureControls(
   }
 
   for (const key of CHECKBOX_KEYS) {
+    if (key === "hasDoors" && !(Number(params.doorCount) > 0 || params.type === "fwm_catalog_tall_cabinet")) continue;
     const row = document.createElement("label");
     row.className = "module-package-control";
     row.style.display = "grid";
     row.style.gap = "4px";
     row.style.marginTop = "8px";
     const label = document.createElement("span");
-    label.textContent = key;
+    label.textContent = key === "hasDoors" ? "Dvierka" : key;
     const input = document.createElement("input");
     input.type = "checkbox";
     input.checked = params[key] === true;

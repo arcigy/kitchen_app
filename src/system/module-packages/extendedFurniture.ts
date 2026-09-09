@@ -511,6 +511,7 @@ function isDrawerSystemSelectionParameter(key: string) {
 }
 
 function parameterUiVisibility(spec: FwmFurnitureSpec, parameter: ModuleParameterDefinition): UiVisibility {
+  if (parameter.key === "hasDoors") return (spec.doors ?? 0) > 0 || spec.moduleType === "fwm_catalog_tall_cabinet" || spec.moduleType === "fwm_catalog_base_drawers" ? "user" : "internal";
   if (isDrawerSystemSelectionParameter(parameter.key)) return "internal";
   if (INTERNAL_PARAMETER_GROUPS.has(parameter.group ?? "")) return "internal";
   if (TECHNICAL_PARAMETER_GROUPS.has(parameter.group ?? "")) return "technical";
@@ -954,6 +955,7 @@ function baseParameters(spec: FwmFurnitureSpec): ModuleParameterDefinition[] {
     numberParam("drawer4FrontHeightMm", "Drawer 4 front height", 40, 40, 1200, "components", "geometry", 1),
     numberParam("drawer5FrontHeightMm", "Drawer 5 front height", 40, 40, 1200, "components", "geometry", 1),
     numberParam("doorCount", "Door count", spec.doors ?? 0, 0, 12, "components", "geometry"),
+    booleanParam("hasDoors", "Dvierka", true, "components", "all"),
     numberParam("shelfCount", "Shelf count", spec.shelves ?? 0, 0, 16, "components", "geometry"),
     stringParam("shelfGaps", "Shelf gaps", "", "components", "geometry", false),
     ...(spec.moduleType === "fwm_catalog_tall_cabinet"
@@ -1323,6 +1325,7 @@ function ui(spec: FwmFurnitureSpec): ModuleUiDefinition {
     "shelfCount",
     "shelfGaps",
     "tallStackMode",
+    "hasDoors",
     "tallSlotCount",
     ...Array.from({ length: 12 }, (_, index) => [`tallSlot${index + 1}Type`, `tallSlot${index + 1}HeightMm`, `tallSlot${index + 1}DrawerSystemSize`, `tallSlot${index + 1}OffsetMm`]).flat(),
     "tallDoorOpeningMode",
@@ -1365,7 +1368,7 @@ function ui(spec: FwmFurnitureSpec): ModuleUiDefinition {
       key.endsWith("MaterialId") ? "materialPicker" :
       key.endsWith("ComponentId") ? "componentPicker" :
       /^tallSlot\d+(Type|DrawerSystemSize)$/.test(key) || /^drawer[1-5]SystemSize$/.test(key) || ["variant", "side", "endingSide", "endingShape", "cornerShape", "frontType", "openingMode", "applianceKind", "shape", "mountingMode", "handleType", "drawerSystemBrand", "drawerSystemSize", "drawerSystem", "tallStackMode", "tallDoorOpeningMode"].includes(key) ? "select" :
-      key === "wallMounted" || key === "glassFronts" || key === "opened" || key === "hasCutleryInnerDrawer" ? "checkbox" :
+      key === "wallMounted" || key === "glassFronts" || key === "opened" || key === "hasCutleryInnerDrawer" || key === "hasDoors" ? "checkbox" :
       parameter.type === "string" ? "text" :
       "number";
     return [{ parameterKey: key, controlType, groupId, order: index }];

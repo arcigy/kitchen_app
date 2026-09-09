@@ -1,4 +1,5 @@
 {
+  "hasDoors": true,
   "type": "flap_shelves_low",
   "assemblyContext": "kitchen",
   "kitchenModuleRole": "top",

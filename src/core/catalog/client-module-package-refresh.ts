@@ -5,6 +5,7 @@ const PRESERVED_PARAMETER_DEFAULTS = new Set([
   "cornerShape",
   "side",
   "doorCount",
+  "hasDoors",
   "drawerCount",
   "openingMode",
   "shelfCount",
@@ -70,6 +71,14 @@ export function refreshClientModulePackageFromSystemTemplate(args: {
     ...source.parameters,
     parameters: refreshParameterDefaults(source.parameters.parameters, args.existingPackage)
   };
+  if (args.existingPackage.parameterPresets) {
+    const existing = args.existingPackage.parameterPresets;
+    const existingIds = new Set(existing.presets.map(preset => preset.presetId));
+    refreshed.parameterPresets = structuredClone({
+      ...existing,
+      presets: [...existing.presets, ...(source.parameterPresets?.presets ?? []).filter(preset => !existingIds.has(preset.presetId))],
+    });
+  }
 
   return refreshed;
 }

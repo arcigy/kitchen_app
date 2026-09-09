@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { resolveTallStackLayout, resolveTallDoorFront } from "./tallStackLayout";
 import type { ClientCatalog, ComponentDefinition, ComponentGeometryDefinition, ComponentType } from "../../core/catalog/catalog-types";
 import type { ModuleGeometryPrimitive } from "../../core/module-package/module-package-types";
 import {
@@ -2003,131 +2004,134 @@ function buildCatalogWallCorner90Cabinet(group: THREE.Group, params: FwmFurnitur
     shelfY += shelfT;
   }
 
-  const doorY = height / 2;
-  const doorH = height;
-  // The upper 90 corner was rebuilt from the approved Revit lower-corner
-  // family: the two L-front boards meet at the inner corner and cover the
-  // outer side-front edges instead of stopping short by the side thickness.
-  const doorXMinZ = frontInner;
-  const doorXMaxZ = maxZ;
-  const doorXDepth = Math.max(40, doorXMaxZ - doorXMinZ);
-  const doorX = addBox(
-    group,
-    "door_front_x",
-    { width: frontT, height: doorH, depth: doorXDepth },
-    { x: frontInner + frontT / 2, y: doorY, z: doorXMinZ + doorXDepth / 2 },
-    frontMat,
-    ["doorCount", "frontThicknessMm", "frontGap", "frontMaterialId", "opened"]
-  );
-  tagVisibleEdges(tagBoardIdentity(doorX, "door_front_x", "front"), ["visible_door_edges"]);
-  const doorZMinX = frontOuter;
-  const doorZMaxX = maxX;
-  const doorZWidth = Math.max(40, doorZMaxX - doorZMinX);
-  const doorZ = addBox(
-    group,
-    "door_front_z",
-    { width: doorZWidth, height: doorH, depth: frontT },
-    { x: doorZMinX + doorZWidth / 2, y: doorY, z: frontInner + frontT / 2 },
-    frontMat,
-    ["doorCount", "frontThicknessMm", "frontGap", "frontMaterialId", "opened"]
-  );
-  tagVisibleEdges(tagBoardIdentity(doorZ, "door_front_z", "front"), ["visible_door_edges"]);
+  if (params.hasDoors !== false) {
+    const doorY = height / 2;
+    const doorH = height;
+    // The upper 90 corner was rebuilt from the approved Revit lower-corner
+    // family: the two L-front boards meet at the inner corner and cover the
+    // outer side-front edges instead of stopping short by the side thickness.
+    const doorXMinZ = frontInner;
+    const doorXMaxZ = maxZ;
+    const doorXDepth = Math.max(40, doorXMaxZ - doorXMinZ);
+    const doorX = addBox(
+      group,
+      "door_front_x",
+      { width: frontT, height: doorH, depth: doorXDepth },
+      { x: frontInner + frontT / 2, y: doorY, z: doorXMinZ + doorXDepth / 2 },
+      frontMat,
+      ["doorCount", "frontThicknessMm", "frontGap", "frontMaterialId", "opened"]
+    );
+    tagVisibleEdges(tagBoardIdentity(doorX, "door_front_x", "front"), ["visible_door_edges"]);
+    const doorZMinX = frontOuter;
+    const doorZMaxX = maxX;
+    const doorZWidth = Math.max(40, doorZMaxX - doorZMinX);
+    const doorZ = addBox(
+      group,
+      "door_front_z",
+      { width: doorZWidth, height: doorH, depth: frontT },
+      { x: doorZMinX + doorZWidth / 2, y: doorY, z: frontInner + frontT / 2 },
+      frontMat,
+      ["doorCount", "frontThicknessMm", "frontGap", "frontMaterialId", "opened"]
+    );
+    tagVisibleEdges(tagBoardIdentity(doorZ, "door_front_z", "front"), ["visible_door_edges"]);
 
-  addWallCornerHardwareCylinder(
-    group,
-    "doorHandle_front_x",
-    handleRadius,
-    handleLength,
-    { x: frontOuter + handleProjection * 0.5, y: height - 60, z: doorXMinZ + doorXDepth * 0.5 },
-    handleMaterial,
-    "z",
-    handleComponent
-  );
-  addWallCornerHardwareCylinder(
-    group,
-    "doorHandle_front_z",
-    handleRadius,
-    handleLength,
-    { x: doorZMinX + doorZWidth * 0.5, y: height - 60, z: frontOuter + handleProjection * 0.5 },
-    handleMaterial,
-    "x",
-    handleComponent
-  );
+    addWallCornerHardwareCylinder(
+      group,
+      "doorHandle_front_x",
+      handleRadius,
+      handleLength,
+      { x: frontOuter + handleProjection * 0.5, y: height - 60, z: doorXMinZ + doorXDepth * 0.5 },
+      handleMaterial,
+      "z",
+      handleComponent
+    );
+    addWallCornerHardwareCylinder(
+      group,
+      "doorHandle_front_z",
+      handleRadius,
+      handleLength,
+      { x: doorZMinX + doorZWidth * 0.5, y: height - 60, z: frontOuter + handleProjection * 0.5 },
+      handleMaterial,
+      "x",
+      handleComponent
+    );
 
-  const hingeYs = [height * 0.28, height * 0.72];
-  for (const [index, hingeY] of hingeYs.entries()) {
-    addWallCornerHardwareBox(
-      group,
-      `hinge_front_x_${index + 1}_door_plate`,
-      { width: hingeNormal, height: hingeHeight, depth: hingePlane },
-      { x: frontInner - hingeNormal / 2, y: hingeY, z: doorXMaxZ - hingeEndOffset },
-      hingeMaterial,
-      hingeComponent,
-      "hingeComponentId",
-      ["hingeComponentId", "opened"]
-    );
-    addWallCornerHardwareBox(
-      group,
-      `hinge_front_x_${index + 1}_door_cup`,
-      { width: hingeNormal, height: hingeHeight, depth: hingePlane },
-      { x: frontInner - hingeNormal * 1.5, y: hingeY, z: doorXMaxZ - hingeEndOffset },
-      hingeMaterial,
-      hingeComponent,
-      "hingeComponentId",
-      ["hingeComponentId", "opened"]
-    );
-    addWallCornerHardwareBox(
-      group,
-      `hinge_front_z_${index + 1}_door_plate`,
-      { width: hingePlane, height: hingeHeight, depth: hingeNormal },
-      { x: doorZMaxX - hingeEndOffset, y: hingeY, z: frontInner - hingeNormal / 2 },
-      hingeMaterial,
-      hingeComponent,
-      "hingeComponentId",
-      ["hingeComponentId", "opened"]
-    );
-    addWallCornerHardwareBox(
-      group,
-      `hinge_front_z_${index + 1}_door_cup`,
-      { width: hingePlane, height: hingeHeight, depth: hingeNormal },
-      { x: doorZMaxX - hingeEndOffset, y: hingeY, z: frontInner - hingeNormal * 1.5 },
-      hingeMaterial,
-      hingeComponent,
-      "hingeComponentId",
-      ["hingeComponentId", "opened"]
-    );
-  }
+    const hingeYs = [height * 0.28, height * 0.72];
+    for (const [index, hingeY] of hingeYs.entries()) {
+      addWallCornerHardwareBox(
+        group,
+        `hinge_front_x_${index + 1}_door_plate`,
+        { width: hingeNormal, height: hingeHeight, depth: hingePlane },
+        { x: frontInner - hingeNormal / 2, y: hingeY, z: doorXMaxZ - hingeEndOffset },
+        hingeMaterial,
+        hingeComponent,
+        "hingeComponentId",
+        ["hingeComponentId", "opened"]
+      );
+      addWallCornerHardwareBox(
+        group,
+        `hinge_front_x_${index + 1}_door_cup`,
+        { width: hingeNormal, height: hingeHeight, depth: hingePlane },
+        { x: frontInner - hingeNormal * 1.5, y: hingeY, z: doorXMaxZ - hingeEndOffset },
+        hingeMaterial,
+        hingeComponent,
+        "hingeComponentId",
+        ["hingeComponentId", "opened"]
+      );
+      addWallCornerHardwareBox(
+        group,
+        `hinge_front_z_${index + 1}_door_plate`,
+        { width: hingePlane, height: hingeHeight, depth: hingeNormal },
+        { x: doorZMaxX - hingeEndOffset, y: hingeY, z: frontInner - hingeNormal / 2 },
+        hingeMaterial,
+        hingeComponent,
+        "hingeComponentId",
+        ["hingeComponentId", "opened"]
+      );
+      addWallCornerHardwareBox(
+        group,
+        `hinge_front_z_${index + 1}_door_cup`,
+        { width: hingePlane, height: hingeHeight, depth: hingeNormal },
+        { x: doorZMaxX - hingeEndOffset, y: hingeY, z: frontInner - hingeNormal * 1.5 },
+        hingeMaterial,
+        hingeComponent,
+        "hingeComponentId",
+        ["hingeComponentId", "opened"]
+      );
+    }
 
-  if (bool(params, "opened", false)) {
-    const hingeCount = hingeYs.length;
-    const xPivot = attachObjectsToWallCornerPivot(
-      group,
-      "__wall_corner_90_door_pivot_x",
-      { x: frontInner + frontT / 2, z: doorXMaxZ },
-      [
-        doorX,
-        group.getObjectByName("doorHandle_front_x"),
-        ...Array.from({ length: hingeCount }, (_, index) => [
-          group.getObjectByName(`hinge_front_x_${index + 1}_door_plate`),
-          group.getObjectByName(`hinge_front_x_${index + 1}_door_cup`)
-        ]).flat()
-      ].filter((object): object is THREE.Object3D => Boolean(object))
-    );
-    xPivot.rotation.y = -Math.PI / 2;
-    const zPivot = attachObjectsToWallCornerPivot(
-      group,
-      "__wall_corner_90_door_pivot_z",
-      { x: doorZMaxX, z: frontInner + frontT / 2 },
-      [
-        doorZ,
-        group.getObjectByName("doorHandle_front_z"),
-        ...Array.from({ length: hingeCount }, (_, index) => [
-          group.getObjectByName(`hinge_front_z_${index + 1}_door_plate`),
-          group.getObjectByName(`hinge_front_z_${index + 1}_door_cup`)
-        ]).flat()
-      ].filter((object): object is THREE.Object3D => Boolean(object))
-    );
-    zPivot.rotation.y = Math.PI / 2;
+    if (bool(params, "opened", false)) {
+      const hingeCount = hingeYs.length;
+      const xPivot = attachObjectsToWallCornerPivot(
+        group,
+        "__wall_corner_90_door_pivot_x",
+        { x: frontInner + frontT / 2, z: doorXMaxZ },
+        [
+          doorX,
+          group.getObjectByName("doorHandle_front_x"),
+          ...Array.from({ length: hingeCount }, (_, index) => [
+            group.getObjectByName(`hinge_front_x_${index + 1}_door_plate`),
+            group.getObjectByName(`hinge_front_x_${index + 1}_door_cup`)
+          ]).flat()
+        ].filter((object): object is THREE.Object3D => Boolean(object))
+      );
+      xPivot.rotation.y = -Math.PI / 2;
+      const zPivot = attachObjectsToWallCornerPivot(
+        group,
+        "__wall_corner_90_door_pivot_z",
+        { x: doorZMaxX, z: frontInner + frontT / 2 },
+        [
+          doorZ,
+          group.getObjectByName("doorHandle_front_z"),
+          ...Array.from({ length: hingeCount }, (_, index) => [
+            group.getObjectByName(`hinge_front_z_${index + 1}_door_plate`),
+            group.getObjectByName(`hinge_front_z_${index + 1}_door_cup`)
+          ]).flat()
+        ].filter((object): object is THREE.Object3D => Boolean(object))
+      );
+      zPivot.rotation.y = Math.PI / 2;
+    }
+
   }
 
   attachWallCornerKitchenAnchors(group, minX, maxX, minZ, maxZ);
@@ -2244,6 +2248,8 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
   ];
 
   for (const part of parts) {
+    // The historical filler ID is the hinged leaf; corner_right_door is the fixed blind panel.
+    if (params.hasDoors === false && part.name === "corner_blind_front_filler") continue;
     const size = scaleGroundTruthSize(part.size, part.role, { width, height, depth, plinth, t, back, shelfT, frontT }, source);
     const center = scaleGroundTruthCenter(part.center, source, { width, height, depth, plinth });
     center.x = handedX(center.x);
@@ -2284,7 +2290,7 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
   }
 
   const handleTargetMesh = group.getObjectByName("corner_blind_front_filler") as THREE.Mesh | null;
-  if (handleTargetMesh instanceof THREE.Mesh) {
+  if (params.hasDoors !== false && handleTargetMesh instanceof THREE.Mesh) {
     const doorBounds = readObjectBoundsMm(handleTargetMesh);
     const handleProjection = num(params, "handleProjectionMm", 28);
     const handleLength = Math.min(num(params, "handleLengthMm", 160), Math.max(40, doorBounds.height * 0.45));
@@ -2331,6 +2337,7 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
     { x: -131.618, y: 652.4, z: 302 },
     { x: -131.618, y: 157.4, z: 302 }
   ].entries()) {
+    if (params.hasDoors === false) continue;
     const center = scaleGroundTruthCenter(sourceCenter, source, { width, height, depth, plinth });
     center.x = handedX(center.x);
     const hinge = addBox(
@@ -2346,7 +2353,7 @@ function buildCatalogBaseCorner1D(group: THREE.Group, params: FwmFurnitureParams
     markComponent(hinge, hingeComponent, "hingeComponentId");
   }
 
-  if (params.opened === true) openCatalogBaseCorner1DDoor(group, side);
+  if (params.hasDoors !== false && params.opened === true) openCatalogBaseCorner1DDoor(group, side);
 }
 
 function openCatalogBaseCorner1DDoor(group: THREE.Group, side: "left" | "right") {
@@ -3161,6 +3168,8 @@ function buildCatalogBaseCornerChamferedGroundTruth(group: THREE.Group, catalog:
   const context = createChamferedGroundTruthParametricContext(buildParams);
   for (const primitive of primitives) {
     if (primitive.primitiveType !== "mesh") continue;
+    const doorPart = readGroundTruthString(primitive.params.boardName);
+    if (buildParams.hasDoors === false && ["diagonal_front", "diagonal_handle", "hinge_lower", "hinge_upper"].includes(doorPart ?? "")) continue;
     const mesh = buildGroundTruthMesh(primitive, context, buildParams, catalog);
     if (mesh) group.add(mesh);
   }
@@ -3826,7 +3835,7 @@ function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: Clie
       addCylinder(drawerGroup, `${prefix}drawer_handle_${index + 1}`, 6, Math.min(num(params, "handleLengthMm", 160), width - 120), { x: 0, y: drawerH * 0.28, z: handleZ }, hardware, "x");
       y += drawerH / 2 + gap;
     }
-    if (!mixedWithDoors) return;
+    if (!mixedWithDoors || params.hasDoors === false) return;
 
     const doorZoneStart = plinth + gap + drawerZoneHeight + gap;
     const doorZoneHeight = Math.max(80, frontAreaHeight - drawerZoneHeight - gap);
@@ -3847,7 +3856,7 @@ function addFronts(group: THREE.Group, params: FwmFurnitureParams, catalog: Clie
     return;
   }
 
-  if (doorCount > 0) {
+  if (doorCount > 0 && params.hasDoors !== false) {
     const eachW = Math.max(40, (width - sideGap * 2 - gap * (doorCount - 1)) / doorCount);
     for (let index = 0; index < doorCount; index += 1) {
       const x = -width / 2 + sideGap + eachW / 2 + index * (eachW + gap);
@@ -4006,25 +4015,6 @@ function addAppliance(group: THREE.Group, params: FwmFurnitureParams, catalog: C
   addBox(group, name, { width, height: h, depth }, { x: 0, y, z: 20 }, makeMaterial(params, catalog, "appliance"), ["applianceWidthMm", "width", "height", "depth"]);
 }
 
-type TallStackSlotType = "empty" | "drawer" | "shelf" | "oven" | "sink" | "microwave" | "door";
-
-const TALL_STACK_SLOT_TYPES: readonly TallStackSlotType[] = ["empty", "drawer", "shelf", "oven", "sink", "microwave", "door"];
-const DEFAULT_TALL_STACK: Array<{ type: TallStackSlotType; height: number }> = [];
-
-function tallSlotType(params: FwmFurnitureParams, index: number): TallStackSlotType {
-  const fallback = DEFAULT_TALL_STACK[index - 1]?.type ?? "empty";
-  const value = String(params[`tallSlot${index}Type`] ?? fallback);
-  return TALL_STACK_SLOT_TYPES.includes(value as TallStackSlotType) ? value as TallStackSlotType : fallback;
-}
-
-function tallSlotHeight(params: FwmFurnitureParams, index: number) {
-  return Math.max(0, num(params, `tallSlot${index}HeightMm`, DEFAULT_TALL_STACK[index - 1]?.height ?? 0));
-}
-
-function tallSlotOffset(params: FwmFurnitureParams, index: number) {
-  return num(params, `tallSlot${index}OffsetMm`, 0);
-}
-
 function markTallSelectableSubmodule(group: THREE.Object3D, args: { id: string; label: string; kind: string; slotIndex: number }) {
   group.traverse((child) => {
     child.userData.selectableSubmoduleId = args.id;
@@ -4161,19 +4151,8 @@ function addTallDoorSlot(
   coverBottomMm = 0,
   coverTopMm = 0
 ) {
-  const width = num(params, "width", 600);
-  const depth = num(params, "depth", 560);
-  const frontT = num(params, "frontThicknessMm", 18);
-  const sideGap = num(params, "sideGap", 2);
-  const gap = num(params, "frontGap", 2);
-  const leafCount = Math.max(1, Math.min(2, Math.round(num(params, `tallSlot${slotIndex}DoorLeafCount`, 1))));
-  const openingMode = String(params[`tallSlot${slotIndex}DoorOpeningMode`] ?? "hinged") === "lift_up" ? "lift_up" : "hinged";
-  const frontBottomY = bottomY - coverBottomMm + (coverBottomMm > 0 ? 0 : gap);
-  const frontTopY = bottomY + slotHeight + coverTopMm - (coverTopMm > 0 ? 0 : gap);
-  const frontHeight = Math.max(60, frontTopY - frontBottomY);
-  const fullFrontWidth = Math.max(60, width - sideGap * 2);
-  const leafGap = leafCount > 1 ? gap : 0;
-  const leafWidth = Math.max(40, (fullFrontWidth - leafGap * (leafCount - 1)) / leafCount);
+  if (params.hasDoors === false) return;
+  const { depth, frontT, leafCount, openingMode, frontBottomY, frontTopY, frontHeight, fullFrontWidth, leafGap, leafWidth } = resolveTallDoorFront(params, slotIndex, bottomY, slotHeight, coverBottomMm, coverTopMm);
   const material = makeMaterial(params, catalog, "front");
   const hardware = makeMaterial(params, catalog, "hardware");
   const doorGroup = new THREE.Group();
@@ -4242,75 +4221,16 @@ function buildCatalogTallStackBuilder(group: THREE.Group, params: FwmFurniturePa
   const width = num(params, "width", 600);
   const height = num(params, "height", 2080);
   const depth = num(params, "depth", 560);
-  const t = num(params, "boardThickness", 18);
-  const plinth = num(params, "plinthHeight", 100);
   addCarcass(group, { ...params, doorCount: 0, drawerCount: 0, shelfCount: 0, applianceKind: "none" } as FwmFurnitureParams, catalog, { width, height, depth, namePrefix: "tower" });
 
-  const slotCount = Math.max(0, Math.min(12, Math.round(num(params, "tallSlotCount", DEFAULT_TALL_STACK.length))));
-  const slots = Array.from({ length: slotCount }, (_, index) => ({
-    index: index + 1,
-    type: tallSlotType(params, index + 1),
-    height: tallSlotHeight(params, index + 1),
-    offset: tallSlotOffset(params, index + 1)
-  }));
-  const nonShelfSlots = slots.filter((slot) => slot.type !== "shelf" && slot.type !== "empty");
-  const usableBottom = plinth + t;
-  const usableHeight = Math.max(80, height - plinth - t * 2);
-  const fixedTotal = slots.reduce((sum, slot) => sum + (slot.type !== "shelf" && slot.type !== "empty" && slot.height > 0 ? slot.height : 0), 0);
-  const fillSlots = slots.filter((slot) => slot.type !== "shelf" && slot.type !== "empty" && slot.height <= 0).length;
-  const fillHeight = fillSlots > 0 ? Math.max(60, (usableHeight - fixedTotal) / fillSlots) : 0;
-  const shouldScaleOverflow = String(params.tallStackMode ?? "builder") !== "builder";
-  const scale = shouldScaleOverflow && fillSlots === 0 && fixedTotal > usableHeight ? usableHeight / fixedTotal : 1;
-  let cursor = usableBottom;
-  let drawerIndex = 1;
-  let previousSlotType: TallStackSlotType | null = null;
-  let previousNonShelfType: TallStackSlotType | null = null;
-  let lastShelfTopY: number | null = null;
-  let shelfAtCurrentBoundary = false;
-  for (const slot of slots) {
-    const slotHeight = slot.height > 0 ? Math.max(8, slot.height * scale) : fillHeight;
-    const slotBottomY = cursor + slot.offset;
-    const isMoved = Math.abs(slot.offset) > 0.001;
-    if (slot.type === "drawer") {
-      addTallDrawerSlot(group, params, catalog, slot.index, drawerIndex, slotBottomY, slotHeight, drawerIndex === 1 || shelfAtCurrentBoundary ? t : 0, 0);
-      drawerIndex += 1;
-      cursor += slotHeight;
-      previousNonShelfType = slot.type;
-      shelfAtCurrentBoundary = false;
-    } else if (slot.type === "shelf") {
-      const nextNonShelf = slots.slice(slot.index).find((candidate) => candidate.type !== "shelf" && candidate.type !== "empty")?.type ?? null;
-      const topY = previousNonShelfType === "drawer" && !isMoved && (nextNonShelf === "oven" || nextNonShelf === "sink" || nextNonShelf === "microwave")
-        ? cursor - num(params, "frontGap", 2) / 2
-        : slotBottomY;
-      if (lastShelfTopY == null || Math.abs(lastShelfTopY - topY) > 0.01) {
-        addTallShelfSlot(group, params, catalog, slot.index, topY, slotHeight, true);
-        lastShelfTopY = topY;
-      }
-      if (!isMoved) cursor = topY;
-      shelfAtCurrentBoundary = !isMoved;
-    } else if (slot.type === "oven" || slot.type === "sink" || slot.type === "microwave") {
-      if (!shelfAtCurrentBoundary) {
-        addTallShelfSlot(group, params, catalog, slot.index, cursor, num(params, "shelfThickness", t), true);
-        shelfAtCurrentBoundary = true;
-      }
-      addTallApplianceSubmodule(group, params, catalog, slot.type, slot.index, slotBottomY, slotHeight);
-      cursor += slotHeight;
-      previousNonShelfType = slot.type;
-      shelfAtCurrentBoundary = false;
-    } else if (slot.type === "door") {
-      const remainingFrontSlots = nonShelfSlots.filter((candidate) => candidate.index > slot.index && (candidate.type === "door" || candidate.type === "drawer"));
-      const coverTop = remainingFrontSlots.length === 0 ? t + num(params, "frontGap", 2) / 2 : 0;
-      addTallDoorSlot(group, params, catalog, slot.index, slotBottomY, slotHeight, shelfAtCurrentBoundary ? t : 0, coverTop);
-      cursor += slotHeight;
-      previousNonShelfType = slot.type;
-      shelfAtCurrentBoundary = false;
-    } else if (slot.type === "empty") {
-      cursor += Math.max(0, slot.height);
-      shelfAtCurrentBoundary = false;
-    }
-    previousSlotType = slot.type;
+  const layout = resolveTallStackLayout(params);
+  for (const entry of layout.entries) {
+    if (entry.type === "drawer") addTallDrawerSlot(group, params, catalog, entry.index, entry.drawerIndex!, entry.bottomY, entry.height, entry.coverBottom, entry.coverTop);
+    else if (entry.type === "shelf") addTallShelfSlot(group, params, catalog, entry.index, entry.bottomY, entry.height, true);
+    else if (entry.type === "door") addTallDoorSlot(group, params, catalog, entry.index, entry.bottomY, entry.height, entry.coverBottom, entry.coverTop);
+    else addTallApplianceSubmodule(group, params, catalog, entry.type, entry.index, entry.bottomY, entry.height);
   }
-  group.userData.tallStackSlots = slots;
+  group.userData.tallStackSlots = layout.slots;
 }
 
 function addDishwasherFront(group: THREE.Group, params: FwmFurnitureParams, catalog: ClientCatalog) {

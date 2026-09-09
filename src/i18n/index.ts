@@ -759,6 +759,7 @@ const PARAM_LABELS_SK: Record<string, string> = {
 };
 
 const PARAM_LABELS_SK_OVERRIDES: Record<string, string> = {
+  hasDoors: "Dvierka",
   upperDepthMm: "H\u013abka horn\u00fdch modulov (mm)",
   __fridgeHandleSplitScaleVersion: "Verzia delenia úchytky chladničky",
   backMaterialId: "Materiál chrbta",

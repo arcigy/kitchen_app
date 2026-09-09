@@ -9,6 +9,7 @@ import {
 
 export type SwingShelvesLowParams = {
   type: "swing_shelves_low";
+  hasDoors?: boolean;
 } & Record<string, PortableJsonValue>;
 
 const MODULE_DEFAULTS = defaults as SwingShelvesLowParams;
@@ -69,6 +70,7 @@ export function normalizeSwingShelvesLowParams(
   options: SwingShelvesLowNormalizeOptions = {}
 ): SwingShelvesLowParams {
   const normalized = normalizePortableParams(MODULE_DEFAULTS, params, "swing_shelves_low") as SwingShelvesLowParams;
+  normalized.hasDoors = normalized.hasDoors !== false;
   const sourceKey = options.sourceKey ?? "";
   const worktopThicknessMm = getResolvedWorktopThickness(normalized);
   const hasWorktop = requiresWorktop(normalized);
