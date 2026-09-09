@@ -24,6 +24,7 @@ const allowedSystemSeedCatalogFiles = new Set([
   "src/core/project-save/project-save.test.ts",
   "src/lib/materials/rendering.test.ts",
   "src/modules/fwmFurniture/fwmFurniture.test.ts",
+  "src/modules/fwmFurniture/hasDoors.test.ts",
   "src/modules/runtime/runtimeCatalog.test.ts"
 ]);
 

@@ -596,6 +596,7 @@ export function buildSwingShelvesLowParametric(
     centerXMm: number;
     hingeDirectionX: -1 | 1;
   }) => {
+    if (params.hasDoors === false) return;
     addBoxPart({
       group,
       name: args.doorName,
@@ -656,7 +657,7 @@ export function buildSwingShelvesLowParametric(
     });
   }
 
-  if (params.doorOpen === true) {
+  if (params.hasDoors !== false && params.doorOpen === true) {
     if (doorDouble) {
       const leftPivot = attachDoorPivot(
         group,

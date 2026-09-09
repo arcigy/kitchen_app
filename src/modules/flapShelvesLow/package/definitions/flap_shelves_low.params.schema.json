@@ -5,6 +5,10 @@
   "title": "Flap Params",
   "type": "object",
   "properties": {
+    "hasDoors": {
+      "type": "boolean",
+      "default": true
+    },
     "type": {
       "type": "string"
     },

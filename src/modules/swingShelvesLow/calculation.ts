@@ -47,7 +47,7 @@ export function calculateBOM(params: SwingShelvesLowParams, ctx: KitchenContext,
   const backVisibleHeight = Math.max(1, sideHeight - 2 * boardT + 2 * num(source, "backGrooveDepthMm", 8) - num(source, "backGrooveClearanceMm", 1));
   const shelfDepth = Math.max(40, carcassDepth - backT - 29);
   const doorDouble = source.doorDouble !== false;
-  const doorCount = doorDouble ? 2 : 1;
+  const doorCount = p.hasDoors === false ? 0 : doorDouble ? 2 : 1;
   const meetingGap = doorDouble ? frontGap : 0;
   const doorWidth = Math.max(40, doorDouble ? (width - sideGap * 2 - meetingGap) * 0.5 : width - sideGap * 2);
   const doorHeight = Math.max(40, heightCarcass - plinthHeight - topGap - bottomGap);
@@ -80,7 +80,7 @@ export function calculateBOM(params: SwingShelvesLowParams, ctx: KitchenContext,
   if (shelfBoardCount > 0) {
     items.push(boardItem({ id: "shelves", category: "carcass", description: "Internal shelves", quantity: shelfBoardCount, length: innerWidth, width: shelfDepth, thickness: shelfT, material: shelfRef ?? bodyRef, slot: "shelf", wasteMultiplier: 1.1 }));
   }
-  items.push(boardItem({ id: "door-fronts", category: "front", description: "Door fronts", quantity: doorCount, length: doorWidth, width: doorHeight, thickness: frontT, material: frontRef, slot: "front", wasteMultiplier: 1.1 }));
+  if (doorCount > 0) items.push(boardItem({ id: "door-fronts", category: "front", description: "Door fronts", quantity: doorCount, length: doorWidth, width: doorHeight, thickness: frontT, material: frontRef, slot: "front", wasteMultiplier: 1.1 }));
 
   const visibleEdgeLm = round((sideHeight * 2 + innerWidth * (2 + shelfBoardCount) + Math.max(0, plinthHeight > 0 ? innerWidth : 0) + doorCount * (doorWidth * 2 + doorHeight * 2)) / 1000);
   if (edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
