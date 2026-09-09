@@ -63,6 +63,7 @@ type KeyboardInputHandlersContext = {
     backOffsetMm: number
   ) => boolean;
   cancelActiveViewerTool: () => boolean;
+  cancelModulePointerDrag?: () => boolean;
   handleCustomFurnitureEscape: (ev: KeyboardEvent) => boolean;
   handleGlobalMeasurementClear: (ev: KeyboardEvent) => boolean;
   handleLayoutEscape: (ev: KeyboardEvent) => boolean;
@@ -363,6 +364,7 @@ type KeyboardInputCommandContext = PlacementShortcutCommandContext &
   Pick<
     KeyboardInputHandlersContext,
     | "cancelActiveViewerTool"
+    | "cancelModulePointerDrag"
     | "floorEdit"
     | "handleCustomFurnitureEscape"
     | "handleGlobalMeasurementClear"
@@ -1212,6 +1214,12 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
   // Native text controls own every key, including Escape and Undo/Redo. This
   // prevents an in-progress value from cancelling its enclosing editor tool.
   if (ctx.isTypingTarget(ev.target)) return false;
+
+  if (ev.key === "Escape" && ctx.cancelModulePointerDrag?.()) {
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    return true;
+  }
 
   if (ev.defaultPrevented) {
     if (isSpaceShortcut(ev)) {

@@ -3,7 +3,7 @@ import { pointInPolygonXZ, worldToScreen } from "./sharedUtils";
 import { getModulePlanPolygon } from "./planSnap";
 import type { LayoutInstance } from "./localTypes";
 import type { KitchenModeGroupSelectionApi, SelectionMarqueeState } from "./selectionControllerTypes";
-import type { PointerModuleDragState } from "./pointerModuleDrag";
+import { beginPointerModuleDrag, type PointerModuleDragState } from "./pointerModuleDrag";
 
 type KitchenModeSelectionApi = KitchenModeGroupSelectionApi & {
   filterSelectableInstanceId: (id: string) => string | null;
@@ -26,6 +26,8 @@ type ModuleSelectionControllerContext = {
   getKitchenMode: () => KitchenModeSelectionApi | null;
   getModuleLocalBackCenter: (inst: LayoutInstance) => THREE.Vector3;
   isModuleAlignLocked?: (id: string) => boolean;
+  isModuleSelected?: (id: string) => boolean;
+  canBeginDirectDrag?: () => boolean;
   isMobileAdditiveSelection?: () => boolean;
   consumeMobileAdditiveSelection?: () => void;
   setSelectedKitchenGroup: (groupId: string | null) => void;
@@ -57,7 +59,18 @@ export function createModuleSelectionController(ctx: ModuleSelectionControllerCo
     if (selectOwningKitchenGroup(inst.kitchenGroupId)) return true;
     const keyboardAdditive = ev.shiftKey || ev.ctrlKey || ev.metaKey;
     const mobileAdditive = ctx.isMobileAdditiveSelection?.() ?? false;
+    const directDrag = ctx.isModuleSelected?.(selectableId) && ctx.canBeginDirectDrag?.()
+      && ev.button === 0 && ev.pointerType !== "touch" && !keyboardAdditive && !mobileAdditive
+      && !ctx.pinnedInstanceIds.has(selectableId) && !ctx.isModuleAlignLocked?.(selectableId);
     ctx.setSelectedModule(selectableId, { additive: keyboardAdditive || mobileAdditive || undefined });
+    if (directDrag) {
+      inst.root.updateMatrixWorld(true);
+      const hit = ctx.raycaster.intersectObject(inst.module, true).find(item => item.object instanceof THREE.Mesh);
+      if (beginPointerModuleDrag({ state: ctx.dragState, instance: inst, ray: ctx.raycaster.ray,
+        pointerId: ev.pointerId, clientX: ev.clientX, clientY: ev.clientY, grabHeight: hit?.point.y ?? inst.root.position.y })) {
+        ctx.renderer.domElement.setPointerCapture(ev.pointerId);
+      }
+    }
     if (mobileAdditive && !keyboardAdditive) ctx.consumeMobileAdditiveSelection?.();
     return true;
   };

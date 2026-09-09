@@ -289,7 +289,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     { id: "led-under-upper", group: "kitchen", label: "LED under upper cabinets", iconSvg: ctx.I_LED_STRIP, keywords: ["led", "lighting"], execute: () => ctx.setToolLed("underUpper") },
     { id: "led-plinth-joint", group: "kitchen", label: "LED at plinth", iconSvg: ctx.I_LED_STRIP, keywords: ["led", "lighting"], execute: () => ctx.setToolLed("plinthJoint") },
     { id: "led-shelf-joint", group: "kitchen", label: "LED in shelves", iconSvg: ctx.I_LED_STRIP, keywords: ["led", "lighting"], execute: () => ctx.setToolLed("shelfJoint") },
-    { id: "fit-gap", group: "kitchen", label: "Fit gap", iconSvg: ctx.I_FIT_GAP, execute: ctx.fitSelectedKitchenModuleToGap, getState: selectionState },
+    { id: "fit-gap", group: "kitchen", label: "Fit gap width", iconSvg: ctx.I_FIT_GAP, execute: ctx.fitSelectedKitchenModuleToGap, getState: selectionState },
     { id: "living-wall-catalog", group: "living-wall", label: "Living Wall", iconSvg: ctx.I_LIVING_WALL, execute: () => setActiveTab("livingWall") },
     { id: "room-catalog", group: "room", label: "Room modules", iconSvg: ctx.I_WARDROBE, execute: () => setActiveTab("room") },
     { id: "wardrobe", group: "room", label: "Wardrobe", iconSvg: ctx.I_WARDROBE, execute: () => runToolbarWardrobeCommand(ctx) },
@@ -343,7 +343,7 @@ export function createClassicTopbarController(ctx: ClassicTopbarControllerContex
     disposeLedStripMenu?.();
     disposeLedStripMenu = installLedStripMenu({ trigger: ledButton, onChoose: ctx.setToolLed });
     const auto = ctx.tb.addGroup("Auto", { row });
-    addButton(auto, { title: "Fit selected module into gap", label: "Fit gap", iconSvg: ctx.I_FIT_GAP, onClick: ctx.fitSelectedKitchenModuleToGap });
+    addButton(auto, { title: "Resize the selected module width to fill the gap between its neighbors.", label: "Fit gap width", iconSvg: ctx.I_FIT_GAP, onClick: ctx.fitSelectedKitchenModuleToGap });
   };
 
   const addLivingWallTab = (row: HTMLElement) => {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import type { LayoutInstance } from "./localTypes";
 import { createModuleSelectionController } from "./moduleSelectionController";
+import { createPointerModuleDragState } from "./pointerModuleDrag";
 
 function moduleInstance(id: string): LayoutInstance {
   const root = new THREE.Group();
@@ -43,6 +44,37 @@ describe("module selection controller", () => {
     )).toBe("upper");
   });
 
+  it.each(["2d", "3d"])("arms precise direct drag only for an already selected unlocked module in %s", viewMode => {
+    const inst = moduleInstance("m1");
+    const dragState = createPointerModuleDragState();
+    const setPointerCapture = vi.fn();
+    const selected = new Set<string>();
+    const pinned = new Set<string>();
+    const raycaster = new THREE.Raycaster(new THREE.Vector3(1.2, 5, 2.15), new THREE.Vector3(0, -1, 0));
+    const controller = createModuleSelectionController({
+      instances: [inst], pinnedInstanceIds: pinned, raycaster, groundPlane: new THREE.Plane(),
+      renderer: { domElement: { setPointerCapture } } as unknown as THREE.WebGLRenderer,
+      dragState, marquee: { active: false, pending: false, pointerId: null, hitSomething: false },
+      marqueeEl: { style: { display: "" } } as HTMLElement,
+      findInstance: () => inst, getCamera: () => new THREE.OrthographicCamera(), getMode: () => "layout", getViewMode: () => viewMode,
+      getKitchenEditMode: () => false, getKitchenMode: () => null, getModuleLocalBackCenter: () => new THREE.Vector3(),
+      setSelectedKitchenGroup: vi.fn(), setSelectedModule: id => { if (id) selected.add(id); },
+      isModuleSelected: id => selected.has(id), canBeginDirectDrag: () => true,
+    });
+    const event = { pointerId: 7, pointerType: "mouse", button: 0, clientX: 100, clientY: 200 } as PointerEvent;
+    controller.beginModuleSelection(inst.id, event);
+    expect(dragState.gesture).toBeUndefined();
+    pinned.add(inst.id);
+    controller.beginModuleSelection(inst.id, event);
+    expect(dragState.gesture).toBeUndefined();
+    pinned.clear();
+    controller.beginModuleSelection(inst.id, event);
+    expect(dragState.active).toBe(false);
+    expect(dragState.gesture?.original.position.toArray()).toEqual([1, 0, 2]);
+    expect(dragState.offset.x).toBeCloseTo(.2);
+    expect(dragState.offset.z).toBeCloseTo(.15);
+    expect(setPointerCapture).toHaveBeenCalledExactlyOnceWith(7);
+  });
   it("selects a module without starting direct pointer drag", () => {
     const inst = moduleInstance("m1");
     const setPointerCapture = vi.fn();

@@ -1,13 +1,101 @@
 import * as THREE from "three";
 import type { AppState, LayoutInstance } from "../layout/appState";
 import { refreshModuleKitchenPlacement, type KitchenPlacementGroupContext } from "./moduleKitchenPlacement";
+import { POINTER_DRAG_THRESHOLD_PX } from "./snapToolProfiles";
+import type { ModuleAdjacencyLink } from "./moduleAdjacency";
+
+export type ModuleDragTransform = {
+  position: THREE.Vector3;
+  rotationY: number;
+  kitchenPlacement: LayoutInstance["kitchenPlacement"];
+  kitchenGroupId: LayoutInstance["kitchenGroupId"];
+};
+
+export type PointerModuleDragGesture = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  plane: THREE.Plane;
+  original: ModuleDragTransform;
+  lastValid: ModuleDragTransform;
+  valid: boolean;
+  snap: ModuleAdjacencyLink | null;
+};
 
 export type PointerModuleDragState = {
   active: boolean;
   id: string | null;
   offset: THREE.Vector3;
   lastValid: THREE.Vector3;
+  gesture?: PointerModuleDragGesture;
 };
+
+export function createPointerModuleDragState(): PointerModuleDragState {
+  return { active: false, id: null, offset: new THREE.Vector3(), lastValid: new THREE.Vector3() };
+}
+
+export function captureModuleDragTransform(instance: LayoutInstance): ModuleDragTransform {
+  return {
+    position: instance.root.position.clone(),
+    rotationY: instance.root.rotation.y,
+    kitchenPlacement: instance.kitchenPlacement ? structuredClone(instance.kitchenPlacement) : instance.kitchenPlacement,
+    kitchenGroupId: instance.kitchenGroupId,
+  };
+}
+
+export function restoreModuleDragTransform(instance: LayoutInstance, snapshot: ModuleDragTransform) {
+  instance.root.position.copy(snapshot.position);
+  instance.root.rotation.y = snapshot.rotationY;
+  instance.kitchenPlacement = snapshot.kitchenPlacement ? structuredClone(snapshot.kitchenPlacement) : snapshot.kitchenPlacement;
+  instance.kitchenGroupId = snapshot.kitchenGroupId;
+  instance.root.updateMatrixWorld(true);
+}
+
+export function beginPointerModuleDrag(args: {
+  state: PointerModuleDragState;
+  instance: LayoutInstance;
+  ray: THREE.Ray;
+  pointerId: number;
+  clientX: number;
+  clientY: number;
+  grabHeight: number;
+}) {
+  if (args.state.gesture || args.state.active) return false;
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -args.grabHeight);
+  const hit = args.ray.intersectPlane(plane, new THREE.Vector3());
+  if (!hit) return false;
+  const original = captureModuleDragTransform(args.instance);
+  args.state.id = args.instance.id;
+  args.state.offset.copy(hit).sub(original.position);
+  args.state.lastValid.copy(original.position);
+  args.state.gesture = {
+    pointerId: args.pointerId, startX: args.clientX, startY: args.clientY,
+    plane, original, lastValid: captureModuleDragTransform(args.instance), valid: true, snap: null,
+  };
+  return true;
+}
+
+export function activatePointerModuleDrag(state: PointerModuleDragState, event: Pick<PointerEvent, "pointerId" | "clientX" | "clientY">) {
+  const gesture = state.gesture;
+  if (!gesture || gesture.pointerId !== event.pointerId) return false;
+  if (!state.active && Math.abs(event.clientX - gesture.startX) < POINTER_DRAG_THRESHOLD_PX
+      && Math.abs(event.clientY - gesture.startY) < POINTER_DRAG_THRESHOLD_PX) return false;
+  state.active = true;
+  return true;
+}
+
+export function finishModuleDragGesture(state: PointerModuleDragState, instance: LayoutInstance | null, cancel = false) {
+  const gesture = state.gesture;
+  if (!gesture) return { handled: false, changed: false };
+  const changed = !!instance && state.active && !cancel && gesture.valid
+    && (instance.root.position.distanceToSquared(gesture.original.position) > 1e-12
+      || Math.abs(instance.root.rotation.y - gesture.original.rotationY) > 1e-8);
+  if (instance && !changed) restoreModuleDragTransform(instance, gesture.original);
+  state.active = false;
+  state.id = null;
+  delete state.gesture;
+  return { handled: true, changed };
+}
 
 type PushedModuleSnapshot = {
   id: string;
@@ -120,7 +208,7 @@ export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGround
   const prevPos = inst.root.position.clone();
   inst.root.position.copy(finalPos);
   params.autoOrientModuleToRoomWallIfSnapped(inst);
-  const pushed = params.nudgePinnedModuleChain(inst, inst.root.position.clone().sub(prevPos));
+  const pushed = params.dragState.gesture ? [] : params.nudgePinnedModuleChain(inst, inst.root.position.clone().sub(prevPos));
   if (params.anyOverlap(inst, null) || params.moduleOverlapsWalls(inst) || params.moduleOverlapsKitchenWorktops(inst)) {
     rollbackPointerModuleDragOverlap({
       instance: inst,
@@ -130,6 +218,11 @@ export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGround
     });
     inst.root.rotation.y = previousRotation;
     inst.kitchenPlacement = previousBinding;
+    if (params.dragState.gesture) {
+      restoreModuleDragTransform(inst, params.dragState.gesture.lastValid);
+      params.dragState.gesture.valid = false;
+      params.dragState.gesture.snap = null;
+    }
     inst.root.updateMatrixWorld(true);
     return true;
   }
@@ -143,6 +236,10 @@ export function updateModuleDragFromGroundHit(params: UpdateModuleDragFromGround
     inferKitchenPlacementBinding: params.inferKitchenPlacementBinding
   });
   params.dragState.lastValid.copy(inst.root.position);
+  if (params.dragState.gesture) {
+    params.dragState.gesture.lastValid = captureModuleDragTransform(inst);
+    params.dragState.gesture.valid = true;
+  }
   params.updateLayoutPanel();
   return true;
 }

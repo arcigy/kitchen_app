@@ -17,6 +17,8 @@ const LOCALES: Record<AppLanguage, AppLocale> = {
 };
 
 const EXACT_CS_TEXT: Record<string, string> = {
+  "Fit gap width": "Šířka do mezery",
+  "Resize the selected module width to fill the gap between its neighbors.": "Změní šířku vybrané skříňky tak, aby vyplnila mezeru mezi sousedy.",
   Appearance: "Vzhled", "System theme": "Systémová", "Light theme": "Světlá", "Dark theme": "Tmavá",
   ...CZECH_SYSTEM_TEXT,
   File: "Soubor", Architecture: "Architektura", Modify: "Upravit", View: "Zobrazení", Manage: "Správa",
@@ -42,6 +44,8 @@ const EXACT_CS_TEXT: Record<string, string> = {
 };
 
 const EXACT_SK_TEXT: Record<string, string> = {
+  "Fit gap width": "Šírka do medzery",
+  "Resize the selected module width to fill the gap between its neighbors.": "Zmení šírku vybranej skrinky tak, aby vyplnila medzeru medzi susedmi.",
   Appearance: "Vzhľad", "System theme": "Systémová", "Light theme": "Svetlá", "Dark theme": "Tmavá",
   "Local recovery draft – server will be verified on open": "Lokálny obnovovací koncept – server sa overí pri otvorení.",
   "Local recovery data are not shown without a valid sign-in.": "Lokálne obnovovacie dáta sa bez platného prihlásenia nezobrazujú.",
