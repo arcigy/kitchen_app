@@ -12,6 +12,8 @@ Status: local implementation complete; production promotion is not approved. Onl
 
 Pricing review: composed tall cabinets now count doors from their actual slot layout. The previous generic door count could omit those fronts and hardware. This correction can change an existing tall cabinet's calculated price; compare representative DELFI tall cabinets before production approval.
 
+This is the whole develop release, including earlier upper-cabinet details, plan/selection/render corrections, mobile/UI foundations and Supplier Bridge improvements. Compared with current main it also adds the existing `0005_user_activity.sql` migration and requires that version for readiness. The migration creates five activity tables and their indexes; it does not rewrite project or catalog rows. After database recovery, check the production migration ledger and obtain approval before applying any missing migration. Rolling the application image back can leave these additive tables in place; do not drop them as part of routine rollback.
+
 ## Source and main preservation
 
 The source started at current `origin/develop` in isolated worktrees. The original checkout's unrelated unresolved merge remains untouched.
