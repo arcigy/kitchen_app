@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -18,34 +18,47 @@ const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
 
 describe("CI Playwright installation", () => {
   it.each([
-    { sourceExists: true, installerExit: 0 },
-    { sourceExists: true, installerExit: 23 },
-    { sourceExists: false, installerExit: 0 },
-  ])("restores the optional feed and preserves installer status: %j", ({ sourceExists, installerExit }) => {
+    { sourceNames: ["google-chrome.list"], installerExit: 0 },
+    { sourceNames: ["google-chrome.sources"], installerExit: 0 },
+    { sourceNames: ["google-chrome.sources"], installerExit: 23 },
+    { sourceNames: ["chrome-stable.sources", "chrome-extra.list"], installerExit: 0 },
+    { sourceNames: [], installerExit: 0 },
+  ])("restores the optional feed and preserves installer status: %j", ({ sourceNames, installerExit }) => {
     const fixture = mkdtempSync(path.join(tmpdir(), "arcigy-ci-browser-"));
-    const source = path.join(fixture, "google-chrome.list");
+    const sources = path.join(fixture, "sources.list.d");
+    mkdirSync(sources);
     const invocation = path.join(fixture, "installer-args.txt");
-    const original = "deb https://dl.google.com/linux/chrome-stable/deb stable main\n";
-    if (sourceExists) writeFileSync(source, original);
+    const original = (name: string) => name.endsWith(".sources")
+      ? "Types: deb\nURIs: https://dl.google.com/linux/chrome-stable/deb\nSuites: stable\nComponents: main\n"
+      : "deb https://dl.google.com/linux/chrome/deb/ stable main\n";
+    for (const name of sourceNames) writeFileSync(path.join(sources, name), original(name));
+    const ubuntu = path.join(sources, "ubuntu.sources");
+    writeFileSync(ubuntu, "URIs: http://archive.ubuntu.com/ubuntu\n");
     try {
-      // Only the fixed system path is redirected into a disposable fixture.
+      // Only the system sources directory is redirected into a disposable fixture.
       // sudo and npx are shell functions: no elevated operation or download runs.
       const script = `
 sudo() { "$@"; }
 npx() {
-  if [[ -f ${quote(shellPath(source))} ]]; then return 42; fi
+  for source in ${quote(shellPath(sources))}/*.list ${quote(shellPath(sources))}/*.sources; do
+    if [[ -f "$source" ]] && grep -q 'dl.google.com' "$source"; then return 42; fi
+  done
+  if [[ ! -f ${quote(shellPath(ubuntu))} ]]; then return 43; fi
   printf '%s\\n' "$@" > ${quote(shellPath(invocation))}
   return ${installerExit}
 }
 export RUNNER_TEMP=${quote(shellPath(fixture))}
-${command.replace("/etc/apt/sources.list.d/google-chrome.list", quote(shellPath(source)))}`;
+${command.replaceAll("/etc/apt/sources.list.d", quote(shellPath(sources)))}`;
       const result = spawnSync(bash, ["--noprofile", "--norc", "-c", script], { encoding: "utf8", timeout: 10000 });
       expect(result.error).toBeUndefined();
       expect(result.status, result.stderr).toBe(installerExit);
       expect(readFileSync(invocation, "utf8").trim().split("\n")).toEqual(["playwright", "install", "--with-deps", "chromium"]);
-      expect(existsSync(source)).toBe(sourceExists);
-      if (sourceExists) expect(readFileSync(source, "utf8")).toBe(original);
-      expect(existsSync(path.join(fixture, "arcigy-google-chrome.list"))).toBe(false);
+      expect(readdirSync(sources).sort()).toEqual([...sourceNames, "ubuntu.sources"].sort());
+      for (const name of sourceNames) expect(readFileSync(path.join(sources, name), "utf8")).toBe(original(name));
+      expect(readFileSync(ubuntu, "utf8")).toBe("URIs: http://archive.ubuntu.com/ubuntu\n");
+      for (const backup of readdirSync(fixture).filter(name => name.startsWith("arcigy-chrome-sources."))) {
+        expect(readdirSync(path.join(fixture, backup))).toEqual([]);
+      }
     } finally {
       rmSync(fixture, { recursive: true, force: true });
     }
