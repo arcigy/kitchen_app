@@ -22,7 +22,7 @@ Theme choices are system (default), light and dark, remembered only in the brows
 
 - A synchronous `public/theme-init.js` script resolves the initial theme before body paint. `src/ui/theme/themeController.ts` subsequently owns the preference, system and storage listeners; the connected theme picker removes its subscription when its screen is removed.
 - Only `arcigy.ui.theme` is persisted. A blocked browser store still permits switching for the current session. The existing application's broader storage requirements are unchanged.
-- `src/app/viewportAppearance.ts` applies a temporary editing background and registered wireframe line colors during one synchronous frame, restoring exact values in `finally`. No theme field enters project serialization. Photo/SSGI and explicit HDRI use project presentation.
+- `src/app/viewportAppearance.ts` applies a temporary editing background during one synchronous frame, restoring exact values in `finally`. No theme field enters project serialization. Photo/SSGI and explicit HDRI use project presentation.
 - PNG export draws a neutral frame for capture and restores the current editor frame. Saved previews, Blender exports and material rendering read the unchanged scene. Print CSS restores the complete light palette.
 - Native radio controls expose System, Light and Dark in login and the account panel. Existing business buttons, keyboard commands and navigation retain their handlers.
 - Existing screen styles use the shared tokens; `appearance.css` owns shared control feedback, focus, theme-picker layout and reduced motion. The pricing summary has compact spacing so its actions fit inside the existing footer.

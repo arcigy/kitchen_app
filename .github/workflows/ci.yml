@@ -95,7 +95,26 @@ jobs:
         run: npm run build
 
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: |
+          set -euo pipefail
+          # Playwright downloads its own Chromium. This optional Chrome feed is
+          # not required for the Ubuntu libraries installed by --with-deps.
+          chrome_backup="$(mktemp -d "${RUNNER_TEMP}/arcigy-chrome-sources.XXXXXX")"
+          chrome_sources=()
+          restore_chrome_sources() {
+            for chrome_source in "${chrome_sources[@]}"; do
+              sudo mv -- "$chrome_backup/${chrome_source##*/}" "$chrome_source"
+            done
+          }
+          trap restore_chrome_sources EXIT
+          for chrome_source in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            if [[ -f "$chrome_source" ]] && grep -Eq 'https?://dl\.google\.com/linux/chrome(-stable)?/deb([/[:space:]]|$)' "$chrome_source"; then
+              printf 'Temporarily isolating Chrome feed: %s\n' "${chrome_source##*/}"
+              sudo mv -- "$chrome_source" "$chrome_backup/"
+              chrome_sources+=("$chrome_source")
+            fi
+          done
+          npx playwright install --with-deps chromium
 
       - name: Start isolated UI runtime
         env:

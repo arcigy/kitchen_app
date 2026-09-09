@@ -48,6 +48,20 @@ function createHiddenFill() {
 }
 
 describe("kitchen plan presentation", () => {
+  it("does not resurrect a see-through plan outline after navigation has switched to 3D", () => {
+    const outline = new THREE.LineSegments(new THREE.BoxGeometry(), new THREE.LineBasicMaterial({ depthTest: false }));
+    outline.visible = true;
+    const snapshot = captureKitchenPlanOutline(outline);
+    applyKitchenPlanOutlineEmphasis(outline, { active: true, color: 0x111111, opacity: 1, renderOrder: 60 });
+    // Navigation now rebuilds the outline in 3D and hides it before the kitchen
+    // controller releases its floorplan styling on the next frame.
+    outline.visible = false;
+    outline.material.depthTest = true;
+    restoreKitchenPlanOutline(outline, snapshot, "3d");
+    expect(outline.visible).toBe(false);
+    expect(outline.material.depthTest).toBe(true);
+  });
+
   it("keeps every outline visible while repeatedly switching active layers", () => {
     const { outline, material } = createHiddenOutline();
 
@@ -90,7 +104,7 @@ describe("kitchen plan presentation", () => {
       opacity: 1,
       renderOrder: 60,
     });
-    restoreKitchenPlanOutline(outline, snapshot);
+    restoreKitchenPlanOutline(outline, snapshot, "2d");
 
     expect(outline.visible).toBe(false);
     expect(outline.frustumCulled).toBe(true);

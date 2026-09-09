@@ -295,7 +295,7 @@ import { createCustomFurnitureController } from "./app/customFurnitureController
 import { createMaterialModifyController } from "./app/materialModifyController";
 import { createDemosLivePreviewColorController } from "./app/demosLivePreviewColor";
 import { createCameraPlacementController } from "./app/cameraPlacementController";
-import { createViewDisplayController } from "./app/viewDisplayController";
+import { createViewDisplayController, resolveViewDisplayMode } from "./app/viewDisplayController";
 import { createVisibilityController, type VisibilityTarget } from "./app/visibilityController";
 import { getAppContextMenuController } from "./ui/contextMenu";
 import { createNavigationFocusProvider } from "./app/navigationFocus";
@@ -3575,9 +3575,7 @@ export function startApp(initialArgs: AppArgs) {
       refreshViewerTabs();
       activateViewerTab(tab);
     }
-    if (savedScene?.displayMode === "solid" || savedScene?.displayMode === "realistic" || savedScene?.displayMode === "wireframe") {
-      setViewerDisplayMode(savedScene.displayMode);
-    }
+    setViewerDisplayMode(resolveViewDisplayMode(savedScene?.displayMode));
     const savedRenderMode = savedScene?.renderMode === "realtime"
       || savedScene?.renderMode === "realtime_ssgi"
       || savedScene?.renderMode === "photo_pathtrace"
