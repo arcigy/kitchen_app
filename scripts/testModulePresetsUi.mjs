@@ -87,8 +87,8 @@ try {
   await select();
   const presetName = `QA custom ${Date.now()}`;
   await page.locator('.module-parameter-preset-create').click();
-  const dialog = () => page.locator('form').filter({ has: page.locator('textarea[placeholder="Note"]') });
-  await dialog().locator('input[placeholder="Name"]').fill(presetName);
+  const dialog = () => page.locator('form').filter({ has: page.locator('textarea') });
+  await dialog().locator('input[type="text"]').fill(presetName);
   await dialog().locator('textarea').fill('Saved configuration regression');
   const [createdResponse] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/parameter-presets') && response.request().method() === 'POST'),
@@ -136,7 +136,7 @@ try {
   await trigger().click();
   await page.route('**/parameter-presets', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'QA saving unavailable' }) }));
   await page.locator('.module-parameter-preset-create').click();
-  await dialog().locator('input[placeholder="Name"]').fill('QA rejected preset');
+  await dialog().locator('input[type="text"]').fill('QA rejected preset');
   await dialog().locator('textarea').fill('Controlled save failure');
   await dialog().locator('button[type="submit"]').click();
   await dialog().getByText('QA saving unavailable', { exact: true }).waitFor();
