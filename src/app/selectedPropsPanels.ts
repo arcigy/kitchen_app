@@ -1,4 +1,5 @@
 import type { AppState } from "../layout/appState";
+import { describeFwmModuleHeight } from "../modules/fwmFurniture/heightPresentation";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
@@ -1103,6 +1104,16 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
         }
       });
       s.appendChild(typePicker);
+    }
+
+    const heightPresentation = describeFwmModuleHeight(inst.params, inst.root.position.y * 1000);
+    if (heightPresentation) {
+      const summary = document.createElement("div");
+      summary.className = "muted";
+      summary.dataset.moduleHeightSummary = "true";
+      summary.textContent = heightPresentation.summary;
+      summary.style.marginTop = "8px";
+      s.appendChild(summary);
     }
 
     const editorHost = document.createElement("div");

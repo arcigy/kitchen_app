@@ -4431,7 +4431,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     };
 
     addNumberRow(
-      translateParamLabel("heightMm"),
+      t("Height to worktop surface (mm)"),
       ctx.heightMm,
       (value, refreshProps) =>
         commitCtx((base) => ({ ...base, heightMm: value }), { refreshProps }),
@@ -4471,7 +4471,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         }),
     );
     addNumberRow(
-      translateParamLabel("upperStartHeightMm"),
+      t("Upper cabinet bottom above floor (mm)"),
       ctx.upperStartHeightMm,
       (value, refreshProps) =>
         commitCtx((base) => ({ ...base, upperStartHeightMm: value }), {
@@ -4487,7 +4487,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         }),
     );
     addNumberRow(
-      translateParamLabel("upperHeightMm"),
+      t("Upper cabinet height (mm)"),
       ctx.upperHeightMm,
       (value, refreshProps) =>
         commitCtx((base) => ({ ...base, upperHeightMm: value }), {
@@ -4501,7 +4501,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         commitCtx((base) => ({ ...base, tallDepthMm: value }), { refreshProps }),
     );
     addNumberRow(
-      translateParamLabel("tallHeightMm"),
+      t("Tall cabinet height including plinth (mm)"),
       ctx.tallHeightMm,
       (value, refreshProps) =>
         commitCtx((base) => ({ ...base, tallHeightMm: value }), { refreshProps }),
