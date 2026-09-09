@@ -118,6 +118,7 @@ jobs:
 
       - name: Start isolated UI runtime
         env:
+          VITE_LOCAL_CLIENT_CATALOG_FROM_API: "true"
           BLENDER_WORKER_PORT: "5191"
           KITCHEN_PROJECT_STORAGE: file
           APP_ENV: dev

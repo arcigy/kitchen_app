@@ -7,12 +7,16 @@ import { computeModulePackageHash } from "./module-package-file";
 import type { FurnQuoteModulePackage, ModuleParameterPreset } from "./module-package-types";
 
 const DEFAULT_PRESET_FREE_PARAMETER_KEYS = [
+  // Catalog identity belongs to the target cabinet, not to its reusable configuration.
+  "code",
   "width",
   "height",
   "depth",
   "widthMm",
   "heightMm",
   "depthMm",
+  "heightCarcass",
+  "depthCarcass",
   "plinthHeight",
   "plinthHeightMm",
   "materialId",

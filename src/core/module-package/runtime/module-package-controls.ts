@@ -118,6 +118,8 @@ function withParameterPresetControl(
 
   const presetPicker = createModuleParameterPresetPicker({
     modulePackage,
+    parameters: params,
+    clientCatalog: args.clientCatalog,
     selectedPresetId: resolveMatchingModuleParameterPresetId(modulePackage, params),
     onSelect: (presetId) => {
       Object.assign(params, applyModuleParameterPreset({ modulePackage, parameters: params, presetId }));
