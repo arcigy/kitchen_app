@@ -951,9 +951,9 @@ export function installKitchenDebugApi(ctx: KitchenDebugApiContext) {
     return getDebugKitchenSnapshot(null);
   };
 
-  const debugProjectPlanPoint = (pointMm: { x: number; z: number }) => {
+  const debugProjectPlanPoint = (pointMm: { x: number; z: number; y?: number }) => {
     const rect = renderer.domElement.getBoundingClientRect();
-    const screen = worldToScreen(new THREE.Vector3(pointMm.x / 1000, 0, pointMm.z / 1000), cam(), rect);
+    const screen = worldToScreen(new THREE.Vector3(pointMm.x / 1000, (pointMm.y ?? 0) / 1000, pointMm.z / 1000), cam(), rect);
     return { x: rect.left + screen.x, y: rect.top + screen.y };
   };
 

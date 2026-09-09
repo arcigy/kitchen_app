@@ -283,6 +283,7 @@ import { createEditHudController } from "./app/editHudController";
 import { createWallEditDragController } from "./app/wallEditDragController";
 import { createViewPropertiesController } from "./app/viewPropertiesController";
 import { createModuleSelectionController } from "./app/moduleSelectionController";
+import { createPointerModuleDragState } from "./app/pointerModuleDrag";
 import { syncProjectMaterialAssignmentsToLayout } from "./app/projectMaterialLayoutSync";
 import { syncProjectMaterialAssignmentsToKitchenContexts } from "./app/projectMaterialKitchenContextSync";
 import { createProjectMaterialRuntimeCatalog } from "./app/projectMaterialRuntimeCatalog";
@@ -1302,12 +1303,7 @@ export function startApp(initialArgs: AppArgs) {
   raycaster.params.Line = { threshold: 0.08 };
   const pointerNdc = new THREE.Vector2();
   const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const dragState = {
-    active: false,
-    id: null as string | null,
-    offset: new THREE.Vector3(),
-    lastValid: new THREE.Vector3()
-  };
+  const dragState = createPointerModuleDragState();
 
   const underlayDragState = {
     active: false,
@@ -1354,6 +1350,7 @@ export function startApp(initialArgs: AppArgs) {
     },
     isTypingTarget,
     isInteractionBlocked: () =>
+      !!dragState.gesture ||
       dragState.active ||
       windowDragState.active ||
       doorDragState.active ||
@@ -1363,6 +1360,7 @@ export function startApp(initialArgs: AppArgs) {
       Boolean(floorEdit.drag) ||
       underlayDragState.active,
     isPanInteractionBlocked: () =>
+      !!dragState.gesture ||
       dragState.active ||
       windowDragState.active ||
       doorDragState.active ||
@@ -1388,7 +1386,7 @@ export function startApp(initialArgs: AppArgs) {
       marquee.pointerId = null;
       marquee.hitSomething = false;
       marqueeEl.style.display = "none";
-      dragState.active = false;
+      pointerInputHandlers.cancelModuleDrag();
       windowDragState.active = false;
       doorDragState.active = false;
       wallEditHud.drag = null;
@@ -1961,6 +1959,7 @@ export function startApp(initialArgs: AppArgs) {
   };
   viewerToolModeController = createViewerToolModeController({
     canvasEl: renderer.domElement,
+    getObjectDragState: () => dragState.gesture ? (dragState.active ? "dragging" : "pending") : null,
     getInsertMode: () =>
       mode === "layout" &&
       (layoutTool !== "select" ||
@@ -2866,6 +2865,7 @@ export function startApp(initialArgs: AppArgs) {
     startWorktopDraw: startKitchenWorktopDraw,
     cancelWorktopDraw: cancelKitchenWorktopDraw,
     handleWorktopEscape: handleKitchenWorktopEscape,
+    cancelModulePointerDrag: () => pointerInputHandlers.cancelModuleDrag(),
     refreshWorktopPreview: updateKitchenWorktopPreview,
     getGroupWorktops: getKitchenGroupWorktops,
     replaceGroupWorktops: replaceKitchenGroupWorktops,
@@ -3228,6 +3228,9 @@ export function startApp(initialArgs: AppArgs) {
   }
 
   const moduleSelectionController = createModuleSelectionController({
+    isModuleSelected: id => selectedInstanceIds.size === 1 && selectedInstanceIds.has(id),
+    canBeginDirectDrag: () => layoutTool === "select" && !placement.active && !transformState.kind
+      && (viewMode === "3d" || activeViewerTab === "floorplan"),
     instances,
     pinnedInstanceIds,
     raycaster,
@@ -4348,6 +4351,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   createTransformControllerResult = createTransformController({
+    resolveModuleAdjacencySnap,
     S,
     anyOverlap,
     anyOverlapIgnoring,
@@ -4446,6 +4450,7 @@ export function startApp(initialArgs: AppArgs) {
 
   const keyboardInputController = installKeyboardInputHandlers({
     S,
+    cancelModulePointerDrag: () => pointerInputHandlers.cancelModuleDrag(),
     get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
     addWall,
     anyOverlap,
@@ -4550,6 +4555,8 @@ export function startApp(initialArgs: AppArgs) {
 
   const pointerInputHandlers = installPointerInputHandlers({
     S,
+    resolveModuleAdjacencySnap,
+    getModuleLocalBackCenter,
     ledStripDrawController,
     get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
     addFloorEditSegment,

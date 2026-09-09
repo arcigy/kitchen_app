@@ -1322,6 +1322,18 @@ describe("top-level keyboard input command dispatcher", () => {
     expect(ctx.clearSelection).not.toHaveBeenCalled();
   });
 
+  it("Escape cancels the direct drag before closing kitchen editing or clearing selection", () => {
+    const cancelModulePointerDrag = vi.fn(() => true);
+    const ctx = topLevelKeyboardContext({ cancelModulePointerDrag });
+    const ev = shortcutEvent("Escape", { ctrlKey: false });
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+    expect(cancelModulePointerDrag).toHaveBeenCalledOnce();
+    expect(ev.stopImmediatePropagation).toHaveBeenCalledOnce();
+    expect(ctx.clearSelection).not.toHaveBeenCalled();
+    expect(ctx.undo).not.toHaveBeenCalled();
+    expect(ctx.cancelPlacement).not.toHaveBeenCalled();
+  });
+
   it("leaves all keys at typing targets without preventing default", () => {
     const ev = plainKeyEvent("Delete", { preventDefault: vi.fn(), target: { nodeName: "INPUT" } as unknown as EventTarget });
     const deleteSelected = vi.fn(() => true);

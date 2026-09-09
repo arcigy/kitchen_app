@@ -340,6 +340,7 @@ type CreateKitchenEditModeArgs = {
   startWorktopDraw: () => void;
   cancelWorktopDraw: (opts?: { silent?: boolean }) => void;
   handleWorktopEscape: () => boolean;
+  cancelModulePointerDrag?: () => boolean;
   refreshWorktopPreview: () => void;
   getGroupWorktops: (groupId: string) => GroupWorktopSnapshot[];
   replaceGroupWorktops: (
@@ -621,6 +622,11 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   const addEscapeHandler = () => {
     removeEscapeHandler();
     escapeHandler = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape" && args.cancelModulePointerDrag?.()) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        return;
+      }
       if (handleTallStackEditorKeyDown(ev)) return;
       if (
         args.S.kitchenEditMode &&

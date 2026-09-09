@@ -6,6 +6,10 @@ import {
   resolvePointerModuleDragFinalPosition,
   rollbackPointerModuleDragOverlap,
   updateModuleDragFromGroundHit,
+  beginPointerModuleDrag,
+  activatePointerModuleDrag,
+  createPointerModuleDragState,
+  finishModuleDragGesture,
   type PointerModuleDragState
 } from "./pointerModuleDrag";
 
@@ -34,6 +38,58 @@ function dragState(overrides: Partial<PointerModuleDragState> = {}): PointerModu
 }
 
 describe("pointer module drag", () => {
+  it.each(["click", "valid", "invalid"])("finishes %s exactly once without reprojecting the final preview", outcome => {
+    const inst = moduleInstance("m1", new THREE.Vector3());
+    inst.root.position.set(1, 1.4, 2);
+    const state = createPointerModuleDragState();
+    beginPointerModuleDrag({ state, instance: inst, ray: new THREE.Ray(new THREE.Vector3(1, 4, 2), new THREE.Vector3(0, -1, 0)),
+      pointerId: 1, clientX: 0, clientY: 0, grabHeight: 1.4 });
+    if (outcome !== "click") {
+      activatePointerModuleDrag(state, { pointerId: 1, clientX: 20, clientY: 0 });
+      inst.root.position.x = 1.23456789;
+      state.gesture!.valid = outcome === "valid";
+    }
+    expect(finishModuleDragGesture(state, inst)).toEqual({ handled: true, changed: outcome === "valid" });
+    expect(inst.root.position.toArray()).toEqual([outcome === "valid" ? 1.23456789 : 1, 1.4, 2]);
+    expect(finishModuleDragGesture(state, inst)).toEqual({ handled: false, changed: false });
+  });
+  it("retains the grabbed point on the same elevated plane and waits for the drag threshold", () => {
+    const inst = moduleInstance("m1", new THREE.Vector3());
+    inst.root.position.set(1, 1.4, 2);
+    const state = createPointerModuleDragState();
+    const ray = new THREE.Ray(new THREE.Vector3(4, 5, 8), new THREE.Vector3(-2.75, -3, -5.8).normalize());
+    expect(beginPointerModuleDrag({ state, instance: inst, ray, pointerId: 7, clientX: 100, clientY: 200, grabHeight: 2 })).toBe(true);
+    expect(activatePointerModuleDrag(state, { pointerId: 7, clientX: 105, clientY: 201 })).toBe(false);
+    expect(activatePointerModuleDrag(state, { pointerId: 8, clientX: 200, clientY: 200 })).toBe(false);
+    expect(activatePointerModuleDrag(state, { pointerId: 7, clientX: 106, clientY: 201 })).toBe(true);
+    const hit = ray.intersectPlane(state.gesture!.plane, new THREE.Vector3())!;
+    const position = resolvePointerModuleDragFinalPosition({ dragState: state, instance: inst, hitPoint: hit,
+      applyWallConstraints: (_inst, point) => point, snapPosition: (_inst, point) => point });
+    expect(position.distanceTo(inst.root.position)).toBeLessThan(1e-9);
+    const shifted = resolvePointerModuleDragFinalPosition({ dragState: state, instance: inst, hitPoint: hit.clone().add(new THREE.Vector3(0.2, 0, 0.3)),
+      applyWallConstraints: (_inst, point) => point, snapPosition: (_inst, point) => point });
+    expect(shifted.toArray()).toEqual([1.2, 1.4, 2.3]);
+  });
+
+  it("restores original position, rotation and kitchen binding on cancellation without a history change", () => {
+    const inst = moduleInstance("m1", new THREE.Vector3(), "kitchen");
+    inst.root.position.set(1, 1.4, 2);
+    inst.root.rotation.y = Math.PI / 2;
+    inst.kitchenPlacement = { worktopId: "worktop", segmentIndex: 1, offsetAlongM: 0.8 };
+    const state = createPointerModuleDragState();
+    beginPointerModuleDrag({ state, instance: inst, ray: new THREE.Ray(new THREE.Vector3(1, 4, 2), new THREE.Vector3(0, -1, 0)),
+      pointerId: 1, clientX: 0, clientY: 0, grabHeight: 1.4 });
+    activatePointerModuleDrag(state, { pointerId: 1, clientX: 20, clientY: 0 });
+    inst.root.position.set(9, 1.4, 9);
+    inst.root.rotation.y = 0;
+    inst.kitchenPlacement.offsetAlongM = 8;
+    expect(finishModuleDragGesture(state, inst, true)).toEqual({ handled: true, changed: false });
+    expect(inst.root.position.toArray()).toEqual([1, 1.4, 2]);
+    expect(inst.root.rotation.y).toBe(Math.PI / 2);
+    expect(inst.kitchenPlacement.offsetAlongM).toBe(0.8);
+    expect(state.gesture).toBeUndefined();
+    expect(state.active).toBe(false);
+  });
   it("resolves final position through hit offset, wall constraints, snap, and wall constraints", () => {
     const inst = moduleInstance("m1", new THREE.Vector3(1, 0.4, 1));
     inst.root.position.copy(new THREE.Vector3(1, 0.4, 1));

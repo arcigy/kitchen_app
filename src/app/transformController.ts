@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { createModuleAdjacencySnapResolver } from "./moduleAdjacencySnapResolver";
 import { getKitchenModuleRole } from '../layout/kitchenModuleRules';
 import type { DoorParams, KitchenWorktopInstance, LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallParams, WindowParams } from "./localTypes";
 import type { AppState } from "../layout/appState";
@@ -334,6 +335,7 @@ export type TransformControllerContext = {
     desired: THREE.Vector3,
     opts: { ignoreIds?: Set<string>; stickyNeighborId?: string | null }
   ) => { position: THREE.Vector3 };
+  resolveModuleAdjacencySnap?: ReturnType<typeof createModuleAdjacencySnapResolver>["resolveModuleAdjacencySnap"];
   autoOrientModuleToRoomWallIfSnapped: (instance: LayoutInstance, ignoreIds?: Set<string>) => void;
   nudgePinnedModuleChain: (instance: LayoutInstance, delta: THREE.Vector3) => void;
   instanceFitsRoom: (instance: LayoutInstance) => boolean;
@@ -566,6 +568,20 @@ export function createTransformController(ctx: TransformControllerContext) {
     const ignore = new Set<string>(ctx.transformState.selectedInstanceIds);
 
     const moveSelectedModulesByDelta = (moduleDelta: THREE.Vector3) => {
+      const snapSingleModule = (inst: LayoutInstance, desired: THREE.Vector3) => {
+        if (ctx.transformState.selectedInstanceIds.length !== 1) return desired;
+        const stickyNeighborId = ctx.transformState.startInstanceAdjacency.get(inst.id) ?? null;
+        if (ctx.resolveModuleAdjacencySnap) {
+          const result = ctx.resolveModuleAdjacencySnap(inst, desired, {
+            stickyNeighborId, preferredKitchenPlacement: inst.kitchenPlacement,
+          });
+          if (!result) return desired;
+          inst.root.rotation.y = result.rotationY;
+          inst.kitchenPlacement = result.kitchenPlacement;
+          return result.position;
+        }
+        return ctx.snapPositionDetailed(inst, desired, { ignoreIds: ignore, stickyNeighborId }).position;
+      };
       for (const id of ctx.transformState.selectedInstanceIds) {
         const inst = ctx.findInstance(id);
         const st = ctx.transformState.startInstances.get(id);
@@ -584,27 +600,20 @@ export function createTransformController(ctx: TransformControllerContext) {
             if (guide) binding.offsetAlongM = startKitchenPlacement.offsetAlongM + moduleDelta.dot(guide.dir);
           }
           ctx.applyKitchenPlacementBinding(inst, binding, backOffsetMm);
+          inst.root.position.copy(snapSingleModule(inst, inst.root.position.clone()));
+          inst.root.updateMatrixWorld(true);
           continue;
         }
         const desired = st.pos.clone().add(moduleDelta);
         const desiredInRoom = ctx.applyWallConstraints(inst, desired);
-        const snapped =
-          ctx.transformState.selectedInstanceIds.length === 1
-            ? ctx.snapPositionDetailed(inst, desiredInRoom, {
-                ignoreIds: ignore,
-                stickyNeighborId: ctx.transformState.startInstanceAdjacency.get(id) ?? null
-              }).position
-            : desiredInRoom;
+        const snapped = snapSingleModule(inst, desiredInRoom);
         inst.root.position.copy(snapped);
-        ctx.autoOrientModuleToRoomWallIfSnapped(inst, ignore);
-        if (ctx.transformState.selectedInstanceIds.length === 1) {
-          const actualDelta = inst.root.position.clone().sub(st.pos);
-          ctx.nudgePinnedModuleChain(inst, actualDelta);
-        }
+        if (!inst.kitchenPlacement) ctx.autoOrientModuleToRoomWallIfSnapped(inst, ignore);
+        inst.root.updateMatrixWorld(true);
       }
     };
 
-    // Move modules as a group (no module-to-module snapping here; target snapping comes from cursor snap).
+    // Only a single module snaps to a neighbor; a selected group retains its internal offsets.
     moveSelectedModulesByDelta(delta);
 
     const restoreLastValidMoveDelta = () => {

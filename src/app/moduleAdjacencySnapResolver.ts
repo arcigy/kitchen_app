@@ -50,7 +50,7 @@ export function createModuleAdjacencySnapResolver(ctx: ModuleAdjacencySnapResolv
     const effectiveGroupId = moving.kitchenGroupId ?? (ctx.S.kitchenEditMode ? ctx.S.activeKitchenGroupId : null);
     const result = ctx.snapPositionDetailed(moving, desired, {
       stickyNeighborId: opts?.stickyNeighborId ?? null,
-      snapDistanceM: effectiveGroupId ? SNAP_DISTANCE_M.kitchenModulePlacement : undefined,
+      snapDistanceM: SNAP_DISTANCE_M.moduleAdjacency,
       enforceWallConstraints: !effectiveGroupId,
       enforceWallOverlap: !effectiveGroupId
     });
@@ -126,7 +126,7 @@ export function createModuleAdjacencySnapResolver(ctx: ModuleAdjacencySnapResolv
     return {
       position: snappedPosition,
       rotationY: snappedRotationY,
-      link: result.link,
+      link: snappedPosition.distanceToSquared(result.position) <= 1e-10 ? result.link : null,
       kitchenPlacement
     };
   }
