@@ -104,3 +104,31 @@ export function refreshClientModulePackagesFromSystemTemplates(args: {
   }
   return refreshed;
 }
+
+/** Add the door capability without replacing customer geometry, defaults or commercial rules. */
+export function upgradeClientModuleDoorControls(args: {
+  existingPackage: FurnQuoteModulePackage;
+  sourcePackages: readonly FurnQuoteModulePackage[];
+}): FurnQuoteModulePackage | null {
+  const source = findRefreshSource(args.existingPackage, args.sourcePackages);
+  if (!source || !runtimeBuilderKey(source) || runtimeBuilderKey(source) !== runtimeBuilderKey(args.existingPackage)) return null;
+  const definition = source.parameters.parameters.find(parameter => parameter.key === "hasDoors");
+  const control = source.ui.controls.find(item => item.parameterKey === "hasDoors");
+  if (!definition || definition.type !== "boolean" || !control) return null;
+  const next = structuredClone(args.existingPackage);
+  const existingDefinition = next.parameters.parameters.find(parameter => parameter.key === "hasDoors");
+  if (existingDefinition && existingDefinition.type !== "boolean") throw new Error("Existing hasDoors parameter is incompatible with the door capability.");
+  if (!existingDefinition) next.parameters.parameters.push(structuredClone(definition));
+  if (!next.ui.controls.some(item => item.parameterKey === "hasDoors")) {
+    if (control.groupId && !next.ui.groups.some(group => group.id === control.groupId)) {
+      const group = source.ui.groups.find(group => group.id === control.groupId);
+      if (!group) throw new Error("Door control group is missing from its source package.");
+      next.ui.groups.push(structuredClone(group));
+    }
+    next.ui.controls.push(structuredClone(control));
+  }
+  // Reuse the existing preset merge contract: client IDs win, new system IDs are appended.
+  const refreshed = refreshClientModulePackageFromSystemTemplate(args)!;
+  if (refreshed.parameterPresets) next.parameterPresets = refreshed.parameterPresets;
+  return next;
+}
