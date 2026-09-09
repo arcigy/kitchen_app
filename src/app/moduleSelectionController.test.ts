@@ -20,6 +20,29 @@ function moduleInstance(id: string): LayoutInstance {
 }
 
 describe("module selection controller", () => {
+  it("picks the active cabinet through an overlapping inactive floorplan footprint", () => {
+    const inactive = moduleInstance("lower");
+    const active = moduleInstance("upper");
+    for (const inst of [inactive, active]) {
+      inst.localBox = new THREE.Box3(new THREE.Vector3(-0.3, 0, -0.3), new THREE.Vector3(0.3, 0.72, 0.3));
+      inst.root.updateMatrixWorld(true);
+    }
+    const controller = createModuleSelectionController({
+      instances: [inactive, active], pinnedInstanceIds: new Set(), raycaster: new THREE.Raycaster(), groundPlane: new THREE.Plane(),
+      renderer: { domElement: {} } as THREE.WebGLRenderer,
+      dragState: { active: false, id: null, offset: new THREE.Vector3(), lastValid: new THREE.Vector3() },
+      marquee: { active: false, pending: false, pointerId: null, hitSomething: false }, marqueeEl: { style: { display: "" } } as HTMLElement,
+      findInstance: id => [inactive, active].find(inst => inst.id === id) ?? null,
+      getCamera: () => new THREE.OrthographicCamera(), getMode: () => "layout", getViewMode: () => "2d",
+      getKitchenEditMode: () => true,
+      getKitchenMode: () => ({ findKitchenGroup: () => null, filterSelectableInstanceId: id => id === "upper" ? id : null }),
+      getModuleLocalBackCenter: () => new THREE.Vector3(), setSelectedKitchenGroup: vi.fn(), setSelectedModule: vi.fn(),
+    });
+    expect(controller.findSelectableFloorplanModuleAtPoint(
+      { x: 1000, z: 2000 }, { x: 100, y: 100 }, { width: 1000, height: 800, left: 0, top: 0 } as DOMRect,
+    )).toBe("upper");
+  });
+
   it("selects a module without starting direct pointer drag", () => {
     const inst = moduleInstance("m1");
     const setPointerCapture = vi.fn();

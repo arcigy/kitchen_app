@@ -40,6 +40,16 @@ export function isKitchenModuleSelectableInEditLayer(
   return role === "tall" || role === layer;
 }
 
+export function isKitchenModuleSelectableInView(
+  params: Record<string, unknown> | null | undefined,
+  layer: KitchenModuleEditLayer,
+  viewMode: "2d" | "3d",
+  viewerTab: string,
+) {
+  return viewMode !== "2d" || viewerTab !== "floorplan"
+    || isKitchenModuleSelectableInEditLayer(params, layer);
+}
+
 export function resolveKitchenModulePlanEmphasis(
   params: Record<string, unknown> | null | undefined,
   layer: KitchenModuleEditLayer

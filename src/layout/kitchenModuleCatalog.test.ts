@@ -5,6 +5,7 @@ import type {
 } from "../core/module-package/module-package-types";
 import {
   getKitchenCatalogRole,
+  getKitchenCatalogRolesForLayer,
   getKitchenCatalogSubcategoryKey,
   groupKitchenModulePackages,
 } from "./kitchenModuleCatalog";
@@ -75,6 +76,10 @@ function makeModulePackage(args: {
 }
 
 describe("kitchenModuleCatalog", () => {
+  it("offers the active cabinet layer with tall cabinets and accessories in both layers", () => {
+    expect(getKitchenCatalogRolesForLayer("base")).toEqual(["low", "tall", "accessory"]);
+    expect(getKitchenCatalogRolesForLayer("upper")).toEqual(["top", "tall", "accessory"]);
+  });
   it("groups exactly the DB-enabled package list supplied by the caller", () => {
     const delfiTall = makeModulePackage({
       modulePackageId: "fwm_catalog_tall_cabinet_family_v1",

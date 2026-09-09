@@ -71,7 +71,8 @@ export function createModuleSelectionController(ctx: ModuleSelectionControllerCo
     let best: { id: string; score: number } | null = null;
 
     for (const inst of ctx.instances) {
-      const selectableId = ctx.getKitchenMode()?.filterSelectableInstanceId(inst.id) ?? inst.id;
+      const kitchenMode = ctx.getKitchenMode();
+      const selectableId = kitchenMode ? kitchenMode.filterSelectableInstanceId(inst.id) : inst.id;
       if (!selectableId) continue;
       const poly = getModulePlanPolygon(inst, ctx.getModuleLocalBackCenter).map((p) => ({ x: p.x, z: p.z }));
       if (poly.length < 3) continue;
