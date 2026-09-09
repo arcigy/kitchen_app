@@ -1,7 +1,12 @@
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import { getPackageDefaultValue } from "../core/module-package/module-package-catalog";
+import type { KitchenModuleEditLayer } from "./kitchenModuleRules";
 
 export type KitchenCatalogRole = "low" | "top" | "tall" | "accessory";
+
+export function getKitchenCatalogRolesForLayer(layer: KitchenModuleEditLayer): readonly KitchenCatalogRole[] {
+  return [layer === "upper" ? "top" : "low", "tall", "accessory"];
+}
 
 export type KitchenCatalogSubcategoryKey =
   | "corner"
