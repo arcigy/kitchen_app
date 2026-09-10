@@ -110,6 +110,7 @@ const WALL_CORNER_90_USER_PARAMETER_KEYS = new Set([
   "height",
   "depth",
   "shelfCount",
+  "hasDoors",
   "opened",
   "bodyMaterialId",
   "frontMaterialId",
