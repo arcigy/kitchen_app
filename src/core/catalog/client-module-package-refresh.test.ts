@@ -3,6 +3,7 @@ import { refreshClientModulePackageFromSystemTemplate } from "./client-module-pa
 import { systemModulePackageTemplates } from "../../system/module-packages";
 import { planClientModuleDoorUpgrade } from "./client-module-door-upgrade";
 import { computeModulePackageHash } from "../module-package/module-package-file";
+import { isCompatibleModulePackageCatalogReference } from "../module-package/module-package-persistence-compatibility";
 
 describe("refreshClientModulePackageFromSystemTemplate", () => {
   it("keeps client presets and explicit false values, with existing ids winning over new system versions", () => {
@@ -90,6 +91,26 @@ describe("targeted door capability upgrade", () => {
     existing.parameters.parameters.push(doors);
     const result = planClientModuleDoorUpgrade({ packages: [existing], catalogModules, sourcePackages: [source], modulePackageIds: [existing.module.modulePackageId], updatedAt: "2026-09-10T00:00:00Z" });
     expect(result.changes[0]!.nextPackage.parameters.parameters.find(item => item.key === "hasDoors")!.defaultValue).toBe(false);
+  });
+  it("preserves the historical wall-corner catalog type while upgrading its exact package", () => {
+    const source = systemModulePackageTemplates.find(item => item.module.modulePackageId === "wall_corner_90")!;
+    const existing = structuredClone(source);
+    existing.parameters.parameters = existing.parameters.parameters.filter(item => item.key !== "hasDoors");
+    existing.ui.controls = existing.ui.controls.filter(item => item.parameterKey !== "hasDoors");
+    const reference = { id: "wall_corner_90", modulePackageId: "wall_corner_90", moduleType: "wall_corner_90", name: "Corner", enabled: false };
+    const result = planClientModuleDoorUpgrade({ packages: [existing], catalogModules: [reference], sourcePackages: [source], modulePackageIds: ["wall_corner_90"], updatedAt: "2026-09-10T00:00:00Z" });
+    expect(result.changes[0]!.nextPackage.module).toEqual(existing.module);
+    expect(result.changes[0]!.nextPackage.geometry).toEqual(existing.geometry);
+    expect(result.catalogModules).toEqual([{ ...reference, packageHash: result.changes[0]!.afterHash }]);
+    expect(() => planClientModuleDoorUpgrade({ packages: [existing], catalogModules: [reference, reference], sourcePackages: [source], modulePackageIds: ["wall_corner_90"], updatedAt: "2026-09-10T00:00:00Z" })).toThrow("ambiguous");
+  });
+  it.each(["other-package", "other-type", "other-builder"])("does not broaden the historical alias to %s", variant => {
+    const source = structuredClone(systemModulePackageTemplates.find(item => item.module.modulePackageId === "wall_corner_90")!);
+    const reference = { id: "wall_corner_90", modulePackageId: "wall_corner_90", moduleType: "wall_corner_90" };
+    if (variant === "other-package") reference.modulePackageId = "other";
+    if (variant === "other-type") reference.moduleType = "other";
+    if (variant === "other-builder") source.geometry = { mode: "trusted-runtime", runtimeBuilderKey: "other" };
+    expect(isCompatibleModulePackageCatalogReference(source, reference)).toBe(false);
   });
   it.each(["unknown", "all", "custom-builder", "missing-reference"])("refuses an unsafe target: %s", variant => {
     const { source, existing, catalogModules } = fixture();

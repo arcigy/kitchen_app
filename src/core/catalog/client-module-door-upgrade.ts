@@ -2,6 +2,7 @@ import type { ClientModuleDefinition } from "./catalog-types";
 import type { FurnQuoteModulePackage } from "../module-package/module-package-types";
 import { computeModulePackageHash, withModulePackageHash } from "../module-package/module-package-file";
 import { upgradeClientModuleDoorControls } from "./client-module-package-refresh";
+import { isCompatibleModulePackageCatalogReference } from "../module-package/module-package-persistence-compatibility";
 
 /** Pure preparation only; the caller must approve and atomically persist packages plus catalog hashes. */
 export function planClientModuleDoorUpgrade(args: {
@@ -19,7 +20,7 @@ export function planClientModuleDoorUpgrade(args: {
     if (matches.length !== 1) throw new Error(`Package must exist exactly once: ${modulePackageId}`);
     const before = matches[0]!;
     const references = catalogModules.filter(item => (item.modulePackageId ?? item.id) === modulePackageId);
-    if (references.length !== 1 || references[0]!.moduleType !== before.module.moduleType) throw new Error(`Catalog reference is missing or ambiguous: ${modulePackageId}`);
+    if (references.length !== 1 || !isCompatibleModulePackageCatalogReference(before, references[0]!)) throw new Error(`Catalog reference is missing or ambiguous: ${modulePackageId}`);
     const next = upgradeClientModuleDoorControls({ existingPackage: before, sourcePackages: args.sourcePackages });
     if (!next) throw new Error(`No compatible door capability: ${modulePackageId}`);
     const beforeHash = computeModulePackageHash(before);

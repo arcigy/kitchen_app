@@ -16,6 +16,7 @@ const cases: Array<[string, Record<string, unknown>, RegExp]> = [
   ["fwm_catalog_base_corner", { variant: "corner_90" }, /^(door_front_|doorHandle_|hinge_front_)/],
   ["fwm_catalog_base_corner", { variant: "corner_chamfered" }, /corner_chamfered_(diagonal_front|diagonal_handle|hinge_lower|hinge_upper)_/],
   ["fwm_catalog_wall_cabinet", { variant: "corner_90" }, /^(door_front_|doorHandle_|hinge_front_)/],
+  ["wall_corner_90", {}, /^(door_front_|doorHandle_|hinge_front_)/],
   ["fwm_catalog_wall_cabinet", { variant: "corner_chamfered" }, /corner_chamfered_(diagonal_front|diagonal_handle|hinge_lower|hinge_upper)_/],
   ["fwm_catalog_tall_cabinet", { tallSlotCount: 3, tallSlot1Type: "drawer", tallSlot1HeightMm: 300, tallSlot2Type: "door", tallSlot2HeightMm: 600, tallSlot3Type: "door", tallSlot3HeightMm: 400, tallSlot3DoorOpeningMode: "lift_up" }, /^tower_door_/],
   ["swing_shelves_low", { doorDouble: true }, /^door_front_/],
@@ -38,7 +39,7 @@ function parts(group: Object3D) {
 describe("door assembly removal", () => {
   it.each(cases)("%s %j keeps every non-door part and restores the exact original geometry", (type, overrides, doorNames) => {
     const catalog = getSystemSeedCatalog();
-    const modulePackage = systemModulePackageTemplates.find(item => item.module.moduleType === type)!;
+    const modulePackage = systemModulePackageTemplates.find(item => item.module.moduleType === type || item.module.modulePackageId === type)!;
     const parameters = { ...createDefaultModulePackageParameters(modulePackage), ...overrides };
     const build = (values: Record<string, unknown>) => parts(buildModulePackageGeometryFromPackage({ modulePackage, parameters: values, catalog }));
     const before = build(parameters);
@@ -55,8 +56,8 @@ describe("door assembly removal", () => {
 
   it.each(cases)("%s %j removes only door BOM and its price, preserving drawers and structure", (type, overrides) => {
     const catalog = getSystemSeedCatalog();
-    const modulePackage = systemModulePackageTemplates.find(item => item.module.moduleType === type)!;
-    const descriptor = getModuleDescriptors().find(item => item.type === type)!;
+    const modulePackage = systemModulePackageTemplates.find(item => item.module.moduleType === type || item.module.modulePackageId === type)!;
+    const descriptor = getModuleDescriptors().find(item => item.type === modulePackage.module.moduleType)!;
     const parameters = { ...createDefaultModulePackageParameters(modulePackage), ...overrides } as ModuleParams;
     const calculate = (hasDoors: boolean) => descriptor.calculateBOM({ ...parameters, hasDoors }, makeDefaultKitchenContext(), catalog);
     const before = calculate(true);
