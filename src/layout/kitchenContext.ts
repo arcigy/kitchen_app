@@ -6,7 +6,7 @@ export interface KitchenContext {
 
   // Base modules - dimensions
   wallHeightMm: number           // full room wall height for tall and full-height kitchen layouts
-  heightMm: number              // module height without plinth
+  heightMm: number              // floor to worktop surface, including plinth and worktop
   worktopDepthMm: number        // real worktop depth
   worktopFrontOffsetMm: number  // worktop front overhang
   worktopBackOffsetMm: number   // worktop back gap from wall

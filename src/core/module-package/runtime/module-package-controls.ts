@@ -2,6 +2,7 @@ import type { ClientCatalog } from "../../catalog/catalog-types";
 import type { FurnQuoteModulePackage, ModuleParameterDefinition } from "../module-package-types";
 import type { ModuleControlsApi, ModuleControlsArgs } from "../../../modules/registry";
 import { getModuleDescriptor } from "../../../modules/registry";
+import { describeFwmModuleHeight } from "../../../modules/fwmFurniture/heightPresentation";
 import { t, translateEnumLabel, translateParamLabel } from "../../../i18n";
 import { applyModuleParameterPreset } from "./module-runtime-adapter";
 import {
@@ -310,8 +311,10 @@ export function createModulePackageControls(
     row.style.marginTop = "8px";
 
     const label = document.createElement("span");
-    const labelText = translateParamLabel(parameter.key) || t(parameter.label);
+    const heightPresentation = parameter.key === "height" ? describeFwmModuleHeight({ ...params, type: modulePackage.module.moduleType }) : null;
+    const labelText = heightPresentation?.label ?? (translateParamLabel(parameter.key) || t(parameter.label));
     label.textContent = parameter.unit ? `${labelText} (${parameter.unit})` : labelText;
+    if (heightPresentation) row.title = heightPresentation.help;
     row.appendChild(label);
 
     const input =

@@ -4,7 +4,7 @@ import { installAuthSession } from "./uiAuthSession.mjs";
 const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 
 const kitchenInputAliases = {
-  "Height (mm)": ["Height (mm)", "Výška (mm)"],
+  "Height (mm)": ["Height to worktop surface (mm)", "Výška po hornú hranu pracovnej dosky (mm)"],
   "Worktop depth (mm)": ["Worktop depth (mm)", "Hĺbka pracovnej dosky (mm)"],
   "Worktop front offset (mm)": ["Worktop front offset (mm)", "Predné odsadenie pracovnej dosky (mm)"],
   "Worktop back offset (mm)": ["Worktop back offset (mm)", "Zadné odsadenie pracovnej dosky (mm)"]
