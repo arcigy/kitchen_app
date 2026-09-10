@@ -659,6 +659,7 @@ describe("FWM furniture module packages", () => {
       "height",
       "depth",
       "shelfCount",
+      "hasDoors",
       "bodyMaterialId",
       "frontMaterialId",
       "backMaterialId",
