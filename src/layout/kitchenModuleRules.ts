@@ -40,6 +40,16 @@ export function isKitchenModuleSelectableInEditLayer(
   return role === "tall" || role === layer;
 }
 
+export function isKitchenModuleSelectableInView(
+  params: Record<string, unknown> | null | undefined,
+  layer: KitchenModuleEditLayer,
+  viewMode: "2d" | "3d",
+  viewerTab: string,
+) {
+  return viewMode !== "2d" || viewerTab !== "floorplan"
+    || isKitchenModuleSelectableInEditLayer(params, layer);
+}
+
 export function resolveKitchenModulePlanEmphasis(
   params: Record<string, unknown> | null | undefined,
   layer: KitchenModuleEditLayer
@@ -64,6 +74,9 @@ export function isKitchenCornerModule(
   if (modulePackage?.placement.allowedContexts?.includes("kitchen_corner")) return true;
   if (params?.isCorner === true || params?.requiresCorner === true) return true;
   if (isTruthyCornerShape(params?.cornerShape)) return true;
+  // Catalog wall variants share a module type; older saved instances may not
+  // carry the package's requiresCorner flag, but their geometry is still a corner.
+  if (params?.type === 'fwm_catalog_wall_cabinet' && /^corner_(90|chamfered|open_chamfered)(?:_1p)?$/.test(String(params.variant ?? ''))) return true;
   return params?.type === "corner_shelf_lower" || params?.type === "fwm_catalog_base_corner";
 }
 

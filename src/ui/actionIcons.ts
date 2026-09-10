@@ -10,7 +10,7 @@ export const actionIconDetails = {
   livingWall: { title: "Living wall", description: "Add a living-wall module or open its catalog." },
   wardrobe: { title: "Wardrobe", description: "Add a wardrobe or open the room-module catalog." },
   align: { title: "Align", description: "Align the selected objects using their available references." },
-  fitGap: { title: "Fit selected module into gap", description: "Resize the selected kitchen module to the available gap." },
+  fitGap: { title: "Fit gap width", description: "Resize the selected module width to fill the gap between its neighbors." },
   trim: { title: "Trim", description: "Trim the active editable geometry." },
   section: { title: "Section", description: "Create or edit a section view." },
   dimension: { title: "Dimension", description: "Create a persistent dimension." },

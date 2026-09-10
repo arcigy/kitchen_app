@@ -345,7 +345,15 @@ export function createSelectionHighlights(args: {
     });
   };
 
-  const addKitchenGroupModuleHighlight = (group: THREE.Group, inst: LayoutInstance, mode: "hover" | "selected") => {
+  const addKitchenGroupModuleHighlight = (
+    group: THREE.Group,
+    inst: LayoutInstance,
+    mode: "hover" | "selected",
+    names: { fill: string; edge: string } = {
+      fill: "selectedKitchenGroupPlanFill",
+      edge: "selectedKitchenGroupPlanEdge"
+    }
+  ) => {
     const polygon = getModulePlanLocalPolygon(inst, args.getModuleLocalBackCenter);
     if (polygon.length < 3) return;
     const shape = new THREE.Shape();
@@ -369,7 +377,7 @@ export function createSelectionHighlights(args: {
           side: THREE.DoubleSide
         })
       );
-      fill.name = "selectedKitchenGroupPlanFill";
+      fill.name = names.fill;
       fill.renderOrder = 88;
       group.add(fill);
     }
@@ -385,7 +393,7 @@ export function createSelectionHighlights(args: {
         depthWrite: false
       })
     );
-    edges.name = mode === "hover" ? "hoverKitchenGroupPlanEdge" : "selectedKitchenGroupPlanEdge";
+    edges.name = mode === "hover" ? "hoverKitchenGroupPlanEdge" : names.edge;
     edges.renderOrder = mode === "hover" ? 96 : 90;
     group.add(edges);
     edgeSource.dispose();
@@ -497,6 +505,19 @@ export function createSelectionHighlights(args: {
 
   const addTargetsHighlight = (group: THREE.Group, targets: SelectionHighlightTarget[], mode: "hover" | "selected") => {
     for (const target of targets) {
+      // The rendered cabinet is intentionally hidden in a floorplan. Highlight
+      // its real footprint instead of replaying every 3D board from above;
+      // otherwise selection looks like a second, overlapping cabinet.
+      if (target.kind === "module" && args.getViewMode?.() === "2d") {
+        const inst = args.getInstances().find((item) => item.id === target.id) ?? null;
+        if (inst) {
+          addKitchenGroupModuleHighlight(group, inst, mode, {
+            fill: "selectedModulePlanFill",
+            edge: "selectedModulePlanEdge"
+          });
+        }
+        continue;
+      }
       if (target.kind === "kitchenGroup") {
         for (const inst of args.getInstances()) {
           if (inst.kitchenGroupId !== target.id) continue;

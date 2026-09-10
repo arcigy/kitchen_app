@@ -13,6 +13,7 @@ import { attachFileMenu } from "../ui/createFileMenu";
 import { t, type AppLanguage } from "../i18n";
 import type { AppArgs } from "./bootstrap";
 import { openBlenderMaterialReview } from "./blenderMaterialReview";
+import { captureViewportOutput } from "./viewportAppearance";
 
 type HdriSettings = {
   id: string | null;
@@ -214,7 +215,9 @@ export function createExportActions(args: ExportActionsArgs) {
   };
 
   const downloadViewportPng = () => {
-    downloadCanvasPng({ canvas: args.renderer.domElement, scope: storageScope, prefix: "kitchen" });
+    captureViewportOutput(args.renderer, () => {
+      downloadCanvasPng({ canvas: args.renderer.domElement, scope: storageScope, prefix: "kitchen" });
+    });
   };
 
   const saveLayoutFile = async () => {

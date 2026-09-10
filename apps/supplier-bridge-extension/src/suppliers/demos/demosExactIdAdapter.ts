@@ -1,6 +1,7 @@
 import type { SupplierPriceBasis } from "../../../../../src/core/supplier-bridge/supplier-bridge-types";
 import { supplierPortals } from "../../config";
 import { waitForStableElement } from "../../content/waitForStableElement";
+import { isSupportedDemosPreviewImageUrl } from "./demosPreviewImageUrl";
 import type {
   ExactIdSupplierAdapter,
   ExactProductExtractionContext,
@@ -47,6 +48,23 @@ function materialThickness(parameters: Map<string, string>): string | null {
 function definitionValue(document: Document, label: string): string | null {
   const term = [...document.querySelectorAll("dt")].find((candidate) => cleanText(candidate) === label);
   return term ? cleanText(term.nextElementSibling) || null : null;
+}
+
+function previewImageUrl(document: Document): string | null {
+  // Current Démos product pages put their primary material image directly on
+  // the image element (`img.image-product`), outside the older gallery/image
+  // wrappers. Keep all selectors: Démos still serves both page variants.
+  const candidates = [...document.querySelectorAll<HTMLImageElement>('[itemprop="image"], img.image-product, .box-detail__image img, .box-detail__gallery img')];
+  for (const image of candidates) {
+    const source = image.currentSrc || image.getAttribute("data-zoom-image") || image.getAttribute("data-src") || image.getAttribute("src") || image.src;
+    try {
+      const url = new URL(source, origin);
+      if (isSupportedDemosPreviewImageUrl(url.toString())) return url.toString();
+    } catch {
+      // A broken preview is non-blocking; product metadata remains valid.
+    }
+  }
+  return null;
 }
 
 function localizedNumber(raw: string | null): number | null {
@@ -155,6 +173,7 @@ function detailExtraction(document: Document, context: ExactProductExtractionCon
       description: null,
       decorCode: firstParameter(parameters, /Číslo dekoru|Název dekoru/i),
       surfaceCode: firstParameter(parameters, /Struktura/i),
+      previewImageUrl: previewImageUrl(document),
       thicknessMm: localizedNumber(materialThickness(parameters)),
       dimensions: productDimensions,
       availability: availability(availabilityText)

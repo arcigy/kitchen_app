@@ -1,10 +1,11 @@
-import type { ProjectMaterialsView } from "../../../src/core/project-materials/project-material-types";
+import type { ProjectMaterialWarning, ProjectMaterialsView } from "../../../src/core/project-materials/project-material-types";
 import type { SupplierId } from "../../../src/core/supplier-bridge/supplier-bridge-types";
 import {
   attachSupplierBridgeSession,
   confirmSupplierCandidate,
   createExtensionTargetSession,
   loadExtensionProjectMaterials,
+  resolveSupplierPreviewImageColor,
   submitSupplierCandidate
 } from "./api";
 import type { CapturedSupplierCandidate } from "./messages";
@@ -21,9 +22,23 @@ export type ExtensionAssignmentInput = {
   target: ExtensionMaterialTarget;
 };
 
+export class SupplierPreviewColorRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SupplierPreviewColorRequiredError";
+  }
+}
+
+export type ExtensionPreviewColorResult = {
+  status: "derived" | "not_required";
+  colorHex: string | null;
+  imageFound: boolean;
+};
+
 type AssignmentDependencies = {
   createSession: typeof createExtensionTargetSession;
   attachSession: typeof attachSupplierBridgeSession;
+  resolvePreviewColor: typeof resolveSupplierPreviewImageColor;
   submitCandidate: typeof submitSupplierCandidate;
   confirmCandidate: typeof confirmSupplierCandidate;
   loadMaterials: typeof loadExtensionProjectMaterials;
@@ -34,12 +49,15 @@ type AssignmentDependencies = {
 export type ExtensionAssignmentResult = {
   sessionId: string;
   materials: ProjectMaterialsView | null;
+  warnings: ProjectMaterialWarning[];
   refreshError: unknown | null;
+  previewColor: ExtensionPreviewColorResult;
 };
 
 const dependencies: AssignmentDependencies = {
   createSession: createExtensionTargetSession,
   attachSession: attachSupplierBridgeSession,
+  resolvePreviewColor: resolveSupplierPreviewImageColor,
   submitCandidate: submitSupplierCandidate,
   confirmCandidate: confirmSupplierCandidate,
   loadMaterials: loadExtensionProjectMaterials,
@@ -54,6 +72,13 @@ export async function runExtensionAssignment(
   const supplierIdForBackend = __SUPPLIER_BRIDGE_DEBUG__ && input.supplierId === "mock-supplier"
     ? "demos"
     : input.supplierId;
+  // The debug supplier intentionally reuses the Démos backend contract, but it
+  // does not serve Démos product images. Never turn that test-only mapping into
+  // a production preview-image requirement.
+  const demosSurfaceMaterial = input.supplierId === "demos" && ["board", "worktop"].includes(input.candidate.normalizedProduct.productType ?? "");
+  if (demosSurfaceMaterial && !input.candidate.previewImageUrl) {
+    throw new SupplierPreviewColorRequiredError("Démos plošný materiál nemá overený produktový obrázok. Materiál nebol priradený, aby sa do modelu nezapísala nesprávna farba.");
+  }
   const creation = await deps.createSession(input.baseUrl, input.accessToken, input.projectId, supplierIdForBackend, {
     requestId: `extension-${deps.randomId()}`,
     materialAssignmentId: input.target.id,
@@ -65,11 +90,27 @@ export async function runExtensionAssignment(
   const attachment = await deps.attachSession(input.baseUrl, creation.view.session.id, creation.bridgeToken);
   const item = attachment.view.items[0];
   if (!item || attachment.view.items.length !== 1) throw new Error("Bridge nevytvoril presne jeden cieľ.");
+  const previewColor = demosSurfaceMaterial
+    ? {
+        status: "derived" as const,
+        colorHex: await deps.resolvePreviewColor(
+          input.baseUrl,
+          creation.view.session.id,
+          attachment.accessToken,
+          item.id,
+          input.candidate.previewImageUrl!
+        ),
+        imageFound: true
+      }
+    : { status: "not_required" as const, colorHex: null, imageFound: !!input.candidate.previewImageUrl };
   const submission = await deps.submitCandidate(input.baseUrl, creation.view.session.id, attachment.accessToken, {
     submissionId: `extension-${deps.randomId()}`,
     syncItemId: item.id,
     supplierProductCode: input.candidate.supplierProductCode,
-    normalizedProduct: input.candidate.normalizedProduct,
+    normalizedProduct: {
+      ...input.candidate.normalizedProduct,
+      ...(previewColor.colorHex ? { previewColorHex: previewColor.colorHex } : {})
+    },
     sourcePageType: input.candidate.sourcePageType,
     sourcePath: input.candidate.sourcePath,
     observedAt: input.candidate.observedAt,
@@ -80,10 +121,16 @@ export async function runExtensionAssignment(
 
   try {
     const materials = await deps.loadMaterials(input.baseUrl, input.accessToken, input.projectId);
-    return { sessionId: creation.view.session.id, materials, refreshError: null };
+    return {
+      sessionId: creation.view.session.id,
+      materials,
+      warnings: (materials.warnings ?? []).filter((warning) => warning.affectedObjectId === input.target.id && warning.id.startsWith("supplier-")),
+      refreshError: null,
+      previewColor
+    };
   } catch (refreshError) {
     // Confirmation is the commit boundary. A failed read-after-write must never be
     // presented as a failed assignment or encourage the user to submit a duplicate.
-    return { sessionId: creation.view.session.id, materials: null, refreshError };
+    return { sessionId: creation.view.session.id, materials: null, warnings: [], refreshError, previewColor };
   }
 }

@@ -92,7 +92,7 @@ export function createProjectDeleteDialog(
   actions.className = "project-delete-dialog__actions";
   const cancel = createButtonElement(t("Cancel"));
   cancel.classList.add("project-delete-dialog__cancel");
-  const confirm = createButtonElement(t("Yes, delete project"));
+  const confirm = createButtonElement(t("Yes, delete project"), { variant: "danger" });
   confirm.classList.add("project-delete-dialog__confirm");
   actions.append(cancel, confirm);
 

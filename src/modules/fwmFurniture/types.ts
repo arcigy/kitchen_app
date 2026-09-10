@@ -15,6 +15,7 @@ const DEFAULT_TALL_STACK_SLOTS: Array<{ type: (typeof TALL_STACK_SLOT_TYPES)[num
 
 export type FwmFurnitureParams = {
   type: FwmFurnitureModuleType;
+  hasDoors?: boolean;
 } & Record<string, PortableJsonValue>;
 
 function num(value: unknown, fallback: number) {
@@ -76,6 +77,12 @@ function isWallCornerVariant(spec: ReturnType<typeof getFwmFurnitureSpec>, param
 function usesUnifiedCornerDepth(spec: ReturnType<typeof getFwmFurnitureSpec>, params: Record<string, PortableJsonValue>) {
   const variant = text(params.variant, spec.variantOptions?.[0] ?? "");
   return spec.moduleType === "fwm_catalog_base_corner" && variant.includes("chamfered");
+}
+
+function isLowerChamferedCorner(spec: ReturnType<typeof getFwmFurnitureSpec>, params: Record<string, PortableJsonValue>) {
+  return spec.moduleType === "fwm_catalog_base_corner" &&
+    spec.kitchenRole === "low" &&
+    text(params.variant, spec.variantOptions?.[0] ?? "").includes("chamfered");
 }
 
 function hasNoBackPanel(spec: ReturnType<typeof getFwmFurnitureSpec>) {
@@ -171,6 +178,7 @@ export function makeDefaultFwmFurnitureParams(type: FwmFurnitureModuleType): Fwm
     drawer4FrontHeightMm: 40,
     drawer5FrontHeightMm: 40,
     doorCount: spec.doors ?? 0,
+    hasDoors: true,
     shelfCount: spec.shelves ?? 0,
     shelfGaps: "",
     tallStackMode: type === "fwm_catalog_tall_cabinet" ? "builder" : "fixed",
@@ -367,6 +375,10 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
     : isWallCornerVariant(spec, next)
       ? variantValue.includes("chamfered") ? "chamfered" : variantValue.includes("90") ? "l_shape" : "blind"
       : text(next.cornerShape, spec.geometryKind === "corner" ? "l_shape" : "none");
+  if (isLowerChamferedCorner(spec, next)) {
+    const requestedVersion = num(params.geometryContractVersion, 3);
+    next.geometryContractVersion = requestedVersion >= 3 ? 3 : requestedVersion === 2 ? 3 : 1;
+  }
   next.handleType = ["none", "bar", "knob", "profile", "push"].includes(text(next.handleType, "none")) ? text(next.handleType, "none") : "none";
   next.drawerCount = count(next.drawerCount, spec.drawers ?? 0, 12);
   next.drawerFrontHeightsMm = typeof next.drawerFrontHeightsMm === "string" ? next.drawerFrontHeightsMm.trim() : "";
@@ -409,6 +421,7 @@ export function normalizeFwmFurnitureParams(params: FwmFurnitureParams): FwmFurn
     delete next[`drawer${index}SystemBackHeightMm`];
   }
   next.doorCount = count(next.doorCount, spec.doors ?? 0, 12);
+  next.hasDoors = bool(next.hasDoors, true);
   next.shelfCount = count(next.shelfCount, spec.shelves ?? 0, 16);
   if (spec.moduleType === "fwm_catalog_tall_cabinet") {
     next.tallStackMode = ["fixed", "builder"].includes(text(next.tallStackMode, "builder")) ? text(next.tallStackMode, "builder") : "builder";

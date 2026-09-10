@@ -81,6 +81,28 @@ function makeContext(instance: LayoutInstance, getKitchenGuideSegmentInfo = vi.f
 }
 
 describe("module placement helpers", () => {
+  it("prefers a nearby valid seam over a free position without moving the neighbor or resizing", () => {
+    const moving = moduleInstance(null);
+    const neighbor = moduleInstance(null);
+    neighbor.id = "neighbor";
+    neighbor.root.position.set(0.64, 0, 0);
+    const ctx = makeContext(moving);
+    ctx.instances = [moving, neighbor];
+    const worldBox = (inst: LayoutInstance) => {
+      inst.root.updateMatrixWorld(true);
+      return inst.localBox.clone().applyMatrix4(inst.root.matrixWorld);
+    };
+    ctx.instanceWorldBox = worldBox;
+    ctx.instanceLayoutWorldBox = worldBox;
+    const helpers = createModulePlacementHelpers(ctx);
+    const result = helpers.snapPositionDetailed(moving, new THREE.Vector3());
+    expect(result.position.x).toBeCloseTo(0.04);
+    expect(result.link?.otherId).toBe("neighbor");
+    expect(moving.params.width).toBe(600);
+    expect(neighbor.root.position.x).toBe(0.64);
+    neighbor.root.position.y = 3;
+    expect(helpers.snapPositionDetailed(moving, new THREE.Vector3()).link).toBeNull();
+  });
   it("uses group-specific kitchen placement back offset for tall resize anchor inference", () => {
     const instance = moduleInstance("kg1");
     const getKitchenGuideSegmentInfo = vi.fn();

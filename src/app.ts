@@ -104,7 +104,7 @@ import type {
 import type { ModuleParams } from "./model/cabinetTypes";
 import { normalizeModuleParams, normalizeModuleParamsForSource, validateModule } from "./model/cabinetTypes";
 import { buildModule } from "./geometry/buildModule";
-import { createScene } from "./core/scene";
+import { createScene, resolveRendererPixelRatio } from "./core/scene";
 import { createPartPanel } from "./ui/createPartPanel";
 import { createLayoutPanel } from "./ui/createLayoutPanel";
 import { createEditorShell } from "./ui/createEditorShell";
@@ -115,6 +115,7 @@ import type { PhotoPathTracer } from "./rendering/photoPathTracer";
 import { createTopbar } from "./ui/createTopbar";
 import { showComingSoonDialog } from "./ui/comingSoonDialog";
 import { openBomPanel, openPricingCatalog } from "./app/projectPanels";
+import { createProjectPricingSummaryController } from "./app/projectPricingSummaryController";
 import {
   cloneFloorSegments,
   floorBoundaryToSegments,
@@ -183,6 +184,7 @@ import {
   commitPlacement,
   mountPlacementControls,
   rebuildGhost,
+  rotateActivePlacement,
   scheduleRebuildGhost,
   type PlacementHelpers
 } from "./layout/placementManager";
@@ -192,6 +194,8 @@ import {
   staysOutsideKitchenWorktopFootprint
 } from "./layout/kitchenModuleRules";
 import { createViewNavigation } from "./app/viewNavigation";
+import { createRenderLifecycleController } from "./app/renderLifecycleController";
+import { createRendererInteractionQualityController } from "./app/rendererInteractionQuality";
 import { createExportActions } from "./app/exportActions";
 import { createProjectActions } from "./app/project/projectActions";
 import { createMaterialsPhaseController } from "./app/materialsPhaseController";
@@ -261,6 +265,8 @@ import { createWallEditHudUpdater } from "./app/wallEditHudUpdater";
 import { createWindowControlsController } from "./app/windowControlsController";
 import { createDoorControlsController } from "./app/doorControlsController";
 import { createClassicTopbarController } from "./app/classicTopbarController";
+import { mountMobileWorkspaceShell } from "./ui/mobileWorkspaceShell";
+import { createMobileCommandHudController } from "./app/mobileCommandHudController";
 import { createWorkspaceNavigationController } from "./app/workspaceNavigationController";
 import { createMeasureSelectionActions } from "./app/measureSelectionActions";
 import { createRoomWallDefinitions } from "./app/wallDefinitions";
@@ -277,7 +283,10 @@ import { createEditHudController } from "./app/editHudController";
 import { createWallEditDragController } from "./app/wallEditDragController";
 import { createViewPropertiesController } from "./app/viewPropertiesController";
 import { createModuleSelectionController } from "./app/moduleSelectionController";
+import { createPointerModuleDragState } from "./app/pointerModuleDrag";
 import { syncProjectMaterialAssignmentsToLayout } from "./app/projectMaterialLayoutSync";
+import { syncProjectMaterialAssignmentsToKitchenContexts } from "./app/projectMaterialKitchenContextSync";
+import { createProjectMaterialRuntimeCatalog } from "./app/projectMaterialRuntimeCatalog";
 import { createLayoutActionsController } from "./app/layoutActionsController";
 import { createWindowInstanceController } from "./app/windowInstanceController";
 import { createDoorInstanceController } from "./app/doorInstanceController";
@@ -287,7 +296,7 @@ import { createCustomFurnitureController } from "./app/customFurnitureController
 import { createMaterialModifyController } from "./app/materialModifyController";
 import { createDemosLivePreviewColorController } from "./app/demosLivePreviewColor";
 import { createCameraPlacementController } from "./app/cameraPlacementController";
-import { createViewDisplayController } from "./app/viewDisplayController";
+import { createViewDisplayController, resolveViewDisplayMode } from "./app/viewDisplayController";
 import { createVisibilityController, type VisibilityTarget } from "./app/visibilityController";
 import { getAppContextMenuController } from "./ui/contextMenu";
 import { createNavigationFocusProvider } from "./app/navigationFocus";
@@ -307,7 +316,8 @@ import { showToast } from "./ui/toast";
 
 export function startApp(initialArgs: AppArgs) {
   const args = resolveAppArgs(initialArgs);
-  const clientCatalog = args.clientCatalog;
+  const projectMaterialRuntimeCatalog = createProjectMaterialRuntimeCatalog(args.clientCatalog);
+  const clientCatalog = projectMaterialRuntimeCatalog.catalog;
   const modulePackages = args.modulePackages;
   let projectMaterialAssignments: ProjectMaterialAssignmentsState = createEmptyProjectMaterialAssignmentsState();
   let projectMarginSettings: ProjectMarginSettingsState = createDefaultProjectMarginSettingsState();
@@ -379,6 +389,21 @@ export function startApp(initialArgs: AppArgs) {
   renderer.localClippingEnabled = true;
   const temporaryDimensions = createTemporaryDimensionManager(renderer, cam());
   temporaryDimensions.setUnitScale(1000);
+  const fullRendererPixelRatio = resolveRendererPixelRatio(
+    window.devicePixelRatio || 1,
+    window.matchMedia?.("(pointer: coarse)").matches ?? false
+  );
+  const rendererInteractionQuality = createRendererInteractionQualityController({
+    fullPixelRatio: fullRendererPixelRatio,
+    reducedPixelRatio: Math.min(1, fullRendererPixelRatio),
+    setPixelRatio: (pixelRatio) => {
+      renderer.setPixelRatio(pixelRatio);
+      const width = args.viewerEl.clientWidth;
+      const height = args.viewerEl.clientHeight;
+      setSize(width, height);
+      temporaryDimensions.setSize(width, height);
+    }
+  });
 
   setDaylightIntensity(9);
 
@@ -404,6 +429,7 @@ export function startApp(initialArgs: AppArgs) {
 
   type LayoutTool = "select" | "wall" | "led" | "align" | "trim" | "measure" | "section" | "dimension";
   let layoutTool: LayoutTool = "select";
+  let mobileAdditiveSelection = false;
   let viewNavigation: ReturnType<typeof createViewNavigation>;
   let detailViewController!: ReturnType<typeof createDetailViewController>;
   let cameraPlacementController!: ReturnType<typeof createCameraPlacementController>;
@@ -811,6 +837,19 @@ export function startApp(initialArgs: AppArgs) {
     openBomPanelForState({ instances, kitchenWorktops, customFurniture, kitchenCtx: S.kitchenCtx });
   });
 
+  createProjectPricingSummaryController({
+    root: document,
+    getPricingInput: () => ({
+      instances,
+      worktops: kitchenWorktops,
+      customFurniture,
+      kitchenContext: S.kitchenCtx,
+      catalog: clientCatalog,
+      quoteSettings: projectMarginSettings,
+      currency: args.clientProfile?.defaults.currency ?? "EUR"
+    })
+  });
+
   const recentActivityController = createRecentActivityController({
     S,
     getHelpers: () => helpers,
@@ -1148,6 +1187,8 @@ export function startApp(initialArgs: AppArgs) {
   const getKitchenPlacementConstraint = (...args: Parameters<ReturnType<typeof createKitchenPlacementController>["getKitchenPlacementConstraint"]>) => kitchenPlacementController.getKitchenPlacementConstraint(...args);
 
   kitchenPlacementController = createKitchenPlacementController({
+    setStatus: message => setUnderlayStatus(message),
+    hasModuleCollision: (inst) => modulePlacementHelpers.anyOverlap(inst, null),
     S,
     walls,
     instances,
@@ -1174,6 +1215,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   const layoutSceneQueries = createLayoutSceneQueries({
+    hasRequiredWallSupport: kitchenPlacementController.hasRequiredKitchenWallSupport,
     instances,
     kitchenWorktops,
     walls,
@@ -1261,12 +1303,7 @@ export function startApp(initialArgs: AppArgs) {
   raycaster.params.Line = { threshold: 0.08 };
   const pointerNdc = new THREE.Vector2();
   const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const dragState = {
-    active: false,
-    id: null as string | null,
-    offset: new THREE.Vector3(),
-    lastValid: new THREE.Vector3()
-  };
+  const dragState = createPointerModuleDragState();
 
   const underlayDragState = {
     active: false,
@@ -1307,8 +1344,13 @@ export function startApp(initialArgs: AppArgs) {
     getState: () => ({ mode, viewMode, activeViewerTab }),
     getViewerToolMode,
     setViewerPanActive,
+    setNavigationInteractionActive: (active) => {
+      if (active) rendererInteractionQuality.beginInteraction();
+      else rendererInteractionQuality.endInteraction();
+    },
     isTypingTarget,
     isInteractionBlocked: () =>
+      !!dragState.gesture ||
       dragState.active ||
       windowDragState.active ||
       doorDragState.active ||
@@ -1318,6 +1360,7 @@ export function startApp(initialArgs: AppArgs) {
       Boolean(floorEdit.drag) ||
       underlayDragState.active,
     isPanInteractionBlocked: () =>
+      !!dragState.gesture ||
       dragState.active ||
       windowDragState.active ||
       doorDragState.active ||
@@ -1326,6 +1369,30 @@ export function startApp(initialArgs: AppArgs) {
       marquee.pending ||
       Boolean(floorEdit.drag) ||
       underlayDragState.active,
+    canStartSingleTouchOrbit: () =>
+      mode === "layout" &&
+      viewMode === "3d" &&
+      layoutTool === "select" &&
+      !placement.active &&
+      !transformState.kind &&
+      !floorEdit.active &&
+      !measureState.enabled &&
+      !isColumnPlacementActive() &&
+      !isDoorPlacementActive() &&
+      !isWindowPlacementActive(),
+    cancelEditorTouchInteraction: () => {
+      marquee.active = false;
+      marquee.pending = false;
+      marquee.pointerId = null;
+      marquee.hitSomething = false;
+      marqueeEl.style.display = "none";
+      pointerInputHandlers.cancelModuleDrag();
+      windowDragState.active = false;
+      doorDragState.active = false;
+      wallEditHud.drag = null;
+      floorEdit.drag = null;
+      underlayDragState.active = false;
+    },
     focusProvider: navigationFocusProvider,
     refreshDetailView: () => {
       detailViewController.activeDetailClipPlanes = [];
@@ -1702,6 +1769,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   wallController = createWallController({
+    reconcileMountedModules: () => kitchenPlacementController.reconcileMountedModules(),
     walls,
     instances,
     kitchenWorktops,
@@ -1718,7 +1786,7 @@ export function startApp(initialArgs: AppArgs) {
     cam,
     getModuleLocalBackCenter,
     getKitchenWorktopGuidePathForAlign,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: (inst) => modulePlacementHelpers.moduleOverlapsWalls(inst),
     setUnderlayStatus,
     showWallSnapMarkersFor,
     getViewMode: () => viewMode,
@@ -1891,6 +1959,7 @@ export function startApp(initialArgs: AppArgs) {
   };
   viewerToolModeController = createViewerToolModeController({
     canvasEl: renderer.domElement,
+    getObjectDragState: () => dragState.gesture ? (dragState.active ? "dragging" : "pending") : null,
     getInsertMode: () =>
       mode === "layout" &&
       (layoutTool !== "select" ||
@@ -2141,7 +2210,7 @@ export function startApp(initialArgs: AppArgs) {
     kitchenWorktops,
     measureState,
     moduleOverlapsKitchenWorktops,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     mountActiveViewProps,
     mountPlacementControls,
     pinnedInstanceIds,
@@ -2304,6 +2373,7 @@ export function startApp(initialArgs: AppArgs) {
     restoreColumns: restoreColumnsFromSnapshot,
     restoreSections: restoreSectionsFromSnapshot,
     restoreWorktops: restoreKitchenWorktopsFromSnapshot,
+    restoreKitchenModulePlacements: () => kitchenPlacementController.restoreKitchenModulePlacements(),
     restoreLedStripGroups: (groups, ledStripCounter) => {
       S.ledStripGroups.splice(0, S.ledStripGroups.length, ...groups);
       S.ledStripCounter = ledStripCounter ?? S.ledStripCounter;
@@ -2314,6 +2384,7 @@ export function startApp(initialArgs: AppArgs) {
       if (!state) return;
       projectMaterialAssignments = cloneJson(state);
       S.projectMaterialAssignments = cloneJson(state);
+      projectMaterialRuntimeCatalog.applyProjectAssignments(projectMaterialAssignments);
       materialsPhaseController?.restoreSaveState(state);
     },
     clearToolHud,
@@ -2329,7 +2400,7 @@ export function startApp(initialArgs: AppArgs) {
   function anyOverlapIgnoring(moving: LayoutInstance, ignoreIds: Set<string>) { return modulePlacementHelpers.anyOverlapIgnoring(moving, ignoreIds); }
   function moduleWorldRing(inst: LayoutInstance) { return modulePlacementHelpers.moduleWorldRing(inst); }
   function moduleOverlapsKitchenWorktops(inst: LayoutInstance) { return modulePlacementHelpers.moduleOverlapsKitchenWorktops(inst); }
-  function moduleOverlapsWalls(inst: LayoutInstance) { return modulePlacementHelpers.moduleOverlapsWalls(inst); }
+  function moduleViolatesWallConstraints(inst: LayoutInstance) { return modulePlacementHelpers.moduleViolatesWallConstraints(inst); }
   function snapPositionDetailed(moving: LayoutInstance, desired: THREE.Vector3, opts?: ModulePlacementSnapOptions) { return modulePlacementHelpers.snapPositionDetailed(moving, desired, opts); }
   function collectAdjacentModuleInfos(inst: LayoutInstance, referenceBox = instanceWorldBox(inst)) { return modulePlacementHelpers.collectAdjacentModuleInfos(inst, referenceBox); }
   function chooseResizeAnchorSide(inst: LayoutInstance, infos: AdjacentModuleInfo[]) { return modulePlacementHelpers.chooseResizeAnchorSide(inst, infos); }
@@ -2358,7 +2429,7 @@ export function startApp(initialArgs: AppArgs) {
     roomContainsBoxXZ,
     instanceWorldBox,
     anyOverlap,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     moduleOverlapsKitchenWorktops,
     autoOrientModuleToRoomWallIfSnapped,
     resolveModuleAdjacencySnap,
@@ -2703,7 +2774,7 @@ export function startApp(initialArgs: AppArgs) {
     fitSelectedKitchenModuleToGap,
     modulePackages,
     get wardrobeMode() { return wardrobeMode; },
-    layoutTool,
+    get layoutTool() { return layoutTool; },
     openBomPanel: (panelArgs) => openBomPanelForState(panelArgs),
     openPricingCatalog: () => openPricingCatalogForState(),
     openUnderlayPanel,
@@ -2748,6 +2819,18 @@ export function startApp(initialArgs: AppArgs) {
     }
   });
   syncClassicTopbarVisibility = createClassicTopbarControllerResult.syncClassicTopbarVisibility;
+  let mobileSaveProject: (() => void | Promise<void>) | null = null;
+  mountMobileWorkspaceShell({
+    root: document.getElementById("app") ?? document.body,
+    registry: createClassicTopbarControllerResult.commandRegistry,
+    openProjectManager: args.openProjectManager ?? (() => undefined),
+    saveProject: () => {
+      if (mobileSaveProject) return mobileSaveProject();
+    },
+    getActiveToolLabel: () => layoutTool === "select" ? "Select" : layoutTool,
+    getMobileAdditiveSelection: () => mobileAdditiveSelection,
+    setMobileAdditiveSelection: (enabled) => { mobileAdditiveSelection = enabled; }
+  });
 
   kitchenMode = createKitchenEditMode({
     S,
@@ -2782,6 +2865,7 @@ export function startApp(initialArgs: AppArgs) {
     startWorktopDraw: startKitchenWorktopDraw,
     cancelWorktopDraw: cancelKitchenWorktopDraw,
     handleWorktopEscape: handleKitchenWorktopEscape,
+    cancelModulePointerDrag: () => pointerInputHandlers.cancelModuleDrag(),
     refreshWorktopPreview: updateKitchenWorktopPreview,
     getGroupWorktops: getKitchenGroupWorktops,
     replaceGroupWorktops: replaceKitchenGroupWorktops,
@@ -2931,7 +3015,9 @@ export function startApp(initialArgs: AppArgs) {
   function setSelectedUnderlay() { return selectionController.setSelectedUnderlay(); }
   function setSelectedSection(id: string | null) { return selectionController.setSelectedSection(id); }
   function setSelectedColumn(id: string | null) { return selectionController.setSelectedColumn(id); }
-  function setSelectedWall(id: string | null) { return selectionController.setSelectedWall(id); }
+  function setSelectedWall(...args: Parameters<ReturnType<typeof createSelectionController>["setSelectedWall"]>) {
+    return selectionController.setSelectedWall(...args);
+  }
   function setSelectedFloor(id: string | null) { return selectionController.setSelectedFloor(id); }
   function clearSelection() { return selectionController.clearSelection(); }
 
@@ -3133,10 +3219,18 @@ export function startApp(initialArgs: AppArgs) {
 
   let createInstanceRebuilderResult!: ReturnType<typeof createInstanceRebuilder>;
   function rebuildInstance(...args: Parameters<ReturnType<typeof createInstanceRebuilder>["rebuildInstance"]>) {
-    return createInstanceRebuilderResult.rebuildInstance(...args);
+    const rebuilt = createInstanceRebuilderResult.rebuildInstance(...args);
+    // Rebuilding resets the plan pick to its invisible raycast material. The
+    // kitchen editor owns the visible footprint treatment and reapplies it only
+    // while its floorplan is active.
+    kitchenMode?.syncPlanPresentation();
+    return rebuilt;
   }
 
   const moduleSelectionController = createModuleSelectionController({
+    isModuleSelected: id => selectedInstanceIds.size === 1 && selectedInstanceIds.has(id),
+    canBeginDirectDrag: () => layoutTool === "select" && !placement.active && !transformState.kind
+      && (viewMode === "3d" || activeViewerTab === "floorplan"),
     instances,
     pinnedInstanceIds,
     raycaster,
@@ -3153,6 +3247,8 @@ export function startApp(initialArgs: AppArgs) {
     getKitchenMode: () => kitchenMode,
     getModuleLocalBackCenter,
     isModuleAlignLocked: (id) => isObjectInLockedAlignLock(S.alignLocks, "module", id),
+    isMobileAdditiveSelection: () => mobileAdditiveSelection,
+    consumeMobileAdditiveSelection: () => { mobileAdditiveSelection = false; },
     setSelectedKitchenGroup,
     setSelectedModule
   });
@@ -3161,6 +3257,8 @@ export function startApp(initialArgs: AppArgs) {
   const selectInstanceById = moduleSelectionController.selectInstanceById;
 
   modulePlacementHelpers = createModulePlacementHelpers({
+    hasRequiredWallSupport: kitchenPlacementController.hasRequiredKitchenWallSupport,
+    resolveUpperWallMove: kitchenPlacementController.resolveUpperWallMove,
     instances,
     kitchenWorktops,
     walls,
@@ -3361,6 +3459,7 @@ export function startApp(initialArgs: AppArgs) {
     marginsPhaseController?.destroy();
     projectMaterialAssignments = cloneJson(appState.materialAssignments);
     S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
+    projectMaterialRuntimeCatalog.applyProjectAssignments(projectMaterialAssignments);
     projectMarginSettings = normalizeProjectMarginSettingsState(appState.quoteSettings);
     const layout = appState.layout as {
       snapshot?: unknown;
@@ -3408,6 +3507,13 @@ export function startApp(initialArgs: AppArgs) {
     S.activeKitchenGroupId = null;
     if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
     S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
+    projectMaterialRuntimeCatalog.applyProjectAssignments(projectMaterialAssignments);
+    syncProjectMaterialAssignmentsToKitchenContexts({
+      catalog: clientCatalog,
+      assignments: projectMaterialAssignments,
+      kitchenContext: S.kitchenCtx,
+      kitchenGroups: S.kitchenGroups
+    });
     materialsPhaseController?.restoreSaveState(projectMaterialAssignments);
     if (!layout?.snapshot) throw new Error("Project save is missing layout snapshot.");
     restoreLayoutSnapshot(S, helpers, layout.snapshot as Parameters<typeof restoreLayoutSnapshot>[2]);
@@ -3472,9 +3578,7 @@ export function startApp(initialArgs: AppArgs) {
       refreshViewerTabs();
       activateViewerTab(tab);
     }
-    if (savedScene?.displayMode === "solid" || savedScene?.displayMode === "realistic" || savedScene?.displayMode === "wireframe") {
-      setViewerDisplayMode(savedScene.displayMode);
-    }
+    setViewerDisplayMode(resolveViewDisplayMode(savedScene?.displayMode));
     const savedRenderMode = savedScene?.renderMode === "realtime"
       || savedScene?.renderMode === "realtime_ssgi"
       || savedScene?.renderMode === "photo_pathtrace"
@@ -3793,6 +3897,7 @@ export function startApp(initialArgs: AppArgs) {
       }
       tb.setProjectLabel(project ? project.name : args.clientProfile?.company.name ?? "Workspace");
       projectHeader.render(project, status);
+      moduleCommercialPropsController?.refreshAfterSave();
       void supplierBridgeController?.syncProjectContext().catch(() => undefined);
     },
     initialProject: args.initialProject,
@@ -3801,7 +3906,17 @@ export function startApp(initialArgs: AppArgs) {
   });
   if (!projectMaterialAssignments.initialized) projectMaterialAssignments = createProjectMaterialDefaults();
   S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
+  projectMaterialRuntimeCatalog.applyProjectAssignments(projectMaterialAssignments);
   const applyCommittedProjectMaterialAssignments = (assignments: ProjectMaterialAssignmentsState) => {
+    // The supplier refresh and assignment callbacks are independent. Refresh the
+    // per-project runtime catalog here as well, before a module rebuild needs it.
+    projectMaterialRuntimeCatalog.applyProjectAssignments(assignments);
+    const contextSync = syncProjectMaterialAssignmentsToKitchenContexts({
+      catalog: clientCatalog,
+      assignments,
+      kitchenContext: S.kitchenCtx,
+      kitchenGroups: S.kitchenGroups
+    });
     const result = syncProjectMaterialAssignmentsToLayout({
       catalog: clientCatalog,
       instances: S.instances,
@@ -3818,7 +3933,7 @@ export function startApp(initialArgs: AppArgs) {
       kitchenGroups: S.kitchenGroups,
       catalog: clientCatalog
     }));
-    if (result.moduleIds.length || result.worktopIds.length || result.customFurnitureIds.length) {
+    if (contextSync.changed || result.moduleIds.length || result.worktopIds.length || result.customFurnitureIds.length) {
       updateLayoutPanel();
       commitHistory(S);
     }
@@ -3844,6 +3959,7 @@ export function startApp(initialArgs: AppArgs) {
     onViewChanged: (view) => {
       projectMaterialAssignments = cloneJson(view.assignments);
       S.projectMaterialAssignments = cloneJson(view.assignments);
+      projectMaterialRuntimeCatalog.applyProjectAssignments(view.assignments);
       materialWarningListEl.innerHTML = renderMaterialWarnings(view.warnings);
     },
     onAssignmentsCommitted: (assignments) => {
@@ -3870,6 +3986,7 @@ export function startApp(initialArgs: AppArgs) {
   });
   moduleCommercialPropsController = createModuleCommercialPropsController({
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
+    hasSavedProject: () => projectActions.getState().hasServerSnapshot !== false,
     getModuleScope: (instanceId) => buildProjectMaterialScopes({
       instances: S.instances,
       worktops: S.kitchenWorktops,
@@ -3884,6 +4001,7 @@ export function startApp(initialArgs: AppArgs) {
     onMaterialsChanged: (view) => {
       projectMaterialAssignments = cloneJson(view.assignments);
       S.projectMaterialAssignments = cloneJson(view.assignments);
+      projectMaterialRuntimeCatalog.applyProjectAssignments(view.assignments);
     },
     onMaterialsCommitted: (view) => {
       projectMaterialAssignments = cloneJson(view.assignments);
@@ -4056,6 +4174,7 @@ export function startApp(initialArgs: AppArgs) {
       await recoveryStore.deleteActive(activeRecoveryScope);
     }
   });
+  mobileSaveProject = () => projectMenuActions.saveProject();
   tb.getQuickAction("save")?.addEventListener("click", () => {
     void projectMenuActions.saveProject();
   });
@@ -4180,15 +4299,20 @@ export function startApp(initialArgs: AppArgs) {
     onLanguageChange: (language) => companyLanguageController.changeLanguage(language)
   });
 
-  const ro = new ResizeObserver(() => {
+  const resizeRendererForViewport = () => {
     const w = args.viewerEl.clientWidth;
     const h = args.viewerEl.clientHeight;
     setSize(w, h);
     temporaryDimensions.setSize(w, h);
     ssgi?.setSize(w, h);
     photo?.setSize(w, h);
-  });
+  };
+  const ro = new ResizeObserver(resizeRendererForViewport);
   ro.observe(args.viewerEl);
+  const renderLifecycle = createRenderLifecycleController({
+    canvas: renderer.domElement,
+    onResume: resizeRendererForViewport
+  });
 
   // Quick edit dimension value (double click)
   renderer.domElement.addEventListener("dblclick", (ev) => {
@@ -4227,6 +4351,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   createTransformControllerResult = createTransformController({
+    resolveModuleAdjacencySnap,
     S,
     anyOverlap,
     anyOverlapIgnoring,
@@ -4252,7 +4377,7 @@ export function startApp(initialArgs: AppArgs) {
     mmDist,
     get mode() { return mode; },
     moduleOverlapsKitchenWorktops,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     getKitchenGuideSegmentInfo,
     mountProps,
     nudgePinnedModuleChain,
@@ -4287,6 +4412,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   createInstanceRebuilderResult = createInstanceRebuilder({
+    hasRequiredWallSupport: kitchenPlacementController.hasRequiredKitchenWallSupport,
     S,
     anyOverlap,
     applyWallConstraints,
@@ -4307,7 +4433,7 @@ export function startApp(initialArgs: AppArgs) {
     isCornerKitchenModule,
     get lastRebuildDebug() { return lastRebuildDebug; }, set lastRebuildDebug(next) { lastRebuildDebug = next; },
     moduleOverlapsKitchenWorktops,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     moduleRootLocalBox,
     normalizeModuleParamsForSource,
     preserveAnchoredResizeSide,
@@ -4322,8 +4448,9 @@ export function startApp(initialArgs: AppArgs) {
     validateModule
   });
 
-  installKeyboardInputHandlers({
+  const keyboardInputController = installKeyboardInputHandlers({
     S,
+    cancelModulePointerDrag: () => pointerInputHandlers.cancelModuleDrag(),
     get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
     addWall,
     anyOverlap,
@@ -4376,7 +4503,7 @@ export function startApp(initialArgs: AppArgs) {
     mirrorKitchenWorktopDraw,
     get mode() { return mode; }, set mode(next) { mode = next; },
     moduleOverlapsKitchenWorktops,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     mountProps,
     nudgePinnedModuleChain,
     pinnedWallIds,
@@ -4428,6 +4555,8 @@ export function startApp(initialArgs: AppArgs) {
 
   const pointerInputHandlers = installPointerInputHandlers({
     S,
+    resolveModuleAdjacencySnap,
+    getModuleLocalBackCenter,
     ledStripDrawController,
     get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },
     addFloorEditSegment,
@@ -4451,6 +4580,8 @@ export function startApp(initialArgs: AppArgs) {
     beginKitchenWorktopSelection,
     findSelectableFloorplanWorktopAtPoint,
     beginModuleSelection,
+    isMobileAdditiveSelection: () => mobileAdditiveSelection,
+    consumeMobileAdditiveSelection: () => { mobileAdditiveSelection = false; },
     updateSelectionHover,
     bindingFromPlanSnap,
     get cabinetGroup() { return cabinetGroup; }, set cabinetGroup(next) { cabinetGroup = next; },
@@ -4538,7 +4669,7 @@ export function startApp(initialArgs: AppArgs) {
     measureState,
     get mode() { return mode; }, set mode(next) { mode = next; },
     moduleOverlapsKitchenWorktops,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     mountProps,
     mountWindowControls,
     moveFloorEditSegment,
@@ -4649,6 +4780,31 @@ export function startApp(initialArgs: AppArgs) {
     worldToScreen
   });
 
+  const resolveCurrentActiveContextCommand = () => resolveActiveContextCommand({
+    layoutTool,
+    transformKind: transformState.kind,
+    transformMoveSnapDisabled: transformState.moveSnapDisabled,
+    floorBoundaryActive: floorEdit.active,
+    placementActive: placement.active,
+    columnPlacementActive: isColumnPlacementActive(),
+    windowPlacementActive: isWindowPlacementActive(),
+    doorPlacementActive: isDoorPlacementActive(),
+    kitchenWorktopActive: kitchenWorktopDraw.active,
+    orthoEnabled: drawOrthoEnabled,
+    cancelTransform: () => clearTransform(),
+    cancelFloorBoundary: discardFloorBoundaryEdit,
+    finishFloorBoundary: finishFloorBoundaryEdit,
+    cancelPlacement: () => cancelPlacement(S, placementHelpers),
+    cancelColumnPlacement: () => { cancelColumnPlacement(); },
+    cancelWindowPlacement: () => { cancelWindowPlacement(); },
+    cancelDoorPlacement: () => { cancelDoorPlacement(); },
+    cancelKitchenWorktop: () => cancelKitchenWorktopDraw(),
+    cancelLayoutTool: setToolSelect,
+    rotatePlacement: () => { rotateActivePlacement(S, placementHelpers); },
+    toggleMoveSnap: () => { transformState.moveSnapDisabled = !transformState.moveSnapDisabled; },
+    toggleOrtho: toggleDrawOrthoMode
+  });
+
   const editorContextMenuController = createEditorContextMenuController({
     canvas: renderer.domElement,
     menu: getAppContextMenuController(),
@@ -4660,29 +4816,7 @@ export function startApp(initialArgs: AppArgs) {
       selectionCount: selectedInstanceIds.size + selectedWallIds.size || (selectedKind ? 1 : 0),
       hasHiddenObjects: visibilityController.hasHiddenObjects(),
       selectedHasHidden: visibilityController.selectedHasHidden(),
-      activeCommand: resolveActiveContextCommand({
-        layoutTool,
-        transformKind: transformState.kind,
-        transformMoveSnapDisabled: transformState.moveSnapDisabled,
-        floorBoundaryActive: floorEdit.active,
-        placementActive: placement.active,
-        columnPlacementActive: isColumnPlacementActive(),
-        windowPlacementActive: isWindowPlacementActive(),
-        doorPlacementActive: isDoorPlacementActive(),
-        kitchenWorktopActive: kitchenWorktopDraw.active,
-        orthoEnabled: drawOrthoEnabled,
-        cancelTransform: () => clearTransform(),
-        cancelFloorBoundary: discardFloorBoundaryEdit,
-        finishFloorBoundary: finishFloorBoundaryEdit,
-        cancelPlacement: () => cancelPlacement(S, placementHelpers),
-        cancelColumnPlacement: () => { cancelColumnPlacement(); },
-        cancelWindowPlacement: () => { cancelWindowPlacement(); },
-        cancelDoorPlacement: () => { cancelDoorPlacement(); },
-        cancelKitchenWorktop: () => cancelKitchenWorktopDraw(),
-        cancelLayoutTool: setToolSelect,
-        toggleMoveSnap: () => { transformState.moveSnapDisabled = !transformState.moveSnapDisabled; },
-        toggleOrtho: toggleDrawOrthoMode
-      })
+      activeCommand: resolveCurrentActiveContextCommand()
     }),
     resolveCanvasTarget: pointerInputHandlers.resolveContextTarget,
     openProperties: mountProps,
@@ -4705,6 +4839,11 @@ export function startApp(initialArgs: AppArgs) {
   const appContextMenuRoot = document.getElementById("app");
   if (appContextMenuRoot) {
     getAppContextMenuController().register(appContextMenuRoot, () => editorContextMenuController.resolveGlobalItems());
+    createMobileCommandHudController({
+      root: appContextMenuRoot,
+      getActiveCommand: resolveCurrentActiveContextCommand,
+      applyNumericValue: keyboardInputController.applyNumericValue
+    });
   }
 
   createViewModeControllerResult = createViewModeController({
@@ -4866,7 +5005,7 @@ export function startApp(initialArgs: AppArgs) {
     findInstance,
     instanceFitsRoom,
     anyOverlap,
-    moduleOverlapsWalls,
+    moduleOverlapsWalls: moduleViolatesWallConstraints,
     moduleOverlapsKitchenWorktops,
     inferKitchenPlacementBinding,
     rebuildFloor,
@@ -4919,6 +5058,9 @@ export function startApp(initialArgs: AppArgs) {
     const outlineMaterial = inst.outline.material as THREE.LineBasicMaterial;
     outlineMaterial.opacity = isFloorplanView ? 0.95 : 0.98;
     outlineMaterial.depthTest = viewMode !== "2d";
+    // Placement also rebuilds the pick polygon, so restore the kitchen-owned
+    // floorplan fill after the generic raycast setup has completed.
+    kitchenMode?.syncPlanPresentation();
   }
 
   let createMeasureValueCommitterResult!: ReturnType<typeof createMeasureValueCommitter>;
@@ -5310,6 +5452,10 @@ export function startApp(initialArgs: AppArgs) {
   };
 
   const tick = () => {
+    if (!renderLifecycle.canRender()) {
+      requestAnimationFrame(tick);
+      return;
+    }
     const dt = Math.min(0.05, navClock.getDelta());
     visibilityController.sync();
     kitchenMode?.syncPlanPresentation?.();

@@ -7,6 +7,9 @@ const forbiddenImport = /from\s+["'][^"']*data\/(?:materials|hardware|pricing)(?
 const runtimeRoots = ["src/modules", "src/layout", "src/ui", "src/app", "src/lib/materials"];
 const sourceRoots = ["src", "scripts", "server"];
 const allowedSystemSeedCatalogFiles = new Set([
+  "src/app/kitchenPosition.audit.test.ts",
+  "src/app/upperWallPlacement.test.ts",
+  "src/app/openNichePlan.regression.test.ts",
   "scripts/arcigyModuleIconRenderer.ts",
   "scripts/testPortableMaterialLive.mjs",
   "scripts/testPricingContract.ts",
@@ -21,6 +24,7 @@ const allowedSystemSeedCatalogFiles = new Set([
   "src/core/project-save/project-save.test.ts",
   "src/lib/materials/rendering.test.ts",
   "src/modules/fwmFurniture/fwmFurniture.test.ts",
+  "src/modules/fwmFurniture/hasDoors.test.ts",
   "src/modules/runtime/runtimeCatalog.test.ts"
 ]);
 

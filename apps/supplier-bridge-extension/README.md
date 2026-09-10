@@ -8,6 +8,7 @@ Manifest V3 Chrome extension for user-assisted material and price capture. The A
 - An exact-origin Arcigy content script validates `window.postMessage` requests and forwards only `sessionId` plus the one-time bridge token.
 - The MV3 service worker routes messages, talks to the backend, coordinates the user-opened supplier tab, and restores progress from storage. It contains no long-running job loop.
 - The React Side Panel is the primary UI. The toolbar action only opens this panel.
+- The Side Panel uses the same required **company + username + password** identity contract as the Arcigy app. Bridge access is issued directly from the standard Arcigy user account, so a newly created active user works without a separate Bridge account or assignment.
 - Capability-based supplier adapters extract only the currently visible page after an explicit user click.
 - `MockSupplierAdapter` supports only the local simulator in a debug build.
 - Exact-ID jobs preserve supplier product IDs as text, including leading zeroes, punctuation and slashes.

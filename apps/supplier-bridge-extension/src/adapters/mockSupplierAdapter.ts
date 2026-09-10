@@ -69,6 +69,7 @@ async function candidateFromElement(element: Element, pageType: SupplierSourcePa
       manufacturer: requiredAttribute(element, "data-manufacturer"),
       decorCode: requiredAttribute(element, "data-decor-code"),
       surfaceCode: requiredAttribute(element, "data-surface-code"),
+      previewColorHex: requiredAttribute(element, "data-preview-color-hex"),
       productType: requiredAttribute(element, "data-product-type"),
       thicknessMm: numberAttribute(element, "data-thickness-mm"),
       widthMm,

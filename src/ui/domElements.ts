@@ -4,20 +4,24 @@ export function createTextElement(text: string) {
   return element;
 }
 
-export function createButtonElement(text: string, options: { type?: "button" | "submit" } = {}) {
+export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
+
+export function createButtonElement(text: string, options: { type?: "button" | "submit"; variant?: ButtonVariant } = {}) {
   const button = document.createElement("button");
   button.type = options.type ?? "button";
   button.textContent = text;
+  if (options.variant) button.dataset.variant = options.variant;
   return button;
 }
 
 export function createHtmlButtonElement(
   html: string,
-  options: { ariaLabel?: string; className?: string; title?: string; type?: "button" | "submit" } = {}
+  options: { ariaLabel?: string; className?: string; title?: string; type?: "button" | "submit"; variant?: ButtonVariant } = {}
 ) {
   const button = document.createElement("button");
   button.type = options.type ?? "button";
   if (options.className != null) button.className = options.className;
+  if (options.variant) button.dataset.variant = options.variant;
   button.innerHTML = html;
   if (options.title != null) button.title = options.title;
   if (options.ariaLabel != null) button.setAttribute("aria-label", options.ariaLabel);

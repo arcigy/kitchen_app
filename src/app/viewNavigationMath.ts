@@ -212,14 +212,14 @@ export function orbitCameraAroundPivot(
   const offset = camera.position.clone().sub(pivot);
   if (offset.lengthSq() < 1e-12) return false;
   const spherical = new THREE.Spherical().setFromVector3(offset);
-  // Direct manipulation: dragging right moves the camera to the right rather
-  // than mirroring the gesture around the model.
-  spherical.theta += Math.PI * safeDeltaX / width * rotateSpeed;
+  // Match the standard OrbitControls/CAD convention: the scene follows the
+  // pointer drag instead of rotating in the mirrored direction.
+  spherical.theta -= Math.PI * safeDeltaX / width * rotateSpeed;
   // Clamp polar angle, not the camera quaternion.  This remains well-defined
   // at a top/bottom view and lets the next vertical drag return to an axon.
   const minPolar = Math.PI / 2 - MAX_ORBIT_ELEVATION;
   spherical.phi = THREE.MathUtils.clamp(
-    spherical.phi + Math.PI * safeDeltaY / height * rotateSpeed,
+    spherical.phi - Math.PI * safeDeltaY / height * rotateSpeed,
     minPolar,
     Math.PI - minPolar
   );

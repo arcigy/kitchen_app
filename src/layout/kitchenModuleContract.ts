@@ -104,7 +104,7 @@ export function inferKitchenModuleContract(modulePackage: FurnQuoteModulePackage
     capabilities: inferCapabilities(modulePackage, values, productKind),
     // V2 is supported by the FWM base-corner family. The run-time geometry
     // audit applies its two-arm plane invariant only to its chamfered variants.
-    geometryContractVersion: modulePackage.module.moduleType === "fwm_catalog_base_corner" ? 2 : 1
+    geometryContractVersion: modulePackage.module.moduleType === "fwm_catalog_base_corner" ? 3 : 1
   };
 }
 
@@ -266,10 +266,10 @@ export function normalizeKitchenModulePackage(modulePackage: FurnQuoteModulePack
     const parameter = normalized.parameters.parameters.find((item) => item.key === "frontChamferReferenceMm");
     if (parameter) parameter.uiVisibility = "internal";
   }
-  if (inferred.geometryContractVersion === 2) {
+  if (inferred.geometryContractVersion >= 2) {
     upsertParameter(normalized.parameters.parameters, {
       key: "geometryContractVersion", label: "Geometry contract version", type: "number", required: true,
-      defaultValue: 2, min: 1, max: 2, step: 1, unit: "pcs", group: "system", uiVisibility: "internal", affects: "geometry"
+      defaultValue: inferred.geometryContractVersion, min: 1, max: 3, step: 1, unit: "pcs", group: "system", uiVisibility: "internal", affects: "geometry"
     });
   }
   // Drawer-system/size choices are assigned through materials/components,

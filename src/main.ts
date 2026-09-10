@@ -1,3 +1,4 @@
+import "./styles/designTokens.css";
 import "./styles/base.css";
 import "./styles/appBoot.css";
 import "./styles/loadingSkeleton.css";
@@ -9,6 +10,10 @@ import "./styles/classicEditorChrome.css";
 import "./styles/contextMenu.css";
 import "./style.css";
 import "./styles/chatbot.css";
+import "./styles/mobileEditor.css";
+import "./styles/userActivity.css";
+import "./styles/appearance.css";
+import { getThemeController } from "./ui/theme/themeController";
 import { renderKitchenAppShell } from "./ui/kitchenAppShell";
 import { createChatbotDock, renderChatbotOnly } from "./ui/chatbot/chatbotShell";
 import type { ClientContext } from "./core/client/client-context";
@@ -17,12 +22,14 @@ import type { ProjectMetadata } from "./core/project/project-types";
 import type { ProjectSaveFile } from "./core/project-save/project-save-types";
 import { browserJourneyNow, reportBrowserJourney, type BrowserJourneyMetric } from "./app/clientJourneyTelemetry";
 import { sampleBrowserRuntimeMemory, startBrowserRuntimeTelemetry } from "./app/browserRuntimeTelemetry";
+import { startUserActivityTracking } from "./app/userActivityTracker";
 import { installStaleAssetRecovery } from "./app/staleAssetRecovery";
 import { installIconTooltips } from "./ui/iconTooltips";
 import { mountLoadingSkeleton, type LoadingSkeletonHandle } from "./ui/loadingSkeleton";
 import type { ProjectRecoveryEnvelopeV1, ProjectRecoveryScope } from "./app/project/projectRecoveryTypes";
 import { clearLastWorkspacePointer } from "./app/project/projectRecoveryStore";
 
+getThemeController();
 installStaleAssetRecovery();
 installIconTooltips();
 
@@ -43,7 +50,7 @@ void start().catch((error: unknown) => {
   workspaceSkeleton?.clear();
   const message = error instanceof Error ? error.message : String(error);
   appRoot.innerHTML = `
-    <div style="padding:16px;font-family:sans-serif;color:#111">
+    <div style="padding:16px;font-family:sans-serif;color:var(--text)">
       <strong>App start failed</strong>
       <pre style="white-space:pre-wrap">${escapeHtml(message)}</pre>
     </div>
@@ -114,6 +121,7 @@ async function start(): Promise<void> {
   const session = await requireClientSession(appRoot);
   const clientContext = createClientContext(session);
   startBrowserRuntimeTelemetry();
+  void startUserActivityTracking();
   setBootStatus("Prihlásenie potvrdené");
 
   if (window.location.pathname === "/material-proof") {

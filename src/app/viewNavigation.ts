@@ -13,6 +13,7 @@ import {
   type SemanticFocusPerspective,
   viewCubeCssTransform
 } from "./viewNavigationMath";
+import { createTouchGestureController, installTouchActivationGestures } from "./touchGestureController";
 
 export type NavigationViewMode = "3d" | "2d";
 export type NavigationAppMode = "build" | "layout";
@@ -129,6 +130,9 @@ type CreateViewNavigationArgs = {
   focusProvider: NavigationFocusProvider;
   refreshDetailView: () => void;
   activate3dView?: () => void;
+  cancelEditorTouchInteraction?: (pointerIds: readonly number[]) => void;
+  canStartSingleTouchOrbit?: () => boolean;
+  setNavigationInteractionActive?: (active: boolean) => void;
 };
 
 const NAV_KEY_CODES = new Set([
@@ -208,6 +212,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     lastClientY: 0,
     pivot: new THREE.Vector3()
   };
+  let singleTouchOrbitCandidate: { pointerId: number; startClientX: number; startClientY: number } | null = null;
   let navigationFocusDistance: number | null = null;
   let navigationSceneRadius = 10;
   const savedFloorplanView = {
@@ -567,6 +572,46 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     syncViewCube();
   };
 
+  const zoomViewByTouchScale = (scale: number) => {
+    if (!Number.isFinite(scale) || scale <= 0 || Math.abs(scale - 1) < 0.001) return;
+    const camera = args.getCamera();
+    const controls = getControls();
+    if (camera instanceof THREE.OrthographicCamera) {
+      camera.zoom = THREE.MathUtils.clamp(camera.zoom * scale, 0.02, 200);
+      camera.updateProjectionMatrix();
+      controls.update();
+      return;
+    }
+    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    const offset = tmpVecA.copy(camera.position).sub(controls.target);
+    const currentDistance = Math.max(MIN_NAVIGATION_FOCUS_DISTANCE, offset.length());
+    const nextDistance = THREE.MathUtils.clamp(currentDistance / scale, MIN_NAVIGATION_FOCUS_DISTANCE, Math.max(500, navigationSceneRadius * 100));
+    if (offset.lengthSq() < 1e-8) offset.copy(DEFAULT_3D_DIRECTION);
+    camera.position.copy(controls.target).add(offset.normalize().multiplyScalar(nextDistance));
+    navigationFocusDistance = nextDistance;
+    stabilize3dCamera();
+    controls.update();
+    syncViewCube();
+  };
+
+  const touchGesture = createTouchGestureController({
+    onMultiTouchStart: (pointerIds) => {
+      singleTouchOrbitCandidate = null;
+      args.cancelEditorTouchInteraction?.(pointerIds);
+      args.setViewerPanActive?.(true);
+      args.setNavigationInteractionActive?.(true);
+    },
+    onMultiTouchMove: (delta) => {
+      if (args.isPanInteractionBlocked?.() ?? args.isInteractionBlocked()) return;
+      panViewByPixels(delta.deltaX, delta.deltaY);
+      zoomViewByTouchScale(delta.scale);
+    },
+    onMultiTouchEnd: () => {
+      args.setViewerPanActive?.(false);
+      args.setNavigationInteractionActive?.(false);
+    }
+  });
+
   const reset3dView = () => {
     const camera = get3dCamera();
     if (!camera) return;
@@ -678,7 +723,10 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     navKeys.clear();
     gestureState.kind = null;
     gestureState.pointerId = null;
+    singleTouchOrbitCandidate = null;
     args.setViewerPanActive?.(false);
+    args.setNavigationInteractionActive?.(false);
+    touchGesture.cancel();
   };
 
   const beginGesture = (kind: NavigationGesture, ev: PointerEvent) => {
@@ -699,6 +747,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     gestureState.lastClientY = ev.clientY;
     if (kind === "orbit") gestureState.pivot.copy(resolveStableOrbitPivot(getControls().target));
     args.setViewerPanActive?.(true);
+    args.setNavigationInteractionActive?.(true);
     try {
       args.canvasEl.setPointerCapture(ev.pointerId);
     } catch {
@@ -712,6 +761,21 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
 
   const handlePointerDown = (ev: PointerEvent) => {
     viewerFocusState.active = true;
+    if (ev.pointerType === "touch") {
+      const consumed = touchGesture.pointerDown(ev);
+      if (consumed) {
+        singleTouchOrbitCandidate = null;
+        ev.preventDefault();
+        ev.stopPropagation();
+      } else if (args.canStartSingleTouchOrbit?.()) {
+        singleTouchOrbitCandidate = {
+          pointerId: ev.pointerId,
+          startClientX: ev.clientX,
+          startClientY: ev.clientY
+        };
+      }
+      return consumed;
+    }
     const gesture = resolveNavigationGesture({
       button: ev.button,
       shiftKey: ev.shiftKey,
@@ -723,6 +787,22 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
   };
 
   const handlePointerMove = (ev: PointerEvent) => {
+    if (ev.pointerType === "touch" && touchGesture.pointerMove(ev)) {
+      singleTouchOrbitCandidate = null;
+      ev.preventDefault();
+      return true;
+    }
+    if (ev.pointerType === "touch" && singleTouchOrbitCandidate?.pointerId === ev.pointerId) {
+      const movedDistance = Math.hypot(
+        ev.clientX - singleTouchOrbitCandidate.startClientX,
+        ev.clientY - singleTouchOrbitCandidate.startClientY
+      );
+      if (movedDistance >= 10) {
+        singleTouchOrbitCandidate = null;
+        args.cancelEditorTouchInteraction?.([ev.pointerId]);
+        return beginOrbit(ev);
+      }
+    }
     if (!gestureState.kind || gestureState.pointerId !== ev.pointerId) return false;
     const deltaX = ev.clientX - gestureState.lastClientX;
     const deltaY = ev.clientY - gestureState.lastClientY;
@@ -740,6 +820,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     gestureState.kind = null;
     gestureState.pointerId = null;
     args.setViewerPanActive?.(false);
+    args.setNavigationInteractionActive?.(false);
     if (activePointerId != null) {
       try {
         args.canvasEl.releasePointerCapture(activePointerId);
@@ -750,7 +831,11 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     return true;
   };
 
-  const handlePointerUp = (ev: PointerEvent) => endGesture(ev.pointerId);
+  const handlePointerUp = (ev: PointerEvent) => {
+    if (singleTouchOrbitCandidate?.pointerId === ev.pointerId) singleTouchOrbitCandidate = null;
+    if (ev.pointerType === "touch" && touchGesture.pointerEnd(ev)) return true;
+    return endGesture(ev.pointerId);
+  };
 
   const applyWheelZoom = (ev: WheelEvent) => {
     const { viewMode, activeViewerTab } = args.getState();
@@ -774,6 +859,8 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     stabilize3dCamera();
     controls.update();
     syncViewCube();
+    args.setNavigationInteractionActive?.(true);
+    args.setNavigationInteractionActive?.(false);
     return true;
   };
 
@@ -795,6 +882,8 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
     const zAxis = (navKeys.has("KeyW") ? 1 : 0) - (navKeys.has("KeyS") ? 1 : 0);
     const yAxis = (navKeys.has("KeyQ") ? 1 : 0) - (navKeys.has("KeyE") ? 1 : 0);
     if (xAxis === 0 && zAxis === 0 && yAxis === 0) return;
+    args.setNavigationInteractionActive?.(true);
+    args.setNavigationInteractionActive?.(false);
 
     const controls = getControls();
     const camera = args.getCamera();
@@ -851,8 +940,15 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
   });
   args.canvasEl.addEventListener("wheel", applyWheelZoom, { capture: true, passive: false });
   args.canvasEl.addEventListener("lostpointercapture", () => {
+    singleTouchOrbitCandidate = null;
     endGesture();
   });
+  args.canvasEl.addEventListener("pointercancel", (event) => {
+    if (singleTouchOrbitCandidate?.pointerId === event.pointerId) singleTouchOrbitCandidate = null;
+    touchGesture.pointerEnd(event);
+    endGesture(event.pointerId);
+  });
+  installTouchActivationGestures(args.canvasEl);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("blur", onBlur);

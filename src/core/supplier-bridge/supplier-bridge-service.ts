@@ -477,6 +477,8 @@ export function createSupplierBridgeService(deps: SupplierBridgeServiceDependenc
         sessionId,
         syncItemId: item.id,
         supplierProductCode: result.candidate.supplierProductCode,
+        productType: result.candidate.normalizedProduct.productType ?? undefined,
+        previewColorApplied: typeof result.candidate.normalizedProduct.previewColorHex === "string",
         amount: result.priceObservation?.normalizedAmount
       });
       return { view: createSupplierSyncSessionView(aggregate), candidate: result.candidate, idempotent: result.idempotent };

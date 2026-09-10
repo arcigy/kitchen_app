@@ -1,4 +1,5 @@
 {
+  "hasDoors": true,
   "type": "swing_shelves_low",
   "assemblyContext": "kitchen",
   "kitchenModuleRole": "base",

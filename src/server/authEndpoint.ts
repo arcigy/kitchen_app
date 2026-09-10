@@ -3,6 +3,7 @@ import { createLoginRateLimiter } from "../core/auth/login-rate-limit";
 import { createInMemoryAuthSessionStore, type AuthSessionStore } from "../core/auth/auth-session-store";
 import { createInMemoryUserRepository } from "../core/auth/user-repository";
 import { createUserService, type UserService } from "../core/auth/user-service";
+import type { AuthenticatedClientSession } from "../core/client/client-types";
 import {
   clearClientSessionCookieValue,
   parseClientSessionCookieDetailed,
@@ -17,6 +18,15 @@ import { clientAddressForRequest, resolveTrustedProxyHops } from "./http-client-
 type ReadJsonBody = (req: http.IncomingMessage) => Promise<unknown>;
 type SendJson = (res: http.ServerResponse, status: number, data: unknown) => void;
 type LoginRateLimiter = ReturnType<typeof createLoginRateLimiter>;
+type LoginCredentials = {
+  company: string;
+  username: string;
+  password: string;
+};
+type LoginAttempt =
+  | { status: "invalid" }
+  | { status: "limited" }
+  | { status: "authenticated"; session: AuthenticatedClientSession };
 
 const defaultUserService = createUserService(createInMemoryUserRepository());
 const defaultAuthSessionStore = createInMemoryAuthSessionStore();
@@ -46,6 +56,36 @@ function getLoginRateLimitKey(
   return `${ip}:${namespace.trim().toLowerCase()}:${username.trim().toLowerCase()}`;
 }
 
+function readLoginCredentials(body: unknown): LoginCredentials | null {
+  const company = getStringField(body, "company");
+  const username = getStringField(body, "username");
+  const password = getStringField(body, "password");
+  if (!company || !username || !password) return null;
+  return { company, username, password };
+}
+
+async function authenticateLoginAttempt(
+  req: http.IncomingMessage,
+  credentials: LoginCredentials,
+  dependencies: AuthEndpointDependencies
+): Promise<LoginAttempt> {
+  const loginRateLimiter = dependencies.loginRateLimiter ?? defaultLoginRateLimiter;
+  const rateLimitKey = getLoginRateLimitKey(req, credentials.company, credentials.username, dependencies.trustedProxyHops);
+  if (loginRateLimiter.isLimited(rateLimitKey)) return { status: "limited" };
+
+  const session = await (dependencies.userService ?? defaultUserService).authenticate(
+    credentials.company,
+    credentials.username,
+    credentials.password
+  );
+  if (!session) {
+    loginRateLimiter.recordFailure(rateLimitKey);
+    return { status: "invalid" };
+  }
+  loginRateLimiter.reset(rateLimitKey);
+  return { status: "authenticated", session };
+}
+
 export async function handleAuthLogin(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -53,27 +93,17 @@ export async function handleAuthLogin(
   sendJson: SendJson,
   dependencies: AuthEndpointDependencies = {}
 ): Promise<void> {
-  const userService = dependencies.userService ?? defaultUserService;
-  const loginRateLimiter = dependencies.loginRateLimiter ?? defaultLoginRateLimiter;
   const authSessionStore = dependencies.authSessionStore ?? defaultAuthSessionStore;
-  const body = await readJsonBody(req);
-  const company = getStringField(body, "company");
-  const username = getStringField(body, "username");
-  const password = getStringField(body, "password");
-  if (!company || !username || !password) return sendJson(res, 400, { ok: false, error: INVALID_CREDENTIALS });
-
-  const rateLimitKey = getLoginRateLimitKey(req, company, username, dependencies.trustedProxyHops);
-  if (loginRateLimiter.isLimited(rateLimitKey)) {
+  const credentials = readLoginCredentials(await readJsonBody(req));
+  if (!credentials) return sendJson(res, 400, { ok: false, error: INVALID_CREDENTIALS });
+  const attempt = await authenticateLoginAttempt(req, credentials, dependencies);
+  if (attempt.status === "limited") {
     return sendJson(res, 429, { ok: false, error: INVALID_CREDENTIALS });
   }
-
-  const authenticatedSession = await userService.authenticate(company, username, password);
-  if (!authenticatedSession) {
-    loginRateLimiter.recordFailure(rateLimitKey);
+  if (attempt.status === "invalid") {
     return sendJson(res, 401, { ok: false, error: INVALID_CREDENTIALS });
   }
-  loginRateLimiter.reset(rateLimitKey);
-  const session = await authSessionStore.issue(authenticatedSession);
+  const session = await authSessionStore.issue(attempt.session);
 
   res.setHeader(
     "Set-Cookie",
@@ -92,28 +122,15 @@ export async function handleExtensionAuthLogin(
   sendJson: SendJson,
   dependencies: AuthEndpointDependencies = {}
 ): Promise<void> {
-  const userService = dependencies.userService ?? defaultUserService;
-  const loginRateLimiter = dependencies.loginRateLimiter ?? defaultLoginRateLimiter;
   const authSessionStore = dependencies.authSessionStore ?? defaultAuthSessionStore;
-  const body = await readJsonBody(req);
-  const company = getStringField(body, "company");
-  const username = getStringField(body, "username");
-  const password = getStringField(body, "password");
-  if (!username || !password) return sendJson(res, 400, { ok: false, error: INVALID_CREDENTIALS });
-
-  const rateLimitKey = getLoginRateLimitKey(req, "extension", username, dependencies.trustedProxyHops);
-  if (loginRateLimiter.isLimited(rateLimitKey)) return sendJson(res, 429, { ok: false, error: INVALID_CREDENTIALS });
-  // New Bridge clients submit the same company discriminator as the main app.
-  // Retain the username-only path for already-installed extension builds.
-  const authenticatedSession = company?.trim()
-    ? await userService.authenticate(company, username, password)
-    : await userService.authenticateByUsername(username, password);
-  if (!authenticatedSession) {
-    loginRateLimiter.recordFailure(rateLimitKey);
+  const credentials = readLoginCredentials(await readJsonBody(req));
+  if (!credentials) return sendJson(res, 400, { ok: false, error: INVALID_CREDENTIALS });
+  const attempt = await authenticateLoginAttempt(req, credentials, dependencies);
+  if (attempt.status === "limited") return sendJson(res, 429, { ok: false, error: INVALID_CREDENTIALS });
+  if (attempt.status === "invalid") {
     return sendJson(res, 401, { ok: false, error: INVALID_CREDENTIALS });
   }
-  loginRateLimiter.reset(rateLimitKey);
-  const session = await authSessionStore.issue(authenticatedSession);
+  const session = await authSessionStore.issue(attempt.session);
   const { sessionId: _sessionId, ...publicSession } = session;
   return sendJson(res, 200, {
     ok: true,

@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import type { ViewDisplayMode } from "./viewDisplayController";
 import type { ClientContext } from "../core/client/client-context";
 import type { ClientProfile } from "../core/client/client-types";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
@@ -103,13 +104,12 @@ export function createViewerTabs(viewerEl: HTMLElement) {
   return { viewerTabbar, floorplanTab, view3dTab, setExtraTabs, syncViewerTabs };
 }
 
-export type ViewerDisplayMode = "solid" | "realistic" | "wireframe";
+export type ViewerDisplayMode = ViewDisplayMode;
 export type ViewerProjectionMode = "perspective" | "axonometric";
 
 const viewerDisplayLabels: Record<ViewerDisplayMode, string> = {
   solid: "Solid",
-  realistic: "Realistic",
-  wireframe: "Wireframe"
+  realistic: "Realistic"
 };
 
 export function createViewerDownbar(
@@ -184,7 +184,7 @@ export function createViewerDownbar(
     button.setAttribute("aria-expanded", "true");
   };
 
-  for (const mode of ["wireframe", "realistic", "solid"] as ViewerDisplayMode[]) {
+  for (const mode of ["solid", "realistic"] as ViewerDisplayMode[]) {
     const item = createButtonElement(t(viewerDisplayLabels[mode]));
     item.dataset.mode = mode;
     item.setAttribute("role", "menuitem");

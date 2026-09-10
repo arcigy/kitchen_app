@@ -1,4 +1,5 @@
 import { refreshSelectionHighlights, replaceSelectionIdSet, resolveMergedSelectionIdSet } from "./selectionController";
+import { POINTER_DRAG_THRESHOLD_PX } from "./snapToolProfiles";
 
 export type ScreenPoint = { x: number; y: number };
 
@@ -76,7 +77,7 @@ export function updatePointerMarqueeDrag(
   }
 
   if (!marquee.pending || marquee.pointerId !== args.pointerId) return false;
-  const thresholdPx = args.thresholdPx ?? 6;
+  const thresholdPx = args.thresholdPx ?? POINTER_DRAG_THRESHOLD_PX;
   const w = Math.abs(args.x - marquee.startX);
   const h = Math.abs(args.y - marquee.startY);
   if (w < thresholdPx && h < thresholdPx) return false;

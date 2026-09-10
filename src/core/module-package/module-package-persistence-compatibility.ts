@@ -1,8 +1,24 @@
 import { systemModulePackageTemplates } from "../../system/module-packages";
+import type { FurnQuoteModulePackage } from "./module-package-types";
+import type { ClientModuleDefinition } from "../catalog/catalog-types";
 
 const LEGACY_WALL_CORNER_90_ID = "wall_corner_90";
 const WALL_CABINET_RUNTIME_TYPE = "fwm_catalog_wall_cabinet";
 const WALL_CABINET_RUNTIME_BUILDER = "fwm_catalog_wall_cabinet.v1";
+
+/** Recognizes the established catalog alias without rewriting the stored identity. */
+export function isCompatibleModulePackageCatalogReference(
+  modulePackage: FurnQuoteModulePackage,
+  reference: Pick<ClientModuleDefinition, "id" | "modulePackageId" | "moduleType">
+): boolean {
+  if ((reference.modulePackageId ?? reference.id) !== modulePackage.module.modulePackageId) return false;
+  if (reference.moduleType === modulePackage.module.moduleType) return true;
+  return modulePackage.module.modulePackageId === LEGACY_WALL_CORNER_90_ID &&
+    modulePackage.module.moduleType === WALL_CABINET_RUNTIME_TYPE &&
+    reference.moduleType === LEGACY_WALL_CORNER_90_ID &&
+    modulePackage.geometry.mode === "trusted-runtime" &&
+    modulePackage.geometry.runtimeBuilderKey === WALL_CABINET_RUNTIME_BUILDER;
+}
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;

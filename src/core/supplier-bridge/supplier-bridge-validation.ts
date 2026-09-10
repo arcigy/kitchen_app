@@ -43,6 +43,15 @@ function nullableText(value: unknown, path: string, maxLength = 500): string | n
   return text(value, path, maxLength);
 }
 
+function nullableHexColor(value: unknown, path: string): string | null {
+  if (value == null) return null;
+  const normalized = text(value, path, 7).toUpperCase();
+  if (!/^#[0-9A-F]{6}$/.test(normalized)) {
+    throw new SupplierBridgeValidationError(`${path} must be a #RRGGBB colour or null.`);
+  }
+  return normalized;
+}
+
 function nullableNumber(value: unknown, path: string, options: { min?: number; max?: number } = {}): number | null {
   if (value == null) return null;
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -85,6 +94,7 @@ export function validateNormalizedSupplierProduct(value: unknown, path = "normal
     manufacturer: nullableText(input.manufacturer, `${path}.manufacturer`, 160),
     decorCode: nullableText(input.decorCode, `${path}.decorCode`, 120),
     surfaceCode: nullableText(input.surfaceCode, `${path}.surfaceCode`, 120),
+    previewColorHex: nullableHexColor(input.previewColorHex, `${path}.previewColorHex`),
     productType: nullableText(input.productType, `${path}.productType`, 120),
     thicknessMm: nullableNumber(input.thicknessMm, `${path}.thicknessMm`, { min: 0.1, max: 1_000 }),
     widthMm: nullableNumber(input.widthMm, `${path}.widthMm`, { min: 0.1, max: 100_000 }),

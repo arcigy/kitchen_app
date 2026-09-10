@@ -1121,7 +1121,7 @@ describe("transform move tool", () => {
     expect(updateSectionVisual).toHaveBeenCalledWith(section);
   });
 
-  it("moves selected modules through the current snap and pinned-chain path", () => {
+  it("snaps a selected module without pushing independent adjacent modules", () => {
     const instance = moduleInstance("m1", new THREE.Vector3(1, 0, 1));
     const transformState = makeTransformState();
     const snapPositionDetailed = vi.fn((_item: LayoutInstance, desired: THREE.Vector3) => ({ position: desired.clone() }));
@@ -1146,13 +1146,7 @@ describe("transform move tool", () => {
     expect(instance.root.position.toArray()).toEqual([1.2, 0, 1.3]);
     expect(snapPositionDetailed).toHaveBeenCalledTimes(1);
     expect(autoOrientModuleToRoomWallIfSnapped).toHaveBeenCalledWith(instance, new Set(["m1"]));
-    expect(nudgePinnedModuleChain).toHaveBeenCalledTimes(1);
-    expect(nudgePinnedModuleChain.mock.calls[0]?.[0]).toBe(instance);
-    expect(nudgePinnedModuleChain.mock.calls[0]?.[1].toArray()).toEqual([
-      expect.closeTo(0.2),
-      0,
-      expect.closeTo(0.3)
-    ]);
+    expect(nudgePinnedModuleChain).not.toHaveBeenCalled();
     expect(transformState.lastValidDelta.toArray()).toEqual([0.2, 0, 0.3]);
     expect(updateLayoutPanel).toHaveBeenCalled();
   });
@@ -1187,7 +1181,9 @@ describe("transform move tool", () => {
 
     expect(instance.root.position.toArray()).toEqual([1.25, 0, 0]);
     expect(instance.kitchenPlacement).toEqual({ worktopId: "wt1", segmentIndex: 0, offsetAlongM: 1.25 });
-    expect(snapPositionDetailed).not.toHaveBeenCalled();
+    expect(snapPositionDetailed).toHaveBeenCalledExactlyOnceWith(instance, new THREE.Vector3(1.25, 0, 0), {
+      ignoreIds: new Set(["m1"]), stickyNeighborId: null,
+    });
     expect(autoOrientModuleToRoomWallIfSnapped).not.toHaveBeenCalled();
     expect(applyKitchenPlacementBinding).toHaveBeenCalledExactlyOnceWith(instance, { worktopId: "wt1", segmentIndex: 0, offsetAlongM: 1.25 }, 55);
   });

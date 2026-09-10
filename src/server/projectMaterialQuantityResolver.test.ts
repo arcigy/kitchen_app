@@ -116,6 +116,22 @@ describe("server project material quantity resolver", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("falls back to saved layout instances when the module summary is non-empty but malformed", () => {
+    const params = makeDefaultDrawerLowParams();
+    const savedModule = { id: "module_snapshot_1", type: params.type, params, kitchenGroupId: null };
+    const save = createSave({
+      modules: [savedModule],
+      snapshotInstances: [savedModule]
+    });
+    // Mirrors a legacy/corrupted persisted summary without creating an invalid
+    // save through the current writer, which correctly rejects that mismatch.
+    save.appState.modules = [{ id: "broken-summary", params: {} }];
+    const result = resolveProjectMaterialQuantities(save, catalog);
+
+    expect(quantity(result, "corpus")).toBeGreaterThan(0);
+    expect(quantity(result, "front")).toBeGreaterThan(0);
+  });
+
   it("rebuilds one module scope with its individual BOM boards and components", () => {
     const params = makeDefaultDrawerLowParams();
     const savedModule = { id: "module_scope_1", type: params.type, params, kitchenGroupId: null };

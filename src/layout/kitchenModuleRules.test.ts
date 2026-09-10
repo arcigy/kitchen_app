@@ -2,10 +2,22 @@ import { describe, expect, it } from "vitest";
 import {
   isKitchenModuleInEditLayer,
   isKitchenModuleSelectableInEditLayer,
+  isKitchenModuleSelectableInView,
   resolveKitchenModulePlanEmphasis
 } from "./kitchenModuleRules";
 
 describe("kitchen module edit layers", () => {
+  it("restricts selection only in the floorplan, with all cabinet roles selectable in 3D", () => {
+    for (const layer of ["base", "upper"] as const) {
+      for (const role of ["low", "top", "tall"] as const) {
+        const params = { kitchenModuleRole: role };
+        expect(isKitchenModuleSelectableInView(params, layer, "3d", "3d")).toBe(true);
+        expect(isKitchenModuleSelectableInView(params, layer, "2d", "front")).toBe(true);
+        expect(isKitchenModuleSelectableInView(params, layer, "2d", "floorplan"))
+          .toBe(role === "tall" || role === (layer === "base" ? "low" : "top"));
+      }
+    }
+  });
   it("maps low and top aliases to the matching editable layer", () => {
     expect(isKitchenModuleInEditLayer({ kitchenModuleRole: "low" }, "base")).toBe(true);
     expect(isKitchenModuleInEditLayer({ kitchenModuleRole: "base" }, "base")).toBe(true);

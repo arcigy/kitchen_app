@@ -31,6 +31,10 @@
     "test:assistant-project": "node scripts/testAssistantCapabilitiesPersistedProject.mjs",
     "test:pricing-ui": "node scripts/testPricingUi.mjs",
     "test:kitchen-context-live": "node scripts/testKitchenContextLive.mjs",
+    "test:upper-details-ui": "node scripts/testUpperDetailsUi.mjs",
+    "test:module-presets-ui": "node scripts/testModulePresetsUi.mjs",
+    "test:module-doors-ui": "node scripts/testModuleDoorsUi.mjs",
+    "test:module-direct-drag-ui": "node scripts/testModuleDirectDragUi.mjs",
     "test:kitchen-performance": "node scripts/testKitchenPerformance.mjs",
     "test:workspace-cold-open": "node scripts/measureWorkspaceColdOpen.mjs",
     "test:saas-load": "tsx scripts/runSaasLoadTest.ts",
@@ -49,7 +53,8 @@
     "test:ui-smoke": "node scripts/testFullUiSmoke.mjs",
     "test:context-menu-ui": "node scripts/testContextMenusUi.mjs",
     "test:accessibility": "node scripts/testAccessibilitySmoke.mjs",
-    "test:ui-regression": "npm run test:ui-smoke && npm run test:context-menu-ui && npm run test:accessibility && npm run test:i18n-ui && npm run test:kitchen-context-live && npm run test:kitchen-module-edge-cases && npm run test:pricing-ui && npm run test:module-properties && npm run test:portable-material-live && npm run test:material-proof && npm run test:project-save-load && npm run test:project-roundtrip-full && npm run test:project-recovery-ui",
+    "test:ui-appearance": "node scripts/testUiAppearance.mjs",
+    "test:ui-regression": "npm run test:ui-smoke && npm run test:context-menu-ui && npm run test:accessibility && npm run test:ui-appearance && npm run test:i18n-ui && npm run test:kitchen-context-live && npm run test:upper-details-ui && npm run test:module-direct-drag-ui && npm run test:module-doors-ui && npm run test:module-presets-ui && npm run test:kitchen-module-edge-cases && npm run test:pricing-ui && npm run test:module-properties && npm run test:portable-material-live && npm run test:material-proof && npm run test:project-save-load && npm run test:project-roundtrip-full && npm run test:project-recovery-ui",
     "test:i18n-ui": "node scripts/testI18nUi.mjs",
     "worker:dev": "tsx scripts/worker.ts",
     "dev:supplier-simulator": "vite apps/supplier-simulator --config apps/supplier-simulator/vite.config.ts",
@@ -69,7 +74,8 @@
     "db:audit-kitchen-module-geometry": "tsx scripts/auditKitchenModuleGeometryDimensions.ts",
     "db:assign-client-suppliers": "tsx scripts/assignClientSuppliers.ts",
     "db:set-client-currency": "tsx scripts/setClientCurrency.ts",
-    "odoo:feedback:setup": "tsx scripts/setupOdooFeedbackProject.ts --apply"
+    "odoo:feedback:setup": "tsx scripts/setupOdooFeedbackProject.ts --apply",
+    "odoo:user-activity:sync": "tsx scripts/userActivityOdooSync.ts"
   },
   "dependencies": {
     "fflate": "^0.8.2",
@@ -82,6 +88,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "realism-effects": "^1.1.2",
+    "sharp": "^0.35.4",
     "three": "^0.168.0",
     "three-gpu-pathtracer": "0.0.20",
     "three-mesh-bvh": "^0.9.9",

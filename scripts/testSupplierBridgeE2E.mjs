@@ -180,6 +180,7 @@ async function main() {
   }));
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await panel.locator('select').first().selectOption(new URL(appUrl).origin);
+  await panel.locator('input[autocomplete="organization"]').fill(testCompany);
   await panel.locator('input[autocomplete="username"]').fill(testUsername);
   await panel.locator('input[autocomplete="current-password"]').fill(testPassword);
   await panel.getByRole("button", { name: "Prihlásiť" }).click();

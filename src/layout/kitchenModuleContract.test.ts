@@ -19,9 +19,9 @@ describe("Kitchen module contract", () => {
     }
   });
 
-  it("keeps a v2 chamfered corner on two declared depth reference planes", () => {
+  it("keeps a v3 chamfered corner on two declared depth-plus-chamfer reference planes", () => {
     const modulePackage = systemModulePackageTemplates.find((entry) => entry.module.moduleType === "fwm_catalog_base_corner");
-    expect(modulePackage?.kitchenContract).toMatchObject({ topology: "corner-symmetric", geometryContractVersion: 2 });
+    expect(modulePackage?.kitchenContract).toMatchObject({ topology: "corner-symmetric", geometryContractVersion: 3 });
     const catalog = createSystemSeedClientCatalogRepository().getCatalogForClient("client_delfi");
     const build = (frontChamferMm: number) => buildModulePackageGeometryFromPackage({
       modulePackage: modulePackage!,
@@ -42,11 +42,11 @@ describe("Kitchen module contract", () => {
       const corner = group.getObjectByName("__kitchen_corner_anchor")!;
       const xArm = group.getObjectByName("__kitchen_corner_x_anchor")!;
       const zArm = group.getObjectByName("__kitchen_corner_z_anchor")!;
-      expect((corner.position.x - xArm.position.x) * 1000).toBeCloseTo(580, 4);
-      expect((zArm.position.z - corner.position.z) * 1000).toBeCloseTo(580, 4);
+      expect((corner.position.x - xArm.position.x) * 1000).toBeCloseTo(580 + frontChamferMm + 18, 4);
+      expect((zArm.position.z - corner.position.z) * 1000).toBeCloseTo(580 + frontChamferMm + 18, 4);
       const boardBounds = kitchenBoardBounds(group);
-      expect((boardBounds.max.x - boardBounds.min.x) * 1000).toBeCloseTo(580, 4);
-      expect((boardBounds.max.z - boardBounds.min.z) * 1000).toBeCloseTo(580, 4);
+      expect((boardBounds.max.x - boardBounds.min.x) * 1000).toBeCloseTo(580 + frontChamferMm + 18, 4);
+      expect((boardBounds.max.z - boardBounds.min.z) * 1000).toBeCloseTo(580 + frontChamferMm + 18, 4);
       const auditPackage = structuredClone(modulePackage!);
       for (const parameter of auditPackage.parameters.parameters) {
         if (parameter.key === "variant") parameter.defaultValue = "corner_chamfered";

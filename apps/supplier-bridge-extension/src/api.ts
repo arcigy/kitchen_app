@@ -218,6 +218,23 @@ export async function submitSupplierCandidate(
   return { view, candidate, idempotent: body.idempotent };
 }
 
+export async function resolveSupplierPreviewImageColor(
+  baseUrl: string,
+  sessionId: string,
+  accessToken: string,
+  syncItemId: string,
+  imageUrl: string
+): Promise<string> {
+  const body = record(await requestJson(url(baseUrl, sessionId, "preview-color"), {
+    method: "POST",
+    headers: authorized(accessToken),
+    body: JSON.stringify({ syncItemId, imageUrl })
+  }));
+  const hex = typeof body?.previewColorHex === "string" ? body.previewColorHex.toUpperCase() : "";
+  if (!/^#[0-9A-F]{6}$/.test(hex)) throw new Error("Supplier preview colour response is invalid.");
+  return hex;
+}
+
 export async function confirmSupplierCandidate(
   baseUrl: string,
   sessionId: string,

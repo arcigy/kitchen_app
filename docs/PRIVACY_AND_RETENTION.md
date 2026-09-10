@@ -14,6 +14,7 @@ Status: engineering inventory and proposed controls. Legal basis, controller/pro
 | Assistant | user message, live editor context, conversation/tool results, tenant catalog/RAG excerpts | Sent per request to Gemini only when configured; tenant RAG may persist in PostgreSQL | Conversation retention in app is not formally defined; third-party retention requires contract review |
 | Generated files | project exports, previews, renders, uploads, backups | `/app/storage` today; target durable tenant-scoped volume/object storage | Lifecycle and deletion policy pending durable-storage migration |
 | Operations | request ID, normalized route metrics, slow request data, HMAC mutation references, status/outcome | process/Docker logs and future central telemetry | Central retention, access controls, and deletion schedule not configured |
+| Per-user Arcigy app activity | tenant/user ID, current app presence, bounded active intervals, daily active seconds/session count | tenant-scoped PostgreSQL tables; Odoo 19 only after separate activation | Implemented default-off; retention, subject export/deletion, notice/legal basis and Odoo recipient approval are not complete |
 
 ## External recipients and subprocessors to confirm
 
@@ -33,6 +34,10 @@ The business owner must record contract, region, purpose, data categories, trans
 - Supplier Bridge sends normalized required observations, not whole pages, cookies, or supplier credentials.
 - Keep inactive commercial records required by historical projects, but distinguish this compatibility need from personal-data retention.
 - Use synthetic data in develop/load tests unless a controlled copy is explicitly approved and protected.
+- Per-user activity may contain only the strict state/date/time-zone pulse plus
+  authenticated tenant/user identity. Never add input contents, pointer
+  coordinates, screenshots, URLs, project/customer data, IP addresses,
+  pricing/BOM, or user IDs in Prometheus labels.
 
 ## Required data-subject and tenant procedures
 

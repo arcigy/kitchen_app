@@ -66,6 +66,17 @@ describe("editor context menu", () => {
     fixture.menu.destroy();
   });
 
+  it("keeps module placement rotation or mirroring available without a keyboard", () => {
+    const alternate = vi.fn();
+    const fixture = setup({
+      activeCommand: { id: "placement", label: "module placement", cancel: vi.fn(), alternate: { label: "Rotate / Flip", execute: alternate } }
+    });
+    fixture.canvas.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    document.querySelector<HTMLButtonElement>("[data-context-menu-action='alternate-command']")?.click();
+    expect(alternate).toHaveBeenCalledOnce();
+    fixture.menu.destroy();
+  });
+
   it("shows global actions for blank editor space", () => {
     const fixture = setup({ selectionKind: null, selectionCount: 0, hasHiddenObjects: true });
     fixture.canvas.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));

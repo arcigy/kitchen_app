@@ -350,6 +350,12 @@ function getProjectedPlanPolygonFromMesh(inst: LayoutInstance, mesh: THREE.Mesh)
 }
 
 function getRealModulePlanLocalPolygon(inst: LayoutInstance) {
+  const footprint = inst.module.userData.kitchenPlanFootprintMm as Array<{x:number;z:number}> | undefined;
+  if (footprint?.length && footprint.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.z))) {
+    inst.root.updateMatrixWorld(true);
+    const inverse = inst.root.matrixWorld.clone().invert();
+    return footprint.map(p=>new THREE.Vector3(p.x/1000,0,p.z/1000).applyMatrix4(inst.module.matrixWorld).applyMatrix4(inverse).setY(0));
+  }
   // A Revit profile is authoritative for every module, not only the original
   // FWM corner family.  Prefer its declared corpus/front board and never let a
   // handle or another hardware mesh become the plan boundary.

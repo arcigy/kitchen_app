@@ -314,6 +314,40 @@ describe("createSelectionHighlights", () => {
     expect(syncSelectionHighlights()).toBe(false);
   });
 
+  it("highlights one selected kitchen module from its floorplan footprint, not every hidden 3D board", () => {
+    const layoutRoot = new THREE.Group();
+    const instance = createModuleInstance(layoutRoot);
+    instance.kitchenGroupId = "kg1";
+    for (let board = 0; board < 20; board += 1) {
+      instance.module.add(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), new THREE.MeshBasicMaterial()));
+    }
+    const { selectionHighlights, updateSelectionHighlights } = createSelectionHighlights({
+      layoutRoot,
+      getMode: () => "layout",
+      getViewMode: () => "2d",
+      getWalls: () => [] as WallInstance[],
+      getSelectedWallIds: () => new Set<string>(),
+      getSelectedInstanceIds: () => new Set([instance.id]),
+      getWallSolvedOutlines: () => new Map(),
+      getSelectedKind: () => "module",
+      getSelectedFloorId: () => null,
+      getFloors: () => [] as FloorInstance[],
+      getInstances: () => [instance],
+      getModuleLocalBackCenter: () => new THREE.Vector3(0, 0, -0.3)
+    });
+
+    updateSelectionHighlights();
+
+    expect(selectionHighlights.children.map((child) => child.name).sort()).toEqual([
+      "selectedModulePlanEdge",
+      "selectedModulePlanFill"
+    ]);
+    const fill = selectionHighlights.children.find((child) => child.name === "selectedModulePlanFill") as THREE.Mesh;
+    const bounds = new THREE.Box3().setFromObject(fill);
+    expect(bounds.max.x - bounds.min.x).toBeCloseTo(1, 3);
+    expect(bounds.max.z - bounds.min.z).toBeCloseTo(0.6, 3);
+  });
+
   it("keeps exact 3D kitchen-group fills while reusing module and outline geometry", () => {
     const layoutRoot = new THREE.Group();
     const instance = createModuleInstance(layoutRoot);

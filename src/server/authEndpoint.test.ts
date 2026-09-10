@@ -165,7 +165,7 @@ describe("auth endpoints", () => {
     const userService = createTestUserService();
     const authSessionStore = createInMemoryAuthSessionStore();
     const login = mockRes();
-    await handleExtensionAuthLogin(mockReq(), login, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
+    await handleExtensionAuthLogin(mockReq(), login, readBody({ company: "Arcigy Kitchen", username: "arcigy", password: "kitchen2026" }), sendJson, {
       userService,
       authSessionStore,
       loginRateLimiter: createLoginRateLimiter()
@@ -207,6 +207,39 @@ describe("auth endpoints", () => {
 
     expect(login.statusCode).toBe(200);
     expect(login.body).toMatchObject({ session: { clientId: "client_arcigy_demo", displayName: "Branislav" } });
+  });
+
+  it("applies the same exact company and username rule to the app and Bridge", async () => {
+    const users = [...seedAuthUsers, {
+      ...seedAuthUsers[1]!,
+      userId: "user_other_branislav",
+      organizationName: "Other Company",
+      clientId: "client_other",
+      passwordHash: seedAuthUsers[0]!.passwordHash
+    }];
+    const userService = createTestUserService(users);
+    const browser = mockRes();
+    const bridge = mockRes();
+    const body = readBody({ company: "Arcigy Kitchen", username: "branislav", password: "branislav2026" });
+
+    await handleAuthLogin(mockReq(), browser, body, sendJson, { userService, authSessionStore: createInMemoryAuthSessionStore(), loginRateLimiter: createLoginRateLimiter() });
+    await handleExtensionAuthLogin(mockReq(), bridge, body, sendJson, { userService, authSessionStore: createInMemoryAuthSessionStore(), loginRateLimiter: createLoginRateLimiter() });
+
+    expect(browser.statusCode).toBe(200);
+    expect(bridge.statusCode).toBe(200);
+    expect((bridge.body as { session: { clientId: string; displayName: string } }).session).toMatchObject({ clientId: "client_arcigy_demo", displayName: "Branislav" });
+  });
+
+  it("requires the same company field for Bridge login as for app login", async () => {
+    const bridge = mockRes();
+    await handleExtensionAuthLogin(mockReq(), bridge, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
+      userService: createTestUserService(),
+      authSessionStore: createInMemoryAuthSessionStore(),
+      loginRateLimiter: createLoginRateLimiter()
+    });
+
+    expect(bridge.statusCode).toBe(400);
+    expect(bridge.body).toEqual({ ok: false, error: "Invalid credentials." });
   });
 
   it("logs in Andrej with organization credentials", async () => {

@@ -1,9 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { stringifySupplierBridgeJson, supplierBridgePostgresValues } from "./supplier-bridge-postgres-json";
 import { supplierMappingKey } from "./supplier-bridge-repository";
-import { validateSupplierCandidateSubmission } from "./supplier-bridge-validation";
+import { validateNormalizedSupplierProduct, validateSupplierCandidateSubmission } from "./supplier-bridge-validation";
 
 describe("Supplier Bridge PostgreSQL-safe product text", () => {
+  it("accepts an explicit supplier preview colour and rejects malformed values", () => {
+    const valid = validateNormalizedSupplierProduct({
+      displayName: "Red board",
+      manufacturer: null,
+      decorCode: null,
+      surfaceCode: null,
+      previewColorHex: "#b31b34",
+      productType: "board",
+      thicknessMm: 18,
+      widthMm: null,
+      lengthMm: null,
+      availability: "available"
+    });
+
+    expect(valid.previewColorHex).toBe("#B31B34");
+    expect(() => validateNormalizedSupplierProduct({ ...valid, previewColorHex: "red" })).toThrow("#RRGGBB");
+  });
+
   it("removes hidden NUL bytes from all validated candidate text", () => {
     const candidate = validateSupplierCandidateSubmission({
       submissionId: "capture\u0000-175718",

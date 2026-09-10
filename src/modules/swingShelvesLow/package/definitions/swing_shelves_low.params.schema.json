@@ -5,6 +5,10 @@
   "title": "Shelf Doors Params",
   "type": "object",
   "properties": {
+    "hasDoors": {
+      "type": "boolean",
+      "default": true
+    },
     "type": {
       "type": "string"
     },

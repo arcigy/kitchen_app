@@ -63,6 +63,7 @@ type KeyboardInputHandlersContext = {
     backOffsetMm: number
   ) => boolean;
   cancelActiveViewerTool: () => boolean;
+  cancelModulePointerDrag?: () => boolean;
   handleCustomFurnitureEscape: (ev: KeyboardEvent) => boolean;
   handleGlobalMeasurementClear: (ev: KeyboardEvent) => boolean;
   handleLayoutEscape: (ev: KeyboardEvent) => boolean;
@@ -363,6 +364,7 @@ type KeyboardInputCommandContext = PlacementShortcutCommandContext &
   Pick<
     KeyboardInputHandlersContext,
     | "cancelActiveViewerTool"
+    | "cancelModulePointerDrag"
     | "floorEdit"
     | "handleCustomFurnitureEscape"
     | "handleGlobalMeasurementClear"
@@ -1213,6 +1215,12 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
   // prevents an in-progress value from cancelling its enclosing editor tool.
   if (ctx.isTypingTarget(ev.target)) return false;
 
+  if (ev.key === "Escape" && ctx.cancelModulePointerDrag?.()) {
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    return true;
+  }
+
   if (ev.defaultPrevented) {
     if (isSpaceShortcut(ev)) {
       if (runPlacementShortcutCommand(ctx, ev)) {
@@ -1224,6 +1232,7 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
     }
     if (ev.key === "Escape") {
       if (runPlacementShortcutCommand(ctx, ev)) return true;
+      if (runActivePlacementEscapeCommand(ctx, ev)) return true;
       if (runClearSelectionShortcutCommand(ctx, ev)) return true;
     }
     return true;
@@ -1250,6 +1259,11 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
     ev.preventDefault();
     ev.stopPropagation();
     ev.stopImmediatePropagation();
+    return true;
+  }
+
+  if (runActivePlacementEscapeCommand(ctx, ev)) {
+    ev.preventDefault();
     return true;
   }
 
@@ -1293,4 +1307,31 @@ export function installKeyboardInputHandlers(ctx: KeyboardInputHandlersContext) 
   window.addEventListener("keydown", (ev) => {
     runKeyboardInputCommand(ctx, ev);
   });
+
+  const applyNumericValue = (raw: string) => {
+    const normalized = raw.trim().replace(",", ".");
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) return false;
+    const keys = [...normalized, "Enter"];
+    if (ctx.S.kitchenEditMode && ctx.kitchenWorktopDraw.active && ctx.mode === "layout" && ctx.viewMode === "2d") {
+      ctx.kitchenWorktopDraw.typedMm = "";
+      return keys.every((key) => runKitchenWorktopTypedInputCommand(ctx, { key }));
+    }
+    if (ctx.transformState.kind) {
+      ctx.transformState.typed = "";
+      return keys.every((key) => runLayoutTransformKeyboardCommand(ctx, {
+        key,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault: () => undefined
+      }));
+    }
+    if (ctx.layoutTool === "wall" && ctx.wallDraw.active && ctx.wallDraw.a && ctx.viewMode === "2d") {
+      ctx.wallDraw.typedMm = "";
+      return keys.every((key) => runWallTypedLengthCommand(ctx, { key }));
+    }
+    return false;
+  };
+
+  return { applyNumericValue };
 }
