@@ -72,6 +72,7 @@ export type PortableModuleControlsArgs = {
   clientCatalog: ClientCatalog;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;
+  userParametersOnly?: boolean;
 };
 
 export type PortableFieldOption = {
@@ -206,6 +207,7 @@ function createFieldShell(args: {
 }) {
   const wrapper = document.createElement("div");
   wrapper.className = `field portable-field${args.readOnly ? " portable-field--readonly" : ""}`;
+  wrapper.dataset.parameterKey = args.key;
   const tooltip = args.description.trim();
   if (tooltip) wrapper.title = translateParamDescription(tooltip);
 
@@ -461,7 +463,9 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
   systemCatalog?: PortableSystemParameterCatalog;
   systemValues?: PortableSystemParameterValues;
 }): PortableModuleControlsApi {
-  const { container, params, catalog, controlArgs, paramChangeHook, fieldOptions, fieldState, materialsSnapshot, systemCatalog, systemValues } = args;
+  const { container, params, catalog, controlArgs, paramChangeHook, fieldOptions, fieldState, systemCatalog } = args;
+  const materialsSnapshot = controlArgs.userParametersOnly ? structuredClone(args.materialsSnapshot) : args.materialsSnapshot;
+  const systemValues = controlArgs.userParametersOnly ? structuredClone(args.systemValues) : args.systemValues;
   const clientCatalog = controlArgs.clientCatalog;
   const runtimeCatalog = createModuleRuntimeCatalogContext(clientCatalog);
   const explicitCommitMode = controlArgs.textInputCommitMode === "explicit";
@@ -928,7 +932,7 @@ export function createPortableModuleControls<T extends Record<string, unknown>>(
     }
   }
 
-  if (systemCatalog && systemValues) {
+  if (systemCatalog && systemValues && !controlArgs.userParametersOnly) {
     const systemGroups = new Map(systemCatalog.groups.map((group) => [group.key, group]));
     const systemDefinitionsByGroup = new Map<string, typeof systemCatalog.definitions>();
     for (const definition of systemCatalog.definitions) {

@@ -1,0 +1,220 @@
+import { chromium } from 'playwright';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { isDeepStrictEqual } from 'node:util';
+import { installAuthSession } from './uiAuthSession.mjs';
+
+const baseUrl = process.env.KITCHEN_UI_BASE_URL;
+if (!baseUrl || !['localhost', '127.0.0.1'].includes(new URL(baseUrl).hostname)) throw new Error('Requires an isolated localhost runtime.');
+const ready = await fetch(new URL('/ready', baseUrl));
+if (!ready.ok || (await ready.json()).storage !== 'file') throw new Error('Requires disposable file storage.');
+const out = '.tmp/module-settings-ui';
+await mkdir(out, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+const errors = [], checks = [];
+page.on('pageerror', error => errors.push(String(error)));
+page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+const assert = (ok, message) => { if (!ok) throw new Error(message); checks.push(message); };
+const modal = () => page.locator('dialog[data-module-settings]');
+const field = key => modal().locator(`[data-parameter-key="${key}"] input`);
+const dimension = key => modal().locator(`[data-dimension-parameter="${key}"]`);
+const action = name => modal().locator('.module-settings-actions').getByRole('button', { name, exact: true });
+let group, id;
+const module = () => page.evaluate(({ group, id }) => window.__kitchenDebug.snapshot(group).instances.find(item => item.id === id), { group, id });
+const open = async () => {
+  await page.evaluate(id => window.__kitchenDebug.selectModule(id), id);
+  if (await page.getByRole('button', { name: /^(Upraviť kuchyňu|Edit kitchen)$/ }).isVisible()) {
+    await page.getByRole('button', { name: /^(Upraviť kuchyňu|Edit kitchen)$/ }).click();
+    await page.evaluate(id => window.__kitchenDebug.selectModule(id), id);
+  }
+  await page.locator('[data-open-module-settings]').click();
+  await modal().waitFor(); await dimension('width').waitFor();
+};
+const editField = async (key, value) => { await field(key).fill(String(value)); await field(key).press('Enter'); };
+try {
+  await installAuthSession(page, { autoStartWorkspace: false });
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-project-manager-form]', { state: 'attached' });
+  if (!(await page.locator('[data-project-manager-form]').isVisible())) await page.locator('[data-project-manager-new]').click();
+  await page.locator("input[name='name']").fill(`QA Module settings ${Date.now()}`);
+  await page.locator("input[name='address']").fill('QA');
+  await page.locator("input[name='contactName']").fill('QA');
+  await page.locator('[data-project-manager-form] button[type="submit"]').click();
+  await page.waitForFunction(() => !!window.__kitchenDebug);
+  const fixture = await page.evaluate(() => window.__kitchenDebug.createKitchenScenario({ path: [{ x: 0, z: 0 }, { x: 4000, z: 0 }], addModule: false }));
+  group = fixture.group.id;
+  await page.getByRole('button', { name: /^(Upraviť kuchyňu|Edit kitchen)$/ }).click();
+  await page.getByRole('button', { name: /^(Pôdorys|Floorplan)$/ }).click();
+  await page.getByRole('button', { name: /^(Prispôsobiť pohľad|Fit view)$/ }).click();
+  await page.evaluate(() => window.__kitchenDebug.startModulePlacement('fwm_catalog_base_drawers'));
+  const insert = await page.evaluate(() => window.__kitchenDebug.projectPlanPoint({ x: 1000, z: 300 }));
+  await page.mouse.move(insert.x, insert.y);
+  await page.waitForFunction(() => window.__kitchenDebug.placementState().valid);
+  await page.mouse.click(insert.x, insert.y); await page.keyboard.press('Escape');
+  id = await page.evaluate(group => window.__kitchenDebug.snapshot(group).instances[0]?.id, group);
+  assert(!!id, 'Module inserted through normal placement');
+  await page.getByRole('button', { name: /^(Potvrdiť skupinu|Confirm group)$/ }).click();
+  await Promise.all([
+    page.waitForResponse(response => response.url().endsWith('/save') && response.request().method() === 'POST'),
+    page.locator("button[data-quick-action='save']").click(),
+  ]);
+  const initial = await module();
+  await page.evaluate(box => window.__kitchenDebug.createWall({
+    aMm: { x: box.max.x * 1000 + 300, z: box.min.z * 1000 - 100 },
+    bMm: { x: box.max.x * 1000 + 300, z: box.max.z * 1000 + 100 }, thicknessMm: 100,
+  }), initial.structuralWorldBoxM);
+  await open();
+  const view = await page.evaluate(() => window.__kitchenDebug.viewState());
+  assert(JSON.stringify((await module()).params) === JSON.stringify(initial.params), 'Opening changes no project parameters');
+  await action('Zrušiť').click();
+  assert(await modal().count() === 0, 'Unchanged window closes without confirmation');
+  await open();
+  const width = initial.params.width;
+  await dimension('width').click();
+  const inline = () => modal().locator('.module-settings-dimension-input');
+  await inline().fill(String(width + 100)); await inline().press('Escape');
+  assert(Number(await field('width').inputValue()) === width, 'Escape cancels the inline edit');
+  await dimension('width').click(); await inline().fill(String(width + 100)); await inline().press('Enter');
+  assert(Number(await field('width').inputValue()) === width + 100, 'Dimension edit updates the form');
+  assert((await module()).params.width === width, 'Dimension edit stays private');
+  await page.keyboard.press('Control+z');
+  assert(Number(await field('width').inputValue()) === width, 'Local undo restores draft only');
+  await page.keyboard.press('Control+Shift+z');
+  assert(Number(await field('width').inputValue()) === width + 100, 'Local redo restores draft');
+  await editField('width', width + 150);
+  assert((await dimension('width').textContent()).includes(String(width + 150)), 'Form edit updates the dimension');
+  await editField('width', -1);
+  await action('Uložiť a zavrieť').click();
+  assert(await modal().count() === 1 && (await module()).params.width === width, 'Invalid dimensions cannot save or close');
+  await field('width').fill('');
+  await action('Uložiť a zavrieť').click();
+  assert(await modal().count() === 1 && (await module()).params.width === width, 'An empty dimension cannot silently become zero');
+  await editField('width', width + 1000);
+  assert((await dimension('width').textContent()).includes(String(width + 1000)), 'A collision candidate is valid in the isolated preview');
+  await action('Uložiť a zavrieť').click();
+  assert(await modal().count() === 1 && JSON.stringify((await module()).params) === JSON.stringify(initial.params), 'A real wall collision rolls back the project and retains the draft');
+  assert(Number(await field('width').inputValue()) === width + 1000, 'Rejected layout save preserves editable candidate values');
+  await editField('width', width + 150);
+  await modal().locator('[data-module-parameter-preset-trigger]').click();
+  await modal().locator('[data-parameter-preset-id="drawers_2_top_shallow"]').click();
+  assert(Number(await field('drawerCount').inputValue()) === 2, 'Preset changes the draft');
+  assert(Number(await field('width').inputValue()) === width + 150, 'Preset preserves draft dimensions');
+  assert(JSON.stringify((await module()).params) === JSON.stringify(initial.params), 'Preset leaves project unchanged');
+  const frontBefore = Number(await field('drawer1FrontHeightMm').inputValue());
+  await dimension('drawer1FrontHeightMm').click(); await inline().fill(String(Math.round(frontBefore + 20))); await inline().press('Enter');
+  assert(Math.abs(Number(await field('drawer1FrontHeightMm').inputValue()) - Math.round(frontBefore + 20)) < .1, 'Dependent drawer dimension and form agree');
+  await action('Uložiť').click();
+  assert(await modal().count() === 1 && (await module()).params.width === width + 150, 'Save commits and keeps the window open');
+  const saved = await module();
+  await action('Zrušiť').click();
+  assert(await modal().count() === 0, 'Saved baseline closes without confirmation');
+  await page.keyboard.press('Control+z');
+  assert((await module()).params.width === width, 'One project undo restores the complete prior module');
+  await page.keyboard.press('Control+Shift+z');
+  assert((await module()).params.width === saved.params.width, 'Project redo restores the committed module');
+  await open();
+  const beforeDiscardView = await page.evaluate(() => window.__kitchenDebug.viewState());
+  await page.screenshot({ path: `${out}/desktop.png` });
+  await editField('width', width + 250);
+  await action('Zrušiť').click();
+  await page.locator('.module-settings-confirm').getByRole('button', { name: 'Pokračovať v úpravách', exact: true }).click();
+  assert(Number(await field('width').inputValue()) === width + 250, 'Continue editing retains changes');
+  await action('Zrušiť').click();
+  await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
+  assert(JSON.stringify((await module()).params) === JSON.stringify(saved.params), 'Discard restores the saved project baseline');
+  const afterDiscardView = await page.evaluate(() => window.__kitchenDebug.viewState());
+  const cameraSignature = camera => JSON.stringify(camera, (_key, value) => typeof value === 'number' ? Number(value.toFixed(8)) : value);
+  assert(cameraSignature(afterDiscardView.camera) === cameraSignature(beforeDiscardView.camera), 'Main camera remains unchanged');
+  await open(); await editField('drawerCount', 3);
+  const presetName = `QA advanced ${Date.now()}`;
+  await modal().locator('.module-parameter-preset-create').click();
+  const presetDialog = () => page.locator('[data-preset-dialog]');
+  await presetDialog().locator('input').fill(presetName);
+  await presetDialog().locator('textarea').fill('Independent company preset');
+  await page.route('**/parameter-presets', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Preset save failed (test).' }) }), { times: 1 });
+  await presetDialog().locator('button[type=submit]').click();
+  await presetDialog().getByText('Preset save failed (test).', { exact: true }).waitFor();
+  assert(await presetDialog().locator('input').inputValue() === presetName && await presetDialog().locator('textarea').inputValue() === 'Independent company preset', 'Failed preset creation preserves the completed form for retry');
+  const [createdResponse] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith('/parameter-presets') && response.request().method() === 'POST'),
+    presetDialog().locator('button[type=submit]').click(),
+  ]);
+  assert(createdResponse.ok(), 'Advanced preset saves independently to the company');
+  const created = await createdResponse.json();
+  const presetId = created.preset.presetId;
+  const savedPreset = created.modulePackage.parameterPresets.presets.find(preset => preset.presetId === presetId);
+  assert(!Object.hasOwn(savedPreset.parameterValues, 'width') && !Object.hasOwn(savedPreset.parameterValues, 'frontMaterialId'), 'Preset stores configuration without dimensions or materials');
+  assert(JSON.stringify((await module()).params) === JSON.stringify(saved.params), 'Preset creation does not mutate the project through shared references');
+  await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
+  await open(); await modal().locator('[data-module-parameter-preset-trigger]').click();
+  await modal().locator(`[data-parameter-preset-id="${presetId}"]`).click();
+  assert(Number(await field('drawerCount').inputValue()) === 3, 'New preset survives discarded module edits');
+  assert(Number(await field('width').inputValue()) === saved.params.width, 'Saved preset preserves target dimensions');
+  await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
+  for (let i = 0; i < 3; i++) { await open(); await action('Zrušiť').click(); }
+  assert(await page.locator('[data-module-settings-canvas]').count() === 0, 'Repeated closing removes every preview');
+  await open();
+  await page.screenshot({ path: `${out}/desktop.png` });
+  const captions = await modal().locator('[data-dimension-parameter]').allTextContents();
+  const viewport = await modal().locator('[data-module-settings-canvas]').boundingBox();
+  const labelBefore = await dimension('width').boundingBox();
+  await page.mouse.move(viewport.x + viewport.width / 2, viewport.y + viewport.height / 2);
+  await page.mouse.down(); await page.mouse.move(viewport.x + viewport.width / 2 + 90, viewport.y + viewport.height / 2 + 30, { steps: 12 }); await page.mouse.up();
+  await page.mouse.wheel(0, -180);
+  await page.waitForFunction(({ x, y }) => {
+    const box = document.querySelector('[data-dimension-parameter="width"]').getBoundingClientRect();
+    return Math.abs(box.x - x) > 2 || Math.abs(box.y - y) > 2;
+  }, labelBefore);
+  assert(JSON.stringify(await modal().locator('[data-dimension-parameter]').allTextContents()) === JSON.stringify(captions), 'Rotation and zoom reproject labels without changing measurements');
+  await modal().getByRole('button', { name: 'Obnoviť pohľad', exact: true }).click();
+  await page.setViewportSize({ width: 780, height: 900 });
+  await page.screenshot({ path: `${out}/compact.png` });
+  assert(await action('Uložiť a zavrieť').isVisible(), 'Save actions remain visible on a compact window');
+  await editField('width', width + 170);
+  await action('Uložiť a zavrieť').click();
+  assert(await modal().count() === 0 && (await module()).params.width === width + 170, 'Save and close commits a changed draft before closing');
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.getByRole('button', { name: /^(Potvrdiť skupinu|Confirm group)$/ }).click();
+  const [savedResponse] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith('/save') && response.request().method() === 'POST'),
+    page.locator("button[data-quick-action='save']").click(),
+  ]);
+  assert(savedResponse.ok(), 'Changed module saves through the project workflow');
+  const persisted = (await savedResponse.json()).save;
+  await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForFunction(() => !!window.__kitchenDebug);
+  assert((await module()).params.width === width + 170, 'Committed settings survive project reload');
+  const exported = await page.context().request.get(new URL(`/api/projects/${persisted.projectId}/download`, baseUrl).toString());
+  assert(exported.ok(), 'Changed module exports through the encrypted FQP workflow');
+  const importedResponse = await page.context().request.post(new URL('/api/projects/import', baseUrl).toString(), { data: { envelope: await exported.text() } });
+  assert(importedResponse.ok(), 'Changed module imports into another project');
+  const imported = (await importedResponse.json()).save;
+  const importedModule = imported.appState.layout.snapshot.instances.find(item => item.id === id);
+  const persistedModule = persisted.appState.layout.snapshot.instances.find(item => item.id === id);
+  const sameParameters = isDeepStrictEqual(importedModule.params, persistedModule.params);
+  if (!sameParameters) await writeFile(`${out}/roundtrip-diff.json`, JSON.stringify({ before: persistedModule.params, after: importedModule.params }, null, 2));
+  assert(sameParameters, 'FQP roundtrip preserves every committed module parameter');
+  await page.locator("button[data-quick-action='open']").click();
+  if (await page.locator("[data-project-exit='save']").isVisible()) await page.locator("[data-project-exit='save']").click();
+  await page.waitForSelector('[data-project-manager-list]');
+  await page.getByRole('button', { name: new RegExp(imported.project.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click();
+  await page.waitForFunction(() => !!window.__kitchenDebug);
+  await open(); await modal().locator('[data-module-parameter-preset-trigger]').click();
+  await modal().locator(`[data-parameter-preset-id="${presetId}"]`).click();
+  assert(Number(await field('width').inputValue()) === width + 170 && await field('frontMaterialId').inputValue() === importedModule.params.frontMaterialId, 'Company preset is available in another project and preserves dimensions and materials');
+  await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
+  await page.evaluate(group => window.__kitchenDebug.addKitchenModule(group, { type: 'drawer_low', offsetAlongMm: 0 }), group);
+  id = await page.evaluate(group => window.__kitchenDebug.snapshot(group).instances.find(item => item.params.type === 'drawer_low').id, group);
+  const legacy = await module(); await open();
+  assert(await modal().locator('.portable-section--system').count() === 0, 'Legacy smart controls hide imported system parameters in the expanded window');
+  await page.screenshot({ path: `${out}/legacy.png` });
+  await editField('width', legacy.params.width + 40);
+  assert(JSON.stringify((await module()).params) === JSON.stringify(legacy.params), 'Legacy smart controls also edit a private draft');
+  await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
+  assert(errors.length === 0, 'Browser console and page errors are zero');
+  await writeFile(`${out}/result.json`, JSON.stringify({ checks, errors }, null, 2));
+  console.log(`Module settings UI: ${checks.length} checks passed.`);
+} catch (error) {
+  await page.screenshot({ path: `${out}/failure.png` });
+  await writeFile(`${out}/failure.json`, JSON.stringify({ error: String(error), checks, errors, body: await page.locator('body').innerText() }, null, 2));
+  throw error;
+} finally { await browser.close(); }

@@ -49,6 +49,9 @@ export type ModuleControlsArgs = {
   clientCatalog: ClientCatalog;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;
+  presetHost?: HTMLElement;
+  presetDialogHost?: HTMLElement;
+  userParametersOnly?: boolean;
   createParameterPreset?: (args: {
     modulePackage: FurnQuoteModulePackage;
     parameters: Record<string, unknown>;

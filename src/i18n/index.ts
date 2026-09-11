@@ -17,6 +17,27 @@ const LOCALES: Record<AppLanguage, AppLocale> = {
 };
 
 const EXACT_CS_TEXT: Record<string, string> = {
+  "Parameters": "Parametry",
+  "Create preset": "Vytvořit preset",
+  "Name and note are required.": "Název a poznámka jsou povinné.",
+"Advanced settings": "Rozšířená nastavení",
+"Changes affect only this preview until you save the module.": "Změny se projeví pouze v náhledu, dokud modul neuložíte.",
+"New presets are saved to your company separately, without dimensions or materials.": "Nové presety se ukládají firmě samostatně, bez rozměrů a materiálů.",
+"Module preview": "Náhled modulu",
+"Unsaved module changes": "Neuložené změny modulu",
+"Module settings saved": "Nastavení modulu jsou uložená",
+"Save the module before closing?": "Uložit modul před zavřením?",
+"Continue editing": "Pokračovat v úpravách",
+"Discard changes": "Zahodit změny",
+"Save and close": "Uložit a zavřít",
+"The module changed outside this window. Reopen its settings.": "Modul se mezitím změnil. Znovu otevřete jeho nastavení.",
+"The module does not fit here. Adjust its dimensions and try again.": "Modul se sem nevejde. Upravte rozměry a zkuste jej uložit znovu.",
+"Enter a value within the allowed range.": "Zadejte hodnotu v povoleném rozsahu.",
+"The module could not be updated.": "Modul se nepodařilo upravit.",
+"3D preview could not be created.": "3D náhled se nepodařilo vytvořit.",
+"Click to edit this dimension.": "Kliknutím upravíte tento rozměr.",
+"Front chamfer coordinate segment": "Osový rozměr předního zkosení",
+"Back chamfer coordinate segment": "Osový rozměr zadního zkosení",
   Carcass: "Korpus",
   Plinth: "Sokl",
   "Height to worktop surface (mm)": "Výška po horní hranu pracovní desky (mm)",
@@ -63,6 +84,27 @@ const EXACT_CS_TEXT: Record<string, string> = {
 };
 
 const EXACT_SK_TEXT: Record<string, string> = {
+  "Parameters": "Parametre",
+  "Create preset": "Vytvoriť preset",
+  "Name and note are required.": "Názov a poznámka sú povinné.",
+"Advanced settings": "Rozšírené nastavenia",
+"Changes affect only this preview until you save the module.": "Zmeny sa prejavia iba v náhľade, kým modul neuložíte.",
+"New presets are saved to your company separately, without dimensions or materials.": "Nové presety sa ukladajú firme samostatne, bez rozmerov a materiálov.",
+"Module preview": "Náhľad modulu",
+"Unsaved module changes": "Neuložené zmeny modulu",
+"Module settings saved": "Nastavenia modulu sú uložené",
+"Save the module before closing?": "Uložiť modul pred zatvorením?",
+"Continue editing": "Pokračovať v úpravách",
+"Discard changes": "Zahodiť zmeny",
+"Save and close": "Uložiť a zavrieť",
+"The module changed outside this window. Reopen its settings.": "Modul sa medzičasom zmenil. Znovu otvorte jeho nastavenia.",
+"The module does not fit here. Adjust its dimensions and try again.": "Modul sa sem nezmestí. Upravte rozmery a skúste ho uložiť znova.",
+"Enter a value within the allowed range.": "Zadajte hodnotu v povolenom rozsahu.",
+"The module could not be updated.": "Modul sa nepodarilo upraviť.",
+"3D preview could not be created.": "3D náhľad sa nepodarilo vytvoriť.",
+"Click to edit this dimension.": "Kliknutím upravíte tento rozmer.",
+"Front chamfer coordinate segment": "Osový rozmer predného skosenia",
+"Back chamfer coordinate segment": "Osový rozmer zadného skosenia",
   Carcass: "Korpus",
   Plinth: "Sokel",
   "Height to worktop surface (mm)": "Výška po hornú hranu pracovnej dosky (mm)",
@@ -797,6 +839,22 @@ const PARAM_LABELS_SK: Record<string, string> = {
 };
 
 const PARAM_LABELS_SK_OVERRIDES: Record<string, string> = {
+  bodyMaterialId: "Materiál korpusu",
+  frontMaterialId: "Materiál čiel",
+  shelfMaterialId: "Materiál políc",
+  plinthMaterialId: "Materiál sokla",
+  frontChamferMm: "Predné skosenie",
+  backChamferMm: "Zadné skosenie",
+  chamferMm: "Skosenie",
+  angleDeg: "Uhol",
+  drawerBackGapMm: "Zadná vôľa zásuvky",
+  side: "Strana",
+  opened: "Otvoriť dvierka a zásuvky",
+  frontType: "Typ čela",
+  glassFronts: "Presklené čelá",
+  hasCutleryInnerDrawer: "Vnútorná príborová zásuvka",
+  tallSlotCount: "Počet vnútorných sekcií",
+  tallStackMode: "Skladba vysokej skrinky",
   hasDoors: "Dvierka",
   upperDepthMm: "H\u013abka horn\u00fdch modulov (mm)",
   __fridgeHandleSplitScaleVersion: "Verzia delenia úchytky chladničky",
@@ -1079,6 +1137,16 @@ export function hasSystemTranslation(language: AppLanguage, key: string): boolea
 }
 
 export function translateParamLabel(key: string): string {
+  const drawer = key.match(/^drawer(\d+)FrontHeightMm$/);
+  const slot = key.match(/^tallSlot(\d+)(HeightMm|OffsetMm|Type)$/);
+  const language = getCurrentLanguage();
+  if (drawer) return language === "sk" ? `Výška čela zásuvky ${drawer[1]}` : language === "cs" ? `Výška čela zásuvky ${drawer[1]}` : `Drawer ${drawer[1]} front height`;
+  if (slot) {
+    const labels = language === "sk" ? { HeightMm: "Výška sekcie", OffsetMm: "Odsadenie sekcie", Type: "Typ sekcie" }
+      : language === "cs" ? { HeightMm: "Výška sekce", OffsetMm: "Odsazení sekce", Type: "Typ sekce" }
+      : { HeightMm: "Section height", OffsetMm: "Section offset", Type: "Section type" };
+    return `${labels[slot[2] as keyof typeof labels]} ${slot[1]}`;
+  }
   if (getCurrentLanguage() === "en") return fallbackFormatKeyLabel(key);
   if (getCurrentLanguage() === "cs") return fallbackFormatKeyLabel(key);
   return PARAM_LABELS_SK_OVERRIDES[key] ?? PARAM_LABELS_SK[key] ?? fallbackFormatKeyLabel(key);

@@ -1,5 +1,5 @@
 import type { ClientCatalog } from "../../catalog/catalog-types";
-import type { FurnQuoteModulePackage, ModuleParameterDefinition } from "../module-package-types";
+import type { FurnQuoteModulePackage, ModuleParameterDefinition, ModuleUiDefinition } from "../module-package-types";
 import type { ModuleControlsApi, ModuleControlsArgs } from "../../../modules/registry";
 import { getModuleDescriptor } from "../../../modules/registry";
 import { describeFwmModuleHeight } from "../../../modules/fwmFurniture/heightPresentation";
@@ -82,6 +82,11 @@ function findParameter(modulePackage: FurnQuoteModulePackage, key: string): Modu
   return modulePackage.parameters.parameters.find((parameter) => parameter.key === key) ?? null;
 }
 
+function isInternalSettingsParameter(parameter: ModuleParameterDefinition) {
+  return parameter.uiVisibility === "internal" || parameter.uiVisibility === "technical" ||
+    ["type", "moduleType", "typeId", "modulePackageId", "packageHash"].includes(parameter.key) || /MaterialGroup$/.test(parameter.key);
+}
+
 function sortedControls(modulePackage: FurnQuoteModulePackage) {
   return [...modulePackage.ui.controls].sort((a, b) => {
     const groupA = modulePackage.ui.groups.find((group) => group.id === a.groupId)?.order ?? 0;
@@ -131,13 +136,14 @@ function withParameterPresetControl(
 
   const createButton = document.createElement("button");
   createButton.type = "button";
-  createButton.textContent = "Vytvoriť preset";
+  createButton.textContent = t("Create preset");
   createButton.disabled = !args.createParameterPreset;
   createButton.className = "module-parameter-preset-create";
 
   createButton.addEventListener("click", () => {
     if (!args.createParameterPreset) return;
     openCreatePresetDialog({
+      host: args.presetDialogHost,
       onSave: async ({ name, note }) => {
         const result = await args.createParameterPreset?.({
           modulePackage,
@@ -153,7 +159,7 @@ function withParameterPresetControl(
   });
 
   row.append(presetPicker.element, createButton);
-  container.prepend(row);
+  (args.presetHost ?? container).prepend(row);
 
   return {
     syncFromParams: () => {
@@ -166,7 +172,7 @@ function withParameterPresetControl(
   };
 }
 
-function openCreatePresetDialog(args: { onSave: (values: { name: string; note: string }) => Promise<void> }) {
+function openCreatePresetDialog(args: { host?: HTMLElement; onSave: (values: { name: string; note: string }) => Promise<void> }) {
   const backdrop = document.createElement("div");
   backdrop.style.position = "fixed";
   backdrop.style.inset = "0";
@@ -174,6 +180,10 @@ function openCreatePresetDialog(args: { onSave: (values: { name: string; note: s
   backdrop.style.background = "rgba(15, 23, 42, 0.35)";
   backdrop.style.display = "grid";
   backdrop.style.placeItems = "center";
+  backdrop.dataset.presetDialog = "true";
+  backdrop.setAttribute("role", "dialog");
+  backdrop.setAttribute("aria-modal", "true");
+  backdrop.setAttribute("aria-label", t("Create preset"));
 
   const panel = document.createElement("form");
   panel.style.width = "min(420px, calc(100vw - 32px))";
@@ -186,16 +196,18 @@ function openCreatePresetDialog(args: { onSave: (values: { name: string; note: s
   panel.style.gap = "12px";
 
   const title = document.createElement("strong");
-  title.textContent = "Create preset";
+  title.textContent = t("Create preset");
 
   const name = document.createElement("input");
   name.type = "text";
   name.required = true;
-  name.placeholder = "Name";
+  name.placeholder = t("Name");
+  name.setAttribute("aria-label", t("Name"));
 
   const note = document.createElement("textarea");
   note.required = true;
-  note.placeholder = "Note";
+  note.placeholder = t("Note");
+  note.setAttribute("aria-label", t("Note"));
   note.rows = 4;
   note.style.resize = "vertical";
 
@@ -211,21 +223,32 @@ function openCreatePresetDialog(args: { onSave: (values: { name: string; note: s
 
   const cancel = document.createElement("button");
   cancel.type = "button";
-  cancel.textContent = "Cancel";
+  cancel.textContent = t("Cancel");
   const save = document.createElement("button");
   save.type = "submit";
-  save.textContent = "Save";
+  save.textContent = t("Save");
   actions.append(cancel, save);
 
   panel.append(title, name, note, error, actions);
   backdrop.appendChild(panel);
-  document.body.appendChild(backdrop);
+  const previousFocus = document.activeElement;
+  (args.host ?? document.body).appendChild(backdrop);
   name.focus();
 
-  const close = () => backdrop.remove();
+  const close = () => { backdrop.remove(); if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus(); };
+  backdrop.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (event.key === "Escape") { event.preventDefault(); if (!save.disabled) close(); }
+    if (event.key === "Tab") {
+      const items = [name, note, cancel, save].filter((item) => !item.disabled);
+      const index = items.indexOf(document.activeElement as typeof name);
+      if (event.shiftKey && index <= 0) { event.preventDefault(); items.at(-1)?.focus(); }
+      else if (!event.shiftKey && index === items.length - 1) { event.preventDefault(); items[0]?.focus(); }
+    }
+  });
   cancel.addEventListener("click", close);
   backdrop.addEventListener("pointerdown", (event) => {
-    if (event.target === backdrop) close();
+    if (event.target === backdrop && !save.disabled) close();
   });
   panel.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -234,16 +257,18 @@ function openCreatePresetDialog(args: { onSave: (values: { name: string; note: s
       note: note.value.trim()
     };
     if (!values.name || !values.note) {
-      error.textContent = "Name and note are required.";
+      error.textContent = t("Name and note are required.");
       return;
     }
     save.disabled = true;
+    cancel.disabled = true;
     error.textContent = "";
     try {
       await args.onSave(values);
       close();
     } catch (saveError) {
       save.disabled = false;
+      cancel.disabled = false;
       error.textContent = saveError instanceof Error ? saveError.message : "Preset save failed.";
     }
   });
@@ -300,19 +325,30 @@ export function createModulePackageControls(
     groups.set(group.id, section);
   }
 
-  for (const control of sortedControls(modulePackage)) {
+  const controls = sortedControls(modulePackage);
+  if (args.userParametersOnly) {
+    for (const parameter of modulePackage.parameters.parameters) {
+      if (parameter.uiVisibility !== "user" || isInternalSettingsParameter(parameter) || controls.some((control) => control.parameterKey === parameter.key)) continue;
+      const controlType: ModuleUiDefinition["controls"][number]["controlType"] = parameter.type === "boolean" ? "checkbox"
+        : parameter.options?.length ? "select" : parameter.type === "number" ? "number" : "text";
+      controls.push({ parameterKey: parameter.key, groupId: parameter.group, controlType });
+    }
+  }
+  for (const control of controls) {
     const parameter = findParameter(modulePackage, control.parameterKey);
     if (!parameter) continue;
+    if (args.userParametersOnly && isInternalSettingsParameter(parameter)) continue;
     const host = control.groupId ? groups.get(control.groupId) ?? container : container;
     const row = document.createElement("label");
     row.className = "module-package-control";
+    row.dataset.parameterKey = parameter.key;
     row.style.display = "grid";
     row.style.gap = "4px";
     row.style.marginTop = "8px";
 
     const label = document.createElement("span");
     const heightPresentation = parameter.key === "height" ? describeFwmModuleHeight({ ...params, type: modulePackage.module.moduleType }) : null;
-    const labelText = heightPresentation?.label ?? (translateParamLabel(parameter.key) || t(parameter.label));
+    const labelText = (heightPresentation?.label ?? (translateParamLabel(parameter.key) || t(parameter.label))).replace(/\s*\(mm\)\s*$/, "");
     label.textContent = parameter.unit ? `${labelText} (${parameter.unit})` : labelText;
     if (heightPresentation) row.title = heightPresentation.help;
     row.appendChild(label);
@@ -338,6 +374,12 @@ export function createModulePackageControls(
     }
 
     const sync = () => {
+      if (args.userParametersOnly) {
+        const slot = parameter.key.match(/^tallSlot(\d+)/);
+        const drawer = parameter.key.match(/^drawer(\d+)FrontHeightMm$/);
+        row.hidden = Boolean((slot && Number(slot[1]) > Number(params.tallSlotCount ?? 0)) || (drawer && Number(drawer[1]) > Number(params.drawerCount ?? 0)));
+        input.disabled = row.hidden;
+      }
       if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = Boolean(readParameterValue(params, parameter));
       else input.value = displayValue(readParameterValue(params, parameter));
     };
@@ -355,7 +397,10 @@ export function createModulePackageControls(
     row.appendChild(input);
     host.appendChild(row);
     records.push({ key: parameter.key, input, row, sync });
+    sync();
   }
+
+  if (args.userParametersOnly) for (const section of groups.values()) if (!section.querySelector("[data-parameter-key]")) section.remove();
 
   const api: ModuleControlsApi = {
     syncFromParams: () => records.forEach((record) => record.sync()),
