@@ -11,6 +11,7 @@ import {
 } from "./module-package-persistence-compatibility";
 import type { ModulePackageRepository, SaveModulePackageOptions } from "./module-package-repository";
 import { systemModulePackageTemplates } from "../../system/module-packages";
+import { createPostgresModuleParameterPreset } from "./module-parameter-preset-postgres";
 
 type PackageRow = {
   package: unknown;
@@ -113,6 +114,7 @@ export function createPostgresModulePackageRepository(args: {
 
   return {
     savePackage,
+    createParameterPreset: (ctx, input) => createPostgresModuleParameterPreset(args, ctx, input),
     async getPackage(ctx, modulePackageId) {
       await ensureSystemPackages(ctx);
       return withSchemaClient(args.connectionString, args.schema, async (client) => {

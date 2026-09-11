@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { verifyModuleParameterPresetDatabase } from "./verifyModuleParameterPresetDatabase";
 import { pathToFileURL } from "node:url";
 import { Pool, type PoolClient } from "pg";
 import { quotePgIdentifier } from "../src/core/database/database-config";
@@ -233,6 +234,7 @@ export async function seedSyntheticArcigyData(url: string): Promise<void> {
       throw error;
     }
   });
+  await verifyModuleParameterPresetDatabase(url);
 }
 
 export async function collectRestoreDrillEvidence(url: string): Promise<RestoreDrillEvidence> {
