@@ -506,6 +506,21 @@ describe("tenant module package import", () => {
     expect(await packageRepository.getPackage(ctxB, source.module.modulePackageId)).toBeNull();
   }, 30_000);
 
+  it("preserves client catalog identities and commercial overrides when saving a preset", async () => {
+    const packageRepository = createFileModulePackageRepository(root);
+    const catalogRepository = createSystemSeedClientCatalogRepository();
+    const service = createModulePackageService({ context: ctxA, packageRepository, catalogRepository });
+    const imported = await service.importPackage({ package: makePackage() });
+    const catalog = await catalogRepository.getCatalog(ctxA);
+    const existing = catalog.modules.find(item => item.modulePackageId === imported.modulePackage.module.modulePackageId)!;
+    Object.assign(existing, { id: "saved_client_catalog_identity", name: "Client cabinet label", enabled: false, pricingRef: Object.keys(catalog.priceList.prices)[0] });
+    await catalogRepository.saveCatalog(ctxA, catalog);
+    const before = structuredClone(catalog.modules);
+    const result = await service.createParameterPreset({ modulePackageId: imported.modulePackage.module.modulePackageId, name: "Configuration", note: "Preserve client catalog", parameters: { handle: "component.handle.bar" } });
+    const after = await catalogRepository.getCatalog(ctxA);
+    expect(after.modules).toEqual(before.map(item => item.modulePackageId === imported.modulePackage.module.modulePackageId ? { ...item, packageHash: result.modulePackage.integrity.packageHash } : item));
+  }, 30_000);
+
   it("keeps UI visibility scoped to ClientCatalog enabled modules", async () => {
     const modulePackage = makePackage();
     const catalog = makeCatalog();

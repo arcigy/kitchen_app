@@ -9,8 +9,11 @@ import type { FurnQuoteModulePackagePayload, ModulePackageStoredMeta } from "./m
 import type { FurnQuoteModulePackage } from "./module-package-types";
 import { computeModulePackageHash } from "./module-package-file";
 import { validateFurnQuoteModulePackage } from "./module-package-validation";
+import type { CreateModuleParameterPresetInput, CreateModuleParameterPresetResult } from "./module-parameter-presets";
 
 export type ModulePackageRepository = {
+  /** Atomic package + catalog update, implemented by the production PostgreSQL repository. */
+  createParameterPreset?(ctx: ClientContext, input: CreateModuleParameterPresetInput): Promise<CreateModuleParameterPresetResult>;
   savePackage(ctx: ClientContext, modulePackage: FurnQuoteModulePackage, options?: SaveModulePackageOptions): Promise<FurnQuoteModulePackage>;
   getPackage(ctx: ClientContext, modulePackageId: string): Promise<FurnQuoteModulePackage | null>;
   listPackages(ctx: ClientContext): Promise<FurnQuoteModulePackage[]>;
