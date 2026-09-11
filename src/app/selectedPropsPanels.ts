@@ -31,6 +31,9 @@ import { refreshSelectionHighlights } from "./selectionController";
 import { createButtonElement, createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement } from "./propsPanelElements";
 import { createReplacementModuleParams, listCompatibleModuleTypeOptions } from "./moduleTypeReplacement";
 import { createModuleTypePicker } from "./moduleTypePicker";
+import { createModuleParameterPresetSaver } from "./moduleParameterPresetService";
+import { commitModuleSettingsToLayout } from "./moduleSettingsCommit";
+import { t } from "../i18n";
 import {
   applyWallTypeToParams,
   CUSTOM_WALL_TYPE_ID,
@@ -1104,6 +1107,26 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
         }
       });
       s.appendChild(typePicker);
+      const advanced = createButtonElement(t("Advanced settings"));
+      advanced.addEventListener("click", async () => {
+        advanced.disabled = true;
+        try {
+          const { openModuleSettings } = await import("./moduleSettingsController");
+          openModuleSettings({
+            modulePackage, parameters: inst.params, clientCatalog: ctx.clientCatalog,
+            commit: (candidate, baseline) => commitModuleSettingsToLayout({
+              state: S, findInstance, rebuildInstance, commitHistory
+            }, inst.id, candidate, baseline),
+            onClose: mountProps
+          });
+        } catch {
+          const failure = document.createElement("p");
+          failure.textContent = t("3D preview could not be created.");
+          failure.setAttribute("role", "alert"); s.appendChild(failure);
+        } finally { advanced.disabled = false; }
+      });
+      advanced.dataset.openModuleSettings = "true";
+      s.appendChild(advanced);
     }
 
     const heightPresentation = describeFwmModuleHeight(inst.params, inst.root.position.y * 1000);
@@ -1145,32 +1168,9 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
         textInputCommitMode: "explicit",
         commitBoundary: args.propertiesEl,
         createParameterPreset: async ({ modulePackage: activePackage, parameters, name, note }) => {
-          const response = await fetch(`/api/modules/${encodeURIComponent(activePackage.module.modulePackageId)}/parameter-presets`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, note, parameters })
-          });
-          const payload = await response.json().catch(() => null) as {
-            ok?: boolean;
-            error?: string;
-            modulePackage?: FurnQuoteModulePackage;
-            catalogModule?: ClientCatalog["modules"][number];
-            preset?: { presetId?: string };
-          } | null;
-          if (!response.ok || !payload?.ok || !payload.modulePackage || !payload.preset?.presetId) {
-            throw new Error(payload?.error || "Preset save failed.");
-          }
-          Object.assign(activePackage, payload.modulePackage);
-          if (payload.catalogModule) {
-            const moduleIndex = ctx.clientCatalog.modules.findIndex((module) =>
-              module.modulePackageId === payload.catalogModule?.modulePackageId ||
-              module.moduleType === payload.catalogModule?.moduleType
-            );
-            if (moduleIndex >= 0) ctx.clientCatalog.modules[moduleIndex] = payload.catalogModule;
-            else ctx.clientCatalog.modules.push(payload.catalogModule);
-          }
-          inst.params.packageHash = payload.modulePackage.integrity.packageHash;
-          return { modulePackage: payload.modulePackage, presetId: payload.preset.presetId };
+          const result = await createModuleParameterPresetSaver(ctx.clientCatalog)({ modulePackage: activePackage, parameters, name, note });
+          if (result) inst.params.packageHash = result.modulePackage.integrity.packageHash;
+          return result;
         }
       });
     }

@@ -43,7 +43,7 @@
     "ops:plan-image-retention": "tsx scripts/caproverImageRetentionPlan.ts",
     "ops:storage-manifest": "tsx scripts/storageTreeManifest.ts",
     "test:kitchen-module-edge-cases": "node scripts/testKitchenModuleEdgeCases.mjs",
-    "test:module-properties": "node scripts/testModulePropertiesUi.mjs",
+    "test:module-properties": "node scripts/testModulePropertiesUi.mjs && node scripts/testModuleSettingsUi.mjs",
     "test:portable-material-live": "node scripts/testPortableMaterialLive.mjs",
     "test:material-proof": "node scripts/testMaterialProofMode.mjs",
     "test:kitchen-module-placement-contract": "tsx scripts/auditKitchenModulePlacementContract.ts --system --module-types=fwm_catalog_base_corner,fwm_catalog_base_doors,fwm_catalog_base_drawers,fwm_catalog_base_open_end,fwm_catalog_tall_cabinet,fwm_tall_open_end,fwm_catalog_wall_cabinet,fwm_catalog_wall_open_end",

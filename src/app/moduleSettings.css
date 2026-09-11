@@ -1,0 +1,38 @@
+.module-settings { width: calc(100vw - 36px); max-width: 1800px; height: calc(100dvh - 36px); max-height: none; padding: 0; border: 1px solid #cbd5e1; border-radius: 12px; color: #172334; background: #fff; box-shadow: 0 24px 90px #0f172a66; }
+.module-settings::backdrop,.module-settings-confirm::backdrop { background: #18243470; }
+.module-settings-shell { height: 100%; display: grid; grid-template-rows: auto minmax(0,1fr) auto; }
+.module-settings-header { padding: 18px 24px 12px; border-bottom: 1px solid #dce2e9; }
+.module-settings-header h2 { font-size: 22px; margin: 0 0 5px; }
+.module-settings-header p,.module-settings-height { color: #526174; margin: 6px 0; font-size: 14px; }
+.module-settings-header small { display: block; margin-top: 6px; color: #526174; }
+.module-settings-presets > .module-package-control { display: flex !important; align-items: end; gap: 12px; }
+.module-settings-presets .module-parameter-preset-picker { width: min(440px,65vw); position: relative; }
+.module-settings-presets .module-parameter-preset-options { position: absolute; z-index: 30; width: min(600px,80vw); max-height: 40vh; overflow: auto; padding: 10px; background: white; border: 1px solid #cbd5e1; box-shadow: 0 12px 30px #17233422; }
+.module-settings-body { display: grid; grid-template-columns: minmax(0,1fr) minmax(320px,35%); min-height: 0; }
+.module-settings-preview { display: grid; grid-template-rows: auto minmax(0,1fr); background: #f4f5f6; min-width: 0; min-height: 0; }
+.module-settings-view-tools { display: flex; gap: 8px; padding: 10px 14px; }
+.module-settings-viewport { position: relative; min-height: 180px; overflow: hidden; }
+.module-settings-viewport > canvas,.module-settings-dimension-labels { position: absolute; inset: 0; width: 100%; height: 100%; }
+.module-settings-dimensions,.module-settings-dimension-labels { pointer-events: none; }
+.module-settings-side { overflow: auto; padding: 14px 22px 24px; border-left: 1px solid #dce2e9; }
+.module-settings-fields { font-size: 15px; }
+.module-settings .module-package-control > span,.module-settings-fields label,.module-settings-fields .muted { color: #526174; font-size: 14px; }
+.module-settings-fields input:not([type=checkbox]),.module-settings-fields select { width: 100%; min-height: 38px; font-size: 16px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #172334; box-sizing: border-box; }
+.module-settings-fields .module-package-control-group > .muted { font-size: 16px; font-weight: 650; color: #172334; padding-top: 12px; }
+.module-settings-fields .is-highlighted { background: #eaf2ff; outline: 2px solid #93b7ff; outline-offset: 4px; border-radius: 4px; }
+.module-settings-fields [hidden] { display: none !important; }
+.module-settings button,.module-settings-confirm button { cursor: pointer; min-height: 34px; padding: 6px 12px; background: white; color: #172334; border: 1px solid #bdc9d7; border-radius: 6px; font-size: 14px; }
+.module-settings button:disabled { opacity: .45; cursor: default; }
+.module-settings button:focus-visible,.module-settings input:focus-visible,.module-settings select:focus-visible { outline: 3px solid #82adf3; outline-offset: 2px; }
+.module-settings .module-settings-dimension { position: absolute; pointer-events: auto; transform: translate(-50%,-50%); white-space: nowrap; min-height: 28px; padding: 2px 6px; border-color: transparent; background: #f4f5f6ed; font: 17px serif; }
+.module-settings .module-settings-dimension.is-active { color: #1d4ed8; border-color: #80a8ef; background: #eaf2ff; }
+.module-settings-dimension-input { position: absolute; pointer-events: auto; transform: translate(-50%,-50%); width: 120px; font-size: 17px; padding: 5px; background: white; border: 2px solid #1d4ed8; border-radius: 4px; }
+.module-settings-footer { padding: 12px 24px; border-top: 1px solid #dce2e9; display: grid; grid-template-columns: 1fr auto; gap: 6px 18px; }
+.module-settings-status { font-size: 14px; align-self: center; }
+.module-settings-error { color: #b42318; font-size: 14px; white-space: pre-line; grid-column: 1; }
+.module-settings-error:empty { display: none; }
+.module-settings-actions { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 8px; align-items: center; }
+.module-settings .primary { color: white; background: #1d4ed8; border-color: #1d4ed8; }
+.module-settings-confirm { max-width: 470px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 22px; background: #fff; color: #172334; }
+.module-settings-confirm button { margin: 5px; }
+@media (max-width: 850px) { .module-settings { width: calc(100vw - 12px); height: calc(100dvh - 12px); } .module-settings-body { grid-template-columns: 1fr; grid-template-rows: minmax(240px,55%) minmax(0,1fr); } .module-settings-side { border-left: 0; border-top: 1px solid #dce2e9; } .module-settings-header { padding: 12px; } .module-settings-header h2 { font-size: 18px; } .module-settings-footer { padding: 10px; grid-template-columns: 1fr; } .module-settings-actions { grid-column: 1; grid-row: auto; justify-content: end; } }
