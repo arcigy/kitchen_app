@@ -1,95 +1,54 @@
 import sharp from "sharp";
 import { createHash } from "node:crypto";
 import { fetchExternalBytes } from "./external-http";
+import { supplierPreviewImageUrl } from "../core/supplier-bridge/supplier-preview-image";
 
-const DEMOS_IMAGE_HOSTS = new Set([
-  "www.demos24plus.com",
-  "www.demos-trade.cz",
-  "www.demos-trade.sk"
-]);
 const IMAGE_TIMEOUT_MS = 8_000;
 const IMAGE_MAX_BYTES = 4 * 1024 * 1024;
 const COLOR_CACHE_TTL_MS = 15 * 60 * 1_000;
 const COLOR_CACHE_MAX_ENTRIES = 250;
 const SAMPLE_SIZE = 96;
-const SAMPLE_POINTS = [
-  [0.5, 0.5],
-  [0.25, 0.25],
-  [0.75, 0.25],
-  [0.25, 0.75],
-  [0.75, 0.75]
-] as const;
-
 type CachedPreviewColor = { hex: string; expiresAt: number };
 
 const previewColorCache = new Map<string, CachedPreviewColor>();
 
 export class SupplierPreviewImageError extends Error {}
 
-function supportedDemosImageUrl(value: string): URL | null {
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== "https:" || !DEMOS_IMAGE_HOSTS.has(parsed.hostname) || !parsed.pathname.startsWith("/content/images/product/")) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
 function rgbToHex(red: number, green: number, blue: number): string {
   return `#${[red, green, blue].map((value) => Math.round(value).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
 }
 
-function averagePatch(data: Buffer, width: number, height: number, centerX: number, centerY: number): string {
-  const radius = Math.max(3, Math.round(Math.min(width, height) * 0.08));
-  const x0 = Math.max(0, Math.round(centerX * width) - radius);
-  const x1 = Math.min(width - 1, Math.round(centerX * width) + radius);
-  const y0 = Math.max(0, Math.round(centerY * height) - radius);
-  const y1 = Math.min(height - 1, Math.round(centerY * height) + radius);
-  let red = 0;
-  let green = 0;
-  let blue = 0;
-  let count = 0;
-  let fallbackRed = 0;
-  let fallbackGreen = 0;
-  let fallbackBlue = 0;
-  let fallbackCount = 0;
-
-  for (let y = y0; y <= y1; y += 1) {
-    for (let x = x0; x <= x1; x += 1) {
-      const index = (y * width + x) * 3;
-      const r = data[index] ?? 0;
-      const g = data[index + 1] ?? 0;
-      const b = data[index + 2] ?? 0;
-      fallbackRed += r;
-      fallbackGreen += g;
-      fallbackBlue += b;
-      fallbackCount += 1;
-
-      // Product photos often have a white page background. Prefer pixels
-      // that contain board detail, but keep a white board valid as fallback.
-      const luminance = (r + g + b) / 3;
-      const chroma = Math.max(r, g, b) - Math.min(r, g, b);
-      if (luminance > 244 && chroma < 9) continue;
-      red += r;
-      green += g;
-      blue += b;
-      count += 1;
+/** Average the central surface, preserving white decors and ignoring transparency.
+ * Resize inside (not cover) keeps narrow edge strips and wide swatches intact.
+ */
+function averageSurface(data: Buffer, width: number, height: number): string {
+  const totals = [0, 0, 0];
+  const foreground = [0, 0, 0];
+  let weight = 0;
+  let foregroundWeight = 0;
+  const insetX = Math.floor(width * 0.1);
+  const insetY = Math.floor(height * 0.1);
+  for (let y = insetY; y < height - insetY; y += 1) {
+    for (let x = insetX; x < width - insetX; x += 1) {
+      const index = (y * width + x) * 4;
+      const alpha = (data[index + 3] ?? 0) / 255;
+      if (alpha < 0.1) continue;
+      const rgb = [data[index]!, data[index + 1]!, data[index + 2]!];
+      const background = Math.min(...rgb) > 244 && Math.max(...rgb) - Math.min(...rgb) < 9;
+      weight += alpha;
+      for (let channel = 0; channel < 3; channel += 1) totals[channel]! += rgb[channel]! * alpha;
+      if (!background) {
+        foregroundWeight += alpha;
+        for (let channel = 0; channel < 3; channel += 1) foreground[channel]! += rgb[channel]! * alpha;
+      }
     }
   }
-
-  if (count > 0) return rgbToHex(red / count, green / count, blue / count);
-  if (fallbackCount > 0) return rgbToHex(fallbackRed / fallbackCount, fallbackGreen / fallbackCount, fallbackBlue / fallbackCount);
-  throw new SupplierPreviewImageError("Supplier preview image contains no readable pixels.");
-}
-
-function averageHex(colors: readonly string[]): string {
-  const totals = colors.reduce((sum, hex) => ({
-    red: sum.red + Number.parseInt(hex.slice(1, 3), 16),
-    green: sum.green + Number.parseInt(hex.slice(3, 5), 16),
-    blue: sum.blue + Number.parseInt(hex.slice(5, 7), 16)
-  }), { red: 0, green: 0, blue: 0 });
-  return rgbToHex(totals.red / colors.length, totals.green / colors.length, totals.blue / colors.length);
+  if (!weight) throw new SupplierPreviewImageError("Supplier preview image contains no visible pixels.");
+  // Do not let a handful of shadows/dust turn a white swatch into a dark colour.
+  const useForeground = foregroundWeight / weight > 0.2;
+  const channels = useForeground ? foreground : totals;
+  const divisor = useForeground ? foregroundWeight : weight;
+  return rgbToHex(channels[0]! / divisor, channels[1]! / divisor, channels[2]! / divisor);
 }
 
 function cachedColor(url: string, now: number): string | null {
@@ -100,9 +59,9 @@ function cachedColor(url: string, now: number): string | null {
   return null;
 }
 
-function previewCacheKey(url: URL): string {
+function previewCacheKey(url: URL, supplierId: string, scope: string): string {
   // Keep repeated capture fast without retaining a supplier image URL.
-  return createHash("sha256").update(url.toString()).digest("hex");
+  return createHash("sha256").update(JSON.stringify([scope, supplierId, url.toString()])).digest("hex");
 }
 
 function storeColor(url: string, hex: string, now: number): void {
@@ -118,42 +77,45 @@ function storeColor(url: string, hex: string, now: number): void {
  * colour, then clears the image buffers. No picture URL, byte array or file is
  * persisted; only the small colour result may live in the process cache.
  */
-export async function resolveDemosPreviewImageColor(imageUrl: string, options: { fetchImpl?: typeof fetch; now?: number } = {}): Promise<string> {
-  const parsed = supportedDemosImageUrl(imageUrl);
-  if (!parsed) throw new SupplierPreviewImageError("Unsupported Démos preview image URL.");
+export async function resolveSupplierPreviewImageColor(supplierId: string, imageUrl: string, options: { fetchImpl?: typeof fetch; now?: number; cacheScope?: string } = {}): Promise<string> {
+  const safeUrl = supplierPreviewImageUrl(supplierId, imageUrl);
+  if (!safeUrl) throw new SupplierPreviewImageError("Unsupported supplier preview image URL.");
+  const parsed = new URL(safeUrl);
   const now = options.now ?? Date.now();
-  const cacheKey = previewCacheKey(parsed);
+  const cacheKey = previewCacheKey(parsed, supplierId, options.cacheScope ?? "");
   const cached = cachedColor(cacheKey, now);
   if (cached) return cached;
 
   let source: Uint8Array | null = null;
   let pixels: Buffer | null = null;
   try {
-    const external = await fetchExternalBytes(parsed, { headers: { Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8" } }, {
+    const external = await fetchExternalBytes(parsed, { headers: { Accept: "image/avif,image/webp,image/png,image/jpeg,image/gif" } }, {
       timeoutMs: IMAGE_TIMEOUT_MS,
       maxBytes: IMAGE_MAX_BYTES,
       fetchImpl: options.fetchImpl
     });
     source = external.body;
-    if (!external.response.ok) throw new SupplierPreviewImageError(`Démos preview image request failed: ${external.response.status}.`);
+    if (!external.response.ok) throw new SupplierPreviewImageError(`Supplier preview image request failed: ${external.response.status}.`);
     if (!(external.response.headers.get("content-type") ?? "").toLowerCase().startsWith("image/")) {
-      throw new SupplierPreviewImageError("Démos preview response is not an image.");
+      throw new SupplierPreviewImageError("Supplier preview response is not an image.");
     }
-    const decoded = await sharp(source, { failOn: "none", limitInputPixels: 16_000_000 })
-      .resize(SAMPLE_SIZE, SAMPLE_SIZE, { fit: "cover", withoutEnlargement: true })
-      .removeAlpha()
+    const decoded = await sharp(source, { failOn: "error", limitInputPixels: 16_000_000 })
+      .rotate()
+      .resize(SAMPLE_SIZE, SAMPLE_SIZE, { fit: "inside", withoutEnlargement: true })
+      .toColourspace("srgb")
+      .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
     pixels = decoded.data;
-    if (!decoded.info.width || !decoded.info.height || decoded.info.channels !== 3) {
-      throw new SupplierPreviewImageError("Démos preview image could not be decoded as RGB.");
+    if (!decoded.info.width || !decoded.info.height || decoded.info.channels !== 4) {
+      throw new SupplierPreviewImageError("Supplier preview image could not be decoded as RGB.");
     }
-    const hex = averageHex(SAMPLE_POINTS.map(([x, y]) => averagePatch(pixels!, decoded.info.width, decoded.info.height, x, y)));
+    const hex = averageSurface(pixels, decoded.info.width, decoded.info.height);
     storeColor(cacheKey, hex, now);
     return hex;
   } catch (error) {
     if (error instanceof SupplierPreviewImageError) throw error;
-    throw new SupplierPreviewImageError("Démos preview image could not be processed.");
+    throw new SupplierPreviewImageError("Supplier preview image could not be processed.");
   } finally {
     // The supplier image is deliberately transient. It is not written to disk,
     // sent to a repository, or retained after colour extraction.
@@ -164,4 +126,9 @@ export async function resolveDemosPreviewImageColor(imageUrl: string, options: {
 
 export function clearDemosPreviewImageColorCacheForTest(): void {
   previewColorCache.clear();
+}
+
+/** Compatibility entry point for existing Démos callers. */
+export function resolveDemosPreviewImageColor(imageUrl: string, options: { fetchImpl?: typeof fetch; now?: number } = {}): Promise<string> {
+  return resolveSupplierPreviewImageColor("demos", imageUrl, options);
 }

@@ -7,7 +7,7 @@ import type {
 } from "../../../src/core/supplier-bridge/supplier-bridge-types";
 import { validateSupplierCandidateSubmission } from "../../../src/core/supplier-bridge/supplier-bridge-validation";
 import { parseSupplierSyncSessionView } from "../../../src/core/supplier-bridge/supplier-session-view-validation";
-import { isSupportedDemosPreviewImageUrl } from "./suppliers/demos/demosPreviewImageUrl";
+import { supplierPreviewImageUrl } from "../../../src/core/supplier-bridge/supplier-preview-image";
 
 export const BRIDGE_CHANNEL = "arcigy-supplier-bridge" as const;
 
@@ -176,17 +176,6 @@ function safeText(value: unknown, maxLength = 8_192): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= maxLength;
 }
 
-function safeDemosPreviewImageUrl(value: unknown, supplierId: string): string | null {
-  if (value === undefined || value === null) return null;
-  if (supplierId !== "demos" || typeof value !== "string" || value.length > 2_048) return null;
-  try {
-    const parsed = new URL(value);
-    return isSupportedDemosPreviewImageUrl(parsed.toString()) ? parsed.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
 export function parseArcigyWindowRequest(value: unknown): ArcigyWindowRequest | null {
   const input = record(value);
   if (!input || input.source !== "ARCIGY_WEB") return null;
@@ -317,7 +306,7 @@ export function parseSupplierPageCapture(value: unknown): SupplierPageCapture | 
         observedAt: candidate.observedAt,
         price: candidate.price ?? null
       });
-      const previewImageUrl = safeDemosPreviewImageUrl(candidate.previewImageUrl, input.supplierId);
+      const previewImageUrl = supplierPreviewImageUrl(input.supplierId, candidate.previewImageUrl);
       candidates.push({
         supplierProductCode: validated.supplierProductCode,
         normalizedProduct: validated.normalizedProduct,

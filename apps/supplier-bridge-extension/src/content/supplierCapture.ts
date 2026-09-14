@@ -40,7 +40,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, _sender, sendResponse: (resp
         expectedThicknessMm: message.expectedThicknessMm
       });
       if ((!extracted.ok && !capturesCurrentProduct) || !extracted.result) {
-        sendResponse({ ok: false, errorCode: extracted.errorCode ?? "EXACT_PRODUCT_EXTRACTION_FAILED", message: "Exact product extraction requires a verified real Czech fixture." });
+        sendResponse({ ok: false, errorCode: extracted.errorCode ?? "EXACT_PRODUCT_EXTRACTION_FAILED", message: extracted.errorCode === "SUPPLIER_VARIANT_REQUIRED" ? "Vyplňte v Bridge kód požadovaného rozmerového variantu zo stránky Hranipex." : "Produkt sa na otvorenej stránke nepodarilo jednoznačne nájsť." });
         return;
       }
       const result = extracted.result;
@@ -92,7 +92,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, _sender, sendResponse: (resp
         warnings: result.diagnostics.warnings,
         errorCode: result.exactIdMatch ? null : "SUPPLIER_PRODUCT_ID_MISMATCH"
       });
-      const errorCode = capturesCurrentProduct ? null : capture?.errorCode ?? "INVALID_EXACT_CAPTURE";
+      const errorCode = !capture ? "INVALID_EXACT_CAPTURE" : capturesCurrentProduct ? null : capture.errorCode;
       sendResponse(capture ? { ok: errorCode === null, capture: { ...capture, errorCode }, errorCode } : { ok: false, errorCode: "INVALID_EXACT_CAPTURE" });
       return;
     }

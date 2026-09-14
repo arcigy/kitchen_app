@@ -78,6 +78,26 @@ const input = {
 };
 
 describe("standalone extension assignment flow", () => {
+  it.each(["demos", "hranipex", "jaf_holz", "schachermayer"] as const)("derives and persists %s colour, leaving input unchanged and stopping on sampling failure", async (supplierId) => {
+    const { deps } = fixtures();
+    const snapshot = structuredClone(candidate);
+    const result = await runExtensionAssignment({ ...input, supplierId }, deps);
+    expect(result.previewColor.colorHex).toBe("#005595");
+    expect(deps.submitCandidate.mock.calls[0]?.[3].normalizedProduct.previewColorHex).toBe("#005595");
+    expect(candidate).toEqual(snapshot);
+    deps.submitCandidate.mockClear(); deps.confirmCandidate.mockClear();
+    deps.resolvePreviewColor.mockRejectedValue(new Error("image unavailable"));
+    await expect(runExtensionAssignment({ ...input, supplierId }, deps)).rejects.toThrow("image unavailable");
+    expect(deps.submitCandidate).not.toHaveBeenCalled();
+    expect(deps.confirmCandidate).not.toHaveBeenCalled();
+  });
+
+  it("samples an edge strip from Hranipex", async () => {
+    const { deps } = fixtures();
+    const result = await runExtensionAssignment({ ...input, supplierId: "hranipex", candidate: { ...candidate, normalizedProduct: { ...candidate.normalizedProduct, productType: "edge_band" } } }, deps);
+    expect(result.previewColor.status).toBe("derived");
+    expect(deps.resolvePreviewColor).toHaveBeenCalledOnce();
+  });
   it("creates one exact target, confirms it, and reads the updated material state", async () => {
     const { deps, materials } = fixtures();
     const result = await runExtensionAssignment(input, deps);

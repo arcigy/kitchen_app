@@ -26,7 +26,7 @@ import {
 import { clientSessionHeaderFromRequest } from "./requestAuthentication";
 import { SupplierBridgePersistenceError } from "../core/supplier-bridge/supplier-bridge-postgres-repository";
 import { supplierExpectedProductTypeForMaterialCategory } from "../core/supplier-bridge/supplier-target-contract";
-import { resolveDemosPreviewImageColor, SupplierPreviewImageError } from "./supplierBridgePreviewImage";
+import { resolveSupplierPreviewImageColor, SupplierPreviewImageError } from "./supplierBridgePreviewImage";
 import { logSupplierBridge } from "../core/supplier-bridge/supplier-bridge-logger";
 
 type SupplierBridgeEndpointDeps = {
@@ -337,11 +337,11 @@ export async function handleSupplierBridgeApi(
       const view = await service.getSessionForExtension(route.sessionId, accessToken);
       const item = view.items.find((candidate) => candidate.id === request.syncItemId);
       const supplierId = item?.exactLookup?.supplierId ?? view.session.supplierId;
-      if (!item || supplierId !== "demos") throw new SupplierBridgeServiceError("Démos preview image is not authorized for this material target.", 403);
+      if (!item || !["demos", "hranipex", "jaf_holz", "schachermayer"].includes(supplierId)) throw new SupplierBridgeServiceError("Supplier preview image is not authorized for this material target.", 403);
       const startedAt = Date.now();
       logSupplierBridge("info", { event: "preview_color_requested", sessionId: route.sessionId, syncItemId: item.id, status: "requested" });
       try {
-        const previewColorHex = await resolveDemosPreviewImageColor(request.imageUrl);
+        const previewColorHex = await resolveSupplierPreviewImageColor(supplierId, request.imageUrl, { cacheScope: view.session.tenantId });
         logSupplierBridge("info", { event: "preview_color_resolved", sessionId: route.sessionId, syncItemId: item.id, status: "derived", durationMs: Date.now() - startedAt, previewColorApplied: true });
         deps.sendJson(res, 200, { ok: true, previewColorHex });
       } catch (error) {

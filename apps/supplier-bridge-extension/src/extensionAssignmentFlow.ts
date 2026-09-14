@@ -1,3 +1,4 @@
+import { supplierProductUsesPreviewColor } from "../../../src/core/supplier-bridge/supplier-preview-image";
 import type { ProjectMaterialWarning, ProjectMaterialsView } from "../../../src/core/project-materials/project-material-types";
 import type { SupplierId } from "../../../src/core/supplier-bridge/supplier-bridge-types";
 import {
@@ -75,9 +76,9 @@ export async function runExtensionAssignment(
   // The debug supplier intentionally reuses the Démos backend contract, but it
   // does not serve Démos product images. Never turn that test-only mapping into
   // a production preview-image requirement.
-  const demosSurfaceMaterial = input.supplierId === "demos" && ["board", "worktop"].includes(input.candidate.normalizedProduct.productType ?? "");
-  if (demosSurfaceMaterial && !input.candidate.previewImageUrl) {
-    throw new SupplierPreviewColorRequiredError("Démos plošný materiál nemá overený produktový obrázok. Materiál nebol priradený, aby sa do modelu nezapísala nesprávna farba.");
+  const surfaceMaterial = !(__SUPPLIER_BRIDGE_DEBUG__ && input.supplierId === "mock-supplier") && supplierProductUsesPreviewColor(input.candidate.normalizedProduct.productType);
+  if (surfaceMaterial && !input.candidate.previewImageUrl) {
+    throw new SupplierPreviewColorRequiredError("Materiál nemá overený produktový obrázok. Materiál nebol priradený, aby sa do modelu nezapísala nesprávna farba.");
   }
   const creation = await deps.createSession(input.baseUrl, input.accessToken, input.projectId, supplierIdForBackend, {
     requestId: `extension-${deps.randomId()}`,
@@ -90,7 +91,7 @@ export async function runExtensionAssignment(
   const attachment = await deps.attachSession(input.baseUrl, creation.view.session.id, creation.bridgeToken);
   const item = attachment.view.items[0];
   if (!item || attachment.view.items.length !== 1) throw new Error("Bridge nevytvoril presne jeden cieľ.");
-  const previewColor = demosSurfaceMaterial
+  const previewColor = surfaceMaterial
     ? {
         status: "derived" as const,
         colorHex: await deps.resolvePreviewColor(

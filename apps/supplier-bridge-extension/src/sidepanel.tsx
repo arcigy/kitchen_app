@@ -1,3 +1,4 @@
+import { supplierProductUsesPreviewColor } from "../../../src/core/supplier-bridge/supplier-preview-image";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { ProjectMaterialScopeKind, ProjectMaterialsView } from "../../../src/core/project-materials/project-material-types";
@@ -62,6 +63,7 @@ function App(): React.JSX.Element {
   const [materials, setMaterials] = useState<ProjectMaterialsView | null>(null);
   const [suppliers, setSuppliers] = useState<ClientSupplierPortal[]>([]);
   const [supplierId, setSupplierId] = useState("");
+  const [variantCode, setVariantCode] = useState("");
   const [capture, setCapture] = useState<SupplierPageCapture | null>(null);
   const [scope, setScope] = useState<"general" | ProjectMaterialScopeKind>("general");
   const [busy, setBusy] = useState<string | null>(null);
@@ -185,7 +187,10 @@ function App(): React.JSX.Element {
             : target?.category === "runner" ? "drawer_system"
               : target && ["corpus", "front", "plinth", "back", "drawer_bottom"].includes(target.category) ? "board"
                 : "unknown";
-      const raw: unknown = await chrome.runtime.sendMessage({ channel: BRIDGE_CHANNEL, type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT", expectedProductType, expectedManufacturer: null, expectedThicknessMm: target?.expectedThicknessMm ?? null });
+      const requestedProductId = supplierId === "hranipex" ? variantCode.trim() : "";
+      const raw: unknown = await chrome.runtime.sendMessage({ channel: BRIDGE_CHANNEL,
+        ...(requestedProductId ? { type: "CAPTURE_EXACT_SUPPLIER_PRODUCT", requestedProductId } : { type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT" }),
+        expectedProductType, expectedManufacturer: null, expectedThicknessMm: target?.expectedThicknessMm ?? null });
       const response = parseBridgeRuntimeResponse(raw);
       if (!response?.ok || !response.capture) throw new Error(response?.message ?? response?.errorCode ?? copy("Produkt sa nepodarilo načítať.", "Produkt se nepodařilo načíst.", "The product could not be read."));
       if (response.capture.candidates.length !== 1) throw new Error(copy("Rozšírenie nerozpoznalo presne jeden produkt. Otvorte detail konkrétneho produktu a skúste to znova.", "Rozšíření nerozpoznalo právě jeden produkt. Otevřete detail konkrétního produktu a zkuste to znovu.", "The extension did not identify exactly one product. Open a specific product detail and try again."));
@@ -193,14 +198,14 @@ function App(): React.JSX.Element {
       setSupplierId(response.capture.supplierId);
       setCapture(response.capture);
       const captured = response.capture.candidates[0] ?? null;
-      const demosSurfaceMaterial = response.capture.supplierId === "demos" && ["board", "worktop"].includes(captured?.normalizedProduct.productType ?? "");
+      const surfaceMaterial = !(__SUPPLIER_BRIDGE_DEBUG__ && response.capture.supplierId === "mock-supplier") && supplierProductUsesPreviewColor(captured?.normalizedProduct.productType);
       const imageFound = Boolean(captured?.previewImageUrl);
-      setPreviewColor(demosSurfaceMaterial
+      setPreviewColor(surfaceMaterial
         ? { status: imageFound ? "image_found" : "missing", colorHex: null }
         : { status: "not_required", colorHex: null });
       setMessage(copy("Produkt načítaný. Teraz vyberte, kam ho chcete priradiť.", "Produkt je načten. Nyní vyberte, kam jej chcete přiřadit.", "Product loaded. Now choose where to assign it."));
-      setLastDebug({ stage: "capture", supplierId: response.capture.supplierId, productCode: captured?.supplierProductCode, productType: captured?.normalizedProduct.productType, previewImageFound: imageFound, previewColorStatus: demosSurfaceMaterial ? (imageFound ? "pending" : "missing") : "not_required" });
-      return captured;
+      setLastDebug({ stage: "capture", supplierId: response.capture.supplierId, productCode: captured?.supplierProductCode, productType: captured?.normalizedProduct.productType, previewImageFound: imageFound, previewColorStatus: surfaceMaterial ? (imageFound ? "pending" : "missing") : "not_required" });
+      return captured ? { candidate: captured, supplierId: response.capture.supplierId as SupplierId } : null;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : copy("Produkt sa nepodarilo načítať.", "Produkt se nepodařilo načíst.", "The product could not be read."));
       setPreviewColor({ status: "failed", colorHex: null });
@@ -212,15 +217,16 @@ function App(): React.JSX.Element {
   const assign = async (target: ExtensionMaterialTarget) => {
     if (!account || !selectedProject || assigningRef.current) return;
     assigningRef.current = true;
-    const candidate = await captureProduct(target);
-    if (!candidate) { assigningRef.current = false; return; }
-    if (target.assignedProductCode === candidate.supplierProductCode) {
+    const captured = await captureProduct(target);
+    if (!captured) { assigningRef.current = false; return; }
+    const { candidate } = captured;
+    if (target.assignedProductCode === candidate.supplierProductCode && !supplierProductUsesPreviewColor(candidate.normalizedProduct.productType)) {
       setError(null);
       setMessage(copy(`${target.assignedText} je už priradený k tejto časti.`, `${target.assignedText} už je přiřazen k této části.`, `${target.assignedText} is already assigned to this part.`));
       assigningRef.current = false;
       return;
     }
-    const context = { account, candidate, project: selectedProject, supplierId: supplierId as SupplierId };
+    const context = { account, candidate, project: selectedProject, supplierId: captured.supplierId };
     setBusy(target.id); setError(null); setMessage(null);
     const startedAt = new Date().toISOString();
     try {
@@ -260,7 +266,7 @@ function App(): React.JSX.Element {
       }
       const api = cause instanceof SupplierBridgeApiError ? { status: cause.status, requestId: cause.requestId, code: cause.code } : {};
       setError(cause instanceof Error ? cause.message : copy("Priradenie materiálu zlyhalo.", "Přiřazení materiálu se nezdařilo.", "Material assignment failed."));
-      if (context.supplierId === "demos" && ["board", "worktop"].includes(context.candidate.normalizedProduct.productType ?? "")) setPreviewColor({ status: "failed", colorHex: null });
+      if (!(__SUPPLIER_BRIDGE_DEBUG__ && context.supplierId === "mock-supplier") && supplierProductUsesPreviewColor(context.candidate.normalizedProduct.productType)) setPreviewColor({ status: "failed", colorHex: null });
       setLastDebug({ stage: "assign", startedAt, projectId: context.project.projectId, targetId: target.id, supplierId: context.supplierId, productCode: context.candidate.supplierProductCode, ...api, error: cause instanceof Error ? cause.message : String(cause) });
       await loadExtensionProjectMaterials(context.account.baseUrl, context.account.accessToken, context.project.projectId)
         .then(setMaterials)
@@ -353,8 +359,9 @@ function App(): React.JSX.Element {
     </section>
     <section className="card">
       <div className="eyebrow">{copy("2. Dodávateľ a produkt", "2. Dodavatel a produkt", "2. Supplier and product")}</div>
-      <label className="field">{copy("Dodávateľ", "Dodavatel", "Supplier")}<select disabled={busy !== null} value={supplierId} onChange={(event) => { setSupplierId(event.target.value); setCapture(null); setMessage(null); setError(null); }}>{suppliers.map((supplier) => <option key={supplier.supplierId} value={supplier.supplierId}>{supplier.displayName}</option>)}</select></label>
+      <label className="field">{copy("Dodávateľ", "Dodavatel", "Supplier")}<select disabled={busy !== null} value={supplierId} onChange={(event) => { setSupplierId(event.target.value); setVariantCode(""); setCapture(null); setPreviewColor(null); setMessage(null); setError(null); }}>{suppliers.map((supplier) => <option key={supplier.supplierId} value={supplier.supplierId}>{supplier.displayName}</option>)}</select></label>
       <div className="privacy-disclosure__actions"><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void openSupplier()}>{copy("Otvoriť dodávateľa", "Otevřít dodavatele", "Open supplier")}</button><button type="button" className="button button--secondary" disabled={busy !== null || !supplierId} onClick={() => void captureProduct()}>{busy === "capture" ? copy("Načítavam…", "Načítám…", "Loading…") : copy("Skontrolovať otvorený produkt", "Zkontrolovat otevřený produkt", "Check open product")}</button></div>
+      {supplierId === "hranipex" && <label className="field">{copy("Kód rozmerového variantu", "Kód rozměrové varianty", "Size variant code")}<input value={variantCode} maxLength={160} disabled={busy !== null} onChange={(event) => { setVariantCode(event.target.value); setCapture(null); setPreviewColor(null); }} /><small>{copy("Skopírujte kód pri požadovanom rozmere hrany na stránke Hranipex.", "Zkopírujte kód u požadovaného rozměru hrany na stránce Hranipex.", "Copy the code beside the required edge size on the Hranipex page.")}</small></label>}
       {selectedCandidate && <div className="notice notice--success"><strong>{selectedCandidate.normalizedProduct.displayName}</strong><br /><span>{selectedCandidate.supplierProductCode}</span>
         {previewColor?.status === "image_found" && <small className="preview-status" data-preview-color-status="image_found">{copy("Obrázok plošného materiálu bol nájdený. Farba sa odčíta pri priradení.", "Obrázek plošného materiálu byl nalezen. Barva se načte při přiřazení.", "The surface-material image was found. Its colour will be read on assignment.")}</small>}
         {previewColor?.status === "derived" && previewColor.colorHex && <small className="preview-status preview-status--derived" data-preview-color-status="derived"><span className="preview-status__swatch" style={{ backgroundColor: previewColor.colorHex }} />{copy(`Farba odčítaná z obrázka: ${previewColor.colorHex}`, `Barva načtená z obrázku: ${previewColor.colorHex}`, `Colour read from image: ${previewColor.colorHex}`)}</small>}

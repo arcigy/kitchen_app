@@ -1,3 +1,4 @@
+import { extractSupplierPreviewImage } from "../supplierPreviewImage";
 import { supplierPortals } from "../../config";
 import { waitForStableElement } from "../../content/waitForStableElement";
 import type { ExactIdSupplierAdapter, ExactProductExtractionContext, SupplierProductLookupResult } from "../exactAdapterTypes";
@@ -18,7 +19,7 @@ function extract(document: Document, context: ExactProductExtractionContext): Su
   const manufacturer = [...document.querySelectorAll<HTMLElement>("[role=combobox]")].map(cleanText).find((value) => /blum/i.test(value)) ?? context.expectedManufacturer;
   return {
     supplierId: "schachermayer", requestedProductId: context.requestedProductId, foundProductId: foundId, exactIdMatch: foundId === context.requestedProductId,
-    product: { name, manufacturer, manufacturerCode: null, productType: productTypeOrOther(context.expectedProductType, /pant|závěs/i.test(name) ? "hinge" : "hardware"), description: null, decorCode: null, surfaceCode: null, thicknessMm: null, dimensions: null, availability: availabilityFrom(availabilityText) },
+    product: { name, manufacturer, manufacturerCode: null, productType: productTypeOrOther(context.expectedProductType, /pant|závěs/i.test(name) ? "hinge" : "hardware"), description: null, decorCode: null, surfaceCode: null, previewImageUrl: extractSupplierPreviewImage(root, "schachermayer", origin, [".grid-article-image .p-galleria-item img", ".grid-article-image img"]), thicknessMm: null, dimensions: null, availability: availabilityFrom(availabilityText) },
     pricing: { customerPrice: amount === null ? null : { amount, currency: currencyFrom(priceText), basis: priceBasisFromUnit(unit), vatMode: "excluded", rawPriceText: priceText, rawUnitText: unit }, listPrice: null, discountPercent: null, normalizedPrice: amount === null ? null : { amount, unit: "piece", confidence: "exact", calculation: null } },
     source: { pageUrl: document.location?.href ?? origin, pageType: "product_detail", observedAt: new Date().toISOString(), adapterVersion: version }, diagnostics: { warnings: [], missingFields: [] }
   };
