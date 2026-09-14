@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DELFI_SHEET_MATERIAL_MARGIN_POLICY } from "../../custom/delfi/projectMargins";
 import {
   createDefaultProjectMarginSettingsState,
   projectMarginTargetId,
@@ -99,7 +100,97 @@ function initializedState(overrides: Partial<ProjectMarginSettingsState> = {}): 
   };
 }
 
+function buildDelfiMarginsView(
+  entries: Parameters<typeof buildProjectMarginsView>[0],
+  state: Parameters<typeof buildProjectMarginsView>[1],
+  options: Parameters<typeof buildProjectMarginsView>[2] = {}
+) {
+  return buildProjectMarginsView(entries, state, { ...options, sheetMaterialMargin: DELFI_SHEET_MATERIAL_MARGIN_POLICY });
+}
+
 describe("project margin calculation", () => {
+  it("leaves the standard margin summary unchanged unless a tenant policy enables the metric", () => {
+    const entries = [entry({ instanceId: "a", items: [pricedItem({ id: "board", cost: 100 })] })];
+    const view = buildProjectMarginsView(entries, initializedState());
+    expect(view.summary).toEqual({ baseCost: 100, marginAmount: 20, combinedMarginPercent: 20, finalPrice: 120, overrideCount: 0, missingPriceCount: 0 });
+    expect(view.summary).not.toHaveProperty("sheetMaterial");
+  });
+
+  it("divides the complete project margin by net board area from 16 mm, including additions", () => {
+    const board = (id: string, cost: number, thickness: number, areaM2: number): PortableQuoteBomItem => ({
+      ...pricedItem({ id, cost }),
+      dimensionsMm: { length: 1000, width: 1000, thickness },
+      metrics: { areaM2, billableAreaM2: areaM2 * 1.3 },
+      pricingQuantity: areaM2 * 1.3
+    });
+    const items = [
+      { ...board("two-sides", 100, 16, 2), quantity: 2 },
+      board("thin-back", 50, 15.99, 9),
+      { ...board("shaped-fronts", 100, 18, 0.75), quantity: 3 },
+      { ...board("plinth", 30, 18, 0.3), materialGroup: "plinth", pricingUnit: "lm" as const, pricingQuantity: 3 }
+    ];
+    const addition = entry({ instanceId: "additions", items: [
+      board("cutout-worktop", 60, 38, 0.45),
+      pricedItem({ id: "appliance", cost: 500, itemType: "hardware" }),
+      pricedItem({ id: "edge", cost: 20, itemType: "edge_band" })
+    ] });
+    const state = initializedState({ defaultMarginPercent: 20, additionalLaborCost: 100 });
+    const before = structuredClone({ items, addition, state });
+    const view = buildDelfiMarginsView([
+      entry({ instanceId: "cabinet", items, labor: 40 }),
+      { ...addition, kind: "worktop" }
+    ], state);
+
+    expect(view.summary).toMatchObject({
+      baseCost: 1000, marginAmount: 200, finalPrice: 1200,
+      sheetMaterial: { areaM2: 3.5, marginPerM2: 57.14, unmeasuredBoardCount: 0 }
+    });
+    expect({ items, addition, state }).toEqual(before);
+  });
+
+  it.each(["body", "front", "back", "drawer_bottom", "plinth", "worktop"])("includes 16 mm %s boards regardless of material category", (group) => {
+    const item = {
+      ...pricedItem({ id: "board", group, cost: 100 }),
+      quantity: 2,
+      dimensionsMm: { length: 1000, width: 500, thickness: 16 }
+    };
+    const view = buildDelfiMarginsView([entry({ instanceId: "a", items: [item] })], initializedState());
+    expect(view.summary).toMatchObject({ sheetMaterial: { areaM2: 1, marginPerM2: 20, unmeasuredBoardCount: 0 } });
+  });
+
+  it("does not divide by zero or use waste-inclusive purchasing quantities as physical area", () => {
+    const item = { ...pricedItem({ id: "thin", cost: 100 }), dimensionsMm: { length: 1000, width: 1000, thickness: 8 } };
+    const view = buildDelfiMarginsView([entry({ instanceId: "a", items: [item] })], initializedState());
+    expect(view.summary).toMatchObject({ marginAmount: 20, sheetMaterial: { areaM2: 0, marginPerM2: null, unmeasuredBoardCount: 0 } });
+    expect(buildDelfiMarginsView([], initializedState()).summary.sheetMaterial?.marginPerM2).toBeNull();
+  });
+
+  it.each([undefined, NaN, -1, Infinity])("keeps an incomplete legacy board measurement visible instead of overstating margin per m2 (%s)", (thickness) => {
+    const item = { ...pricedItem({ id: "legacy", cost: 100 }), dimensionsMm: { length: 1000, width: 1000, thickness: thickness as number } };
+    const view = buildDelfiMarginsView([entry({ instanceId: "a", items: [item] })], initializedState());
+    expect(view.summary).toMatchObject({ marginAmount: 20, sheetMaterial: { marginPerM2: null, unmeasuredBoardCount: 1 } });
+  });
+
+  it("uses the effective project currency and recomputes after margin edits without changing the measured area", () => {
+    const item = { ...pricedItem({ id: "board", cost: 100 }), dimensionsMm: { length: 2000, width: 1000, thickness: 18 } };
+    const entries = [entry({ instanceId: "a", items: [item] })];
+    const view = buildDelfiMarginsView(entries, initializedState(), { currency: "CZK" });
+    expect(view.summary).toMatchObject({ marginAmount: 483.86, sheetMaterial: { areaM2: 2, marginPerM2: 241.93 } });
+    const changed = applyProjectMarginSettingsOperation(view.settings, { type: "set_default", marginPercent: 40 }, projectMarginTargetIds(view));
+    expect(buildDelfiMarginsView(entries, changed, { currency: "CZK" }).summary).toMatchObject({ sheetMaterial: { areaM2: 2, marginPerM2: 483.86 } });
+  });
+
+  it("does not present partial costs or invalid area as complete margin per m2", () => {
+    const item = { ...pricedItem({ id: "board", cost: null }), dimensionsMm: { length: 1000, width: 1000, thickness: 18 } };
+    expect(buildDelfiMarginsView([entry({ instanceId: "a", items: [item] })], initializedState()).summary)
+      .toMatchObject({ missingPriceCount: 1, sheetMaterial: { areaM2: 1, marginPerM2: null } });
+    const invalid = { ...item, itemCost: 100, metrics: { areaM2: -1 } };
+    expect(buildDelfiMarginsView([entry({ instanceId: "a", items: [invalid] })], initializedState()).summary)
+      .toMatchObject({ sheetMaterial: { areaM2: 0, marginPerM2: null, unmeasuredBoardCount: 1 } });
+    expect(buildDelfiMarginsView([entry({ instanceId: "a", items: [{ ...item, itemCost: 100 }] })],
+      initializedState(), { warnings: ["Another module failed to build."] }).summary.sheetMaterial?.marginPerM2).toBeNull();
+  });
+
   it("uses effective assigned material snapshots, including scoped overrides, as the CZK cost authority", () => {
     const assignment = (
       assignmentId: string,
@@ -128,9 +219,13 @@ describe("project margin calculation", () => {
       },
       updatedAt: "2026-07-18T00:00:00.000Z"
     });
-    const view = buildProjectMarginsView([
-      entry({ instanceId: "a", items: [pricedItem({ id: "side", cost: 1, quantity: 2 })] }),
-      entry({ instanceId: "b", items: [pricedItem({ id: "side", cost: 1, quantity: 2 })] })
+    const assignedBoard = {
+      ...pricedItem({ id: "side", cost: null, quantity: 2 }),
+      dimensionsMm: { length: 2000, width: 1000, thickness: 18 }
+    };
+    const view = buildDelfiMarginsView([
+      entry({ instanceId: "a", items: [assignedBoard] }),
+      entry({ instanceId: "b", items: [assignedBoard] })
     ], initializedState({ defaultMarginPercent: 10 }), {
       currency: "CZK",
       materialAssignments: [
@@ -146,6 +241,7 @@ describe("project margin calculation", () => {
       ["module:b", "Demos general", 200]
     ]);
     expect(view.summary).toMatchObject({ baseCost: 700, marginAmount: 70, finalPrice: 770 });
+    expect(view.summary.sheetMaterial).toMatchObject({ areaM2: 4, marginPerM2: 17.5 });
   });
 
   it("converts legacy EUR BOM costs to the client display currency when no assignment exists", () => {
