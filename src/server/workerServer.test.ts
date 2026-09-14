@@ -165,6 +165,14 @@ describe("multi-client worker isolation", () => {
   const users = [
     ...seedAuthUsers,
     {
+      ...seedAuthUsers[0],
+      userId: "user_delfi_fixture",
+      username: "delfi-fixture",
+      organizationName: "Delfi fixture",
+      clientId: "client_delfi",
+      role: "owner" as const
+    },
+    {
       userId: "user_client_b_owner",
       username: "clientb",
       displayName: "Client B",
@@ -1848,6 +1856,7 @@ describe("multi-client worker isolation", () => {
       ok: true,
       view: { revision: 0, editable: true, settings: { defaultMarginPercent: 20 } }
     });
+    expect(ownerView.body).not.toHaveProperty("view.summary.sheetMaterial");
     const viewerView = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: viewerCookie });
     expect(viewerView.status).toBe(200);
     expect(viewerView.body).toMatchObject({ ok: true, view: { revision: 0, editable: false } });
@@ -1946,6 +1955,68 @@ describe("multi-client worker isolation", () => {
       ok: true,
       view: { revision: 1, settings: { groupMargins: { corpus: 15 } } }
     });
+  }, 30_000);
+
+  it.each([undefined, "client_b_demo"])("serves the custom sheet margin only for Delfi across save and FQP (override: %s)", async (configuredClientId) => {
+    const previous = process.env.ARCIGY_DELFI_CLIENT_ID;
+    if (configuredClientId === undefined) delete process.env.ARCIGY_DELFI_CLIENT_ID;
+    else process.env.ARCIGY_DELFI_CLIENT_ID = configuredClientId;
+    const delfiCookie = makeCookieHeader(configuredClientId
+      ? { userId: "user_client_b_owner", clientId: configuredClientId, role: "owner" }
+      : { userId: "user_delfi_fixture", clientId: "client_delfi", role: "owner" });
+    const otherCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    try {
+      const create = async (cookie: string) => {
+        const result = await requestWorker(controller!.port, "/api/projects", {
+          method: "POST", cookie, body: { name: "Delfi policy fixture", address: "QA", contactName: "QA" }
+        });
+        expect(result.status).toBe(201);
+        const id = (result.body as { project: { projectId: string } }).project.projectId;
+        const saved = await requestWorker(controller!.port, `/api/projects/${id}/save`, {
+          method: "POST", cookie,
+          body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} } }
+        });
+        expect(saved.status).toBe(200);
+        return id;
+      };
+      const projectId = await create(delfiCookie);
+      const otherId = await create(otherCookie);
+      const view = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: delfiCookie });
+      expect(view.body).toHaveProperty("view.summary.sheetMaterial", {
+        minimumThicknessMm: 16, areaM2: 0, marginPerM2: null, unmeasuredBoardCount: 0
+      });
+      const updated = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, {
+        method: "PUT", cookie: delfiCookie,
+        body: { revision: 0, operation: { type: "set_additional_labor", additionalLaborCost: 200 } }
+      });
+      expect(updated.status).toBe(200);
+      expect(updated.body).toMatchObject({ view: { summary: { marginAmount: 40, sheetMaterial: { areaM2: 0, marginPerM2: null } } } });
+      const saved = await requestWorker(controller!.port, `/api/projects/${projectId}/load`, { cookie: delfiCookie });
+      expect(saved.body).toHaveProperty("save.appState.quoteSettings.additionalLaborCost", 200);
+      expect(JSON.stringify(saved.body)).not.toContain("sheetMaterial");
+      const downloaded = await requestWorker(controller!.port, `/api/projects/${projectId}/download`, { cookie: delfiCookie });
+      expect(downloaded.status).toBe(200);
+      const imported = await requestWorker(controller!.port, "/api/projects/import", {
+        method: "POST", cookie: delfiCookie, body: { envelope: downloaded.text }
+      });
+      expect(imported.status).toBe(200);
+      const importedId = (imported.body as { save: { projectId: string } }).save.projectId;
+      const restored = await requestWorker(controller!.port, `/api/projects/${importedId}/margins`, { cookie: delfiCookie });
+      expect(restored.body).toHaveProperty("view.summary", (updated.body as { view: { summary: unknown } }).view.summary);
+      const otherView = await requestWorker(controller!.port, `/api/projects/${otherId}/margins?clientId=client_b_demo`, { cookie: otherCookie });
+      expect(otherView.status).toBe(200);
+      expect(otherView.body).not.toHaveProperty("view.summary.sheetMaterial");
+      const otherUpdate = await requestWorker(controller!.port, `/api/projects/${otherId}/margins`, {
+        method: "PUT", cookie: otherCookie,
+        body: { revision: 0, sheetMaterial: { minimumThicknessMm: 16 }, operation: { type: "set_default", marginPercent: 30 } }
+      });
+      expect(otherUpdate.status).toBe(200);
+      expect(otherUpdate.body).not.toHaveProperty("view.summary.sheetMaterial");
+      expect((await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: otherCookie })).status).toBe(403);
+    } finally {
+      if (previous === undefined) delete process.env.ARCIGY_DELFI_CLIENT_ID;
+      else process.env.ARCIGY_DELFI_CLIENT_ID = previous;
+    }
   }, 30_000);
 
   it("imports an encrypted project as a copy when the project already exists", async () => {

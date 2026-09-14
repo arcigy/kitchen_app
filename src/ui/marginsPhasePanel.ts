@@ -3,6 +3,7 @@ import type {
   ProjectMarginItemView,
   ProjectMarginsView
 } from "../layout/bom/projectMargins";
+import { t } from "../i18n";
 import {
   PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX,
   PROJECT_MARGIN_PERCENT_MAX
@@ -455,10 +456,30 @@ function renderSummary(view: ProjectMarginsView): string {
     ["combinedMarginPercent", "Kombinovaná marža", formatPercent(view.summary.combinedMarginPercent), false],
     ["finalPrice", "Predajná cena", formatCurrency(view.summary.finalPrice, view.currency), true]
   ];
-  return `<section class="margins-summary" data-margin-summary aria-label="Cenový súhrn">
+  return `<section class="margins-summary${view.summary.sheetMaterial ? " margins-summary--sheet-metric" : ""}" data-margin-summary aria-label="Cenový súhrn">
     ${metrics.map(([key, label, value, accent]) => `<div class="margins-summary__card${accent ? " margins-summary__card--accent" : ""}" data-margin-summary-value="${summarySelector(key)}"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}
+    ${renderMarginPerM2(view)}
     <div class="margins-summary__card margins-summary__card--status" data-margin-summary-value="status"><span>Vlastné / bez ceny</span><strong>${formatNumber(view.summary.overrideCount, 0)} / ${formatNumber(view.summary.missingPriceCount, 0)}</strong></div>
   </section>`;
+}
+
+function renderMarginPerM2(view: ProjectMarginsView): string {
+  if (!view.summary.sheetMaterial) return "";
+  const { areaM2: sheetMaterialAreaM2, marginPerM2, unmeasuredBoardCount, minimumThicknessMm } = view.summary.sheetMaterial;
+  const areaKnown = Number.isFinite(sheetMaterialAreaM2);
+  const value = marginPerM2 != null && Number.isFinite(marginPerM2)
+    ? `${formatCurrency(marginPerM2, view.currency)} / m²` : "—";
+  const area = areaKnown ? `${formatNumber(sheetMaterialAreaM2, 4)} m²` : "—";
+  const explanation = !areaKnown || unmeasuredBoardCount > 0
+    ? t("Some boards have no valid thickness or area. The result cannot be determined yet.")
+    : sheetMaterialAreaM2 === 0 ? t("The project contains no boards at or above this thickness.")
+    : marginPerM2 == null ? t("The result will be available after missing prices and pricing warnings are resolved.")
+    : t("Total project margin, including additions and appliances, divided by board area at the stated minimum thickness. Purchasing waste is excluded.");
+  return `<div class="margins-summary__card margins-summary__card--area" data-margin-summary-value="margin-per-m2" title="${escapeHtml(explanation)}">
+    <span>${t("Margin per 1 m²")}</span><strong>${escapeHtml(value)}</strong>
+    <small data-margin-sheet-area>${t("Board area")} ≥ ${formatNumber(minimumThicknessMm)} mm: ${escapeHtml(area)}</small>
+    <small data-margin-sheet-explanation${marginPerM2 != null ? ' class="sr-only"' : ""}>${escapeHtml(explanation)}</small>
+  </div>`;
 }
 
 function renderGroup(

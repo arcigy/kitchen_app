@@ -73,6 +73,14 @@ export type ProjectMarginSummaryView = {
   finalPrice: number;
   overrideCount: number;
   missingPriceCount: number;
+  sheetMaterial?: ProjectMarginSheetMaterialView;
+};
+
+export type ProjectMarginSheetMaterialPolicy = { minimumThicknessMm: number };
+export type ProjectMarginSheetMaterialView = ProjectMarginSheetMaterialPolicy & {
+  areaM2: number;
+  marginPerM2: number | null;
+  unmeasuredBoardCount: number;
 };
 
 export type ProjectMarginsView = {
@@ -251,6 +259,39 @@ function combinedPercent(baseCents: number, marginCents: number): number {
   return baseCents === 0 ? 0 : round((marginCents / baseCents) * 100, 2);
 }
 
+/** BOM area is already summed across pieces and excludes purchasing waste. */
+function netBoardAreaM2(item: PortableQuoteBomItem): number | null {
+  const area = item.metrics?.areaM2
+    ?? (item.pricingBasis === "sheet_area" && item.pricingUnit === "m2" ? item.pricingQuantityBase : undefined);
+  if (area != null) return Number.isFinite(area) && area >= 0 ? area : null;
+  const dimensions = item.dimensionsMm;
+  if (!dimensions || !Number.isFinite(dimensions.length) || dimensions.length < 0
+    || !Number.isFinite(dimensions.width) || dimensions.width < 0) return null;
+  const measured = dimensions.length * dimensions.width * item.quantity / 1_000_000;
+  return Number.isFinite(measured) ? measured : null;
+}
+
+function projectSheetMaterialArea(entries: readonly ProjectPricingView[], minimumThicknessMm: number): { areaM2: number; unmeasuredBoardCount: number } {
+  let areaM2 = 0;
+  let unmeasuredBoardCount = 0;
+  for (const entry of entries) {
+    for (const item of entry.result.quoteBom.items) {
+      if (item.itemType !== "board" || item.quantity === 0) continue;
+      const thickness = item.dimensionsMm?.thickness;
+      if (thickness == null || !Number.isFinite(thickness) || thickness <= 0
+        || !Number.isFinite(item.quantity) || item.quantity < 0) {
+        unmeasuredBoardCount += 1;
+        continue;
+      }
+      if (thickness < minimumThicknessMm) continue;
+      const area = netBoardAreaM2(item);
+      if (area == null) unmeasuredBoardCount += 1;
+      else areaM2 += area;
+    }
+  }
+  return { areaM2: round(areaM2, 6), unmeasuredBoardCount };
+}
+
 function groupMetadata(category: ProjectMarginCategory): { label: string; description: string } {
   if (category === "labor") return { label: "Práca", description: "Modulová a dodatočná projektová práca" };
   const definition = getMaterialAssignmentCategoryDefinition(category);
@@ -270,6 +311,7 @@ export function buildProjectMarginsView(
     warnings?: readonly string[];
     currency?: PriceCurrency;
     materialAssignments?: readonly ProjectMaterialAssignment[];
+    sheetMaterialMargin?: ProjectMarginSheetMaterialPolicy;
   } = {}
 ): ProjectMarginsView {
   const state = normalizeProjectMarginSettingsState(inputState);
@@ -413,6 +455,20 @@ export function buildProjectMarginsView(
   const baseCents = groups.reduce((total, group) => total + moneyCents(group.baseCost), 0);
   const marginCents = groups.reduce((total, group) => total + moneyCents(group.marginAmount), 0);
   const groupOverrideCount = Object.keys(state.groupMargins).length;
+  const missingPriceCount = groups.reduce((total, group) => total + group.missingPriceCount, 0);
+  let sheetMaterial: ProjectMarginSheetMaterialView | undefined;
+  if (options.sheetMaterialMargin) {
+    const { minimumThicknessMm } = options.sheetMaterialMargin;
+    if (!Number.isFinite(minimumThicknessMm) || minimumThicknessMm <= 0) throw new Error("Invalid sheet material margin policy.");
+    const measurement = projectSheetMaterialArea(entries, minimumThicknessMm);
+    // Assigned project prices can resolve missing catalog prices in the raw BOM.
+    // Use the effective priced rows above, while keeping failed input/build warnings blocking.
+    const complete = measurement.unmeasuredBoardCount === 0 && missingPriceCount === 0
+      && !options.warnings?.length
+      && !warnings.some((warning) => warning.code === "unsupported_currency");
+    const rate = complete && measurement.areaM2 > 0 ? round(marginCents / 100 / measurement.areaM2) : null;
+    sheetMaterial = { ...measurement, minimumThicknessMm, marginPerM2: rate != null && Number.isFinite(rate) ? rate : null };
+  }
 
   return {
     revision: state.revision,
@@ -426,7 +482,8 @@ export function buildProjectMarginsView(
       combinedMarginPercent: combinedPercent(baseCents, marginCents),
       finalPrice: (baseCents + marginCents) / 100,
       overrideCount: groupOverrideCount + state.itemOverrides.length,
-      missingPriceCount: groups.reduce((total, group) => total + group.missingPriceCount, 0)
+      missingPriceCount,
+      ...(sheetMaterial ? { sheetMaterial } : {})
     },
     groups,
     warnings

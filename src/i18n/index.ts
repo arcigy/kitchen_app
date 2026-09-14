@@ -17,6 +17,12 @@ const LOCALES: Record<AppLanguage, AppLocale> = {
 };
 
 const EXACT_CS_TEXT: Record<string, string> = {
+  "Margin per 1 m²": "Marže na 1 m²",
+  "Board area": "Plocha desek",
+  "Some boards have no valid thickness or area. The result cannot be determined yet.": "Některým deskám chybí platná tloušťka nebo plocha. Výsledek zatím nelze určit.",
+  "The project contains no boards at or above this thickness.": "Projekt neobsahuje desky s touto nebo větší tloušťkou.",
+  "The result will be available after missing prices and pricing warnings are resolved.": "Výsledek bude dostupný po doplnění chybějících cen a vyřešení cenových upozornění.",
+  "Total project margin, including additions and appliances, divided by board area at the stated minimum thickness. Purchasing waste is excluded.": "Celková marže projektu včetně doplňků a spotřebičů dělená plochou desek od uvedené tloušťky. Plocha nezahrnuje přirážku na odpad.",
   "Parameters": "Parametry",
   "Create preset": "Vytvořit preset",
   "Name and note are required.": "Název a poznámka jsou povinné.",
@@ -84,6 +90,12 @@ const EXACT_CS_TEXT: Record<string, string> = {
 };
 
 const EXACT_SK_TEXT: Record<string, string> = {
+  "Margin per 1 m²": "Marža na 1 m²",
+  "Board area": "Plocha dosiek",
+  "Some boards have no valid thickness or area. The result cannot be determined yet.": "Niektorým doskám chýba platná hrúbka alebo plocha. Výsledok zatiaľ nemožno určiť.",
+  "The project contains no boards at or above this thickness.": "Projekt neobsahuje dosky s touto alebo väčšou hrúbkou.",
+  "The result will be available after missing prices and pricing warnings are resolved.": "Výsledok bude dostupný po doplnení chýbajúcich cien a vyriešení cenových upozornení.",
+  "Total project margin, including additions and appliances, divided by board area at the stated minimum thickness. Purchasing waste is excluded.": "Celková marža projektu vrátane doplnkov a spotrebičov delená plochou dosiek od uvedenej hrúbky. Plocha nezahŕňa prirážku na odpad.",
   "Parameters": "Parametre",
   "Create preset": "Vytvoriť preset",
   "Name and note are required.": "Názov a poznámka sú povinné.",

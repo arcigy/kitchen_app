@@ -4448,7 +4448,8 @@ textarea {
   margin-top: 0;
 }
 
-.margins-phase .sr-only {
+.margins-phase .sr-only,
+.margins-summary--sheet-metric .sr-only {
   position: absolute !important;
   width: 1px !important;
   height: 1px !important;
@@ -4520,6 +4521,10 @@ textarea {
   gap: 8px;
 }
 
+.margins-summary--sheet-metric {
+  grid-template-columns: repeat(6, minmax(135px, 1fr));
+}
+
 .margins-summary__card {
   min-width: 0;
   display: grid;
@@ -4558,6 +4563,17 @@ textarea {
 
 .margins-summary__card--status strong {
   font-size: 15px;
+}
+
+.margins-summary__card--area small:not(.sr-only) {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.margins-summary__card--area strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .margins-project-controls {
