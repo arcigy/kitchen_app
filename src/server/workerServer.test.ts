@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import type http from "node:http";
 import { AddressInfo } from "node:net";
@@ -1696,6 +1697,58 @@ describe("multi-client worker isolation", () => {
       thicknessMm: 18,
       snapshots: { material: { definition: { preview: { colorHex: "#2451A6" }, defaultThicknessMm: 18 } } }
     });
+  }, 60_000);
+
+  it("preserves supplier bridge image colours for every supplier through confirmation and FQP", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const created = await requestWorker(controller!.port, "/api/projects", { method: "POST", cookie, body: { name: "Supplier colours", address: "Test", contactName: "Test" } });
+    const projectId = (created.body as { project: { projectId: string } }).project.projectId;
+    await requestWorker(controller!.port, `/api/projects/${projectId}/save`, { method: "POST", cookie, body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} } } });
+    const bytes = await sharp({ create: { width: 24, height: 24, channels: 3, background: "#A07040" } }).png().toBuffer();
+    const realFetch = globalThis.fetch;
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      return url.startsWith("https:") ? Promise.resolve(new Response(new Uint8Array(bytes), { headers: { "content-type": "image/png" } })) : realFetch(input, init);
+    });
+    const sources = [
+      ["demos", "https://www.demos24plus.com/content/images/product/default/test-colour.png"],
+      ["hranipex", "https://hosting.photorobot.com/images/4748478675156992/test-colour/NORMAL/image"],
+      ["jaf_holz", "https://d1cvtajkxcatn5.cloudfront.net/pim/05%20dekore/test-colour.webp"],
+      ["schachermayer", "https://webshop.schachermayer.com/cdn/derivates/1/test-colour.jpg"]
+    ];
+    try {
+      for (const [supplierId, imageUrl] of sources) {
+        const session = await requestWorker(controller!.port, `/api/projects/${projectId}/supplier-sync-sessions`, { method: "POST", cookie, body: { supplierId, projectId, lookups: [{ requestId: `colours-${supplierId}`, projectId, materialAssignmentId: "material-assignment:corpus", supplierId, supplierProductId: "COLOUR-TEST", expectedProductType: "board", expectedThicknessMm: 18 }] } });
+        expect(session.status, supplierId).toBe(201);
+        const { bridgeToken, view } = session.body as { bridgeToken: string; view: { session: { id: string }; currentItem: { id: string } } };
+        const base = `/api/supplier-bridge/sessions/${view.session.id}`;
+        const attached = await requestWorker(controller!.port, `${base}/attach`, { method: "POST", body: { bridgeToken } });
+        const headers = { Authorization: `Bearer ${(attached.body as { accessToken: string }).accessToken}` };
+        const previewBody = { syncItemId: view.currentItem.id, imageUrl };
+        expect((await requestWorker(controller!.port, `${base}/preview-color`, { method: "POST", body: previewBody })).status).toBe(401);
+        expect((await requestWorker(controller!.port, `${base}/preview-color`, { method: "POST", headers, body: { ...previewBody, syncItemId: "foreign-item" } })).status).toBe(403);
+        const crossSupplierUrl = sources.find(([id]) => id !== supplierId)![1];
+        expect((await requestWorker(controller!.port, `${base}/preview-color`, { method: "POST", headers, body: { ...previewBody, imageUrl: crossSupplierUrl } })).status).toBe(422);
+        const preview = await requestWorker(controller!.port, `${base}/preview-color`, { method: "POST", headers, body: previewBody });
+        expect(preview.status, supplierId).toBe(200);
+        expect(preview.body).toMatchObject({ previewColorHex: "#A07040" });
+        const captured = await requestWorker(controller!.port, `${base}/candidates`, { method: "POST", headers, body: { submissionId: `colour-${supplierId}`, syncItemId: view.currentItem.id, supplierProductCode: "COLOUR-TEST", normalizedProduct: { displayName: "Test board", manufacturer: null, decorCode: null, surfaceCode: null, productType: "board", thicknessMm: 18, widthMm: 2070, lengthMm: 2800, availability: "available", previewColorHex: "#A07040" }, sourcePageType: "product", sourcePath: "/product/test", observedAt: "2026-09-14T12:00:00.000Z", price: null } });
+        expect(captured.status).toBe(201);
+        const candidateId = (captured.body as { candidate: { id: string } }).candidate.id;
+        expect((await requestWorker(controller!.port, `${base}/confirm`, { method: "POST", headers, body: { syncItemId: view.currentItem.id, candidateId } })).status).toBe(200);
+        const loaded = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { cookie });
+        expect(JSON.stringify(loaded.body)).toContain('"colorHex":"#A07040"');
+        expect(JSON.stringify(loaded.body)).not.toContain(imageUrl!);
+        const download = await requestWorker(controller!.port, `/api/projects/${projectId}/download`, { cookie });
+        expect(download.status).toBe(200);
+        const imported = await requestWorker(controller!.port, "/api/projects/import", { method: "POST", cookie, body: { envelope: download.body } });
+        expect(imported.status).toBe(200);
+        const importedId = (imported.body as { save: { projectId: string } }).save.projectId;
+        const restored = await requestWorker(controller!.port, `/api/projects/${importedId}/materials`, { cookie });
+        expect(JSON.stringify(restored.body)).toContain('"colorHex":"#A07040"');
+        expect(JSON.stringify(restored.body)).not.toContain(imageUrl!);
+      }
+    } finally { fetchSpy.mockRestore(); }
   }, 60_000);
 
   it("rejects clientId in project create payload", async () => {

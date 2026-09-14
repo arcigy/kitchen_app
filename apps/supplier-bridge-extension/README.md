@@ -57,4 +57,8 @@ Supplier visibility is deliberately tenant-scoped. To prevent accidental cross-c
 
 ## Verification
 
+Material-image sources, colour processing, version 0.3.17 update instructions,
+failure behaviour and manual checks are documented in
+[`docs/supplier-bridge-material-colors.md`](../../docs/supplier-bridge-material-colors.md).
+
 Run `npm run typecheck`, `npm run lint`, `npm run test:supplier-bridge`, `npm run test:supplier-bridge:integration`, `npm run test:supplier-bridge:e2e`, `npm run build:debug`, `npm run build:production`, and `npm run build:supplier-simulator`.
