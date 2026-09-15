@@ -78,7 +78,7 @@
     "odoo:user-activity:sync": "tsx scripts/userActivityOdooSync.ts"
   },
   "dependencies": {
-    "fflate": "^0.8.2",
+    "fflate": "^0.8.3",
     "html2canvas": "^1.4.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38",
