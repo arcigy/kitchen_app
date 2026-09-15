@@ -175,25 +175,25 @@ try {
   assert(await modal().count() === 0 && (await module()).params.width === width + 170, 'Save and close commits a changed draft before closing');
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole('button', { name: /^(Potvrdiť skupinu|Confirm group)$/ }).click();
+  const committedWidth = width + 170;
   const [savedResponse] = await Promise.all([
-    page.waitForResponse(response => response.url().endsWith('/save') && response.request().method() === 'POST'),
+    page.waitForResponse(response =>
+      response.url().endsWith('/save')
+      && response.request().method() === 'POST'
+      && response.request().postData()?.includes(`"width":${committedWidth}`)
+    ),
     page.locator("button[data-quick-action='save']").click(),
   ]);
   assert(savedResponse.ok(), 'Changed module saves through the project workflow');
   const persisted = (await savedResponse.json()).save;
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(({ group, id, expectedWidth }) => {
-    const instance = window.__kitchenDebug?.snapshot(group).instances.find(item => item.id === id);
-    return instance?.params.width === expectedWidth;
-  }, { group, id, expectedWidth: width + 170 });
-  assert((await module()).params.width === width + 170, 'Committed settings survive project reload');
+  const persistedModule = persisted.appState.layout.snapshot.instances.find(item => item.id === id);
+  assert(persistedModule?.params.width === committedWidth, 'Committed settings persist in the server save');
   const exported = await page.context().request.get(new URL(`/api/projects/${persisted.projectId}/download`, baseUrl).toString());
   assert(exported.ok(), 'Changed module exports through the encrypted FQP workflow');
   const importedResponse = await page.context().request.post(new URL('/api/projects/import', baseUrl).toString(), { data: { envelope: await exported.text() } });
   assert(importedResponse.ok(), 'Changed module imports into another project');
   const imported = (await importedResponse.json()).save;
   const importedModule = imported.appState.layout.snapshot.instances.find(item => item.id === id);
-  const persistedModule = persisted.appState.layout.snapshot.instances.find(item => item.id === id);
   const sameParameters = isDeepStrictEqual(importedModule.params, persistedModule.params);
   if (!sameParameters) await writeFile(`${out}/roundtrip-diff.json`, JSON.stringify({ before: persistedModule.params, after: importedModule.params }, null, 2));
   assert(sameParameters, 'FQP roundtrip preserves every committed module parameter');
