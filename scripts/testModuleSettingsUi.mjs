@@ -175,14 +175,19 @@ try {
   assert(await modal().count() === 0 && (await module()).params.width === width + 170, 'Save and close commits a changed draft before closing');
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole('button', { name: /^(Potvrdiť skupinu|Confirm group)$/ }).click();
+  const committedWidth = width + 170;
   const [savedResponse] = await Promise.all([
-    page.waitForResponse(response => response.url().endsWith('/save') && response.request().method() === 'POST'),
+    page.waitForResponse(response =>
+      response.url().endsWith('/save')
+      && response.request().method() === 'POST'
+      && response.request().postData()?.includes(`"width":${committedWidth}`)
+    ),
     page.locator("button[data-quick-action='save']").click(),
   ]);
   assert(savedResponse.ok(), 'Changed module saves through the project workflow');
   const persisted = (await savedResponse.json()).save;
   const persistedModule = persisted.appState.layout.snapshot.instances.find(item => item.id === id);
-  assert(persistedModule?.params.width === width + 170, 'Committed settings persist in the server save');
+  assert(persistedModule?.params.width === committedWidth, 'Committed settings persist in the server save');
   const exported = await page.context().request.get(new URL(`/api/projects/${persisted.projectId}/download`, baseUrl).toString());
   assert(exported.ok(), 'Changed module exports through the encrypted FQP workflow');
   const importedResponse = await page.context().request.post(new URL('/api/projects/import', baseUrl).toString(), { data: { envelope: await exported.text() } });
