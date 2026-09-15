@@ -1,9 +1,11 @@
+import { supplierProductUsesPreviewColor } from "../../../src/core/supplier-bridge/supplier-preview-image";
 import type { SupplierCandidateSubmission, SupplierSyncSessionView } from "../../../src/core/supplier-bridge/supplier-bridge-types";
 import {
   attachSupplierBridgeSession,
   cancelSupplierBridgeSession,
   confirmSupplierCandidate,
   loadSupplierBridgeSession,
+  resolveSupplierPreviewImageColor,
   skipSupplierSyncItem,
   submitSupplierCandidate,
   SupplierBridgeApiError
@@ -296,11 +298,26 @@ async function captureCurrentPage(syncItemId?: string): Promise<BridgeRuntimeRes
   }
   let view = progress.view;
   for (const candidate of capture.candidates) {
+    let previewColorHex = candidate.normalizedProduct.previewColorHex;
+    if (!(__SUPPLIER_BRIDGE_DEBUG__ && supplierId === "mock-supplier") && supplierProductUsesPreviewColor(candidate.normalizedProduct.productType)) {
+      if (!candidate.previewImageUrl) return { ok: false, errorCode: "SUPPLIER_PREVIEW_IMAGE_REQUIRED", message: "Obrázok materiálu sa nenašiel. Otvorte detail produktu a skúste znova." };
+      try {
+        previewColorHex = await resolveSupplierPreviewImageColor(
+          progress.backendBaseUrl,
+          progress.sessionId,
+          accessToken,
+          item.id,
+          candidate.previewImageUrl
+        );
+      } catch {
+        return { ok: false, errorCode: "SUPPLIER_PREVIEW_IMAGE_UNAVAILABLE", message: "Farbu sa nepodarilo načítať. Materiál nebol priradený; skúste načítanie znova." };
+      }
+    }
     const submission: SupplierCandidateSubmission = {
       submissionId: submissionId(progress.sessionId, item.id, candidate.supplierProductCode, candidate.sourcePath),
       syncItemId: item.id,
       supplierProductCode: candidate.supplierProductCode,
-      normalizedProduct: candidate.normalizedProduct,
+      normalizedProduct: { ...candidate.normalizedProduct, previewColorHex },
       sourcePageType: candidate.sourcePageType,
       sourcePath: candidate.sourcePath,
       observedAt: candidate.observedAt,
@@ -315,7 +332,7 @@ async function captureCurrentPage(syncItemId?: string): Promise<BridgeRuntimeRes
   return { ok: capture.candidates.length > 0, view, capture, errorCode: capture.candidates.length > 0 ? null : capture.errorCode };
 }
 
-async function captureActiveSupplierProduct(expected?: Extract<BridgeRuntimeRequest, { type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT" }>): Promise<BridgeRuntimeResponse> {
+async function captureActiveSupplierProduct(expected?: Extract<BridgeRuntimeRequest, { type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT" | "CAPTURE_EXACT_SUPPLIER_PRODUCT" }>): Promise<BridgeRuntimeResponse> {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (typeof tab?.id !== "number" || !tab.url) {
     return { ok: false, errorCode: "SUPPLIER_TAB_REQUIRED", message: "Otvorte detail produktu dodávateľa." };
@@ -332,7 +349,7 @@ async function captureActiveSupplierProduct(expected?: Extract<BridgeRuntimeRequ
     ? { channel: BRIDGE_CHANNEL, type: "CAPTURE_SUPPLIER_PAGE" }
     : {
         channel: BRIDGE_CHANNEL,
-        type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT",
+        ...(expected?.type === "CAPTURE_EXACT_SUPPLIER_PRODUCT" ? { type: expected.type, requestedProductId: expected.requestedProductId } : { type: "CAPTURE_CURRENT_SUPPLIER_PRODUCT" }),
         expectedProductType: expected?.expectedProductType ?? "unknown",
         expectedManufacturer: expected?.expectedManufacturer ?? null,
         expectedThicknessMm: expected?.expectedThicknessMm ?? null
@@ -476,7 +493,7 @@ async function routeMessage(message: BridgeRuntimeRequest, sender: chrome.runtim
   if (message.type === "CANCEL_SUPPLIER_SESSION") return cancel();
   if (message.type === "SIDE_PANEL_COMMAND") return handleSideCommand(message);
   if (message.type === "CAPTURE_ACTIVE_SUPPLIER_PRODUCT") return captureActiveSupplierProduct();
-  if (message.type === "CAPTURE_CURRENT_SUPPLIER_PRODUCT") return captureActiveSupplierProduct(message);
+  if (message.type === "CAPTURE_CURRENT_SUPPLIER_PRODUCT" || message.type === "CAPTURE_EXACT_SUPPLIER_PRODUCT") return captureActiveSupplierProduct(message);
   if (message.type === "START_DIAGNOSTIC_PICK") return diagnosticPick(message);
   return { ok: false, errorCode: "UNSUPPORTED_MESSAGE" };
 }

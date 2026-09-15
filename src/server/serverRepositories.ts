@@ -18,6 +18,9 @@ import { createPostgresSupplierBridgeRepository } from "../core/supplier-bridge/
 import type { SupplierBridgeRepository } from "../core/supplier-bridge/supplier-bridge-repository";
 import { createSeedSupplierConfigurationRepository, type SupplierConfigurationRepository } from "../core/supplier-configuration/supplier-configuration-repository";
 import { createPostgresSupplierConfigurationRepository } from "../core/supplier-configuration/supplier-configuration-postgres-repository";
+import { createInMemoryUserActivityRepository } from "../core/user-activity/user-activity-repository";
+import { createPostgresUserActivityRepository } from "../core/user-activity/user-activity-postgres-repository";
+import type { UserActivityRepository } from "../core/user-activity/user-activity-types";
 
 export function shouldUseDatabase(env: NodeJS.ProcessEnv = process.env): boolean {
   const storage = env.KITCHEN_PROJECT_STORAGE?.toLowerCase();
@@ -43,6 +46,13 @@ export function createServerAuthSessionStore(): AuthSessionStore {
   return databaseConfig
     ? createPostgresAuthSessionStore(databaseConfig)
     : createInMemoryAuthSessionStore();
+}
+
+export function createServerUserActivityRepository(): UserActivityRepository {
+  const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  return databaseConfig
+    ? createPostgresUserActivityRepository(databaseConfig)
+    : createInMemoryUserActivityRepository();
 }
 
 export function createServerCatalogRepository(projectRoot: string): ClientCatalogRepository {

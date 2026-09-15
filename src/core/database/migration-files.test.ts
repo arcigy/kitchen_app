@@ -38,9 +38,16 @@ describe("database migration files", () => {
     expect(exactCatalogSql).toContain("CREATE TABLE IF NOT EXISTS arcigy_supplier_catalog_items");
     expect(exactCatalogSql).toContain("CREATE TABLE IF NOT EXISTS arcigy_material_supplier_assignments");
 
-    const clientSuppliersSql = await readFile(path.join(process.cwd(), "db", "migrations", `${REQUIRED_DATABASE_MIGRATION_VERSION}.sql`), "utf-8");
+    const clientSuppliersSql = await readFile(path.join(process.cwd(), "db", "migrations", "0004_client_suppliers.sql"), "utf-8");
     expect(clientSuppliersSql).toContain("CREATE TABLE IF NOT EXISTS arcigy_suppliers");
     expect(clientSuppliersSql).toContain("CREATE TABLE IF NOT EXISTS arcigy_client_suppliers");
     expect(clientSuppliersSql).toContain("PRIMARY KEY (client_id, supplier_id)");
+
+    const userActivitySql = await readFile(path.join(process.cwd(), "db", "migrations", `${REQUIRED_DATABASE_MIGRATION_VERSION}.sql`), "utf-8");
+    expect(userActivitySql).toContain("CREATE TABLE IF NOT EXISTS arcigy_user_activity_trackers");
+    expect(userActivitySql).toContain("CREATE TABLE IF NOT EXISTS arcigy_user_activity_presence");
+    expect(userActivitySql).toContain("CREATE TABLE IF NOT EXISTS arcigy_user_activity_intervals");
+    expect(userActivitySql).toContain("CREATE TABLE IF NOT EXISTS arcigy_user_activity_daily");
+    expect(userActivitySql).toContain("CREATE TABLE IF NOT EXISTS arcigy_user_activity_outbox");
   });
 });

@@ -31,6 +31,14 @@
   ],
   "parameters": [
     {
+      "key": "hasDoors",
+      "label": "Dvierka",
+      "group": "fronts",
+      "type": "boolean",
+      "defaultValue": true,
+      "description": "Dvierka vrátane úchytiek a kovania. Zásuvky zostávajú zachované."
+    },
+    {
       "key": "assemblyContext",
       "group": "general",
       "type": "string",

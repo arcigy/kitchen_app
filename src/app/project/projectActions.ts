@@ -7,6 +7,8 @@ export type ProjectRuntimeState = {
   lastSavedAt: string | null;
   editingSessionId: string;
   saveRevision: number;
+  /** Legacy snapshots can exist without a revision; metadata alone is not a save. */
+  hasServerSnapshot?: boolean;
 };
 
 export type ProjectSaveOptions = {
@@ -40,7 +42,8 @@ export function createProjectActions(args: {
     currentProject: args.initialProjectSave?.project ?? args.initialProject ?? null,
     lastSavedAt: null,
     editingSessionId: createEditingSessionId(),
-    saveRevision: args.initialProjectSave?.integrity.saveRevision ?? args.initialSaveRevision ?? 0
+    saveRevision: args.initialProjectSave?.integrity.saveRevision ?? args.initialSaveRevision ?? 0,
+    hasServerSnapshot: !!args.initialProjectSave || (args.initialSaveRevision ?? 0) > 0
   };
   let saveInFlight: Promise<ProjectSaveFile> | null = null;
   let saveInFlightIsBackground = false;
@@ -69,6 +72,7 @@ export function createProjectActions(args: {
       .then((save) => {
         state.lastSavedAt = save.integrity.savedAt;
         state.saveRevision = save.integrity.saveRevision ?? state.saveRevision;
+        state.hasServerSnapshot = true;
         setProject(save.project, "Saved.");
         return save;
       })
@@ -90,6 +94,7 @@ export function createProjectActions(args: {
       await prepareProjectReplace();
       const project = await createProject(input);
       state.saveRevision = 0;
+      state.hasServerSnapshot = false;
       setProject(project, "Project created.", true);
       return project;
     },
@@ -104,6 +109,7 @@ export function createProjectActions(args: {
       const save = await loadProject(state.currentProject.projectId);
       await args.restoreSave(save);
       state.saveRevision = save.integrity.saveRevision ?? 0;
+      state.hasServerSnapshot = true;
       setProject(save.project, "Loaded.", true);
       return save;
     },
@@ -114,6 +120,7 @@ export function createProjectActions(args: {
       const save = await loadProject(projectId);
       await args.restoreSave(save);
       state.saveRevision = save.integrity.saveRevision ?? 0;
+      state.hasServerSnapshot = true;
       setProject(save.project, "Loaded.", true);
       return save;
     },
@@ -122,6 +129,7 @@ export function createProjectActions(args: {
       const save = await importProjectFile(file);
       await args.restoreSave(save);
       state.saveRevision = save.integrity.saveRevision ?? 0;
+      state.hasServerSnapshot = true;
       setProject(save.project, "Imported.", true);
       return save;
     }

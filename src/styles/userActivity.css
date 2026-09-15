@@ -1,0 +1,24 @@
+.user-activity-indicator {
+  position: fixed;
+  inset: auto auto 10px 10px;
+  z-index: 1200;
+  max-width: min(280px, calc(100vw - 20px));
+  padding: 5px 8px;
+  border: 1px solid rgba(var(--border-rgb), 0.14);
+  border-radius: 999px;
+  background: var(--inverse);
+  color: rgba(255, 255, 255, 0.88);
+  font: 500 11px/1.2 system-ui, sans-serif;
+  box-shadow: 0 3px 12px rgba(var(--shadow-rgb), 0.2);
+  pointer-events: none;
+}
+
+.user-activity-indicator[data-state="active"]::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--success-solid);
+}

@@ -102,12 +102,13 @@ describe("bootstrap viewer shell", () => {
     const menu = displayWrap.children[1] as BootstrapFakeElement;
     expect(displayButton.type).toBe("button");
     expect(displayButton.attributes.get("aria-haspopup")).toBe("menu");
-    expect(menu.children.map((child) => child.textContent)).toEqual(["Drôtový model", "Realistické", "Plné"]);
-    expect(menu.children.map((child) => child.type)).toEqual(["button", "button", "button"]);
+    expect(menu.children.map((child) => child.textContent)).toEqual(["Plné", "Realistické"]);
+    expect(menu.children.map((child) => child.type)).toEqual(["button", "button"]);
+    expect(menu.children.map((child) => child.dataset.mode)).toEqual(["solid", "realistic"]);
 
-    (menu.children[0] as BootstrapFakeElement).click();
+    (menu.children[1] as BootstrapFakeElement).click();
 
-    expect(mode).toBe("wireframe");
+    expect(mode).toBe("realistic");
     expect(menu.hidden).toBe(true);
 
     const toolbar = downbar.children[1] as BootstrapFakeElement;

@@ -7,6 +7,7 @@ const LOCAL_DEV_CLIENT_ID = "client_arcigy_demo";
 function shouldUseLocalDevFallback(expectedClientId?: string) {
   return (
     import.meta.env.DEV &&
+    import.meta.env.VITE_LOCAL_CLIENT_CATALOG_FROM_API !== "true" &&
     (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") &&
     (!expectedClientId || expectedClientId === LOCAL_DEV_CLIENT_ID)
   );

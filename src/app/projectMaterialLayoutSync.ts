@@ -74,7 +74,8 @@ export function syncProjectMaterialAssignmentsToLayout(
   const worktops = new Map(args.worktops.map((worktop) => [worktop.id, worktop]));
   const furniture = new Map(args.customFurniture.map((item) => [item.id, item]));
   const changedModules = new Set<LayoutInstance>();
-  const changedWorktops = new Map<KitchenWorktopInstance, BoardProjection>();
+  const projectedWorktops = new Map<KitchenWorktopInstance, BoardProjection>();
+  const rebuiltWorktops = new Set<KitchenWorktopInstance>();
   const changedFurniture = new Set<CustomFurnitureInstance>();
 
   for (const scope of scopes) {
@@ -107,11 +108,7 @@ export function syncProjectMaterialAssignmentsToLayout(
       if (target.kind === "worktop") {
         const worktop = worktops.get(target.worktopId);
         if (!worktop || !projection) continue;
-        if ((projection.materialId && worktop.params.materialId !== projection.materialId) || worktop.params.thicknessMm !== projection.thicknessMm) {
-          if (projection.materialId) worktop.params.materialId = projection.materialId;
-          worktop.params.thicknessMm = projection.thicknessMm;
-          changedWorktops.set(worktop, projection);
-        }
+        projectedWorktops.set(worktop, projection);
         continue;
       }
 
@@ -127,17 +124,25 @@ export function syncProjectMaterialAssignmentsToLayout(
   }
 
   for (const instance of changedModules) args.rebuildModule(instance);
-  // Module rebuilds refresh kitchen worktops from their kitchen context. Apply
-  // the project-level worktop projection afterwards so it remains authoritative.
-  for (const [worktop, projection] of changedWorktops) {
+  // A corpus/front module rebuild may reconstruct its kitchen worktop from the
+  // kitchen context. Reapply every active project-level worktop assignment
+  // afterwards, even when that assignment did not itself change in this update.
+  // Otherwise a later Corpus bridge confirmation can erase an already confirmed
+  // Worktop colour/thickness.
+  const moduleRebuildMayHaveResetWorktops = changedModules.size > 0;
+  for (const [worktop, projection] of projectedWorktops) {
+    const worktopChanged = (projection.materialId && worktop.params.materialId !== projection.materialId)
+      || worktop.params.thicknessMm !== projection.thicknessMm;
+    if (!moduleRebuildMayHaveResetWorktops && !worktopChanged) continue;
     if (projection.materialId) worktop.params.materialId = projection.materialId;
     worktop.params.thicknessMm = projection.thicknessMm;
     args.rebuildWorktop(worktop);
+    rebuiltWorktops.add(worktop);
   }
   for (const item of changedFurniture) args.rebuildCustomFurniture(item);
   return {
     moduleIds: [...changedModules].map((instance) => instance.id),
-    worktopIds: [...changedWorktops.keys()].map((worktop) => worktop.id),
+    worktopIds: [...rebuiltWorktops].map((worktop) => worktop.id),
     customFurnitureIds: [...changedFurniture].map((item) => item.id)
   };
 }

@@ -1313,6 +1313,27 @@ describe("top-level keyboard input command dispatcher", () => {
     return ctx as unknown as Parameters<typeof runKeyboardInputCommand>[0];
   }
 
+  it.each([false, true])('Escape cancels a catalog module in kitchen mode before selection, consumed=%s', defaultPrevented => {
+    const ctx = topLevelKeyboardContext({ placement: { active: true } });
+    ctx.S.kitchenEditMode = true;
+    const ev = plainKeyEvent('Escape', { defaultPrevented, preventDefault: vi.fn(), stopPropagation: vi.fn(), stopImmediatePropagation: vi.fn() });
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+    expect(ctx.cancelPlacement).toHaveBeenCalledExactlyOnceWith(ctx.S, ctx.placementHelpers);
+    expect(ctx.clearSelection).not.toHaveBeenCalled();
+  });
+
+  it("Escape cancels the direct drag before closing kitchen editing or clearing selection", () => {
+    const cancelModulePointerDrag = vi.fn(() => true);
+    const ctx = topLevelKeyboardContext({ cancelModulePointerDrag });
+    const ev = shortcutEvent("Escape", { ctrlKey: false });
+    expect(runKeyboardInputCommand(ctx, ev)).toBe(true);
+    expect(cancelModulePointerDrag).toHaveBeenCalledOnce();
+    expect(ev.stopImmediatePropagation).toHaveBeenCalledOnce();
+    expect(ctx.clearSelection).not.toHaveBeenCalled();
+    expect(ctx.undo).not.toHaveBeenCalled();
+    expect(ctx.cancelPlacement).not.toHaveBeenCalled();
+  });
+
   it("leaves all keys at typing targets without preventing default", () => {
     const ev = plainKeyEvent("Delete", { preventDefault: vi.fn(), target: { nodeName: "INPUT" } as unknown as EventTarget });
     const deleteSelected = vi.fn(() => true);

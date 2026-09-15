@@ -1,6 +1,7 @@
 import type { SupplierPriceBasis } from "../../../../../src/core/supplier-bridge/supplier-bridge-types";
 import { supplierPortals } from "../../config";
 import { waitForStableElement } from "../../content/waitForStableElement";
+import { extractSupplierPreviewImage } from "../supplierPreviewImage";
 import type {
   ExactIdSupplierAdapter,
   ExactProductExtractionContext,
@@ -47,6 +48,13 @@ function materialThickness(parameters: Map<string, string>): string | null {
 function definitionValue(document: Document, label: string): string | null {
   const term = [...document.querySelectorAll("dt")].find((candidate) => cleanText(candidate) === label);
   return term ? cleanText(term.nextElementSibling) || null : null;
+}
+
+function previewImageUrl(document: Document): string | null {
+  // Current Démos product pages put their primary material image directly on
+  // the image element (`img.image-product`), outside the older gallery/image
+  // wrappers. Keep all selectors: Démos still serves both page variants.
+  return extractSupplierPreviewImage(document, "demos", origin, ['img.image-product', '[itemprop="image"]', '.box-detail__image img', '.box-detail__gallery img']);
 }
 
 function localizedNumber(raw: string | null): number | null {
@@ -155,6 +163,7 @@ function detailExtraction(document: Document, context: ExactProductExtractionCon
       description: null,
       decorCode: firstParameter(parameters, /Číslo dekoru|Název dekoru/i),
       surfaceCode: firstParameter(parameters, /Struktura/i),
+      previewImageUrl: previewImageUrl(document),
       thicknessMm: localizedNumber(materialThickness(parameters)),
       dimensions: productDimensions,
       availability: availability(availabilityText)
@@ -196,7 +205,7 @@ function searchResultExtraction(document: Document, context: ExactProductExtract
     requestedProductId: context.requestedProductId,
     foundProductId,
     exactIdMatch: foundProductId === context.requestedProductId,
-    product: { name, manufacturer: null, manufacturerCode: null, productType, description: null, decorCode: null, surfaceCode: null, thicknessMm: null, dimensions: null, availability: availability(rawAvailability) },
+    product: { name, manufacturer: null, manufacturerCode: null, productType, description: null, decorCode: null, surfaceCode: null, previewImageUrl: extractSupplierPreviewImage(row, "demos", origin, ["img"]), thicknessMm: null, dimensions: null, availability: availability(rawAvailability) },
     pricing: {
       customerPrice: customerAmount === null ? null : { amount: customerAmount, currency: currencyFrom(rawCustomerPrice), basis, vatMode: "excluded", rawPriceText: rawCustomerPrice, rawUnitText: unit },
       listPrice: listAmount === null ? null : { amount: listAmount, currency: currencyFrom(rawListPrice), rawPriceText: rawListPrice },

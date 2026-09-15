@@ -112,7 +112,9 @@ import {
   handleOpeningDragPointerMove,
   type PointerOpeningDragState
 } from "./pointerOpeningDragBegin";
-import { updateModuleDragFromGroundHit, type PointerModuleDragState } from "./pointerModuleDrag";
+import { activatePointerModuleDrag, finishModuleDragGesture, updateModuleDragFromGroundHit, type PointerModuleDragState } from "./pointerModuleDrag";
+import { createModuleDragVisuals } from "./moduleDragVisuals";
+import type { createModuleAdjacencySnapResolver } from "./moduleAdjacencySnapResolver";
 import { finishPointerDragState } from "./pointerDragFinish";
 import { buildModuleMarqueeScreenBounds, buildWallMarqueeScreenPolygon, collectMarqueeHitIds } from "./pointerMarqueeHitGeometry";
 import { clearNonFloorplanFloorSelection } from "./selectionController";
@@ -299,6 +301,8 @@ type PointerInputHandlersDataContext = {
   beginKitchenWorktopSelection: (worktopId: string, ev: PointerEvent, pointMm?: { x: number; z: number }) => boolean;
   findSelectableFloorplanWorktopAtPoint: (pointMm: { x: number; z: number }) => string | null;
   beginModuleSelection: (selectableId: string, ev: PointerEvent) => boolean;
+  isMobileAdditiveSelection?: () => boolean;
+  consumeMobileAdditiveSelection?: () => void;
   updateSelectionHover: (target: SelectionHighlightTarget | null) => void;
   bindingFromPlanSnap: (snapped: PlanSnapResult | null, fallbackPoint: THREE.Vector3) => PlanSnapBinding;
   cam: () => THREE.Camera;
@@ -454,7 +458,7 @@ type PointerInputHandlersDataContext = {
   setSelectedModule: (id: string | null) => void;
   setSelectedSection: (id: string | null) => void;
   setSelectedUnderlay: () => void;
-  setSelectedWall: (id: string | null) => void;
+  setSelectedWall: (id: string | null, options?: { additive?: boolean }) => void;
   setToolSelect: () => void;
   setSelectedWindow: () => void;
   setUnderlayStatus: (message: string) => void;
@@ -479,6 +483,8 @@ type PointerInputHandlersDataContext = {
   ) => PointerMeasure3DSnap;
   snapPointXZ: (point: THREE.Vector3, mesh: THREE.Mesh, threshold?: number) => PointerPointSnapXZ;
   snapPosition: (moving: LayoutInstance, desired: THREE.Vector3) => THREE.Vector3;
+  resolveModuleAdjacencySnap: ReturnType<typeof createModuleAdjacencySnapResolver>["resolveModuleAdjacencySnap"];
+  getModuleLocalBackCenter: (instance: LayoutInstance) => THREE.Vector3;
   startTransformFromSelection: (kind: TransformKind, opts?: StartTransformOptions) => boolean;
   syncSelectionState: () => void;
   updateAllSectionVisuals: () => void;
@@ -594,6 +600,31 @@ type MoveObjectSnap = {
 };
 
 export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
+  const moduleDragVisuals = createModuleDragVisuals({ parent: ctx.layoutRoot,
+    getViewMode: () => ctx.viewMode, getModuleLocalBackCenter: ctx.getModuleLocalBackCenter });
+  const finishModuleDrag = (cancel: boolean) => {
+    const pointerId = ctx.dragState.gesture?.pointerId;
+    const instance = ctx.dragState.id ? ctx.findInstance(ctx.dragState.id) : null;
+    const result = finishModuleDragGesture(ctx.dragState, instance, cancel);
+    if (!result.handled) return false;
+    moduleDragVisuals.clear();
+    if (pointerId !== undefined) {
+      try { ctx.renderer.domElement.releasePointerCapture(pointerId); } catch { /* Already released. */ }
+    }
+    ctx.updateLayoutPanel();
+    if (result.changed) ctx.commitHistory(ctx.S);
+    return true;
+  };
+  const isAdditiveSelection = (ev: Pick<PointerEvent, "shiftKey" | "ctrlKey" | "metaKey">) =>
+    ev.shiftKey || ev.ctrlKey || ev.metaKey || !!ctx.isMobileAdditiveSelection?.();
+  const consumeMobileAdditiveSelection = () => {
+    if (ctx.isMobileAdditiveSelection?.()) ctx.consumeMobileAdditiveSelection?.();
+  };
+  const selectWallWithModifiers = (id: string | null, ev: PointerEvent) => {
+    const mobileAdditive = !!ctx.isMobileAdditiveSelection?.();
+    ctx.setSelectedWall(id, { additive: isAdditiveSelection(ev) });
+    if (mobileAdditive) consumeMobileAdditiveSelection();
+  };
   const isPickableObject = (object: THREE.Object3D | null | undefined) =>
     !ctx.isObjectPickable || ctx.isObjectPickable(object);
   const isPickableKey = (key: string | null | undefined) =>
@@ -1454,7 +1485,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     if (ctx.S.kitchenEditMode) {
       const directSelectableModuleId = modulePick.selectableModuleId ?? null;
       if (ctx.kitchenMode?.isTallModuleEditorActive?.()) {
-        if (ctx.kitchenMode?.selectTallSubmoduleFromObject?.(directSelectableModuleId, tallSubmoduleModuleHit ?? moduleHit, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+        if (ctx.kitchenMode?.selectTallSubmoduleFromObject?.(directSelectableModuleId, tallSubmoduleModuleHit ?? moduleHit, { additive: isAdditiveSelection(ev) })) {
+          consumeMobileAdditiveSelection();
           markPendingMarqueeHit(ev.pointerId);
           ev.preventDefault();
           ev.stopPropagation();
@@ -1465,7 +1497,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         ev.stopPropagation();
         return true;
       }
-      if (directSelectableModuleId && ctx.kitchenMode?.selectTallSubmoduleFromObject?.(directSelectableModuleId, moduleHit, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+      if (directSelectableModuleId && ctx.kitchenMode?.selectTallSubmoduleFromObject?.(directSelectableModuleId, moduleHit, { additive: isAdditiveSelection(ev) })) {
+        consumeMobileAdditiveSelection();
         cancelPendingMarquee(ev.pointerId);
         ev.preventDefault();
         ev.stopPropagation();
@@ -1489,7 +1522,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           selectFloor: ctx.setSelectedFloor,
           selectModule: ctx.setSelectedModule,
           selectSection: ctx.setSelectedSection,
-          selectWall: ctx.setSelectedWall,
+          selectWall: (id) => selectWallWithModifiers(id, ev),
           selectWindow: (window) => {
             ctx.windowInst = window;
             ctx.setSelectedWindow();
@@ -1556,7 +1589,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         selectFloor: ctx.setSelectedFloor,
         selectModule: ctx.setSelectedModule,
         selectSection: ctx.setSelectedSection,
-        selectWall: ctx.setSelectedWall,
+        selectWall: (id) => selectWallWithModifiers(id, ev),
         selectWindow: (window) => {
           ctx.windowInst = window;
           ctx.setSelectedWindow();
@@ -2324,7 +2357,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
       if (ctx.S.kitchenEditMode && ctx.kitchenMode?.isTallModuleEditorActive?.()) {
         const activeHostId = ctx.getInstanceIdFromObject(tallSubmoduleObject) ?? directModuleId ?? detailFallbackModuleId ?? null;
-        if (tallSubmoduleObject && ctx.kitchenMode.selectTallSubmoduleFromObject?.(activeHostId, tallSubmoduleObject, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+        if (tallSubmoduleObject && ctx.kitchenMode.selectTallSubmoduleFromObject?.(activeHostId, tallSubmoduleObject, { additive: isAdditiveSelection(ev) })) {
+          consumeMobileAdditiveSelection();
           markPendingMarqueeHit(ev.pointerId);
           ev.preventDefault();
           ev.stopPropagation();
@@ -2396,7 +2430,8 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         return;
       }
       if (ctx.S.kitchenEditMode && kind === "module" && id) {
-        if (ctx.kitchenMode?.selectTallSubmoduleFromObject?.(id, first, { additive: ev.shiftKey || ev.ctrlKey || ev.metaKey })) {
+        if (ctx.kitchenMode?.selectTallSubmoduleFromObject?.(id, first, { additive: isAdditiveSelection(ev) })) {
+          consumeMobileAdditiveSelection();
           cancelPendingMarquee(ev.pointerId);
           ev.preventDefault();
           ev.stopPropagation();
@@ -2426,7 +2461,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           selectColumn: ctx.setSelectedColumn,
           selectFloor: ctx.setSelectedFloor,
           selectModule: ctx.setSelectedModule,
-          selectWall: ctx.setSelectedWall,
+          selectWall: (id) => selectWallWithModifiers(id, ev),
           transformSelectElements: ctx.transformState.kind === "move" && ctx.transformState.step === "selectElements",
           viewMode: ctx.viewMode,
           wallId,
@@ -2508,6 +2543,36 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
 
   // Live hover + preview (SketchUp-like)
   ctx.renderer.domElement.addEventListener("pointermove", (ev) => {
+    if (ctx.dragState.gesture) {
+      const gesture = ctx.dragState.gesture;
+      if (gesture.pointerId !== ev.pointerId) return;
+      const instance = ctx.dragState.id ? ctx.findInstance(ctx.dragState.id) : null;
+      if (!instance) { finishModuleDrag(true); return; }
+      if (!activatePointerModuleDrag(ctx.dragState, ev)) { moduleDragVisuals.sync(ctx.dragState, instance); return; }
+      ctx.updateSelectionHover(null);
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      updateRaycasterFromPointer(ev, rect);
+      const hitPoint = intersectRayPlane(ctx.raycaster, gesture.plane);
+      updateModuleDragFromGroundHit({
+        dragState: ctx.dragState, hitPoint, findInstance: ctx.findInstance, applyWallConstraints: ctx.applyWallConstraints,
+        snapPosition: (moving, desired) => {
+          const result = ctx.resolveModuleAdjacencySnap(moving, desired, { preferredKitchenPlacement: moving.kitchenPlacement });
+          gesture.snap = result?.link ?? null;
+          if (!result) return desired;
+          moving.root.rotation.y = result.rotationY;
+          if (result.kitchenPlacement) moving.kitchenPlacement = result.kitchenPlacement;
+          return result.position;
+        },
+        autoOrientModuleToRoomWallIfSnapped: moving => { if (!moving.kitchenPlacement) ctx.autoOrientModuleToRoomWallIfSnapped(moving); },
+        nudgePinnedModuleChain: ctx.nudgePinnedModuleChain, anyOverlap: ctx.anyOverlap,
+        moduleOverlapsWalls: ctx.moduleOverlapsWalls, moduleOverlapsKitchenWorktops: ctx.moduleOverlapsKitchenWorktops,
+        kitchenGroups: ctx.S.kitchenGroups, defaultWorktopBackOffsetMm: ctx.S.kitchenCtx.worktopBackOffsetMm,
+        inferKitchenPlacementBinding: ctx.inferKitchenPlacementBinding, updateLayoutPanel: ctx.updateLayoutPanel,
+        isModuleAlignLocked: ctx.isModuleAlignLocked,
+      });
+      moduleDragVisuals.sync(ctx.dragState, instance);
+      return;
+    }
     if (ctx.viewNavigation.handlePointerMove(ev)) {
       return;
     }
@@ -3012,6 +3077,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
   });
 
   ctx.renderer.domElement.addEventListener("pointerup", (ev) => {
+    if (ctx.dragState.gesture?.pointerId === ev.pointerId && finishModuleDrag(false)) return;
     if (ctx.viewNavigation.handlePointerUp(ev)) {
       return;
     }
@@ -3105,7 +3171,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
       const endPoint = pointerClientPointInRect(ev, rect);
 
       finishActivePointerMarquee({
-        additive: ev.shiftKey,
+        additive: isAdditiveSelection(ev),
         applyCustomSelection: (selectionRect, additive) => {
           if (!ctx.S.kitchenEditMode || !ctx.kitchenMode?.isTallModuleEditorActive?.()) return false;
           if (!ctx.kitchenMode.selectTallSubmodulesFromObjects) return false;
@@ -3164,6 +3230,7 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         setSelectedWall: ctx.setSelectedWall,
         updateSelectionHighlights: ctx.updateSelectionHighlights
       });
+      consumeMobileAdditiveSelection();
       return;
     }
 
@@ -3189,5 +3256,11 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     }
   });
 
-  return { resolveContextTarget };
+  ctx.renderer.domElement.addEventListener("pointercancel", (ev) => {
+    if (ctx.dragState.gesture?.pointerId === ev.pointerId) finishModuleDrag(true);
+  });
+  ctx.renderer.domElement.addEventListener("lostpointercapture", (ev) => {
+    if (ctx.dragState.gesture?.pointerId === ev.pointerId) finishModuleDrag(true);
+  });
+  return { resolveContextTarget, cancelModuleDrag: () => finishModuleDrag(true) };
 }

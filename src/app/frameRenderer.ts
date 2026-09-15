@@ -6,6 +6,7 @@ import type { LayoutInstance } from "./localTypes";
 import type { RenderMode } from "./renderControls";
 import type { SsgiPipeline } from "../rendering/ssgiPipeline";
 import type { PhotoPathTracer } from "../rendering/photoPathTracer";
+import { renderEditorViewport, useProjectViewportAppearance } from "./viewportAppearance";
 
 export type FrameRendererContext = {
   viewNavigation: { update: (dt: number) => void };
@@ -92,6 +93,7 @@ export function renderAppFrame(ctx: FrameRendererContext, dt: number) {
     activeCam instanceof THREE.PerspectiveCamera;
 
   if (isPhoto) {
+    useProjectViewportAppearance(ctx.renderer);
     ctx.ssgi?.dispose();
     ctx.ssgi = null;
     ctx.ssgiCameraUuid = null;
@@ -123,6 +125,7 @@ export function renderAppFrame(ctx: FrameRendererContext, dt: number) {
     ctx.photo.renderSample();
     ctx.photoStatus.textContent = `Samples: ${ctx.photo.getSamples()} / ${ctx.photo.getMaxSamples()}`;
   } else if (isSsgi) {
+    useProjectViewportAppearance(ctx.renderer);
     ctx.photo?.dispose();
     ctx.photo = null;
     ctx.photoCameraUuid = null;
@@ -149,7 +152,7 @@ export function renderAppFrame(ctx: FrameRendererContext, dt: number) {
       ctx.photoLastLightingRevision = -1;
       ctx.photoStatus.textContent = "";
     }
-    ctx.renderer.render(ctx.scene, activeCam);
+    renderEditorViewport(ctx.renderer, ctx.scene, activeCam);
   }
 
   ctx.technicalDimensions.render();

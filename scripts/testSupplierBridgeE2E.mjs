@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { chromium } from "playwright";
+import { supplierColorFixtures } from "./fixtures/supplierBridgeColors.mjs";
 
 const appUrl = process.env.KITCHEN_UI_BASE_URL ?? "http://127.0.0.1:5184/";
 const simulatorUrl = process.env.SUPPLIER_SIMULATOR_URL ?? "http://127.0.0.1:5195/";
@@ -17,6 +18,7 @@ const result = { ok: false, checks: [], consoleErrors: [] };
 let context;
 let profilePath;
 let projectId = null;
+let extensionFixturePath;
 const ownedProcesses = [];
 
 function assert(condition, label, details = null) {
@@ -109,11 +111,18 @@ async function main() {
   }
   await access(path.join(extensionPath, "manifest.json"));
   await ensureLocalServices();
+  // Grant only the fixture suppliers in a disposable copy. Release permissions
+  // remain optional and are still requested by the real Side Panel UI.
+  extensionFixturePath = await mkdtemp(path.join(os.tmpdir(), "arcigy-bridge-fixture-extension-"));
+  await cp(extensionPath, extensionFixturePath, { recursive: true });
+  const manifest = JSON.parse(await readFile(path.join(extensionFixturePath, "manifest.json"), "utf8"));
+  manifest.host_permissions.push(...supplierColorFixtures.map((fixture) => `${new URL(fixture.url).origin}/*`));
+  await writeFile(path.join(extensionFixturePath, "manifest.json"), JSON.stringify(manifest));
   profilePath = await mkdtemp(path.join(os.tmpdir(), "arcigy-supplier-bridge-e2e-"));
   context = await chromium.launchPersistentContext(profilePath, {
     headless: false,
     viewport: { width: 1500, height: 950 },
-    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`]
+    args: [`--disable-extensions-except=${extensionFixturePath}`, `--load-extension=${extensionFixturePath}`]
   });
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent("serviceworker", { timeout: 20_000 });
   worker.on("console", (message) => {
@@ -175,11 +184,12 @@ async function main() {
     contentType: "application/json",
     body: JSON.stringify({
       ok: true,
-      suppliers: [{ supplierId: "mock-supplier", displayName: "Supplier simulator", startUrl: simulatorUrl, adapterKey: "mock", sortOrder: 1 }]
+      suppliers: [{ supplierId: "mock-supplier", displayName: "Supplier simulator", startUrl: simulatorUrl, adapterKey: "mock", sortOrder: 1 }, ...supplierColorFixtures.map((fixture, index) => ({ supplierId: fixture.supplierId, displayName: fixture.label, startUrl: fixture.url, adapterKey: fixture.supplierId, sortOrder: index + 2 }))]
     })
   }));
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await panel.locator('select').first().selectOption(new URL(appUrl).origin);
+  await panel.locator('input[autocomplete="organization"]').fill(testCompany);
   await panel.locator('input[autocomplete="username"]').fill(testUsername);
   await panel.locator('input[autocomplete="current-password"]').fill(testPassword);
   await panel.getByRole("button", { name: "Prihlásiť" }).click();
@@ -232,6 +242,50 @@ async function main() {
     corpusAssignment?.customValues?.supplierBridge ?? null
   );
 
+  let previewRequests = 0;
+  let previewFails = false;
+  // Pixel decoding and tenant authorization have separate real HTTP tests.
+  // This UI gate makes supplier/network availability deterministic.
+  await panel.route("**/api/supplier-bridge/sessions/*/preview-color", async (route) => {
+    previewRequests += 1;
+    const payload = route.request().postDataJSON();
+    assert(supplierColorFixtures.some((fixture) => fixture.imageUrl === payload.imageUrl), "verified product image reached the colour API");
+    await route.fulfill({ status: previewFails ? 422 : 200, contentType: "application/json", body: JSON.stringify(previewFails ? { error: "Image unavailable", code: "SUPPLIER_PREVIEW_IMAGE_UNAVAILABLE" } : { ok: true, previewColorHex: "#A07040" }) });
+  });
+  for (const fixture of supplierColorFixtures) {
+    await context.route(fixture.url, (route) => route.fulfill({ contentType: "text/html; charset=utf-8", body: fixture.html(fixture.imageUrl) }));
+    await context.route(fixture.imageUrl, (route) => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64") }));
+    await panel.locator("select").nth(1).selectOption(fixture.supplierId);
+    if (fixture.supplierId === "hranipex") await panel.getByLabel(/Kód rozmerového variantu/).fill(fixture.code);
+    await supplier.goto(fixture.url);
+    await supplier.bringToFront();
+    const before = previewRequests;
+    let sampled = panel.waitForResponse((response) => response.url().includes("/preview-color") && response.status() === 200);
+    await panel.locator(`[data-material-target="material-assignment:${fixture.category}"]`).click();
+    await sampled.catch(async () => { throw new Error(`${fixture.label}: colour request missing: ${await panel.locator('.notice--error').allTextContents()}`); });
+    await panel.locator('[data-preview-color-status="derived"]').waitFor({ timeout: 20_000 });
+    assert(previewRequests === before + 1, `${fixture.label}: captured image was sampled`);
+    const assigned = await (await context.request.get(new URL(`/api/projects/${projectId}/materials`, appUrl).toString())).json();
+    const entry = assigned.view.assignments.assignments.find((item) => item.assignmentId === `material-assignment:${fixture.category}`);
+    assert(entry?.snapshots?.material?.definition?.preview?.colorHex === "#A07040", `${fixture.label}: image colour persisted in the assigned material`);
+    // Repair already assigned material colours: the same code must not skip sampling.
+    sampled = panel.waitForResponse((response) => response.url().includes("/preview-color") && response.status() === 200);
+    await panel.locator(`[data-material-target="material-assignment:${fixture.category}"]`).click();
+    await sampled.catch(async () => { throw new Error(`${fixture.label}: repeat colour request missing: ${await panel.locator('.notice--error').allTextContents()}`); });
+    await panel.locator('[data-preview-color-status="derived"]').waitFor({ timeout: 20_000 });
+    assert(previewRequests === before + 2, `${fixture.label}: assigning the same product refreshes its colour`);
+  }
+
+  // A failed sample leaves the committed material unchanged and allows retry.
+  const beforeFailure = await (await context.request.get(new URL(`/api/projects/${projectId}/materials`, appUrl).toString())).json();
+  previewFails = true;
+  await panel.locator('[data-material-target="material-assignment:worktop"]').click();
+  await panel.locator('[data-preview-color-status="failed"]').waitFor({ timeout: 20_000 });
+  const afterFailure = await (await context.request.get(new URL(`/api/projects/${projectId}/materials`, appUrl).toString())).json();
+  assert(JSON.stringify(beforeFailure.view.assignments) === JSON.stringify(afterFailure.view.assignments), "failed colour sampling leaves the project unchanged");
+  // Expected network rejection is asserted above, not an application exception.
+  result.consoleErrors = result.consoleErrors.filter((line) => !line.includes("422 (Unprocessable"));
+
   await panel.reload();
   await panel.locator("select").first().waitFor({ timeout: 15_000 });
   assert(true, "Side Panel restored its authenticated account after reload without storing the password");
@@ -250,6 +304,7 @@ try {
   if (projectId && context) await context.request.delete(new URL(`/api/projects/${projectId}`, appUrl).toString()).catch(() => undefined);
   await context?.close().catch(() => undefined);
   if (profilePath) await rm(profilePath, { recursive: true, force: true }).catch(() => undefined);
+  if (extensionFixturePath) await rm(extensionFixturePath, { recursive: true, force: true }).catch(() => undefined);
   await stopLocalProcesses();
   console.log(JSON.stringify(result, null, 2));
 }

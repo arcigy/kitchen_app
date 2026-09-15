@@ -460,8 +460,38 @@ export function validateProjectMaterialAssignments(
   }
 
   validateEdgeWidths(state, warnings);
+  validateSupplierBridgeFieldWarnings(state, warnings);
 
   return uniqueWarnings(warnings);
+}
+
+function validateSupplierBridgeFieldWarnings(state: ProjectMaterialAssignmentsState, warnings: ProjectMaterialWarning[]): void {
+  for (const assignment of state.assignments) {
+    if (assignment.kind !== "material") continue;
+    const bridge = assignment.customValues.supplierBridge;
+    const data = bridge && typeof bridge === "object" && !Array.isArray(bridge) ? bridge as Record<string, JsonValue> : null;
+    if (!data || typeof data.supplierProductCode !== "string") continue;
+    if (data.colorStatus === "retained" || data.colorStatus === "default") {
+      warnings.push(warning(
+        `supplier-color-not-applied:${assignment.assignmentId}`,
+        "warning",
+        "Farba zo suppliera nebola prevzatá",
+        "Dodávateľ neposkytol dôveryhodnú farbu. V aplikácii zostala predchádzajúca alebo predvolená farba.",
+        assignment.category,
+        assignment.assignmentId
+      ));
+    }
+    if (data.thicknessStatus === "retained" || data.thicknessStatus === "default") {
+      warnings.push(warning(
+        `supplier-thickness-not-applied:${assignment.assignmentId}`,
+        "warning",
+        "Hrúbka zo suppliera nebola prevzatá",
+        "Dodávateľ neposkytol dôveryhodnú hrúbku. V aplikácii zostala predchádzajúca alebo predvolená hrúbka.",
+        assignment.category,
+        assignment.assignmentId
+      ));
+    }
+  }
 }
 
 function isGeneralMaterialAssignment(assignment: ProjectMaterialAssignment): boolean {
@@ -517,7 +547,10 @@ function validateMaterialAssignment(
     return;
   }
 
-  const material = catalog.materials.find((candidate) => candidate.id === id);
+  const material = catalog.materials.find((candidate) => candidate.id === id)
+    ?? (assignment.snapshots.material?.definition.id === id && assignment.snapshots.material.definition.supplierSource
+      ? assignment.snapshots.material.definition
+      : undefined);
   if (!material) {
     warnings.push(warning(
       `invalid-material:${assignment.assignmentId}`,

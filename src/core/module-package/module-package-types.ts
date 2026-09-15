@@ -66,7 +66,7 @@ export type KitchenModuleContract = {
   placementMode: KitchenModulePlacementMode;
   capabilities: KitchenModuleCapability[];
   /** A named geometry contract prevents a historical package snapshot from silently changing shape. */
-  geometryContractVersion: 1 | 2;
+  geometryContractVersion: 1 | 2 | 3;
   /** Parameters which are intentionally package-local rather than shared Kitchen Group parameters. */
   localParameterKeys?: string[];
 };

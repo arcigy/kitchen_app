@@ -24,6 +24,7 @@ export function calculateBOM(params: FlapShelvesLowParams, ctx: KitchenContext, 
   void ctx;
   const p = normalizeFlapShelvesLowParams(params);
   const source = p as Record<string, unknown>;
+  const hasDoors = p.hasDoors !== false;
   const width = num(source, "width", 900);
   const height = num(source, "height", 720);
   const depth = num(source, "depth", 560);
@@ -59,15 +60,17 @@ export function calculateBOM(params: FlapShelvesLowParams, ctx: KitchenContext, 
     boardItem({ id: "carcass-top", category: "carcass", description: "Carcass top", quantity: 1, length: innerWidth, width: depth, thickness: boardT, material: bodyRef, slot: "carcass", wasteMultiplier: 1.1 }),
     boardItem({ id: "carcass-back", category: "back_panel", description: "Carcass back", quantity: 1, length: innerWidth, width: innerHeight, thickness: backT, material: backRef, slot: "back", wasteMultiplier: 1.1 }),
     boardItem({ id: "shelves", category: "carcass", description: "Internal shelves", quantity: shelfCount, length: innerWidth, width: innerDepth, thickness: shelfT, material: shelfRef ?? bodyRef, slot: "shelf", wasteMultiplier: 1.1 }),
-    boardItem({ id: "door-front", category: "front", description: "Flap front", quantity: 1, length: frontWidth, width: frontHeight, thickness: frontT, material: frontRef, slot: "front", wasteMultiplier: 1.1 })
+
   ];
 
-  const visibleEdgeLm = round((height * 2 + innerWidth * (2 + shelfCount) + frontWidth * 2 + frontHeight * 2) / 1000);
+  if (hasDoors) items.push(boardItem({ id: "door-front", category: "front", description: "Flap front", quantity: 1, length: frontWidth, width: frontHeight, thickness: frontT, material: frontRef, slot: "front", wasteMultiplier: 1.1 }));
+
+  const visibleEdgeLm = round((height * 2 + innerWidth * (2 + shelfCount) + (hasDoors ? frontWidth * 2 + frontHeight * 2 : 0)) / 1000);
   if (edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
 
   const hardware = [
-    hardwareItem("door-handle", "Door handle", source.handleType === "none" ? 0 : 1, componentRef(resolveComponent(catalog, source, "handleComponentId"))),
-    hardwareItem("lift-up-fittings", "Lift-up fittings", 2, componentRef(resolveComponent(catalog, source, "liftUpComponentId"))),
+    hardwareItem("door-handle", "Door handle", !hasDoors || source.handleType === "none" ? 0 : 1, componentRef(resolveComponent(catalog, source, "handleComponentId"))),
+    hardwareItem("lift-up-fittings", "Lift-up fittings", hasDoors ? 2 : 0, componentRef(resolveComponent(catalog, source, "liftUpComponentId"))),
     hardwareItem("hanging-brackets", "Wall hanging brackets", 2, componentRef(resolveComponent(catalog, source, "hangingBracketComponentId"))),
     hardwareItem("shelf-supports", "Shelf supports", shelfCount * 4, componentRef(resolveComponent(catalog, source, "shelfSupportComponentId")))
   ].filter((item): item is PortableQuoteBomItem => Boolean(item));

@@ -1,5 +1,7 @@
 import type { PlanSnapKind } from "./planSnap";
 
+export const POINTER_DRAG_THRESHOLD_PX = 6;
+
 export type SnapKindPriority = Array<Exclude<PlanSnapKind, "none">>;
 
 export const SNAP_PRIORITY_DEFAULT = ["corner", "endpoint", "perpendicular", "midpoint", "edge", "axis"] satisfies SnapKindPriority;

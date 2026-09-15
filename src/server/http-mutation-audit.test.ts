@@ -62,6 +62,15 @@ describe("HTTP mutation audit", () => {
     expect(log).not.toHaveBeenCalled();
   });
 
+  it("does not duplicate high-frequency activity pulses into mutation logs", () => {
+    const log = vi.fn();
+    const res = response(202);
+    registerMutationAudit(authenticatedRequest("POST", "/api/user-activity/pulse"), res,
+      new URL("http://local/api/user-activity/pulse"), "request-activity", { log });
+    res.emit("finish");
+    expect(log).not.toHaveBeenCalled();
+  });
+
   it("records rejected token mutations without logging the bearer token", () => {
     const log = vi.fn();
     const req = {

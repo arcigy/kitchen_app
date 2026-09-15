@@ -26,6 +26,28 @@ describe("project material business rules", () => {
     ]));
   });
 
+  it("keeps supplier-only snapshots valid and reports a retained supplier colour", () => {
+    const catalog = testCatalog();
+    const state = createDefaultProjectMaterialAssignments(catalog, NOW);
+    const corpus = state.assignments.find((item) => item.category === "corpus")!;
+    const base = corpus.snapshots.material!.definition;
+    corpus.materialId = "supplier-material:demos:RED-18";
+    corpus.snapshots.material!.definition = {
+      ...base,
+      id: corpus.materialId,
+      supplierSource: { supplier: "demos", supplierProductId: "RED-18" },
+      preview: { ...base.preview, colorHex: "#B31B34" },
+      availableThicknessesMm: [18],
+      defaultThicknessMm: 18
+    };
+    corpus.thicknessMm = 18;
+    corpus.customValues = { supplierBridge: { supplierProductCode: "RED-18", colorStatus: "retained", thicknessStatus: "supplier" } };
+
+    const warnings = validateProjectMaterialAssignments(state, catalog);
+    expect(warnings).not.toContainEqual(expect.objectContaining({ id: `invalid-material:${corpus.assignmentId}` }));
+    expect(warnings).toContainEqual(expect.objectContaining({ id: `supplier-color-not-applied:${corpus.assignmentId}` }));
+  });
+
   it("keeps the canonical category order and creates tenant-catalog defaults with snapshots", () => {
     const catalog = testCatalog();
     const state = createDefaultProjectMaterialAssignments(catalog, NOW);

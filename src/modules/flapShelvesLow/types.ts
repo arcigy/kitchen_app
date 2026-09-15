@@ -9,6 +9,7 @@ import {
 
 export type FlapShelvesLowParams = {
   type: "flap_shelves_low";
+  hasDoors?: boolean;
 } & Record<string, PortableJsonValue>;
 
 const MODULE_DEFAULTS = defaults as FlapShelvesLowParams;
@@ -73,6 +74,7 @@ export function normalizeFlapShelvesLowParams(
   options: FlapShelvesLowNormalizeOptions = {}
 ): FlapShelvesLowParams {
   const normalized = normalizePortableParams(MODULE_DEFAULTS, params, "flap_shelves_low") as FlapShelvesLowParams;
+  normalized.hasDoors = normalized.hasDoors !== false;
 
   normalized.type = "flap_shelves_low";
   normalized.assemblyContext = "kitchen";

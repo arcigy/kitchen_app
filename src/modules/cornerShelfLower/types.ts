@@ -9,6 +9,7 @@ import {
 
 export type CornerShelfLowerParams = {
   type: "corner_shelf_lower";
+  hasDoors?: boolean;
 } & Record<string, PortableJsonValue>;
 
 const MODULE_DEFAULTS = defaults as CornerShelfLowerParams;
@@ -82,6 +83,7 @@ export function normalizeCornerShelfLowerParams(
   options: CornerShelfLowerNormalizeOptions = {}
 ): CornerShelfLowerParams {
   const normalized = normalizePortableParams(MODULE_DEFAULTS, params, "corner_shelf_lower") as CornerShelfLowerParams;
+  normalized.hasDoors = normalized.hasDoors !== false;
   const sourceKey = options.sourceKey ?? "";
   const boardThicknessMm = clamp(
     Math.round(getNumber(normalized.boardThickness, getNumber(MODULE_DEFAULTS.boardThickness, 18))),

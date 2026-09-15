@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createUpperWallPlacement, isWallKitchenBinding } from './upperWallPlacement';
 import { createPlanSnapper, type PlanSnapBinding, type PlanSnapResult } from "./planSnap";
 import { buildMeasureGuides, type AssociativeMeasureContext } from "./measureAssociative";
 import { pointInPolygonXZ } from "./sharedUtils";
@@ -121,6 +122,8 @@ function hasAnyChangedContextKey(changedKeys: Set<string>, testedKeys: Set<strin
 }
 
 export type KitchenPlacementControllerContext = {
+  hasModuleCollision?: (inst: LayoutInstance) => boolean;
+  setStatus?: (message: string) => void;
   S: {
     activeKitchenGroupId: string | null;
     kitchenCtx: KitchenContext;
@@ -295,6 +298,63 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     return new THREE.Vector3(inst.localBox.min.x, 0, inst.localBox.min.z);
   };
 
+  const upperWallPlacement = createUpperWallPlacement({
+    walls, wallSolvedOutlines,
+    isCorner: isCornerKitchenModule,
+    getBackCenter: getModuleLocalBackCenter,
+    getPlacementY: getKitchenModulePlacementY,
+    getOpenings: () => [
+      ...(ctx.getWindows?.() ?? []).map(({ params }) => ({ ...params, wallId: params.wallId ?? '', bottomMm: params.sillHeightMm })),
+      ...(ctx.getDoors?.() ?? []).map(({ params }) => ({ ...params, wallId: params.wallId ?? '', bottomMm: 0 }))
+    ]
+  });
+
+  const hasRequiredKitchenWallSupport = (inst: LayoutInstance) =>
+    getKitchenModuleRole(inst.params) !== 'upper' || !!upperWallPlacement.infer(inst);
+
+  const getUpperWallPlacementConstraint = (inst: LayoutInstance, cursor: THREE.Vector3, groupId?: string | null) => {
+    const candidate = upperWallPlacement.constrain(inst, cursor, groupId);
+    const modulePackage = getModulePackageForInstance(inst);
+    const corner = isCornerKitchenModule(inst);
+    const validation = candidate && modulePackage ? validateKitchenModulePackagePlacement({ modulePackage, candidate: {
+      // A catalog wall family may expose corner variants under kitchen_wall.
+      // Keep its declared context; the geometric resolver still requires both
+      // physical walls and the package's anchor/clearance rules still apply.
+      placementContext: corner && modulePackage.placement.allowedContexts.includes('kitchen_corner') ? 'kitchen_corner' : 'kitchen_wall', hasWall: true, hasFloor: false,
+      hasCorner: corner, hasTwoPerpendicularWalls: corner, touchesBothWalls: corner, cornerAngleDeg: corner ? 90 : undefined,
+      snapPosition: candidate.position, snapRotation: candidate.rotationY
+    } }) : null;
+    const valid = !!candidate && (validation?.valid ?? true);
+    return {
+      kitchenPlacement: candidate?.binding ?? null,
+      position: candidate?.position ?? cursor.clone().setY(getKitchenModulePlacementY(inst, groupId)),
+      rotationY: candidate?.rotationY ?? inst.root.rotation.y,
+      valid, enforceRoomBounds: false, enforceWallOverlap: true,
+      statusText: valid ? 'Vrchný modul: ukotvený na stenu.' : validation && !validation.valid
+        ? firstPlacementError(validation) : corner
+          ? 'Rohový vrchný modul potrebuje roh dvoch kolmých stien s dostatočnou výškou a dĺžkou.'
+          : 'Vrchný modul potrebuje nakreslenú stenu pod celým chrbtom a v celej svojej výške.'
+    };
+  };
+
+  const resolveUpperWallMove = (inst: LayoutInstance, desired: THREE.Vector3) => {
+    if (getKitchenModuleRole(inst.params) !== 'upper') return null;
+    return getUpperWallPlacementConstraint(inst, desired, inst.kitchenGroupId);
+  };
+
+  const reconcileMountedModules = () => {
+    const mounted = instances.filter(inst => isWallKitchenBinding(inst.kitchenPlacement));
+    const previous = mounted.map(inst => ({ inst, position: inst.root.position.clone(), rotation: inst.root.rotation.y,
+      binding: structuredClone(inst.kitchenPlacement!) }));
+    const placed = mounted.every(inst => upperWallPlacement.apply(inst, inst.kitchenPlacement!));
+    if (placed && !mounted.some(inst => ctx.hasModuleCollision?.(inst))) return true;
+    for (const item of previous) {
+      item.inst.root.position.copy(item.position); item.inst.root.rotation.y = item.rotation;
+      item.inst.kitchenPlacement = item.binding; item.inst.root.updateMatrixWorld(true);
+    }
+    return false;
+  };
+
   const getModuleLocalKitchenCornerAxisAnchor = (inst: LayoutInstance, axis: "x" | "z") => {
     inst.root.updateMatrixWorld(true);
     const anchorName = axis === "x" ? kitchenCornerXAnchorName : kitchenCornerZAnchorName;
@@ -368,6 +428,10 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
   const getModuleWorldKitchenAnchor = (inst: LayoutInstance) => getModuleLocalKitchenAnchor(inst).applyMatrix4(inst.root.matrixWorld);
 
   const preserveWorldKitchenAnchor = (inst: LayoutInstance, previousWorldAnchor: THREE.Vector3) => {
+    if (getKitchenModuleRole(inst.params) === 'upper') {
+      inst.root.position.y = getKitchenModulePlacementY(inst);
+      inst.root.updateMatrixWorld(true);
+    }
     const nextWorldAnchor = getModuleWorldKitchenAnchor(inst);
     if (isCornerKitchenModule(inst)) {
       const delta = previousWorldAnchor.clone().sub(nextWorldAnchor);
@@ -587,7 +651,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
 
     const extents = getModuleKitchenCornerExtents(inst);
     return {
-      worktopId: binding.worktopId,
+      worktopId: worktop.id,
       cornerIndex,
       xSegmentIndex: resolveSegmentIndex(xDir),
       zSegmentIndex: resolveSegmentIndex(zDir),
@@ -655,6 +719,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     groupId: string,
     backOffsetMm: number
   ): KitchenPlacementBinding | null => {
+    if (getKitchenModuleRole(inst.params) === 'upper') return upperWallPlacement.infer(inst, groupId);
     if (moduleStaysOutsideKitchenWorktop(inst)) return null;
     const groupWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === groupId);
     if (groupWorktops.length === 0) return null;
@@ -752,6 +817,12 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     backOffsetMm: number,
     opts?: { skipRunEndClosureSync?: boolean }
   ) => {
+    if (getKitchenModuleRole(inst.params) === 'upper') {
+      if (isWallKitchenBinding(binding)) return upperWallPlacement.apply(inst, binding);
+      // Legacy worktop links may migrate only where the current pose really touches walls.
+      const wallBinding = upperWallPlacement.infer(inst);
+      return !!wallBinding && upperWallPlacement.apply(inst, wallBinding);
+    }
     const worktop = kitchenWorktops.find((item) => item.id === binding.worktopId);
     if (!worktop) return false;
 
@@ -797,6 +868,29 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     };
     if (!opts?.skipRunEndClosureSync) syncKitchenRunEndClosure(inst, backOffsetMm);
     return true;
+  };
+
+  const restoreKitchenModulePlacements = () => {
+    // A binding is the persisted design intent. Reconcile only explicit, valid
+    // links after all modules/worktops exist; never infer a link for a free item.
+    // Corner rotations must be restored before deriving reserved run margins.
+    const bound = instances.filter(inst => inst.kitchenPlacement && (inst.kitchenGroupId || isWallKitchenBinding(inst.kitchenPlacement)));
+    bound.sort((a, b) => Number(isCornerKitchenModule(b)) - Number(isCornerKitchenModule(a)));
+    for (const inst of bound) {
+      const binding = inst.kitchenPlacement!;
+      const group = S.kitchenGroups.find(item => item.id === inst.kitchenGroupId);
+      if (isWallKitchenBinding(binding)) {
+        applyKitchenPlacementBinding(inst, binding, group?.ctx.worktopBackOffsetMm ?? 0, { skipRunEndClosureSync: true });
+        continue;
+      }
+      const worktop = kitchenWorktops.find(item => item.id === binding.worktopId && item.kitchenGroupId === inst.kitchenGroupId);
+      if (!group || !worktop || !Number.isInteger(binding.segmentIndex) || binding.segmentIndex < 0 || !Number.isFinite(binding.offsetAlongM)) continue;
+      applyKitchenPlacementBinding(inst, binding, group.ctx.worktopBackOffsetMm, { skipRunEndClosureSync: true });
+    }
+    // History constructs worktops while the previous modules still exist.
+    // Rebuild their physical coverage only after all restored placements settle,
+    // including an empty kitchen after undoing insertion/removing the last corner.
+    for (const worktop of kitchenWorktops) ctx.rebuildKitchenWorktop(worktop);
   };
 
   const syncKitchenRunEndClosure = (inst: LayoutInstance, backOffsetMm: number) => {
@@ -933,6 +1027,29 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
         });
       }
     }
+    if (moduleRole === 'upper') {
+      const wallRuns = new Map<string, KitchenRunDimensionSource>();
+      for (const inst of instances) {
+        const binding = inst.kitchenPlacement;
+        if (inst.kitchenGroupId !== groupId || binding?.kind !== 'wall' || getKitchenModuleRole(inst.params) !== 'upper') continue;
+        const face = upperWallPlacement.getRunFace(inst);
+        if (!face) continue;
+        const id = `wall:${face.wall.id}:${face.side}:${face.min}:${face.max}`;
+        let source = wallRuns.get(id);
+        if (!source) {
+          const start = face.start.clone().addScaledVector(face.dir, face.min);
+          const end = face.start.clone().addScaledVector(face.dir, face.max);
+          source = { id, groupId, wallId: face.wall.id, wallSide: face.side, wallStartM: face.min, segmentIndex: 0,
+            lengthMm: (face.max - face.min) * 1000, worktopDepthMm: (inst.localBox.max.z - inst.localBox.min.z) * 1000,
+            start: { x: start.x, z: start.z }, end: { x: end.x, z: end.z },
+            frontNormal: { x: face.normal.x, z: face.normal.z }, reservedStartMm: 0, reservedEndMm: 0, modules: [] };
+          wallRuns.set(id, source);
+        }
+        source.modules.push({ id: inst.id, centerMm: (binding.offsetAlongM - face.min) * 1000,
+          widthMm: getInstanceWidthMm(inst), ...getModuleWidthLimitsMm(inst) });
+      }
+      sources.push(...wallRuns.values());
+    }
     return sources;
   };
 
@@ -1014,9 +1131,10 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
       const centerMm = reflow.centersMm.get(item.id);
       if (centerMm == null) continue;
       applied = applyKitchenPlacementBinding(item, {
+        ...(source.wallId ? { kind: 'wall' as const, wallId: source.wallId, wallSide: source.wallSide } : {}),
         worktopId: source.worktopId,
         segmentIndex: source.segmentIndex,
-        offsetAlongM: centerMm / 1000
+        offsetAlongM: centerMm / 1000 + (source.wallStartM ?? 0)
       }, backOffsetMm) && applied;
     }
     if (!applied) {
@@ -1307,25 +1425,80 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
       inst.kitchenPlacement = { ...binding };
     }
 
+    const previousParamsByInstance = new Map<string, ModuleParams>();
+    const previousPoses = instances.filter(inst => inst.kitchenGroupId === groupId).map(inst => ({ inst,
+      position: inst.root.position.clone(), rotation: inst.root.rotation.y, binding: inst.kitchenPlacement ? structuredClone(inst.kitchenPlacement) : null }));
+    let worktopsRebuilt = false;
+    const rollback = () => {
+      const group = S.kitchenGroups.find(item => item.id === groupId);
+      if (group) group.ctx = structuredClone(prevCtx);
+      if (S.activeKitchenGroupId === groupId) S.kitchenCtx = structuredClone(prevCtx);
+      for (const [instanceId, params] of previousParamsByInstance) {
+        const changed = instances.find(candidate => candidate.id === instanceId);
+        if (!changed) continue;
+        const appliedParams = structuredClone(changed.params);
+        changed.params = structuredClone(params);
+        rebuildInstance(changed, {
+          skipLayoutValidation: true, skipLayoutPanelUpdate: true,
+          preserveBackAnchor: true, previousParams: appliedParams,
+        });
+      }
+      for (const pose of previousPoses) {
+        pose.inst.root.position.copy(pose.position);
+        pose.inst.root.rotation.y = pose.rotation;
+        pose.inst.kitchenPlacement = pose.binding;
+        pose.inst.root.updateMatrixWorld(true);
+      }
+      if (worktopsRebuilt) rebuildKitchenGroupWorktops(groupId, prevCtx);
+      updateLayoutPanel();
+      return false;
+    };
     for (const inst of instances) {
       if (inst.kitchenGroupId !== groupId) continue;
       const modulePackage = getModulePackageForInstance(inst);
       if (!modulePackageReadsChangedKitchenContext(modulePackage, changedContextKeys)) continue;
-      applyKitchenContextToModuleParams(inst.params, nextCtx, ctx.catalog, modulePackage);
-      rebuildInstance(inst, { skipLayoutValidation: true, skipLayoutPanelUpdate: true, preserveBackAnchor: true });
+      const previousParams = structuredClone(inst.params);
+      const candidateParams = structuredClone(inst.params);
+      applyKitchenContextToModuleParams(candidateParams, nextCtx, ctx.catalog, modulePackage);
+      // rebuildInstance can restore geometry only when it receives the actual
+      // pre-change parameters. Do not mutate the live instance before it has
+      // accepted the candidate.
+      inst.params = candidateParams;
+      const rebuilt = rebuildInstance(inst, {
+        skipLayoutValidation: true,
+        skipLayoutPanelUpdate: true,
+        preserveBackAnchor: true,
+        previousParams,
+      });
+      if (!rebuilt) {
+        inst.params = previousParams;
+        return rollback();
+      }
+      previousParamsByInstance.set(inst.id, previousParams);
     }
 
-    if (shouldRebuildWorktops) rebuildKitchenGroupWorktops(groupId, nextCtx);
+    if (shouldRebuildWorktops) {
+      rebuildKitchenGroupWorktops(groupId, nextCtx);
+      worktopsRebuilt = true;
+    }
 
     for (const inst of instances) {
       if (inst.kitchenGroupId !== groupId) continue;
       const binding = bindings.get(inst.id) ?? inst.kitchenPlacement;
       if (binding && applyKitchenPlacementBinding(inst, binding, nextCtx.worktopBackOffsetMm)) continue;
+      // Mounting height can change without rebuilding module geometry. A failed
+      // host attachment must reject the same transaction as a failed rebuild.
+      if (getKitchenModuleRole(inst.params) === 'upper' && !hasRequiredKitchenWallSupport(inst)) {
+        const result = rollback();
+        ctx.setStatus?.('Zmena sa neuložila: vrchný modul musí zostať celou šírkou a výškou opretý o stenu.');
+        return result;
+      }
       inst.kitchenPlacement = inferKitchenPlacementBinding(inst, groupId, nextCtx.worktopBackOffsetMm);
       syncKitchenRunEndClosure(inst, nextCtx.worktopBackOffsetMm);
     }
 
     updateLayoutPanel();
+    return true;
   };
 
   const getTallKitchenPlacementConstraint = (
@@ -1446,6 +1619,9 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
   };
 
   const getKitchenPlacementConstraint = (ghost: LayoutInstance, cursorWorld: THREE.Vector3) => {
+    if (getKitchenModuleRole(ghost.params) === 'upper') {
+      return getUpperWallPlacementConstraint(ghost, cursorWorld, S.activeKitchenGroupId ?? ghost.kitchenGroupId);
+    }
     if (!S.kitchenEditMode || !S.activeKitchenGroupId) return null;
 
     const activeWorktops = kitchenWorktops.filter((worktop) => worktop.kitchenGroupId === S.activeKitchenGroupId);
@@ -1678,6 +1854,7 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     getKitchenSegmentReservedMargins,
     inferKitchenPlacementBinding,
     applyKitchenPlacementBinding,
+    restoreKitchenModulePlacements,
     syncKitchenRunEndClosure,
     syncKitchenRunEndClosures,
     getKitchenRunDimensionSources,
@@ -1688,6 +1865,9 @@ export function createKitchenPlacementController(ctx: KitchenPlacementController
     rebuildKitchenGroupLayout,
     getTallKitchenPlacementConstraint,
     getKitchenPlacementConstraint,
+    hasRequiredKitchenWallSupport,
+    resolveUpperWallMove,
+    reconcileMountedModules,
     setMeasureStateRef: (next: Pick<MeasureState, "measures">) => { measureStateRef = next; }
   };
 }

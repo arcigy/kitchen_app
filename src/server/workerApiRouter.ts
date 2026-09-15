@@ -17,6 +17,8 @@ import { handleSupplierBridgeApi } from "./supplierBridgeEndpoint";
 import { handleFeedbackReportApi } from "./feedbackReportEndpoint";
 import type { ClientCatalogBootstrapResponseCache } from "./clientCatalogBootstrapResponseCache";
 import type { ClientModulePackagesResponseCache } from "./clientModulePackagesResponseCache";
+import type { UserActivityRepository } from "../core/user-activity/user-activity-types";
+import { handleUserActivityApi } from "./userActivityEndpoint";
 
 type GetClientContext = (cookieHeader: string | string[] | undefined) => Promise<ClientContext>;
 type ReadJsonBody = (req: http.IncomingMessage) => Promise<unknown>;
@@ -33,6 +35,7 @@ export type WorkerApiRouterContext = {
   clientCatalogBootstrapResponseCache: ClientCatalogBootstrapResponseCache;
   clientModulePackagesResponseCache: ClientModulePackagesResponseCache;
   catalogLookupCache: CatalogExactLookupCache;
+  userActivityRepository: UserActivityRepository;
   createCatalogRepository(): ClientCatalogRepository;
   createModulePackageRepository(): ModulePackageRepository;
   handleCatalog: DirectRouteHandler;
@@ -56,6 +59,15 @@ export async function handleWorkerApiRequest(
       getContext: context.getClientContext,
       readJsonBody: context.readJsonBody,
       sendJson: context.sendJson
+    })
+  ) return;
+
+  if (
+    await handleUserActivityApi(req, res, url, {
+      getContext: context.getClientContext,
+      readJsonBody: context.readJsonBody,
+      sendJson: context.sendJson,
+      repository: context.userActivityRepository
     })
   ) return;
 

@@ -24,6 +24,7 @@ export function calculateBOM(params: CornerShelfLowerParams, ctx: KitchenContext
   void ctx;
   const p = normalizeCornerShelfLowerParams(params);
   const source = p as Record<string, unknown>;
+  const hasDoors = p.hasDoors !== false;
   const lengthX = num(source, "lengthX", 1000);
   const lengthZ = num(source, "lengthZ", 1000);
   const depth = num(source, "depth", 560);
@@ -88,17 +89,17 @@ export function calculateBOM(params: CornerShelfLowerParams, ctx: KitchenContext
     );
   }
 
-  items.push(
+  if (hasDoors) items.push(
     boardItem({ id: "door-front-z", category: "front", description: "Door front Z", quantity: 1, length: doorWidthZ, width: doorHeight, thickness: frontT, material: frontRef, slot: "front", wasteMultiplier: 1.1 }),
     boardItem({ id: "door-front-x", category: "front", description: "Door front X", quantity: 1, length: doorWidthX, width: doorHeight, thickness: frontT, material: frontRef, slot: "front", wasteMultiplier: 1.1 })
   );
 
-  const visibleEdgeLm = round((sideHeight * 2 + innerLengthX * 3 + innerLengthZ * 2 + shelfPairCount * (shelfXLength + shelfZLength) + doorWidthX * 2 + doorWidthZ * 2 + doorHeight * 4) / 1000);
+  const visibleEdgeLm = round((sideHeight * 2 + innerLengthX * 3 + innerLengthZ * 2 + shelfPairCount * (shelfXLength + shelfZLength) + (hasDoors ? doorWidthX * 2 + doorWidthZ * 2 + doorHeight * 4 : 0)) / 1000);
   if (edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
 
   const hardware = [
-    hardwareItem("door-handles", "Door handles", source.handleType === "none" ? 0 : 2, componentRef(resolveComponent(catalog, source, "handleComponentId"))),
-    hardwareItem("corner-hinges", "Corner hinges", 2 * hingeCount, componentRef(resolveComponent(catalog, source, "hingeComponentId"))),
+    hardwareItem("door-handles", "Door handles", !hasDoors || source.handleType === "none" ? 0 : 2, componentRef(resolveComponent(catalog, source, "handleComponentId"))),
+    hardwareItem("corner-hinges", "Corner hinges", hasDoors ? 2 * hingeCount : 0, componentRef(resolveComponent(catalog, source, "hingeComponentId"))),
     hardwareItem("adjustable-legs", "Adjustable legs", plinthHeight > 0 ? 5 : 0, componentRef(resolveComponent(catalog, source, "legComponentId"))),
     hardwareItem("plinth-clips", "Plinth clips", plinthHeight > 0 ? 2 : 0, componentRef(resolveComponent(catalog, source, "clipComponentId")))
   ].filter((item): item is PortableQuoteBomItem => Boolean(item));

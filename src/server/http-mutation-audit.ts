@@ -22,6 +22,7 @@ function ref(secret: string, kind: string, value: string | undefined): string | 
 
 function mutationAction(method: string, pathname: string): string | undefined {
   if (SAFE_METHODS.has(method)) return undefined;
+  if (pathname === "/api/user-activity/pulse") return undefined;
   if (pathname === "/api/auth/login") return "auth.login";
   if (pathname === "/api/auth/logout") return "auth.logout";
   if (pathname === "/api/projects") return "project.create";

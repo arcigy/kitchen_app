@@ -1,6 +1,8 @@
 export type SupplierBridgeBuildEnvironment = Readonly<Record<string, string | undefined>>;
 
-export const DEFAULT_SUPPLIER_BRIDGE_PRODUCTION_ORIGIN = "https://kitchenapp.178.104.175.242.sslip.io";
+// The sslip.io app hostname is a CapRover routing fallback with a self-signed
+// certificate. Chrome extensions must use the public TLS-validated origin.
+export const DEFAULT_SUPPLIER_BRIDGE_PRODUCTION_ORIGIN = "https://app.arcigy.cloud";
 export const DEFAULT_SUPPLIER_BRIDGE_DEVELOP_ORIGIN = "https://arcigy-kitchen-develop.178.104.175.242.sslip.io";
 
 function exactHttpsOrigin(value: string, setting: string): string {

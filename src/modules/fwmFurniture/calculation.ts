@@ -1,3 +1,4 @@
+import { resolveTallStackLayout, resolveTallDoorFront } from "./tallStackLayout";
 import type { ClientCatalog, ComponentDefinition, ComponentType, MaterialDefinition } from "../../core/catalog/catalog-types";
 import { createPricingCatalog } from "../../core/catalog/pricing-catalog";
 import type { KitchenContext } from "../../layout/kitchenContext";
@@ -398,7 +399,15 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
   const innerH = Math.max(1, cabinetH - 2 * boardT);
   const drawerCount = Math.round(num(p, "drawerCount", spec.drawers ?? 0));
   const drawerFrontHeights = parseDrawerFrontHeights(p.drawerFrontHeightsMm);
-  const doorCount = Math.round(num(p, "doorCount", spec.doors ?? 0));
+  const tallDoors = spec.moduleType === "fwm_catalog_tall_cabinet" && p.hasDoors !== false
+    ? resolveTallStackLayout(p).entries.filter(entry => entry.type === "door").map(entry => ({
+        index: entry.index,
+        ...resolveTallDoorFront(p, entry.index, entry.bottomY, entry.height, entry.coverBottom, entry.coverTop)
+      }))
+    : [];
+  const doorCount = p.hasDoors === false ? 0 : spec.moduleType === "fwm_catalog_tall_cabinet"
+    ? tallDoors.reduce((sum, door) => sum + door.leafCount, 0)
+    : Math.round(num(p, "doorCount", spec.doors ?? 0));
   const shelfCount = Math.round(num(p, "shelfCount", spec.shelves ?? 0));
 
   if (spec.geometryKind === "bed") {
@@ -532,7 +541,7 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
         );
       }
       if (plinth > 0) addCatalogCornerPart("corner-chamfered-plinth-diagonal", "plinth", "Chamfered corner diagonal plinth", { width: diagonal - 120, height: plinth, depth: Math.max(8, Math.min(boardT, 24)) });
-      addCatalogCornerPart("corner-chamfered-diagonal-front", "front", "Chamfered corner diagonal door/front", { width: diagonal, height: Math.max(1, bodyH - 4), depth: frontT });
+      if (p.hasDoors !== false) addCatalogCornerPart("corner-chamfered-diagonal-front", "front", "Chamfered corner diagonal door/front", { width: diagonal, height: Math.max(1, bodyH - 4), depth: frontT });
     } else {
       addCatalogCornerPart("corner-left-side", "body", "Corner left side panel", { width: 18, height: 622, depth: 694 });
       addCatalogCornerPart("corner-right-side", "body", "Corner right side panel", { width: 18, height: 622, depth: 694 });
@@ -544,7 +553,7 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
         addCatalogCornerPart("corner-right-shelves", "shelf", "Corner right shelves", { width: 862, height: 18, depth: 686 }, Math.max(0, Math.min(16, shelfCount)));
       }
       if (plinth > 0) addCatalogCornerPart("corner-plinth-front-board", "plinth", "Corner plinth front board", { width: 468, height: 100, depth: 18 });
-      addCatalogCornerPart("corner-blind-front-filler", "front", "Corner blind front filler", { width: 340, height: 618, depth: 18 });
+      if (p.hasDoors !== false) addCatalogCornerPart("corner-blind-front-filler", "front", "Corner blind front filler", { width: 340, height: 618, depth: 18 });
       addCatalogCornerPart("corner-right-door", "front", "Corner right door", { width: 656.077, height: 618, depth: 18 });
       addCatalogCornerPart("corner-front-top-rail", "body", "Corner front top rail", { width: 864, height: 18, depth: 70 });
     }
@@ -648,7 +657,9 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
         );
       }
     }
-    if (doorCount > 0) {
+    if (spec.moduleType === "fwm_catalog_tall_cabinet") {
+      for (const door of tallDoors) items.push(boardItem({ id: `tower-door-${door.index}`, category: "front", description: `Dvierka sekcie ${door.index}`, quantity: door.leafCount, length: door.leafWidth, width: door.frontHeight, thickness: frontT, material: frontRef, slot: "front" }));
+    } else if (doorCount > 0) {
       items.push(boardItem({ id: "door-fronts", category: "front", description: "Door fronts", quantity: doorCount, length: Math.max(80, (width - 4) / doorCount), width: Math.max(100, height - plinth - 8), thickness: frontT, material: frontRef, slot: "front" }));
     }
     if (spec.appliance === "dishwasher") {

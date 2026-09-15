@@ -22,17 +22,23 @@ import {
 import {
   getKitchenModuleRole,
   isKitchenModuleSelectableInEditLayer,
+  isKitchenModuleSelectableInView,
   resolveKitchenModulePlanEmphasis,
   type KitchenModuleEditLayer
 } from "./kitchenModuleRules";
 import {
+  applyKitchenPlanFillEmphasis,
   applyKitchenPlanOutlineEmphasis,
+  captureKitchenPlanFill,
   captureKitchenPlanOutline,
+  restoreKitchenPlanFill,
   restoreKitchenPlanOutline,
+  type KitchenPlanFillSnapshot,
   type KitchenPlanOutlineSnapshot,
 } from "./kitchenPlanPresentation";
 import {
   groupKitchenModulePackages,
+  getKitchenCatalogRolesForLayer,
   type KitchenCatalogRole,
   type KitchenCatalogSubcategoryKey,
 } from "./kitchenModuleCatalog";
@@ -334,6 +340,7 @@ type CreateKitchenEditModeArgs = {
   startWorktopDraw: () => void;
   cancelWorktopDraw: (opts?: { silent?: boolean }) => void;
   handleWorktopEscape: () => boolean;
+  cancelModulePointerDrag?: () => boolean;
   refreshWorktopPreview: () => void;
   getGroupWorktops: (groupId: string) => GroupWorktopSnapshot[];
   replaceGroupWorktops: (
@@ -449,6 +456,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     THREE.LineSegments,
     KitchenPlanOutlineSnapshot
   >();
+  const planFillSnapshots = new Map<THREE.Mesh, KitchenPlanFillSnapshot>();
   let snapshotName = "";
   let editingExistingGroupId: string | null = null;
   let activeTallEditorInstanceId: string | null = null;
@@ -614,6 +622,11 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   const addEscapeHandler = () => {
     removeEscapeHandler();
     escapeHandler = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape" && args.cancelModulePointerDrag?.()) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        return;
+      }
       if (handleTallStackEditorKeyDown(ev)) return;
       if (
         args.S.kitchenEditMode &&
@@ -888,7 +901,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     headerTitle.textContent = t("Kuchynské moduly");
     const headerStatus = document.createElement("span");
     headerStatus.textContent = isEditing
-      ? t("Kitchen group active")
+      ? t(activeModuleEditLayer === "upper" ? "Upravovať vrchné moduly" : "Upravovať spodné moduly")
       : t("Najprv vytvor alebo otvor kuchyňu");
     headerText.append(headerTitle, headerStatus);
     header.appendChild(headerText);
@@ -943,7 +956,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     body.className = "module-catalog-body";
     body.classList.toggle("module-catalog-disabled", !isEditing);
     if (isVendorCatalog) {
-      for (const role of ["low", "top", "tall", "accessory"] as const) {
+      for (const role of getKitchenCatalogRolesForLayer(activeModuleEditLayer)) {
         const roleGroups = vendorCatalog.groups[role];
         if (roleGroups.size === 0) continue;
         const section = document.createElement("section");
@@ -1008,7 +1021,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         body.appendChild(section);
       }
     } else {
-      for (const role of ["low", "top", "tall", "accessory"] as const) {
+      for (const role of getKitchenCatalogRolesForLayer(activeModuleEditLayer)) {
         const roleGroups = genericCatalog?.groups[role];
         if (!roleGroups) continue;
         if (roleGroups.size === 0) continue;
@@ -1213,8 +1226,12 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   };
 
   const restoreKitchenPlanPresentation = () => {
+    for (const [fill, snapshot] of planFillSnapshots) {
+      restoreKitchenPlanFill(fill, snapshot);
+    }
+    planFillSnapshots.clear();
     for (const [outline, snapshot] of planOutlineSnapshots) {
-      restoreKitchenPlanOutline(outline, snapshot);
+      restoreKitchenPlanOutline(outline, snapshot, args.getViewMode?.() ?? "3d");
     }
     planOutlineSnapshots.clear();
   };
@@ -1249,10 +1266,14 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
           captureKitchenPlanOutline(inst.outline)
         );
       }
+      if (!planFillSnapshots.has(inst.pick)) {
+        planFillSnapshots.set(inst.pick, captureKitchenPlanFill(inst.pick));
+      }
       const emphasis = resolveKitchenModulePlanEmphasis(
         inst.params as Record<string, unknown>,
         activeModuleEditLayer
       );
+      applyKitchenPlanFillEmphasis(inst.pick, emphasis);
       applyKitchenPlanOutlineEmphasis(inst.outline, emphasis);
     }
   };
@@ -3540,15 +3561,12 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     selectedWorktopSegment = null;
     args.cancelPlacementIfActive();
     args.setToolSelect();
-    args.setSelectedModule(null);
     kitchenRunDimensionOverlay?.hide();
     syncKitchenPlanPresentation();
     args.buildClassicTopbar();
     args.refreshProps();
     args.setUnderlayStatus(
-      next === "base"
-        ? "Kitchen: editing lower modules. Upper modules are reference lines only."
-        : "Kitchen: editing upper modules. Lower modules are reference lines only."
+      t(next === "base" ? "Upravovať spodné moduly" : "Upravovať vrchné moduly")
     );
   };
 
@@ -3687,9 +3705,9 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     attachTallEditorPointerHandlers();
     args.setSelectedModule(focusInstanceId);
     args.setUnderlayStatus(
-      "Kitchen: click a dimension to edit width or position. M = Move, A = Align; snapping is active and modules stay inside the worktop.",
+      "Kitchen: click a dimension to edit width or position. M = Move, A = Align; base modules follow the worktop and upper modules require drawn walls.",
     );
-    if (activeTallStackEditorInstance()) args.buildClassicTopbar();
+    args.buildClassicTopbar();
     renderModuleCatalog();
     renderTallDimensionOverlay();
   };
@@ -4008,12 +4026,8 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     args.showKitchenTab();
     addEscapeHandler();
     attachTallEditorPointerHandlers();
-    if (activeTallEditorInstanceId) {
-      args.setSelectedModule(null);
-      args.buildClassicTopbar();
-    } else {
-      args.setSelectedModule(null);
-    }
+    args.setSelectedModule(null);
+    args.buildClassicTopbar();
     args.setSelectedKitchenGroup(activeGroupId);
     args.setUnderlayStatus("Kitchen: obnovená rozpracovaná úprava. Pokračuj v editácii alebo potvrď/zruš zmeny.");
     renderModuleCatalog();
@@ -4417,7 +4431,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     };
 
     addNumberRow(
-      translateParamLabel("heightMm"),
+      t("Height to worktop surface (mm)"),
       ctx.heightMm,
       (value, refreshProps) =>
         commitCtx((base) => ({ ...base, heightMm: value }), { refreshProps }),
@@ -4457,7 +4471,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         }),
     );
     addNumberRow(
-      translateParamLabel("upperStartHeightMm"),
+      t("Upper cabinet bottom above floor (mm)"),
       ctx.upperStartHeightMm,
       (value, refreshProps) =>
         commitCtx((base) => ({ ...base, upperStartHeightMm: value }), {
@@ -4473,7 +4487,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         }),
     );
     addNumberRow(
-      translateParamLabel("upperHeightMm"),
+      t("Upper cabinet height (mm)"),
       ctx.upperHeightMm,
       (value, refreshProps) =>
         commitCtx((base) => ({ ...base, upperHeightMm: value }), {
@@ -4487,7 +4501,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         commitCtx((base) => ({ ...base, tallDepthMm: value }), { refreshProps }),
     );
     addNumberRow(
-      translateParamLabel("tallHeightMm"),
+      t("Tall cabinet height including plinth (mm)"),
       ctx.tallHeightMm,
       (value, refreshProps) =>
         commitCtx((base) => ({ ...base, tallHeightMm: value }), { refreshProps }),
@@ -4744,9 +4758,11 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       if (inst.kitchenGroupId !== activeGroupId) return null;
       const tallHost = activeTallStackEditorInstance();
       if (tallHost) return tallHost.id === id ? id : null;
-      return isKitchenModuleSelectableInEditLayer(
+      return isKitchenModuleSelectableInView(
         inst.params as Record<string, unknown>,
-        activeModuleEditLayer
+        activeModuleEditLayer,
+        args.getViewMode?.() ?? "3d",
+        args.getActiveViewerTab?.() ?? "3d",
       ) ? id : null;
     },
     selectTallSubmoduleFromObject,

@@ -3,6 +3,7 @@ import { findOrganizationUser, organizationUserEmail, organizationUserInitial } 
 import { logoutClient } from "../../app/logoutClient";
 import { actionIconMarkup } from "../actionIcons";
 import { bindIconTooltip } from "../iconTooltips";
+import { createThemePicker } from "../theme/themePicker";
 
 type AccountMenuArgs = {
   mount: HTMLElement;
@@ -83,7 +84,7 @@ export function createAccountMenu(args: AccountMenuArgs): void {
   const items = document.createElement("div");
   items.className = "account-menu-items";
   items.append(
-    menuItem({ label: "Theme", icon: icons.theme, chevron: true }),
+    createThemePicker(),
     menuItem({ label: "Settings", icon: icons.settings }),
     menuItem({ label: "Get desktop app", icon: icons.desktop }),
     sectionBreak(),

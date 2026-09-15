@@ -270,8 +270,18 @@ async function main() {
     assert(expectedEntities.worktops.length === 1, "Fixture must have one worktop before save", expectedEntities);
     assert(expectedEntities.instances.length === 1, "Fixture must have one module before save", expectedEntities);
 
+    // Model an old project whose last saved display mode was Wireframe.
+    // Only this synthetic fixture carries the retired value into the FQP file.
+    const legacySaveRoute = "**/api/projects/*/save";
+    await page.route(legacySaveRoute, async route => {
+      const body = route.request().postDataJSON();
+      body.appState.scene.displayMode = "wireframe";
+      await route.continue({ postData: JSON.stringify(body) });
+    });
     const saved = await saveViaUi(page);
+    await page.unroute(legacySaveRoute);
     cleanupProjectIds.add(saved.projectId);
+    assert(saved.appState.scene.displayMode === "wireframe", "Legacy display fixture was not saved");
     assert(saved.project?.preview?.imageDataUrl?.startsWith("data:image/"), "Save did not persist project manager preview", saved.project);
     assert(saved.appState?.projectPreview?.imageDataUrl?.startsWith("data:image/"), "Save did not include appState project preview", saved.appState);
     assert(saved.appState?.recentActivity, "Save did not include recent activity", saved.appState);
@@ -290,6 +300,8 @@ async function main() {
 
     await openProjectFromManager(page, new RegExp(imported.project.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     const loadedImportedSnapshot = await page.evaluate(() => window.__kitchenDebug.layoutSnapshot());
+    assert(await page.locator('.viewer-display-menu-active').getAttribute("data-mode") === "solid", "Legacy FQP must open with solid surfaces");
+    assert(await page.locator('.viewer-display-menu [data-mode="wireframe"]').count() === 0, "Retired display mode is still available");
     assertEntityRoundtrip(pickEntities(loadedImportedSnapshot), expectedEntities, "Loaded imported project");
     const loadedImportedView = await page.evaluate(() => window.__kitchenDebug.viewState());
     assert(
@@ -311,6 +323,7 @@ async function main() {
     const editedSnapshot = await page.evaluate(() => window.__kitchenDebug.layoutSnapshot());
     assert(editedSnapshot.walls.length === 2, "Loaded imported project could not be edited after import", editedSnapshot);
     const editedSaved = await saveViaUi(page);
+    assert(editedSaved.appState.scene.displayMode === "solid", "Re-saving a legacy project must persist solid mode");
     assert(pickEntities(layoutFromSave(editedSaved)).walls.length === 2, "Edited imported save did not persist new wall", editedSaved.appState?.layout);
 
     await openProjectFromManager(page, new RegExp(imported.project.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -333,6 +346,7 @@ async function main() {
         "download-fqp",
         "import-fqp-as-copy",
         "load-imported-project",
+        "legacy-wireframe-fqp-opens-and-resaves-solid",
         "door-window-cutouts-restored",
         "edit-imported-project",
         "save-edited-import",

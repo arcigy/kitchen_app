@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createSystemCatalogSeed } from "../core/catalog/catalog-bootstrap";
+import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ProjectMaterialAssignment } from "../core/project-materials/project-material-types";
 import type { SupplierConfirmationApplyInput } from "../core/supplier-bridge/supplier-bridge-service";
 import { baseAssignmentForSupplierTarget, updatedSupplierAssignment } from "./supplierBridgeProjectUpdater";
@@ -43,6 +45,63 @@ describe("supplier bridge project updater", () => {
     const updated = updatedSupplierAssignment(current, supplierInput("edge_front"), "2026-07-10T08:01:00.000Z");
     expect(updated).toMatchObject({ materialId: "supplier-edge:demos:SUP-edge_front" });
     expect(updated.snapshots.material?.definition).toMatchObject({ materialType: "edge", pricingUnit: "lm", edgeFamily: "front" });
+  });
+
+  it("applies an explicit board preview colour and thickness to a supplier material snapshot", () => {
+    const current = {
+      assignmentId: "material-assignment:corpus",
+      category: "corpus",
+      kind: "material",
+      customValues: {},
+      source: "auto",
+      snapshots: {},
+      updatedAt: "2026-07-10T08:00:00.000Z"
+    } satisfies ProjectMaterialAssignment;
+    const input = supplierInput("edge_front");
+    input.item = { ...input.item, materialAssignmentId: current.assignmentId, assignmentCategory: "corpus", expectedProductType: "board" };
+    input.candidate = {
+      ...input.candidate,
+      supplierProductCode: "RED-18",
+      normalizedProduct: {
+        ...input.candidate.normalizedProduct,
+        displayName: "Red corpus board 18 mm",
+        productType: "board",
+        thicknessMm: 18,
+        previewColorHex: "#B31B34"
+      }
+    };
+
+    const updated = updatedSupplierAssignment(current, input, "2026-07-10T08:01:00.000Z");
+
+    expect(updated).toMatchObject({ materialId: "supplier-material:demos:RED-18", thicknessMm: 18 });
+    expect(updated.snapshots.material?.definition.preview.colorHex).toBe("#B31B34");
+    expect(updated.customValues.supplierBridge).toMatchObject({ colorStatus: "supplier", thicknessStatus: "supplier" });
+  });
+
+  it("uses an exact tenant catalog material preview when the supplier page has no colour", () => {
+    const seed = createSystemCatalogSeed();
+    const catalog: ClientCatalog = { clientId: "tenant-a", ...seed };
+    const catalogMaterial = catalog.materials.find((material) => material.materialType === "board" && material.boardFamily === "body")!;
+    catalogMaterial.supplierSource = { supplier: "demos-sk", supplierProductId: "CAT-RED" };
+    catalogMaterial.preview = { ...catalogMaterial.preview, colorHex: "#B31B34" };
+    const current = {
+      assignmentId: "material-assignment:corpus",
+      category: "corpus",
+      kind: "material",
+      customValues: {},
+      source: "auto",
+      snapshots: {},
+      updatedAt: "2026-07-10T08:00:00.000Z"
+    } satisfies ProjectMaterialAssignment;
+    const input = supplierInput("edge_front");
+    input.item = { ...input.item, materialAssignmentId: current.assignmentId, assignmentCategory: "corpus", expectedProductType: "board" };
+    input.candidate = { ...input.candidate, supplierProductCode: "CAT-RED", normalizedProduct: { ...input.candidate.normalizedProduct, productType: "board", thicknessMm: null, previewColorHex: null } };
+
+    const updated = updatedSupplierAssignment(current, input, "2026-07-10T08:01:00.000Z", catalog);
+
+    expect(updated.materialId).toBe(catalogMaterial.id);
+    expect(updated.snapshots.material?.definition.preview.colorHex).toBe("#B31B34");
+    expect(updated.customValues.supplierBridge).toMatchObject({ colorStatus: "catalog", thicknessStatus: "catalog" });
   });
 
   it("uses the captured category for scoped targets whose opaque BOM item ID contains colons", () => {

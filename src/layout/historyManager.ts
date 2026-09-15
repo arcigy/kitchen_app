@@ -46,6 +46,7 @@ export interface HistoryHelpers {
     worktops: NonNullable<LayoutSnapshot["worktops"]>,
     worktopCounter?: number
   ) => void;
+  restoreKitchenModulePlacements?: () => void;
   restoreCustomFurniture?: (items: CustomFurnitureSnapshotItem[], customFurnitureCounter?: number) => void;
   restoreLedStripGroups?: (groups: LedStripGroup[], ledStripCounter?: number) => void;
   restoreWardrobe?: (state: WardrobeEditSaveState | null | undefined) => void;
@@ -76,7 +77,7 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
   const mods = (s.instances ?? [])
     .map(
       (m) =>
-        `${m.id}:${stableJson(m.params ?? {})}:${m.kitchenGroupId ?? ""}:${m.kitchenPlacement?.worktopId ?? ""}:${m.kitchenPlacement?.kind ?? "segment"}:${m.kitchenPlacement?.segmentIndex ?? -1}:${m.kitchenPlacement?.cornerIndex ?? -1}:${Math.round((m.kitchenPlacement?.offsetAlongM ?? -1) * 1000)}:${m.positionMm.x},${m.positionMm.y ?? 0},${m.positionMm.z}:${Math.round((m.rotationYDeg ?? 0) * 10)}`
+        `${m.id}:${stableJson(m.params ?? {})}:${m.kitchenGroupId ?? ""}:${stableJson(m.kitchenPlacement ?? null)}:${m.positionMm.x},${m.positionMm.y ?? 0},${m.positionMm.z}:${m.rotationYDeg ?? 0}`
     )
     .join("|");
   const floors = (s.floors ?? [])
@@ -108,7 +109,7 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
   const ledStrips = (s.ledStripGroups ?? []).map((group) => JSON.stringify(group)).join("|");
   const wardrobe = s.wardrobe ? JSON.stringify(s.wardrobe) : "";
   const pins = `${s.pinnedWallIds.slice().sort().join(",")}#${s.pinnedInstanceIds.slice().sort().join(",")}#${s.underlayPinned ? 1 : 0}`;
-  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.alignLockCounter ?? 1}:${s.customFurnitureCounter ?? 1}:${s.ledStripCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${alignLocks}::${customFurniture}::${ledStrips}::${wardrobe}::${stableJson(s.materialAssignments ?? null)}::${mods}`;
+  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.alignLockCounter ?? 1}:${s.customFurnitureCounter ?? 1}:${s.ledStripCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${alignLocks}::${customFurniture}::${ledStrips}::${wardrobe}::${stableJson(s.materialAssignments ?? null)}::${mods}::${stableJson(s.kitchen ?? null)}`;
 };
 
 export const updateUndoRedoUi = (S: AppState) => {
@@ -139,6 +140,11 @@ export const clearSelectionBeforeSnapshotRestore = (S: AppState, helpers: Pick<H
 export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap: LayoutSnapshot) => {
   // Clear selection visuals first
   clearSelectionBeforeSnapshotRestore(S, helpers);
+
+  if (snap.kitchen) {
+    S.kitchenCtx = structuredClone(snap.kitchen.context);
+    S.kitchenGroups.splice(0, S.kitchenGroups.length, ...structuredClone(snap.kitchen.groups));
+  }
 
   // Clear wall roots
   for (const w of S.walls.splice(0, S.walls.length)) {
@@ -220,6 +226,9 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
 
   helpers.restoreFloors?.(snap.floors ?? [], snap.floorCounter);
 
+  helpers.layoutRoot.updateMatrixWorld(true);
+  helpers.restoreKitchenModulePlacements?.();
+
   helpers.rebuildWallPlanMesh();
   helpers.clearToolHud();
 
@@ -253,6 +262,7 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
   const copySectionParams = (p: SectionParams) => JSON.parse(JSON.stringify(p)) as SectionParams;
   const copyColumnParams = (p: ColumnParams) => JSON.parse(JSON.stringify(p)) as ColumnParams;
   return {
+    kitchen: S.kitchenCtx && S.kitchenGroups ? { context: structuredClone(S.kitchenCtx), groups: structuredClone(S.kitchenGroups) } : undefined,
     materialAssignments: structuredClone(S.projectMaterialAssignments),
     wallCounter: S.wallCounter,
     walls: S.walls.map((w) => ({ id: w.id, params: copyParams(w.params) })),
@@ -284,9 +294,9 @@ export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
       kitchenGroupId: i.kitchenGroupId ?? null,
       kitchenPlacement: i.kitchenPlacement ? (JSON.parse(JSON.stringify(i.kitchenPlacement)) as KitchenPlacementBinding) : null,
       positionMm: {
-        x: Math.round(i.root.position.x * 1000),
-        y: Math.round(i.root.position.y * 1000),
-        z: Math.round(i.root.position.z * 1000)
+        x: i.root.position.x * 1000,
+        y: i.root.position.y * 1000,
+        z: i.root.position.z * 1000
       },
       rotationYDeg: (i.root.rotation.y * 180) / Math.PI
     })),

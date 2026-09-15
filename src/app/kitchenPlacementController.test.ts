@@ -506,6 +506,12 @@ describe("kitchen placement controller", () => {
     const lower = boundBaseModule("lower", 0.3);
     const upperA = boundUpperModule("upper-a", 0.3);
     const upperB = boundUpperModule("upper-b", 0.9);
+    ctx.walls.push({ id: 'back', params: { aMm: { x: 0, z: -50 }, bMm: { x: 2400, z: -50 }, thicknessMm: 100, heightMm: 2600 } } as KitchenPlacementControllerContext['walls'][number]);
+    for (const item of [upperA, upperB]) {
+      const along = item.kitchenPlacement!.offsetAlongM;
+      item.kitchenPlacement = { kind: 'wall', wallId: 'back', wallSide: 'left', segmentIndex: 0, offsetAlongM: along };
+      item.root.position.set(along, 1.4, .265); item.root.updateMatrixWorld(true);
+    }
     ctx.instances.push(lower, upperA, upperB);
     ctx.rebuildInstance = vi.fn((inst) => {
       const widthM = Number(inst.params.width ?? 600) / 1000;
@@ -643,6 +649,10 @@ describe("kitchen placement controller", () => {
 
     const inst = chamferedCornerModule(0);
     inst.id = "fwm_upper_l_corner";
+    ctx.walls.push(...[
+      { id: 'back', params: { aMm: { x: 0, z: -50 }, bMm: { x: 1050, z: -50 }, thicknessMm: 100, heightMm: 2600 } },
+      { id: 'side', params: { aMm: { x: 1050, z: -50 }, bMm: { x: 1050, z: 1000 }, thicknessMm: 100, heightMm: 2600 } }
+    ] as KitchenPlacementControllerContext['walls']);
     inst.params = {
       type: "fwm_catalog_wall_cabinet",
       variant: "corner_90",

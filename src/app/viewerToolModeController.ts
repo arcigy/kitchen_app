@@ -3,6 +3,7 @@ export type ViewerToolMode = "select" | "pan" | "zoom-in" | "zoom-out" | "orbit"
 type ViewerToolModeControllerArgs = {
   canvasEl: HTMLElement;
   getInsertMode: () => boolean;
+  getObjectDragState?: () => "pending" | "dragging" | null;
   syncNavigationControls: () => void;
 };
 
@@ -60,7 +61,10 @@ export function createViewerToolModeController(args: ViewerToolModeControllerArg
 
   const syncCursor = () => {
     let cursor = viewerCursors.select;
-    if (panActive) cursor = viewerCursors.panGrab;
+    const objectDrag = args.getObjectDragState?.();
+    if (objectDrag === "dragging") cursor = viewerCursors.panGrab;
+    else if (objectDrag === "pending") cursor = viewerCursors.pan;
+    else if (panActive) cursor = viewerCursors.panGrab;
     else if (toolMode === "pan" || toolMode === "orbit") cursor = viewerCursors.pan;
     else if (args.getInsertMode()) cursor = viewerCursors.insert;
     else if (toolMode === "zoom-in") cursor = viewerCursors.zoomIn;

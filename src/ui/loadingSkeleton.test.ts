@@ -30,4 +30,37 @@ describe("loading skeleton", () => {
     skeleton.clear();
     expect(host.dataset.loadingSkeleton).toBeUndefined();
   });
+
+  it("anchors overlay loading to its host without rendering a guessed workspace layout", () => {
+    const host = document.createElement("section");
+    const skeleton = mountLoadingSkeleton(host, {
+      variant: "workspace",
+      label: "Opening project",
+      mode: "overlay"
+    });
+
+    expect(host.classList.contains("arcigy-loading-skeleton-host--overlay")).toBe(true);
+    expect(host.querySelector("[data-loading-skeleton-activity]")).not.toBeNull();
+    expect(host.querySelector(".arcigy-loading-skeleton__body")).toBeNull();
+
+    skeleton.clear();
+    expect(host.classList.contains("arcigy-loading-skeleton-host--overlay")).toBe(false);
+  });
+
+  it("uses the stable activity loader for a screen rather than guessed columns", () => {
+    const host = document.createElement("main");
+    mountLoadingSkeleton(host, { variant: "screen", label: "Starting app" });
+
+    expect(host.querySelector("[data-loading-skeleton-activity]")).not.toBeNull();
+    expect(host.querySelector(".arcigy-loading-skeleton__sidebar")).toBeNull();
+  });
+
+  it("removes a stale direct overlay before mounting the next loading state", () => {
+    const host = document.createElement("main");
+    mountLoadingSkeleton(host, { variant: "workspace", label: "First", mode: "overlay" });
+    const current = mountLoadingSkeleton(host, { variant: "workspace", label: "Second", mode: "overlay" });
+
+    expect(host.querySelectorAll(":scope > [data-loading-skeleton]")).toHaveLength(1);
+    expect(current.isCurrent()).toBe(true);
+  });
 });

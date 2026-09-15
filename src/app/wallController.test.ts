@@ -68,6 +68,28 @@ const createTestWallInstance = (id: string, aMm: { x: number; z: number }, bMm: 
     outline: new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial())
   });
 
+it('retains the supporting wall when deleting it would orphan an upper cabinet', () => {
+  const ctx = createTestWallContext();
+  const wall = createTestWallInstance('host', { x: 0, z: 0 }, { x: 3000, z: 0 });
+  ctx.walls.push(wall);
+  ctx.instances.push({ kitchenPlacement: { kind: 'wall', wallId: wall.id } } as WallControllerContext['instances'][number]);
+  createWallController(ctx).removeWall(wall);
+  expect(ctx.walls).toContain(wall);
+});
+
+it('rolls back a host wall edit if mounted cabinets cannot follow it', () => {
+  const ctx = { ...createTestWallContext(), reconcileMountedModules: () => false };
+  const wall = createTestWallInstance('host', { x: 0, z: 0 }, { x: 3000, z: 0 });
+  ctx.walls.push(wall);
+  const controller = createWallController(ctx);
+  controller.rebuildWall(wall);
+  ctx.instances.push({ kitchenPlacement: { kind: 'wall', wallId: wall.id } } as WallControllerContext['instances'][number]);
+  wall.params.heightMm = 1600;
+  controller.rebuildWall(wall);
+  expect(wall.params.heightMm).toBe(2600);
+  expect(wall.heightMm).toBe(2600);
+});
+
 const createTestWindowInstance = (params: Partial<WindowParams> & Pick<WindowParams, "centerMm" | "heightMm" | "sillHeightMm" | "widthMm">): WindowInstance => ({
   id: "window1",
   params: {

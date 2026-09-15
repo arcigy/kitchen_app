@@ -28,12 +28,17 @@ export const SCENE_RENDERER_OPTIONS = {
   preserveDrawingBuffer: true
 } as const;
 
+export function resolveRendererPixelRatio(devicePixelRatio: number, coarsePointer: boolean) {
+  const safeDevicePixelRatio = Number.isFinite(devicePixelRatio) ? Math.max(1, devicePixelRatio) : 1;
+  return Math.min(safeDevicePixelRatio, coarsePointer ? 1.5 : 2);
+}
+
 export function createScene(container: HTMLElement) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf3f3f3);
 
   const renderer = new THREE.WebGLRenderer(SCENE_RENDERER_OPTIONS);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(resolveRendererPixelRatio(window.devicePixelRatio || 1, window.matchMedia?.("(pointer: coarse)").matches ?? false));
   renderer.physicallyCorrectLights = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;

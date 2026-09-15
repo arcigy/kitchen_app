@@ -1,4 +1,5 @@
 {
+  "hasDoors": true,
   "type": "corner_shelf_lower",
   "lengthX": 1000,
   "lengthZ": 1000,

@@ -4,6 +4,7 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ClientContext } from "../core/client/client-context";
 import type { ClientProfile } from "../core/client/client-types";
 import type { PriceCurrency } from "../core/pricing/currency";
+import { resolveDelfiSheetMaterialMarginPolicy } from "../custom/delfi/projectMargins";
 import {
   normalizeProjectMarginSettingsState,
   type ProjectMarginCategory,
@@ -22,6 +23,7 @@ import {
   buildProjectMarginsView,
   projectMarginTargetIds,
   type ProjectMarginSettingsOperation,
+  type ProjectMarginSheetMaterialPolicy,
   type ProjectMarginsView
 } from "../layout/bom/projectMargins";
 import { buildProjectPricingViews, type ProjectPricingView } from "../layout/bom/projectPricing";
@@ -166,13 +168,15 @@ export function projectMarginsViewFromSave(
   save: ProjectSaveFile,
   catalog: ClientCatalog,
   editable: boolean,
-  currency: PriceCurrency = "EUR"
+  currency: PriceCurrency = "EUR",
+  sheetMaterialMargin?: ProjectMarginSheetMaterialPolicy
 ): ProjectMarginsView {
   const { entries, warnings } = entriesFromSave(save, catalog);
   return buildProjectMarginsView(entries, normalizeProjectMarginSettingsState(save.appState.quoteSettings), {
     editable,
     warnings,
     currency,
+    sheetMaterialMargin,
     materialAssignments: save.appState.materialAssignments.assignments
   });
 }
@@ -202,9 +206,10 @@ export async function handleProjectMarginsApi(
     (deps.loadClientProfile ?? loadServerClientProfile)(ctx.clientId)
   ]);
   const currency = profile?.defaults.currency ?? "EUR";
+  const sheetMaterialMargin = resolveDelfiSheetMaterialMarginPolicy(ctx.clientId, process.env.ARCIGY_DELFI_CLIENT_ID);
   const save = await createProjectService(repository).loadProject(ctx, route.projectId);
   const currentState = normalizeProjectMarginSettingsState(save.appState.quoteSettings);
-  const currentView = projectMarginsViewFromSave(save, catalog, ctx.role !== "viewer", currency);
+  const currentView = projectMarginsViewFromSave(save, catalog, ctx.role !== "viewer", currency, sheetMaterialMargin);
 
   if (req.method === "GET") {
     deps.sendJson(res, 200, { ok: true, view: currentView });
@@ -246,7 +251,7 @@ export async function handleProjectMarginsApi(
       revision,
       nextState
     );
-    deps.sendJson(res, 200, { ok: true, view: projectMarginsViewFromSave(updatedSave, catalog, true, currency) });
+    deps.sendJson(res, 200, { ok: true, view: projectMarginsViewFromSave(updatedSave, catalog, true, currency, sheetMaterialMargin) });
     return true;
   } catch (error) {
     if (error instanceof ProjectMarginRevisionConflictError) {

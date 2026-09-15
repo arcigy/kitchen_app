@@ -22,7 +22,7 @@ function mountPanelError(container: HTMLElement, message: string) {
   const error = document.createElement("p");
   error.textContent = message;
   error.style.margin = "0";
-  error.style.color = "#ef4444";
+  error.style.color = "var(--danger)";
   container.appendChild(error);
 }
 
@@ -82,7 +82,7 @@ export function openPricingCatalog(catalog: ClientCatalog, displayCurrency: Pric
   overlay.style.position = "fixed";
   overlay.style.inset = "0";
   overlay.style.zIndex = "1000";
-  overlay.style.background = "rgba(0,0,0,0.72)";
+  overlay.style.background = "var(--overlay)";
   overlay.style.display = "grid";
   overlay.style.gridTemplateRows = "1fr";
   overlay.style.padding = "20px";
@@ -92,10 +92,10 @@ export function openPricingCatalog(catalog: ClientCatalog, displayCurrency: Pric
   panel.style.width = "calc(100vw - 40px)";
   panel.style.height = "calc(100vh - 40px)";
   panel.style.overflow = "auto";
-  panel.style.background = "#0b0f14";
-  panel.style.border = "1px solid #303746";
-  panel.style.borderRadius = "14px";
-  panel.style.boxShadow = "0 24px 80px rgba(0,0,0,0.45)";
+  panel.style.background = "var(--surface)";
+  panel.style.border = "1px solid var(--border)";
+  panel.style.borderRadius = "var(--radius-dialog)";
+  panel.style.boxShadow = "var(--shadow-dialog)";
   panel.style.padding = "20px";
   overlay.appendChild(panel);
 
@@ -110,16 +110,16 @@ export function openPricingCatalog(catalog: ClientCatalog, displayCurrency: Pric
   const title = document.createElement("h2");
   title.textContent = "Cenový katalóg";
   title.style.margin = "0";
-  title.style.color = "#eef2ff";
+  title.style.color = "var(--text)";
   title.style.font = "700 16px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
   header.appendChild(title);
 
   const closeBtn = createButtonElement("Zavrieť");
   closeBtn.className = "pricing-catalog-modal__close";
-  closeBtn.style.background = "#0e1118";
-  closeBtn.style.color = "#eef2ff";
-  closeBtn.style.border = "1px solid #303746";
-  closeBtn.style.borderRadius = "6px";
+  closeBtn.style.background = "var(--surface-2)";
+  closeBtn.style.color = "var(--text)";
+  closeBtn.style.border = "1px solid var(--border-strong)";
+  closeBtn.style.borderRadius = "var(--radius-control)";
   closeBtn.style.padding = "7px 10px";
   header.appendChild(closeBtn);
 

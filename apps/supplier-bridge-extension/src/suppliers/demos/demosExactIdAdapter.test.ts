@@ -34,6 +34,7 @@ describe("Démos exact-ID read-only adapter", () => {
       <input id="js-product-search-autocomplete-input-lbx"><a href="/cart/">Cart</a>
       <h1 class="box-detail__top__title">HDF White 2800/2070/3</h1>
       <strong class="box-detail__top__code__value">59678</strong>
+      <div class="box-detail__image"><img itemprop="image" src="/content/images/product/default/365157.jpg"></div>
       <div class="box-detail-add__prices">
         <span class="js-online-base-price-without-vat">100,00 Kč</span>
         <span class="js-online-partner-price-without-vat">50,00 Kč</span>
@@ -53,10 +54,63 @@ describe("Démos exact-ID read-only adapter", () => {
     expect(extracted).toMatchObject({ ok: true, result: {
       exactIdMatch: true,
       foundProductId: "59678",
-      product: { manufacturer: "Kronospan", decorCode: "101", surfaceCode: "PE", thicknessMm: 3, availability: { status: "available" } },
+      product: { manufacturer: "Kronospan", decorCode: "101", surfaceCode: "PE", previewImageUrl: "https://www.demos24plus.com/content/images/product/default/365157.jpg", thicknessMm: 3, availability: { status: "available" } },
       pricing: { customerPrice: { amount: 50, currency: "CZK", basis: "piece", vatMode: "excluded" }, listPrice: { amount: 100 }, normalizedPrice: { unit: "m2", confidence: "calculated" } }
     } });
     expect(extracted.result!.pricing.normalizedPrice!.amount).toBeCloseTo(50 / 5.796, 6);
+  });
+
+  it("keeps a Démos product image hosted on the Slovak image CDN for backend colour extraction", () => {
+    document.body.innerHTML = `
+      <h1 class="box-detail__top__title">DTD Červená 2800/2070/18</h1>
+      <strong class="box-detail__top__code__value">279469</strong>
+      <div class="box-detail__image"><img itemprop="image" src="https://www.demos-trade.sk/content/images/product/original/279469.jpg"></div>
+      <div class="box-detail-add__availability">Skladem</div>
+      <dl><dt>Jednotka (MJ)</dt><dd>ks</dd></dl>
+      <table class="table-params"><tbody>
+        <tr><td>Formát materiálu (mm)</td><td>2800 x 2070</td></tr>
+        <tr><td>Tloušťka materiálu (mm)</td><td>18</td></tr>
+      </tbody></table>
+    `;
+
+    expect(demosExactIdAdapter.extractExactProduct(document, {
+      requestedProductId: "279469", expectedProductType: "board", expectedManufacturer: null, expectedThicknessMm: 18
+    })).toMatchObject({ ok: true, result: {
+      product: {
+        previewImageUrl: "https://www.demos-trade.sk/content/images/product/original/279469.jpg",
+        thicknessMm: 18
+      }
+    } });
+  });
+
+  it("captures the primary image from the live Démos product-page markup", () => {
+    // Captured from product 365157 on 2026-09-04 while signed in to Démos.
+    // Its image is deliberately not inside .box-detail__image or a gallery.
+    document.body.innerHTML = `
+      <h1 class="box-detail__top__title">MDFL 125 BS Royal Blue 2800/2070/10</h1>
+      <strong class="box-detail__top__code__value">365157</strong>
+      <img class="image-product" alt="MDFL 125 BS Royal Blue 2800/2070/10" src="https://www.demos24plus.com/content/images/product/default/203052.jpeg">
+      <div class="box-detail-add__availability">Po objednání: do 4 týdnů</div>
+      <dl><dt>Jednotka (MJ)</dt><dd>ks</dd></dl>
+      <table class="table-params"><tbody>
+        <tr><td>Formát materiálu (mm)</td><td>2800 x 2070</td></tr>
+        <tr><td>Tloušťka materiálu (mm)</td><td>10</td></tr>
+        <tr><td>Barevný odstín</td><td>Modrá</td></tr>
+        <tr><td>Název dekoru</td><td>Royal Blue</td></tr>
+      </tbody></table>
+    `;
+
+    expect(demosExactIdAdapter.extractExactProduct(document, {
+      requestedProductId: "365157", expectedProductType: "board", expectedManufacturer: null, expectedThicknessMm: 10
+    })).toMatchObject({ ok: true, result: {
+      product: {
+        name: "MDFL 125 BS Royal Blue 2800/2070/10",
+        productType: "board",
+        previewImageUrl: "https://www.demos24plus.com/content/images/product/default/203052.jpeg",
+        thicknessMm: 10,
+        dimensions: { widthMm: 2070, lengthMm: 2800, depthMm: null }
+      }
+    } });
   });
 
   it("uses the board thickness instead of an earlier veneer-thickness parameter", () => {

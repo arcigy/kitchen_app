@@ -25,7 +25,7 @@ describe("chatbot layout ownership", () => {
     for (const source of [chatbotStyles, legacyStyles]) {
       const css = readFileSync(source, "utf8");
       const windowShell = css.match(/\.chatbot-window-shell\s*\{([^}]*)\}/s)?.[1] ?? "";
-      expect(windowShell).toMatch(/background:\s*#ffffff;/);
+      expect(windowShell).toMatch(/background:\s*var\(--surface\);/);
       expect(windowShell).not.toMatch(/gradient|background-size/);
     }
   });

@@ -217,6 +217,19 @@ export function validateProjectAppState(appState: unknown): void {
       throw new Error(`Project save instance ${id} references missing kitchen group ${kitchenGroupId}.`);
     }
     const placement = isObject(instance.kitchenPlacement) ? instance.kitchenPlacement : null;
+    if (placement?.kind === 'wall' || placement?.kind === 'wall-corner') {
+      const wallId = typeof placement.wallId === 'string' ? placement.wallId : '';
+      if (!wallInfo.has(wallId)) throw new Error(`Project save instance ${id} references missing wall ${wallId}.`);
+      if (placement.wallSide !== 'left' && placement.wallSide !== 'right') throw new Error(`Project save instance ${id} has invalid wall side.`);
+      numberAt(placement.offsetAlongM, `instance ${id}.kitchenPlacement.offsetAlongM`);
+      if (placement.kind === 'wall-corner') {
+        const second = typeof placement.secondWallId === 'string' ? placement.secondWallId : '';
+        if (!wallInfo.has(second)) throw new Error(`Project save instance ${id} references missing wall ${second}.`);
+        if (second === wallId || (placement.secondWallSide !== 'left' && placement.secondWallSide !== 'right')) {
+          throw new Error(`Project save instance ${id} has invalid wall corner attachment.`);
+        }
+      }
+    }
     const worktopId = typeof placement?.worktopId === "string" ? placement.worktopId : null;
     if (worktopId && worktopIds.size && !worktopIds.has(worktopId)) {
       throw new Error(`Project save instance ${id} references missing worktop ${worktopId}.`);

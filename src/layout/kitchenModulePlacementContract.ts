@@ -41,7 +41,7 @@ function auditContractMetadata(modulePackage: FurnQuoteModulePackage, contract: 
   if (contract.productKind !== "cabinet" && contract.role) add(issues, "contract.non_cabinet_role", "Only cabinet packages may declare a kitchen role.", "kitchenContract.role");
   if (contract.topology !== "rectangular" && contract.placementMode !== "corner") add(issues, "contract.corner_placement", "Corner topology must use corner placement mode.", "kitchenContract.placementMode");
   if (contract.topology === "rectangular" && contract.placementMode === "corner") add(issues, "contract.rectangular_corner", "Rectangular topology cannot use corner placement mode.", "kitchenContract.placementMode");
-  if (contract.geometryContractVersion !== 1 && contract.geometryContractVersion !== 2) add(issues, "contract.geometry_version", "Kitchen geometry contract version must be 1 or 2.", "kitchenContract.geometryContractVersion");
+  if (contract.geometryContractVersion !== 1 && contract.geometryContractVersion !== 2 && contract.geometryContractVersion !== 3) add(issues, "contract.geometry_version", "Kitchen geometry contract version must be 1, 2, or 3.", "kitchenContract.geometryContractVersion");
 }
 
 function auditSharedParameters(modulePackage: FurnQuoteModulePackage, contract: KitchenModuleContract, issues: KitchenModulePlacementContractIssue[]) {
@@ -144,7 +144,7 @@ export function auditKitchenModuleGeometryContract(modulePackage: FurnQuoteModul
   });
   const contract = resolveKitchenModuleContract(modulePackage);
   const isChamferedCorner = String(defaultValue(modulePackage, "variant") ?? "").startsWith("corner_chamfered");
-  if (contract?.placementMode === "corner" && contract.geometryContractVersion === 2 && isChamferedCorner) {
+  if (contract?.placementMode === "corner" && (contract.geometryContractVersion === 2 || contract.geometryContractVersion === 3) && isChamferedCorner) {
     const corner = root.getObjectByName("__kitchen_corner_anchor");
     const xArm = root.getObjectByName("__kitchen_corner_x_anchor");
     const zArm = root.getObjectByName("__kitchen_corner_z_anchor");
@@ -155,9 +155,14 @@ export function auditKitchenModuleGeometryContract(modulePackage: FurnQuoteModul
       const cornerPosition = corner.getWorldPosition(new Vector3()).multiplyScalar(1000);
       const xArmPosition = xArm.getWorldPosition(new Vector3()).multiplyScalar(1000);
       const zArmPosition = zArm.getWorldPosition(new Vector3()).multiplyScalar(1000);
-      const expectedArmLength = defaultValue(modulePackage, "depth");
+      const depth = defaultValue(modulePackage, "depth");
+      const frontChamfer = defaultValue(modulePackage, "frontChamferMm") ?? defaultValue(modulePackage, "frontChamferReferenceMm");
+      const boardThickness = defaultValue(modulePackage, "boardThickness");
+      const expectedArmLength = contract.geometryContractVersion === 3 && typeof depth === "number" && typeof frontChamfer === "number"
+        ? depth + frontChamfer + (typeof boardThickness === "number" ? boardThickness : 0)
+        : depth;
       if (typeof expectedArmLength !== "number") {
-        add(issues, "corner.arm_length.missing", "Corner geometry contract v2 requires a numeric depth reference length.", "parameters.depth.defaultValue");
+        add(issues, "corner.arm_length.missing", `Corner geometry contract v${contract.geometryContractVersion} requires numeric depth and chamfer reference lengths.`, "parameters.depth.defaultValue");
       } else {
         const toleranceMm = 0.01;
         if (Math.abs(cornerPosition.x - xArmPosition.x - expectedArmLength) > toleranceMm || Math.abs(cornerPosition.z - xArmPosition.z) > toleranceMm) {

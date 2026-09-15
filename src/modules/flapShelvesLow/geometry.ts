@@ -113,6 +113,8 @@ export function buildFlapShelvesLow(params: FlapShelvesLowParams, catalog: Clien
     addBox(group, `shelf-${index + 1}`, { x: innerWidthMm, y: shelfThicknessMm, z: innerDepthMm }, { x: 0, y: centerY, z: backThicknessMm / 2 }, bodyMaterial, { width: innerWidthMm, height: innerDepthMm, depth: shelfThicknessMm });
   });
 
+  if (params.hasDoors === false) return group;
+
   const handleLengthMm = clamp(getNumber(params.handleLengthMm, 160), 40, Math.max(40, widthMm - 80));
   const handleSizeMm = clamp(getNumber(params.handleSizeMm, 12), 4, 40);
   const handleProjectionMm = clamp(getNumber(params.handleProjectionMm, 14), 4, 60);

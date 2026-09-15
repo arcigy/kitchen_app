@@ -120,39 +120,45 @@ function readModules(
   warnings: ProjectMaterialWarning[]
 ): ProjectMaterialUsageInput["instances"] {
   const snapshotInstances = Array.isArray(layoutSnapshot.instances) ? layoutSnapshot.instances : [];
-  const candidates = moduleValues.length > 0 ? moduleValues : snapshotInstances;
-  const instances: Array<Pick<LayoutInstance, "id" | "params" | "kitchenGroupId">> = [];
-  const ids = new Set<string>();
-
-  candidates.forEach((candidate, index) => {
-    if (!isRecord(candidate)) {
-      warnings.push(calculationWarning(`invalid-module-${index}`, "Uložený modul nemá platný dátový formát."));
-      return;
-    }
-    const id = nonEmptyString(candidate.id);
-    const rawParams = isRecord(candidate.params) ? candidate.params : null;
-    const type = nonEmptyString(rawParams?.type) ?? nonEmptyString(candidate.type);
-    if (!id || !rawParams || !type) {
-      warnings.push(calculationWarning(
-        `invalid-module-${id ?? index}`,
-        `Uložený modul ${id ?? `#${index + 1}`} nemá ID, typ alebo parametre a nebol započítaný.`,
-        id ?? undefined
-      ));
-      return;
-    }
-    if (ids.has(id)) {
-      warnings.push(calculationWarning(`duplicate-module-${id}`, `Modul ${id} je v save súbore duplicitný a bol započítaný iba raz.`, id));
-      return;
-    }
-    ids.add(id);
-    instances.push({
-      id,
-      params: { ...structuredClone(rawParams), type } as LayoutInstance["params"],
-      kitchenGroupId: nonEmptyString(candidate.kitchenGroupId)
+  const parseCandidates = (candidates: readonly unknown[]): ProjectMaterialUsageInput["instances"] => {
+    const instances: Array<Pick<LayoutInstance, "id" | "params" | "kitchenGroupId">> = [];
+    const ids = new Set<string>();
+    candidates.forEach((candidate, index) => {
+      if (!isRecord(candidate)) {
+        warnings.push(calculationWarning(`invalid-module-${index}`, "Uložený modul nemá platný dátový formát."));
+        return;
+      }
+      const id = nonEmptyString(candidate.id);
+      const rawParams = isRecord(candidate.params) ? candidate.params : null;
+      const type = nonEmptyString(rawParams?.type) ?? nonEmptyString(candidate.type);
+      if (!id || !rawParams || !type) {
+        warnings.push(calculationWarning(
+          `invalid-module-${id ?? index}`,
+          `Uložený modul ${id ?? `#${index + 1}`} nemá ID, typ alebo parametre a nebol započítaný.`,
+          id ?? undefined
+        ));
+        return;
+      }
+      if (ids.has(id)) {
+        warnings.push(calculationWarning(`duplicate-module-${id}`, `Modul ${id} je v save súbore duplicitný a bol započítaný iba raz.`, id));
+        return;
+      }
+      ids.add(id);
+      instances.push({
+        id,
+        params: { ...structuredClone(rawParams), type } as LayoutInstance["params"],
+        kitchenGroupId: nonEmptyString(candidate.kitchenGroupId)
+      });
     });
-  });
+    return instances as unknown as ProjectMaterialUsageInput["instances"];
+  };
 
-  return instances as unknown as ProjectMaterialUsageInput["instances"];
+  const primary = parseCandidates(moduleValues);
+  // Some older saves contain a non-empty but unusable module summary while the
+  // authoritative layout snapshot still has the valid instances. Prefer the
+  // summary when it yields data, otherwise recover quantities from the snapshot.
+  if (primary.length > 0 || snapshotInstances.length === 0) return primary;
+  return parseCandidates(snapshotInstances);
 }
 
 function readWorktops(

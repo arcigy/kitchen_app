@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setCurrentLanguage } from "../i18n";
 import {
   createDefaultProjectMarginSettingsState,
   projectMarginTargetId
@@ -85,12 +86,52 @@ function marginsView(overrides: Partial<ProjectMarginsView> = {}): ProjectMargin
   };
 }
 
+beforeEach(() => setCurrentLanguage("sk"));
 afterEach(() => {
+  setCurrentLanguage("en");
   document.body.innerHTML = "";
   vi.restoreAllMocks();
 });
 
 describe("project margins phase panel", () => {
+  it("keeps the original summary for tenants without the Delfi metric", () => {
+    const html = renderProjectMarginsPanel(marginsView());
+    expect(html).not.toContain('data-margin-summary-value="margin-per-m2"');
+    expect(html).not.toContain("margins-summary--sheet-metric");
+  });
+
+  it("shows margin per physical square meter with its denominator and updates the mounted footer", () => {
+    const host = document.createElement("section");
+    const footer = document.createElement("section");
+    document.body.append(host, footer);
+    const action = vi.fn(async () => ({ ok: true }));
+    const delfiSummary = { ...marginsView().summary, sheetMaterial: { minimumThicknessMm: 16, areaM2: 1.25, marginPerM2: 24, unmeasuredBoardCount: 0 } };
+    const handle = mountProjectMarginsPanel(host, marginsView({ summary: delfiSummary }), {
+      onCommitDefault: action, onCommitAdditionalLabor: action, onApplyGroup: action,
+      onResetGroup: action, onCommitItem: action, onResetItem: action
+    }, { footerContainer: footer });
+    const metric = () => footer.querySelector('[data-margin-summary-value="margin-per-m2"]')!;
+    expect(metric().textContent).toContain("24,00");
+    expect(metric().textContent).toContain("1,25 m²");
+    expect(metric().textContent).toContain("16 mm");
+    expect(metric().textContent).toContain("vrátane doplnkov a spotrebičov");
+    handle.update(marginsView({ currency: "CZK", summary: { ...delfiSummary, sheetMaterial: { ...delfiSummary.sheetMaterial, marginPerM2: 100, areaM2: 2 } } }));
+    expect(metric().textContent).toContain("100,00");
+    expect(metric().textContent).toContain("Kč");
+    expect(metric().textContent).toContain("2 m²");
+    expect(action).not.toHaveBeenCalled();
+    handle.destroy();
+  });
+
+  it("explains empty and incomplete measurements without displaying NaN or Infinity", () => {
+    const summary = { ...marginsView().summary, sheetMaterial: { minimumThicknessMm: 16, areaM2: 0, marginPerM2: null, unmeasuredBoardCount: 0 } };
+    const empty = renderProjectMarginsPanel(marginsView({ summary }));
+    expect(empty).toContain("Projekt neobsahuje dosky");
+    const incomplete = renderProjectMarginsPanel(marginsView({ summary: { ...summary, sheetMaterial: { ...summary.sheetMaterial, unmeasuredBoardCount: 1 } } }));
+    expect(incomplete).toContain("chýba platná hrúbka alebo plocha");
+    expect(incomplete).not.toMatch(/NaN|Infinity/);
+  });
+
   it("renders all client-profile CZK monetary values and the labor input in CZK", () => {
     const html = renderProjectMarginsPanel(marginsView({ currency: "CZK" }));
 

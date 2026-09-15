@@ -4,9 +4,9 @@ import { formatDisplayCurrency, type PriceDisplayCurrency } from "./currencyDisp
 function table(headers: string[], rows: string[][]) {
   const wrap = document.createElement("div");
   wrap.style.overflow = "auto";
-  wrap.style.border = "1px solid #2a3140";
-  wrap.style.borderRadius = "10px";
-  wrap.style.background = "#0d1117";
+  wrap.style.border = "1px solid var(--border)";
+  wrap.style.borderRadius = "var(--radius-control)";
+  wrap.style.background = "var(--surface-2)";
 
   const element = document.createElement("table");
   element.style.width = "100%";
@@ -21,11 +21,11 @@ function table(headers: string[], rows: string[][]) {
     th.textContent = header;
     th.style.textAlign = "left";
     th.style.padding = "10px 12px";
-    th.style.borderBottom = "1px solid #2a3140";
-    th.style.color = "#9aa5ba";
+    th.style.borderBottom = "1px solid var(--border)";
+    th.style.color = "var(--muted)";
     th.style.position = "sticky";
     th.style.top = "0";
-    th.style.background = "#0d1117";
+    th.style.background = "var(--surface-2)";
     headerRow.appendChild(th);
   }
   thead.appendChild(headerRow);
@@ -38,7 +38,7 @@ function table(headers: string[], rows: string[][]) {
       const cell = document.createElement("td");
       cell.textContent = value;
       cell.style.padding = "10px 12px";
-      cell.style.borderBottom = "1px solid #171c25";
+      cell.style.borderBottom = "1px solid var(--border-2)";
       cell.style.verticalAlign = "top";
       row.appendChild(cell);
     }
@@ -61,7 +61,7 @@ export function mountPricingCatalogPanel(
   container.innerHTML = "";
   container.style.display = "grid";
   container.style.gap = "18px";
-  container.style.color = "#eef2ff";
+  container.style.color = "var(--text)";
   container.style.font = "13px system-ui, sans-serif";
 
   const intro = document.createElement("div");
@@ -73,7 +73,7 @@ export function mountPricingCatalogPanel(
   title.style.font = "700 18px system-ui, sans-serif";
   const desc = document.createElement("div");
   desc.textContent = "Centrálny katalóg materiálov, komponentov a jednotkových cien pre obchodný kusovník.";
-  desc.style.color = "#9aa5ba";
+  desc.style.color = "var(--muted)";
   desc.style.fontSize = "12px";
   intro.append(title, desc);
   container.appendChild(intro);

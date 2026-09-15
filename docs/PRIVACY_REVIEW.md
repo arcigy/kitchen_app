@@ -14,6 +14,7 @@ assessment.
 | Assistant data | Prompts, selected project context, tool requests | Worker and configured model provider | Tool validation, authorization and bounded telemetry | Provider DPA, processing region, prompt retention |
 | Supplier/Odoo/feedback data | Supplier configuration, validated feedback PNG and operation metadata | Worker / configured integration | Input validation and safe errors | Contract, recipient list and retention |
 | Operations data | Request IDs, audit events, health/metrics | Worker and future observability backend | Pseudonymous references; structured logging | Retention, access control and export policy |
+| Per-user app activity | Exact tenant/user ID, current active/idle/offline state, intervals and daily active seconds | PostgreSQL and approved Odoo integration | Default-off exact-tenant allowlist, authenticated server identity, multi-tab dedupe, bounded gap, strict no-content payload, restricted Odoo groups | Lawful basis, worker/employee notice, DPIA decision, retention, subject export/deletion and Odoo recipient/DPA approval before production |
 
 ## Engineering findings
 
@@ -26,6 +27,10 @@ assessment.
   legal owners before claiming GDPR operational completeness.
 - Any external assistant, analytics or alerting provider must be added to the
   processor inventory before live enablement.
+- Per-user activity is implemented but remains disabled. Engineering totals
+  mean foreground Arcigy app-active time only and must not be used as a payroll,
+  attendance or productivity claim without a separately approved policy and
+  validated methodology.
 
 ## Minimum production checklist
 

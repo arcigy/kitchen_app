@@ -12,6 +12,7 @@ export type ActiveContextCommand = {
   finish?: () => void;
   back?: () => void;
   restart?: () => void;
+  alternate?: { label: string; execute: () => void };
   cancel: () => void;
   snap?: { enabled: boolean; toggle: () => void };
   ortho?: { enabled: boolean; toggle: () => void };
@@ -72,6 +73,7 @@ export type ResolveActiveContextCommandArgs = {
   cancelDoorPlacement: () => void;
   cancelKitchenWorktop: () => void;
   cancelLayoutTool: () => void;
+  rotatePlacement: () => void;
   toggleMoveSnap: () => void;
   toggleOrtho: () => void;
 };
@@ -99,6 +101,7 @@ export function createEditorContextMenuController(ctx: EditorContextMenuControll
     if (command.back) items.push(action("back-command", "Back / undo last step", command.back, { shortcut: "Backspace" }));
     if (command.ortho) items.push(action("toggle-ortho", "Ortho", command.ortho.toggle, { checked: command.ortho.enabled }));
     if (command.snap) items.push(action("toggle-snap", "Snapping", command.snap.toggle, { checked: command.snap.enabled }));
+    if (command.alternate) items.push(action("alternate-command", command.alternate.label, command.alternate.execute));
     if (command.restart) items.push(separator("command-restart-separator"), action("restart-command", `Restart ${command.label}`, command.restart));
     items.push(separator("command-cancel-separator"), action("cancel-command", `Cancel ${command.label}`, command.cancel, { iconId: "cancel", shortcut: "Esc" }));
     return items;
@@ -167,7 +170,14 @@ export function resolveActiveContextCommand(args: ResolveActiveContextCommandArg
         : undefined
     };
   }
-  if (args.placementActive) return { id: "placement", label: "module placement", cancel: args.cancelPlacement };
+  if (args.placementActive) {
+    return {
+      id: "placement",
+      label: "module placement",
+      alternate: { label: "Rotate / Flip", execute: args.rotatePlacement },
+      cancel: args.cancelPlacement
+    };
+  }
   if (args.columnPlacementActive) return { id: "column-placement", label: "column placement", cancel: args.cancelColumnPlacement };
   if (args.windowPlacementActive) return { id: "window-placement", label: "window placement", cancel: args.cancelWindowPlacement };
   if (args.doorPlacementActive) return { id: "door-placement", label: "door placement", cancel: args.cancelDoorPlacement };

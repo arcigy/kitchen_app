@@ -19,6 +19,14 @@
   "parameters": {
     "parameters": [
       {
+        "key": "hasDoors",
+        "label": "Dvierka",
+        "type": "boolean",
+        "defaultValue": true,
+        "group": "fronts",
+        "affects": "all"
+      },
+      {
         "key": "type",
         "label": "Type",
         "type": "string",
@@ -585,6 +593,12 @@
       }
     ],
     "controls": [
+      {
+        "parameterKey": "hasDoors",
+        "controlType": "checkbox",
+        "groupId": "fronts",
+        "order": 0
+      },
       {
         "parameterKey": "width",
         "controlType": "number",

@@ -484,6 +484,28 @@ describe("tenant module package import", () => {
     expect(catalogModule?.packageHash).not.toBe(beforeHash);
   }, 30_000);
 
+  it("saves a real cabinet configuration without copying its catalog code", async () => {
+    const packageRepository = createFileModulePackageRepository(root);
+    const catalogRepository = createSystemSeedClientCatalogRepository();
+    const service = createModulePackageService({ context: ctxA, packageRepository, catalogRepository });
+    const source = extendedFurnitureModulePackages.find(candidate => candidate.module.moduleType === "fwm_catalog_base_drawers")!;
+    const imported = await service.importPackage({ package: source });
+    const result = await service.createParameterPreset({
+      modulePackageId: source.module.modulePackageId,
+      name: "Otvorená kombinovaná skrinka",
+      note: "Zachová zásuvky a rozmery cieľovej skrinky.",
+      parameters: { ...createDefaultModulePackageParameters(imported.modulePackage), width: 1100, drawerCount: 2, hasDoors: false }
+    });
+    expect(result.preset.parameterValues).toMatchObject({ drawerCount: 2, hasDoors: false });
+    expect(result.preset.parameterValues).not.toHaveProperty("code");
+    expect(result.preset.parameterValues).not.toHaveProperty("width");
+    expect(result.preset.parameterValues).not.toHaveProperty("heightCarcass");
+    expect(result.preset.parameterValues).not.toHaveProperty("depthCarcass");
+    const stored = await packageRepository.getPackage(ctxA, source.module.modulePackageId);
+    expect(stored?.parameterPresets?.presets.at(-1)).toEqual(result.preset);
+    expect(await packageRepository.getPackage(ctxB, source.module.modulePackageId)).toBeNull();
+  }, 30_000);
+
   it("keeps UI visibility scoped to ClientCatalog enabled modules", async () => {
     const modulePackage = makePackage();
     const catalog = makeCatalog();

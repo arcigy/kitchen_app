@@ -9,6 +9,8 @@ export type SupplierBridgeLogEvent = {
   durationMs?: number;
   supplierProductCode?: string;
   amount?: number | null;
+  previewColorApplied?: boolean;
+  productType?: string;
 };
 
 export function logSupplierBridge(level: SupplierBridgeLogLevel, event: SupplierBridgeLogEvent): void {
@@ -23,6 +25,8 @@ export function logSupplierBridge(level: SupplierBridgeLogLevel, event: Supplier
     ...(event.status ? { status: event.status } : {}),
     ...(event.errorCode ? { errorCode: event.errorCode } : {}),
     ...(event.durationMs != null ? { durationMs: event.durationMs } : {}),
+    ...(event.previewColorApplied != null ? { previewColorApplied: event.previewColorApplied } : {}),
+    ...(event.productType ? { productType: event.productType } : {}),
     ...(debugDiagnostics && event.supplierProductCode ? { supplierProductCode: event.supplierProductCode } : {}),
     ...(debugDiagnostics && event.amount != null ? { amount: event.amount } : {})
   };

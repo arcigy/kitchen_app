@@ -951,6 +951,17 @@ export function buildCornerShelfLower(params: CornerShelfLowerParams, catalog: C
   replaceCornerHandlesWithSharedBarGeometry(group);
   attachKitchenCornerAnchors(group);
   applyCornerDoorOpenState(group, params);
+  if (params.hasDoors === false) {
+    // Preserve the original placement anchors and all structural front supports.
+    const doorParts: THREE.Object3D[] = [];
+    group.traverse((part) => {
+      if (/^(door_front_[xz]|doorHandle_front_[xz]|hinge_front_[xz]_)/.test(part.name)) doorParts.push(part);
+    });
+    for (const part of doorParts) {
+      part.removeFromParent();
+      if (part instanceof THREE.Mesh) part.geometry.dispose();
+    }
+  }
 
   return group;
 }

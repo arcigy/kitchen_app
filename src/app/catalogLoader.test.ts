@@ -100,6 +100,7 @@ function createRevision(clientId: string, storageRevision = "revision-1") {
 
 describe("catalogLoader PINO tenant loading", () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     const sessionStorage = createStorage();
@@ -107,6 +108,15 @@ describe("catalogLoader PINO tenant loading", () => {
       location: { hostname: "127.0.0.1" },
       sessionStorage
     });
+  });
+
+  it("can test persisted demo presets through the real tenant API on localhost", async () => {
+    vi.stubEnv("VITE_LOCAL_CLIENT_CATALOG_FROM_API", "true");
+    const serverCatalog = { clientId: "client_arcigy_demo", ...createSystemCatalogSeed() };
+    const fetchMock = vi.fn(async () => createResponse({ catalog: serverCatalog }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await loadClientCatalogForApp("client_arcigy_demo")).toEqual(serverCatalog);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("loads the server catalog for a non-demo localhost tenant instead of forcing local fallback", async () => {

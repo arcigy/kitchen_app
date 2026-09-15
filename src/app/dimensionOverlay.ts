@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getTechnicalColors } from "./viewportAppearance";
 
 export type DimensionPoint = { x: number; y: number };
 export type DimensionOffsetDirection = "bottom" | "top" | "left" | "right";
@@ -33,6 +34,45 @@ const DIMENSION_ARROW_WORLD = 0.035;
 const DIMENSION_OFFSET_WORLD = 0.13;
 const DIMENSION_POINT_RADIUS_WORLD = 0.015;
 const DIMENSION_TEXT_NUDGE_WORLD = 0.015;
+
+/** Shared technical dimension appearance for plan and projected 3D views. */
+export const TECHNICAL_DIMENSION_STYLE = {
+  font: DIMENSION_FONT_WORLD, lineWidth: DIMENSION_LINE_WIDTH_WORLD,
+  arrow: DIMENSION_ARROW_WORLD, nudge: DIMENSION_TEXT_NUDGE_WORLD,
+  fontFamily: "serif", arrowAngle: 0.55, color: "#333333"
+} as const;
+
+export function drawProjectedTechnicalDimension(ctx: CanvasRenderingContext2D, args: {
+  start: DimensionPoint; end: DimensionPoint;
+  extensionStart: DimensionPoint; extensionEnd: DimensionPoint;
+  label: string; labelPosition: DimensionPoint; scale: number; selected?: boolean;
+}) {
+  const { start, end, scale } = args;
+  const length = Math.hypot(end.x - start.x, end.y - start.y);
+  const direction = length > 0.001 ? { x: (end.x - start.x) / length, y: (end.y - start.y) / length } : { x: 1, y: 0 };
+  ctx.save();
+  ctx.strokeStyle = ctx.fillStyle = args.selected ? "#1d4ed8" : TECHNICAL_DIMENSION_STYLE.color;
+  ctx.lineWidth = Math.max(1, TECHNICAL_DIMENSION_STYLE.lineWidth * scale);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const segment = (a: DimensionPoint, b: DimensionPoint) => {
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  };
+  segment(args.extensionStart, start); segment(args.extensionEnd, end); segment(start, end);
+  for (const [tip, sign] of [[start, 1], [end, -1]] as const) {
+    for (const side of [-1, 1]) {
+      const angle = TECHNICAL_DIMENSION_STYLE.arrowAngle * side;
+      segment(tip, {
+        x: tip.x + sign * (direction.x * Math.cos(angle) - direction.y * Math.sin(angle)) * TECHNICAL_DIMENSION_STYLE.arrow * scale,
+        y: tip.y + sign * (direction.x * Math.sin(angle) + direction.y * Math.cos(angle)) * TECHNICAL_DIMENSION_STYLE.arrow * scale
+      });
+    }
+  }
+  const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+  if (Math.hypot(midpoint.x - args.labelPosition.x, midpoint.y - args.labelPosition.y) > 24) segment(midpoint, args.labelPosition);
+  // The accessible DOM label supplies text and the inline editor at this point.
+  ctx.restore();
+}
 
 export class DimensionOverlay {
   readonly canvas: HTMLCanvasElement;
@@ -166,8 +206,8 @@ export class DimensionOverlay {
 
     const ctx = this.ctx;
     ctx.save();
-    ctx.strokeStyle = "#333333";
-    ctx.fillStyle = "#333333";
+    ctx.strokeStyle = getTechnicalColors().line;
+    ctx.fillStyle = getTechnicalColors().line;
     ctx.lineWidth = DIMENSION_LINE_WIDTH_WORLD;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -195,8 +235,8 @@ export class DimensionOverlay {
     const dir = { x: dx / length, y: dy / length };
     const ctx = this.ctx;
     ctx.save();
-    ctx.strokeStyle = "#333333";
-    ctx.fillStyle = "#333333";
+    ctx.strokeStyle = getTechnicalColors().line;
+    ctx.fillStyle = getTechnicalColors().line;
     ctx.lineWidth = DIMENSION_LINE_WIDTH_WORLD;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -224,14 +264,14 @@ export class DimensionOverlay {
     const midpoint = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
     const angle = Math.acos(Math.max(-1, Math.min(1, dx / length))) * (dy < 0 ? -1 : 1);
     this.ctx.save();
-    this.ctx.fillStyle = "#333333";
+    this.ctx.fillStyle = getTechnicalColors().line;
     this.drawReadableText(String(Math.round(length * this.unitScale)), midpoint, angle);
     this.ctx.restore();
   }
 
   drawLine(lineData: DimensionLineData, _index = 0) {
     const ctx = this.ctx;
-    const color = lineData.selected ? "#000fff" : "#333333";
+    const color = lineData.selected ? getTechnicalColors().active : getTechnicalColors().line;
     const pointRadius = lineData.pointRadius ?? 3;
 
     ctx.save();
@@ -300,7 +340,7 @@ export class DimensionOverlay {
     ctx.rotate(angle);
     ctx.scale(1, -1);
     ctx.font = `${DIMENSION_FONT_WORLD}px serif`;
-    ctx.fillStyle = "#333333";
+    ctx.fillStyle = getTechnicalColors().line;
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText(text, 0, -DIMENSION_TEXT_NUDGE_WORLD);

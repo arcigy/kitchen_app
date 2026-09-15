@@ -23,6 +23,7 @@ export type ExtensionMaterialTarget = {
   assignedText: string;
   assignedProductCode: string | null;
   assignedPrice: string | null;
+  assignedColorHex: string | null;
   inherited: boolean;
 };
 
@@ -45,10 +46,11 @@ function bridgeAssignment(assignment: ProjectMaterialAssignment | undefined): {
   text: string;
   productCode: string | null;
   price: string | null;
+  colorHex: string | null;
 } {
   const bridge = assignment?.customValues.supplierBridge;
   if (!bridge || typeof bridge !== "object" || Array.isArray(bridge)) {
-    return { assigned: false, text: "Nepriradené", productCode: null, price: null };
+    return { assigned: false, text: "Nepriradené", productCode: null, price: null, colorHex: null };
   }
   const value = bridge as Record<string, unknown>;
   const snapshotDisplayName = assignment?.snapshots.material?.definition.displayName
@@ -60,12 +62,17 @@ function bridgeAssignment(assignment: ProjectMaterialAssignment | undefined): {
   const productCode = typeof value.supplierProductCode === "string" ? value.supplierProductCode.trim() : "";
   const rawPrice = typeof value.rawPriceText === "string" ? value.rawPriceText.trim() : "";
   const rawUnit = typeof value.rawUnitText === "string" ? value.rawUnitText.trim() : "";
-  if (!displayName && !productCode) return { assigned: false, text: "Nepriradené", productCode: null, price: null };
+  if (!displayName && !productCode) return { assigned: false, text: "Nepriradené", productCode: null, price: null, colorHex: null };
+  const rawColorHex = assignment?.snapshots.material?.definition.preview?.colorHex;
+  const colorHex = typeof rawColorHex === "string" && /^#[0-9a-f]{6}$/iu.test(rawColorHex)
+    ? rawColorHex.toUpperCase()
+    : null;
   return {
     assigned: true,
     text: [displayName || "Materiál", productCode].filter(Boolean).join(" · "),
     productCode: productCode || null,
-    price: [rawPrice, rawUnit].filter(Boolean).join(" / ") || null
+    price: [rawPrice, rawUnit].filter(Boolean).join(" / ") || null,
+    colorHex
   };
 }
 
@@ -119,6 +126,7 @@ export function extensionMaterialTargets(view: ProjectMaterialsView | null): Ext
       assignedText: bridge.text,
       assignedProductCode: bridge.productCode,
       assignedPrice: bridge.price,
+      assignedColorHex: bridge.colorHex,
       inherited: false
     };
   });
@@ -141,6 +149,7 @@ export function extensionMaterialTargets(view: ProjectMaterialsView | null): Ext
         assignedText: bridge.text,
         assignedProductCode: bridge.productCode,
         assignedPrice: bridge.price,
+        assignedColorHex: bridge.colorHex,
         inherited: effective.source === "general"
       });
     }

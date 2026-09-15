@@ -7,6 +7,7 @@ import type {
 } from "../../../src/core/supplier-bridge/supplier-bridge-types";
 import { validateSupplierCandidateSubmission } from "../../../src/core/supplier-bridge/supplier-bridge-validation";
 import { parseSupplierSyncSessionView } from "../../../src/core/supplier-bridge/supplier-session-view-validation";
+import { supplierPreviewImageUrl } from "../../../src/core/supplier-bridge/supplier-preview-image";
 
 export const BRIDGE_CHANNEL = "arcigy-supplier-bridge" as const;
 
@@ -119,6 +120,8 @@ export type CapturedSupplierCandidate = {
   sourcePageType: SupplierSourcePageType;
   sourcePath: string;
   observedAt: string;
+  /** Lives only for the immediate service-worker request; it is never submitted as candidate data. */
+  previewImageUrl?: string | null;
   price: Omit<SupplierPriceObservation, "id" | "syncItemId" | "candidateId" | "tenantId" | "supplierId" | "supplierProductCode"> | null;
 };
 
@@ -303,12 +306,14 @@ export function parseSupplierPageCapture(value: unknown): SupplierPageCapture | 
         observedAt: candidate.observedAt,
         price: candidate.price ?? null
       });
+      const previewImageUrl = supplierPreviewImageUrl(input.supplierId, candidate.previewImageUrl);
       candidates.push({
         supplierProductCode: validated.supplierProductCode,
         normalizedProduct: validated.normalizedProduct,
         sourcePageType: validated.sourcePageType,
         sourcePath: validated.sourcePath,
         observedAt: validated.observedAt,
+        ...(previewImageUrl ? { previewImageUrl } : {}),
         price: validated.price
       });
     } catch {

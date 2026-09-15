@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import type http from "node:http";
 import { AddressInfo } from "node:net";
@@ -165,6 +166,14 @@ describe("multi-client worker isolation", () => {
   const users = [
     ...seedAuthUsers,
     {
+      ...seedAuthUsers[0],
+      userId: "user_delfi_fixture",
+      username: "delfi-fixture",
+      organizationName: "Delfi fixture",
+      clientId: "client_delfi",
+      role: "owner" as const
+    },
+    {
       userId: "user_client_b_owner",
       username: "clientb",
       displayName: "Client B",
@@ -308,7 +317,7 @@ describe("multi-client worker isolation", () => {
 
     const login = await requestWorker(controller!.port, "/api/auth/extension-login", {
       method: "POST",
-      body: { username: "arcigy", password: "kitchen2026" }
+      body: { company: "Arcigy Kitchen", username: "arcigy", password: "kitchen2026" }
     });
     expect(login.status).toBe(200);
     const accessToken = (login.body as { accessToken: string }).accessToken;
@@ -1591,7 +1600,156 @@ describe("multi-client worker isolation", () => {
         supplierProductCode: "MOCK-BRIDGE-001"
       }
     });
-  }, 30_000);
+
+    const assignExactBoard = async (
+      category: "corpus" | "worktop",
+      supplierProductCode: string,
+      previewColorHex: string,
+      thicknessMm: number
+    ): Promise<void> => {
+      const session = await requestWorker(controller!.port, `/api/projects/${projectId}/supplier-sync-sessions`, {
+        method: "POST",
+        cookie,
+        body: {
+          supplierId: "demos",
+          projectId,
+          lookups: [{
+            requestId: `bridge-${category}-${supplierProductCode}`,
+            projectId,
+            materialAssignmentId: `material-assignment:${category}`,
+            supplierId: "demos",
+            supplierProductId: supplierProductCode,
+            expectedProductType: category === "worktop" ? "worktop" : "board",
+            expectedThicknessMm: thicknessMm
+          }]
+        }
+      });
+      expect(session.status).toBe(201);
+      const sessionBody = session.body as {
+        bridgeToken: string;
+        view: { session: { id: string }; currentItem: { id: string } };
+      };
+      const attachment = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${sessionBody.view.session.id}/attach`, {
+        method: "POST",
+        body: { bridgeToken: sessionBody.bridgeToken }
+      });
+      expect(attachment.status).toBe(200);
+      const bridgeAccessToken = (attachment.body as { accessToken: string }).accessToken;
+      const rejectedPreview = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${sessionBody.view.session.id}/preview-color`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${bridgeAccessToken}` },
+        body: {
+          syncItemId: sessionBody.view.currentItem.id,
+          imageUrl: "https://example.test/not-a-demos-image.jpg"
+        }
+      });
+      expect(rejectedPreview.status).toBe(422);
+      expect(rejectedPreview.body).toMatchObject({ code: "SUPPLIER_PREVIEW_IMAGE_UNAVAILABLE" });
+      const candidate = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${sessionBody.view.session.id}/candidates`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${bridgeAccessToken}` },
+        body: {
+          submissionId: `capture-${category}-${supplierProductCode}`,
+          syncItemId: sessionBody.view.currentItem.id,
+          supplierProductCode,
+          normalizedProduct: {
+            displayName: `Bridge ${category} ${supplierProductCode}`,
+            manufacturer: "Arcigy Test",
+            decorCode: supplierProductCode,
+            surfaceCode: "MAT",
+            previewColorHex,
+            productType: category === "worktop" ? "worktop" : "board",
+            thicknessMm,
+            widthMm: 2_070,
+            lengthMm: 2_800,
+            availability: "available"
+          },
+          sourcePageType: "product",
+          sourcePath: `/product/${supplierProductCode.toLowerCase()}`,
+          observedAt: "2026-09-02T12:00:00.000Z",
+          price: null
+        }
+      });
+      expect(candidate.status).toBe(201);
+      const candidateId = (candidate.body as { candidate: { id: string } }).candidate.id;
+      const confirmation = await requestWorker(controller!.port, `/api/supplier-bridge/sessions/${sessionBody.view.session.id}/confirm`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${bridgeAccessToken}` },
+        body: { syncItemId: sessionBody.view.currentItem.id, candidateId }
+      });
+      expect(confirmation.status).toBe(200);
+    };
+
+    // These are the same three Bridge HTTP calls used by the Chrome extension.
+    // The later Corpus assignment must not replace the already committed Worktop snapshot.
+    await assignExactBoard("worktop", "MOCK-WORKTOP-GREEN-38", "#238636", 38);
+    await assignExactBoard("corpus", "MOCK-CORPUS-BLUE-18", "#2451A6", 18);
+
+    const afterRepeatedBridgeAssignments = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { cookie });
+    const repeatedAssignments = (afterRepeatedBridgeAssignments.body as { view: { assignments: { assignments: Array<Record<string, unknown>> } } }).view.assignments.assignments;
+    expect(repeatedAssignments.find((assignment) => assignment.assignmentId === "material-assignment:worktop")).toMatchObject({
+      materialId: "supplier-material:demos:MOCK-WORKTOP-GREEN-38",
+      thicknessMm: 38,
+      snapshots: { material: { definition: { preview: { colorHex: "#238636" }, defaultThicknessMm: 38 } } }
+    });
+    expect(repeatedAssignments.find((assignment) => assignment.assignmentId === "material-assignment:corpus")).toMatchObject({
+      materialId: "supplier-material:demos:MOCK-CORPUS-BLUE-18",
+      thicknessMm: 18,
+      snapshots: { material: { definition: { preview: { colorHex: "#2451A6" }, defaultThicknessMm: 18 } } }
+    });
+  }, 60_000);
+
+  it("preserves supplier bridge image colours for every supplier through confirmation and FQP", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const created = await requestWorker(controller!.port, "/api/projects", { method: "POST", cookie, body: { name: "Supplier colours", address: "Test", contactName: "Test" } });
+    const projectId = (created.body as { project: { projectId: string } }).project.projectId;
+    await requestWorker(controller!.port, `/api/projects/${projectId}/save`, { method: "POST", cookie, body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} } } });
+    const bytes = await sharp({ create: { width: 24, height: 24, channels: 3, background: "#A07040" } }).png().toBuffer();
+    const realFetch = globalThis.fetch;
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = String(input);
+      return url.startsWith("https:") ? Promise.resolve(new Response(new Uint8Array(bytes), { headers: { "content-type": "image/png" } })) : realFetch(input, init);
+    });
+    const sources = [
+      ["demos", "https://www.demos24plus.com/content/images/product/default/test-colour.png"],
+      ["hranipex", "https://hosting.photorobot.com/images/4748478675156992/test-colour/NORMAL/image"],
+      ["jaf_holz", "https://d1cvtajkxcatn5.cloudfront.net/pim/05%20dekore/test-colour.webp"],
+      ["schachermayer", "https://webshop.schachermayer.com/cdn/derivates/1/test-colour.jpg"]
+    ];
+    try {
+      for (const [supplierId, imageUrl] of sources) {
+        const session = await requestWorker(controller!.port, `/api/projects/${projectId}/supplier-sync-sessions`, { method: "POST", cookie, body: { supplierId, projectId, lookups: [{ requestId: `colours-${supplierId}`, projectId, materialAssignmentId: "material-assignment:corpus", supplierId, supplierProductId: "COLOUR-TEST", expectedProductType: "board", expectedThicknessMm: 18 }] } });
+        expect(session.status, supplierId).toBe(201);
+        const { bridgeToken, view } = session.body as { bridgeToken: string; view: { session: { id: string }; currentItem: { id: string } } };
+        const base = `/api/supplier-bridge/sessions/${view.session.id}`;
+        const attached = await requestWorker(controller!.port, `${base}/attach`, { method: "POST", body: { bridgeToken } });
+        const headers = { Authorization: `Bearer ${(attached.body as { accessToken: string }).accessToken}` };
+        const previewBody = { syncItemId: view.currentItem.id, imageUrl };
+        expect((await requestWorker(controller!.port, `${base}/preview-color`, { method: "POST", body: previewBody })).status).toBe(401);
+        expect((await requestWorker(controller!.port, `${base}/preview-color`, { method: "POST", headers, body: { ...previewBody, syncItemId: "foreign-item" } })).status).toBe(403);
+        const crossSupplierUrl = sources.find(([id]) => id !== supplierId)![1];
+        expect((await requestWorker(controller!.port, `${base}/preview-color`, { method: "POST", headers, body: { ...previewBody, imageUrl: crossSupplierUrl } })).status).toBe(422);
+        const preview = await requestWorker(controller!.port, `${base}/preview-color`, { method: "POST", headers, body: previewBody });
+        expect(preview.status, supplierId).toBe(200);
+        expect(preview.body).toMatchObject({ previewColorHex: "#A07040" });
+        const captured = await requestWorker(controller!.port, `${base}/candidates`, { method: "POST", headers, body: { submissionId: `colour-${supplierId}`, syncItemId: view.currentItem.id, supplierProductCode: "COLOUR-TEST", normalizedProduct: { displayName: "Test board", manufacturer: null, decorCode: null, surfaceCode: null, productType: "board", thicknessMm: 18, widthMm: 2070, lengthMm: 2800, availability: "available", previewColorHex: "#A07040" }, sourcePageType: "product", sourcePath: "/product/test", observedAt: "2026-09-14T12:00:00.000Z", price: null } });
+        expect(captured.status).toBe(201);
+        const candidateId = (captured.body as { candidate: { id: string } }).candidate.id;
+        expect((await requestWorker(controller!.port, `${base}/confirm`, { method: "POST", headers, body: { syncItemId: view.currentItem.id, candidateId } })).status).toBe(200);
+        const loaded = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { cookie });
+        expect(JSON.stringify(loaded.body)).toContain('"colorHex":"#A07040"');
+        expect(JSON.stringify(loaded.body)).not.toContain(imageUrl!);
+        const download = await requestWorker(controller!.port, `/api/projects/${projectId}/download`, { cookie });
+        expect(download.status).toBe(200);
+        const imported = await requestWorker(controller!.port, "/api/projects/import", { method: "POST", cookie, body: { envelope: download.body } });
+        expect(imported.status).toBe(200);
+        const importedId = (imported.body as { save: { projectId: string } }).save.projectId;
+        const restored = await requestWorker(controller!.port, `/api/projects/${importedId}/materials`, { cookie });
+        expect(JSON.stringify(restored.body)).toContain('"colorHex":"#A07040"');
+        expect(JSON.stringify(restored.body)).not.toContain(imageUrl!);
+      }
+    } finally { fetchSpy.mockRestore(); }
+  }, 60_000);
 
   it("rejects clientId in project create payload", async () => {
     const response = await requestWorker(controller!.port, "/api/projects", {
@@ -1751,6 +1909,7 @@ describe("multi-client worker isolation", () => {
       ok: true,
       view: { revision: 0, editable: true, settings: { defaultMarginPercent: 20 } }
     });
+    expect(ownerView.body).not.toHaveProperty("view.summary.sheetMaterial");
     const viewerView = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: viewerCookie });
     expect(viewerView.status).toBe(200);
     expect(viewerView.body).toMatchObject({ ok: true, view: { revision: 0, editable: false } });
@@ -1849,6 +2008,68 @@ describe("multi-client worker isolation", () => {
       ok: true,
       view: { revision: 1, settings: { groupMargins: { corpus: 15 } } }
     });
+  }, 30_000);
+
+  it.each([undefined, "client_b_demo"])("serves the custom sheet margin only for Delfi across save and FQP (override: %s)", async (configuredClientId) => {
+    const previous = process.env.ARCIGY_DELFI_CLIENT_ID;
+    if (configuredClientId === undefined) delete process.env.ARCIGY_DELFI_CLIENT_ID;
+    else process.env.ARCIGY_DELFI_CLIENT_ID = configuredClientId;
+    const delfiCookie = makeCookieHeader(configuredClientId
+      ? { userId: "user_client_b_owner", clientId: configuredClientId, role: "owner" }
+      : { userId: "user_delfi_fixture", clientId: "client_delfi", role: "owner" });
+    const otherCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    try {
+      const create = async (cookie: string) => {
+        const result = await requestWorker(controller!.port, "/api/projects", {
+          method: "POST", cookie, body: { name: "Delfi policy fixture", address: "QA", contactName: "QA" }
+        });
+        expect(result.status).toBe(201);
+        const id = (result.body as { project: { projectId: string } }).project.projectId;
+        const saved = await requestWorker(controller!.port, `/api/projects/${id}/save`, {
+          method: "POST", cookie,
+          body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} } }
+        });
+        expect(saved.status).toBe(200);
+        return id;
+      };
+      const projectId = await create(delfiCookie);
+      const otherId = await create(otherCookie);
+      const view = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: delfiCookie });
+      expect(view.body).toHaveProperty("view.summary.sheetMaterial", {
+        minimumThicknessMm: 16, areaM2: 0, marginPerM2: null, unmeasuredBoardCount: 0
+      });
+      const updated = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, {
+        method: "PUT", cookie: delfiCookie,
+        body: { revision: 0, operation: { type: "set_additional_labor", additionalLaborCost: 200 } }
+      });
+      expect(updated.status).toBe(200);
+      expect(updated.body).toMatchObject({ view: { summary: { marginAmount: 40, sheetMaterial: { areaM2: 0, marginPerM2: null } } } });
+      const saved = await requestWorker(controller!.port, `/api/projects/${projectId}/load`, { cookie: delfiCookie });
+      expect(saved.body).toHaveProperty("save.appState.quoteSettings.additionalLaborCost", 200);
+      expect(JSON.stringify(saved.body)).not.toContain("sheetMaterial");
+      const downloaded = await requestWorker(controller!.port, `/api/projects/${projectId}/download`, { cookie: delfiCookie });
+      expect(downloaded.status).toBe(200);
+      const imported = await requestWorker(controller!.port, "/api/projects/import", {
+        method: "POST", cookie: delfiCookie, body: { envelope: downloaded.text }
+      });
+      expect(imported.status).toBe(200);
+      const importedId = (imported.body as { save: { projectId: string } }).save.projectId;
+      const restored = await requestWorker(controller!.port, `/api/projects/${importedId}/margins`, { cookie: delfiCookie });
+      expect(restored.body).toHaveProperty("view.summary", (updated.body as { view: { summary: unknown } }).view.summary);
+      const otherView = await requestWorker(controller!.port, `/api/projects/${otherId}/margins?clientId=client_b_demo`, { cookie: otherCookie });
+      expect(otherView.status).toBe(200);
+      expect(otherView.body).not.toHaveProperty("view.summary.sheetMaterial");
+      const otherUpdate = await requestWorker(controller!.port, `/api/projects/${otherId}/margins`, {
+        method: "PUT", cookie: otherCookie,
+        body: { revision: 0, sheetMaterial: { minimumThicknessMm: 16 }, operation: { type: "set_default", marginPercent: 30 } }
+      });
+      expect(otherUpdate.status).toBe(200);
+      expect(otherUpdate.body).not.toHaveProperty("view.summary.sheetMaterial");
+      expect((await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: otherCookie })).status).toBe(403);
+    } finally {
+      if (previous === undefined) delete process.env.ARCIGY_DELFI_CLIENT_ID;
+      else process.env.ARCIGY_DELFI_CLIENT_ID = previous;
+    }
   }, 30_000);
 
   it("imports an encrypted project as a copy when the project already exists", async () => {
