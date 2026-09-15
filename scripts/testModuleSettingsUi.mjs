@@ -182,10 +182,18 @@ try {
   assert(savedResponse.ok(), 'Changed module saves through the project workflow');
   const persisted = (await savedResponse.json()).save;
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(({ group, id, expectedWidth }) => {
+  const hasPersistedModule = ({ group, id, expectedWidth }) => {
     const instance = window.__kitchenDebug?.snapshot(group).instances.find(item => item.id === id);
     return instance?.params.width === expectedWidth;
-  }, { group, id, expectedWidth: width + 170 });
+  };
+  const restoredWorkspace = await Promise.race([
+    page.waitForFunction(hasPersistedModule, { group, id, expectedWidth: width + 170 }).then(() => true),
+    page.locator('[data-project-manager-list]').waitFor().then(() => false),
+  ]);
+  if (!restoredWorkspace) {
+    await page.getByRole('button', { name: new RegExp(persisted.project.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click();
+    await page.waitForFunction(hasPersistedModule, { group, id, expectedWidth: width + 170 });
+  }
   assert((await module()).params.width === width + 170, 'Committed settings survive project reload');
   const exported = await page.context().request.get(new URL(`/api/projects/${persisted.projectId}/download`, baseUrl).toString());
   assert(exported.ok(), 'Changed module exports through the encrypted FQP workflow');
