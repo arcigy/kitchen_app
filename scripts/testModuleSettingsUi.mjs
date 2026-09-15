@@ -181,7 +181,11 @@ try {
   ]);
   assert(savedResponse.ok(), 'Changed module saves through the project workflow');
   const persisted = (await savedResponse.json()).save;
-  await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForFunction(() => !!window.__kitchenDebug);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(({ group, id, expectedWidth }) => {
+    const instance = window.__kitchenDebug?.snapshot(group).instances.find(item => item.id === id);
+    return instance?.params.width === expectedWidth;
+  }, { group, id, expectedWidth: width + 170 });
   assert((await module()).params.width === width + 170, 'Committed settings survive project reload');
   const exported = await page.context().request.get(new URL(`/api/projects/${persisted.projectId}/download`, baseUrl).toString());
   assert(exported.ok(), 'Changed module exports through the encrypted FQP workflow');
@@ -194,10 +198,16 @@ try {
   if (!sameParameters) await writeFile(`${out}/roundtrip-diff.json`, JSON.stringify({ before: persistedModule.params, after: importedModule.params }, null, 2));
   assert(sameParameters, 'FQP roundtrip preserves every committed module parameter');
   await page.locator("button[data-quick-action='open']").click();
-  if (await page.locator("[data-project-exit='save']").isVisible()) await page.locator("[data-project-exit='save']").click();
-  await page.waitForSelector('[data-project-manager-list]');
+  const saveExit = page.locator("[data-project-exit='save']");
+  const projectManager = page.locator('[data-project-manager-list]');
+  await Promise.race([saveExit.waitFor(), projectManager.waitFor()]);
+  if (await saveExit.isVisible()) await saveExit.click();
+  await projectManager.waitFor();
   await page.getByRole('button', { name: new RegExp(imported.project.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click();
-  await page.waitForFunction(() => !!window.__kitchenDebug);
+  await page.waitForFunction(({ group, id, expectedWidth }) => {
+    const instance = window.__kitchenDebug?.snapshot(group).instances.find(item => item.id === id);
+    return instance?.params.width === expectedWidth;
+  }, { group, id, expectedWidth: importedModule.params.width });
   await open(); await modal().locator('[data-module-parameter-preset-trigger]').click();
   await modal().locator(`[data-parameter-preset-id="${presetId}"]`).click();
   assert(Number(await field('width').inputValue()) === width + 170 && await field('frontMaterialId').inputValue() === importedModule.params.frontMaterialId, 'Company preset is available in another project and preserves dimensions and materials');

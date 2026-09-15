@@ -143,6 +143,21 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).not.toMatch(/uses:\s+actions\/(?:checkout|setup-node)@v\d+/);
   });
 
+  it("automatically routes main to production and develop to the isolated develop app", async () => {
+    const workflow = await readFile(path.join(process.cwd(), ".github", "workflows", "deploy-caprover.yml"), "utf-8");
+
+    expect(workflow).toMatch(/push:\s+branches:\s+- main\s+- develop/m);
+    expect(workflow).toContain("environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'develop' }}");
+    expect(workflow).toContain('if [ "$GITHUB_REF" = "refs/heads/main" ]');
+    expect(workflow).toContain("CAPROVER_PRODUCTION_APP: ${{ vars.CAPROVER_PRODUCTION_APP || 'kitchenapp' }}");
+    expect(workflow).toContain("CAPROVER_DEVELOP_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}");
+    expect(workflow).toContain("CAPROVER_APP: ${{ steps.caprover_app.outputs.app }}");
+    expect(workflow).toContain("CAPROVER_APP_URL: ${{ steps.caprover_app.outputs.url }}");
+    expect(workflow).toContain("ARCIGY_DEPLOY_APP_ENV: ${{ steps.caprover_app.outputs.app_env }}");
+    expect(workflow).toContain("ARCIGY_DEPLOY_DATABASE_SCHEMA: ${{ steps.caprover_app.outputs.database_schema }}");
+    expect(workflow).toContain("ARCIGY_DEPLOY_OBJECT_PREFIX: ${{ steps.caprover_app.outputs.object_prefix }}");
+  });
+
   it("runs CI for pull requests and direct protected-branch updates", async () => {
     const workflow = await readFile(path.join(process.cwd(), ".github", "workflows", "ci.yml"), "utf-8");
 
