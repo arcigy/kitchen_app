@@ -98,13 +98,16 @@ export function runRestoreDrillMigrations(connectionString: string): void {
   ], "Transactional database migrations", { env: migrationEnvironment() });
 }
 
-async function waitForPostgres(containerName: string, databaseName: string): Promise<void> {
+export async function waitForPostgres(containerName: string, databaseName: string): Promise<void> {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const result = spawnSync("docker", [
       "exec",
       containerName,
       "pg_isready",
+      // The image's initialization server accepts Unix sockets before TCP is ready.
+      "--host",
+      "127.0.0.1",
       "--username",
       RESTORE_DRILL_POSTGRES_USER,
       "--dbname",
