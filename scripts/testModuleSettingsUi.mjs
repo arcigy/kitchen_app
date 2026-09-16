@@ -188,6 +188,10 @@ try {
   const persisted = (await savedResponse.json()).save;
   const persistedModule = persisted.appState.layout.snapshot.instances.find(item => item.id === id);
   assert(persistedModule?.params.width === committedWidth, 'Committed settings persist in the server save');
+  // A matching response may belong to an autosave that the explicit save is
+  // waiting for. The exit guard stays locked until the entire manual save
+  // finishes, including the queued foreground save and client state update.
+  await page.locator('body.project-save-blocking').waitFor({ state: 'hidden' });
   const exported = await page.context().request.get(new URL(`/api/projects/${persisted.projectId}/download`, baseUrl).toString());
   assert(exported.ok(), 'Changed module exports through the encrypted FQP workflow');
   const importedResponse = await page.context().request.post(new URL('/api/projects/import', baseUrl).toString(), { data: { envelope: await exported.text() } });
@@ -200,8 +204,9 @@ try {
   await page.locator("button[data-quick-action='open']").click();
   const saveExit = page.locator("[data-project-exit='save']");
   const projectManager = page.locator('[data-project-manager-list]');
-  await Promise.race([saveExit.waitFor(), projectManager.waitFor()]);
-  if (await saveExit.isVisible()) await saveExit.click();
+  await saveExit.waitFor();
+  assert(await saveExit.isVisible(), 'Completed manual save allows the project exit dialog to open');
+  await saveExit.click();
   await projectManager.waitFor();
   await page.getByRole('button', { name: new RegExp(imported.project.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click();
   await page.waitForFunction(({ group, id, expectedWidth }) => {
