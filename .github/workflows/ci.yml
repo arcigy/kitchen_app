@@ -102,7 +102,9 @@ jobs:
           chrome_backup="$(mktemp -d "${RUNNER_TEMP}/arcigy-chrome-sources.XXXXXX")"
           chrome_sources=()
           restore_chrome_sources() {
-            for chrome_source in "${chrome_sources[@]}"; do
+            # Bash 3.2 (macOS verification) treats an empty array as unset
+            # with nounset. Expand only when at least one feed was moved.
+            for chrome_source in ${chrome_sources[@]+"${chrome_sources[@]}"}; do
               sudo mv -- "$chrome_backup/${chrome_source##*/}" "$chrome_source"
             done
           }
