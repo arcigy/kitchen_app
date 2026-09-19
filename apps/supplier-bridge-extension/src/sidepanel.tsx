@@ -55,7 +55,7 @@ async function requestSupplierPermission(supplierId: string, language: SupplierB
 function App(): React.JSX.Element {
   const [account, setAccount] = useState<SupplierBridgeAccount | null>(null);
   const [origin, setOrigin] = useState(defaultOrigin());
-  const [company, setCompany] = useState("Arcigy firma");
+  const [company, setCompany] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [projects, setProjects] = useState<ProjectMetadata[]>([]);
@@ -342,7 +342,7 @@ function App(): React.JSX.Element {
       <h1>{copy("Prihlásenie do Arcigy", "Přihlášení do Arcigy", "Sign in to Arcigy")}</h1>
       <p className="muted">{copy("Použite rovnaké meno a heslo ako v aplikácii. Heslo sa neukladá.", "Použijte stejné uživatelské jméno a heslo jako v aplikaci. Heslo se neukládá.", "Use the same username and password as in the app. The password is not stored.")}</p>
       <label className="field">{copy("Prostredie", "Prostředí", "Environment")}<select value={origin} onChange={(event) => setOrigin(event.target.value)}>{supplierBridgeBuild.arcigyOrigins.map((value) => <option key={value} value={value}>{value.includes("develop") ? "Develop" : copy("Produkcia", "Produkce", "Production")}</option>)}</select></label>
-      <label className="field">{copy("Firma", "Firma", "Company")}<input autoComplete="organization" value={company} onChange={(event) => setCompany(event.target.value)} /></label>
+      <label className="field">{copy("Firma", "Firma", "Company")}<input autoComplete="organization" placeholder={copy("Názov organizácie z prihlásenia do Arcigy", "Název organizace z přihlášení do Arcigy", "Organization name used to sign in to Arcigy")} value={company} onChange={(event) => setCompany(event.target.value)} /></label>
       <label className="field">{copy("Používateľ", "Uživatel", "User")}<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>
       <label className="field">{copy("Heslo", "Heslo", "Password")}<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
       {error && <p className="notice notice--error" role="alert">{error}</p>}
