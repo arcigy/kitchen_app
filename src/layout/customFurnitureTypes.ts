@@ -1,7 +1,9 @@
 import * as THREE from "three";
+import type { ManufacturingRecipeSnapshot } from "../core/project-manufacturing/project-manufacturing-types";
 
 export type CustomFurnitureConstraint = "projectBase" | "furnitureBase" | "furnitureTop" | "absolute";
 export type CustomFurnitureBoardKind = "horizontal" | "vertical" | "worktop" | "custom";
+export type CustomFurnitureAdditionKind = "cover_side" | "filler" | "cladding" | "crown" | "extra_bottom" | "custom";
 export type CustomFurnitureBoardJustification = "center" | "negative" | "positive";
 
 export type CustomFurniturePlanPoint = { x: number; z: number };
@@ -32,6 +34,16 @@ export type CustomFurnitureEdgeBand = {
   materialId: string;
 };
 
+export type CustomFurnitureCabinetAttachment = {
+  cabinetId: string;
+  side: "left" | "right" | "front" | "back" | "top" | "bottom";
+  offsetMm: number;
+  startOverhangMm: number;
+  endOverhangMm: number;
+  /** Only explicitly chosen dimensions follow the cabinet. */
+  followDimensions: Array<"width" | "height" | "depth">;
+};
+
 export type CustomFurnitureBoardParams = {
   id: string;
   name: string;
@@ -46,6 +58,10 @@ export type CustomFurnitureBoardParams = {
   topOffsetMm: number;
   justification: CustomFurnitureBoardJustification;
   edgeBanding: CustomFurnitureEdgeBand[];
+  additionKind?: CustomFurnitureAdditionKind;
+  cabinetAttachment?: CustomFurnitureCabinetAttachment;
+  /** Project-owned recipe snapshot; rendering uses the final thickness and surface only. */
+  recipeSnapshot?: ManufacturingRecipeSnapshot;
 };
 
 export type CustomFurnitureParams = {

@@ -136,6 +136,7 @@ describe("custom furniture selected props panel", () => {
     expect(rows.map((row) => row.label)).toEqual([
       "Name",
       "Kind",
+      "Addition",
       "Material",
       "Thickness",
       "Elevation",
@@ -147,14 +148,14 @@ describe("custom furniture selected props panel", () => {
     ]);
     expect(section.children.at(-1)?.textContent).toBe("Profile: 4 points, 1000 x 500 mm. Edge banding: 1.");
 
-    rows[2]!.control.value = "board-a";
-    rows[2]!.control.dispatch("change");
+    rows[3]!.control.value = "board-a";
+    rows[3]!.control.dispatch("change");
     expect(board.materialId).toBe("board-a");
     expect(rebuildFurniture).toHaveBeenCalledWith(furniture);
     expect(commitHistory).toHaveBeenCalledTimes(1);
 
-    rows[4]!.control.value = "180";
-    rows[4]!.control.dispatch("change");
+    rows[5]!.control.value = "180";
+    rows[5]!.control.dispatch("change");
     expect(board.workplane.type === "horizontal" ? board.workplane.elevationMm : null).toBe(180);
     expect(commitHistory).toHaveBeenCalledTimes(2);
   });
