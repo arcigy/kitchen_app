@@ -11,6 +11,7 @@ import {
   buildProjectQuoteSummary,
   type ProjectQuoteSettingsInput
 } from "../layout/bom/projectQuote";
+import { isProjectMarginSettingsState } from "../core/project-margins/project-margin-types";
 
 type ProjectPricingSummaryInput = {
   catalog: ClientCatalog;
@@ -97,7 +98,9 @@ export function createProjectPricingSummaryController(ctx: ProjectPricingSummary
         input.worktops,
         input.customFurniture,
         input.kitchenContext,
-        input.catalog
+        input.catalog,
+        [],
+        isProjectMarginSettingsState(input.quoteSettings) ? input.quoteSettings.manufacturing : undefined
       );
       const summary = buildProjectQuoteSummary(entries, input.quoteSettings);
       const missingCount = missingPrices(entries);

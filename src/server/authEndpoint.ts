@@ -60,8 +60,10 @@ function readLoginCredentials(body: unknown): LoginCredentials | null {
   const company = getStringField(body, "company");
   const username = getStringField(body, "username");
   const password = getStringField(body, "password");
-  if (!company || !username || !password) return null;
-  return { company, username, password };
+  const normalizedCompany = company?.trim().replace(/\s+/g, " ") ?? "";
+  const normalizedUsername = username?.trim() ?? "";
+  if (!normalizedCompany || !normalizedUsername || !password) return null;
+  return { company: normalizedCompany, username: normalizedUsername, password };
 }
 
 async function authenticateLoginAttempt(

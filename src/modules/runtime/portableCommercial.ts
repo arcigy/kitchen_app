@@ -62,6 +62,8 @@ export type PortableQuoteBomItem = {
   variantLabel?: string;
   pricingGroup?: "boards" | "edge_bands" | "hardware";
   pricingQuantityBase?: number | null;
+  /** Calculated manufactured material price. It bypasses catalog lookup without adding its layers twice. */
+  unitPriceOverride?: number | null;
   unitPrice?: number | null;
   itemCost?: number | null;
   itemCostFormula?: string;
@@ -121,6 +123,10 @@ export type PortableCommercialPricingPayload = {
     boardWasteMultiplier: number;
     laborCostFixed: number;
     marginPercent: number;
+  };
+  preassembly?: {
+    source: "instance" | "preset" | "module" | "missing" | "legacy";
+    amount: number | null;
   };
   calculationFormulas: Record<string, string>;
   aggregates?: PortableQuoteBomPayload["aggregates"];
@@ -949,6 +955,7 @@ export function calculateCommercialPricingFromQuoteBom(args: {
   catalog: ClientCatalog;
   boardWasteMultiplier?: number;
   laborCostFixed?: number;
+  preassembly?: PortableCommercialPricingPayload["preassembly"];
 }): PortableCommercialPricingPayload {
   const pricingCatalog = getPricingCatalog(args.catalog);
   const boardWasteMultiplier = args.boardWasteMultiplier ?? 1.1;
@@ -959,9 +966,10 @@ export function calculateCommercialPricingFromQuoteBom(args: {
     const nextItem = deepClone(item);
     const lookupKey = nextItem.pricingLookup?.sourceCatalogId ?? nextItem.pricingLookup?.key ?? nextItem.catalogRef?.catalogId ?? null;
     const itemErrors = [...(nextItem.validationErrors ?? [])];
-    const unitPrice = lookupKey ? pricingCatalog.getUnitPriceForCatalogId(lookupKey) : null;
+    const hasUnitPriceOverride = typeof nextItem.unitPriceOverride === "number" && Number.isFinite(nextItem.unitPriceOverride);
+    const unitPrice = hasUnitPriceOverride ? nextItem.unitPriceOverride! : lookupKey ? pricingCatalog.getUnitPriceForCatalogId(lookupKey) : null;
 
-    if (!lookupKey) itemErrors.push(`Item ${nextItem.id} is missing pricing lookup.`);
+    if (!lookupKey && !hasUnitPriceOverride) itemErrors.push(`Item ${nextItem.id} is missing pricing lookup.`);
     if (unitPrice === null) itemErrors.push(`Item ${nextItem.id} is missing unit price.`);
     if (!Number.isFinite(nextItem.pricingQuantity)) itemErrors.push(`Item ${nextItem.id} has invalid pricingQuantity.`);
     if (nextItem.itemType === "board" && !nextItem.dimensionsMm) itemErrors.push(`Board item ${nextItem.id} is missing dimensions.`);
@@ -1039,6 +1047,7 @@ export function calculateCommercialPricingFromQuoteBom(args: {
       laborCostFixed,
       marginPercent: 0
     },
+    ...(args.preassembly ? { preassembly: structuredClone(args.preassembly) } : {}),
     calculationFormulas: {
       boardPricedQuantity: "areaM2 * wasteMultiplier",
       itemCost: "pricingQuantity * unitPrice",

@@ -83,7 +83,7 @@ export function calculateBOM(params: SwingShelvesLowParams, ctx: KitchenContext,
   if (doorCount > 0) items.push(boardItem({ id: "door-fronts", category: "front", description: "Door fronts", quantity: doorCount, length: doorWidth, width: doorHeight, thickness: frontT, material: frontRef, slot: "front", wasteMultiplier: 1.1 }));
 
   const visibleEdgeLm = round((sideHeight * 2 + innerWidth * (2 + shelfBoardCount) + Math.max(0, plinthHeight > 0 ? innerWidth : 0) + doorCount * (doorWidth * 2 + doorHeight * 2)) / 1000);
-  if (edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
+  if (visibleEdgeLm > 0) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
 
   const hardware = [
     hardwareItem("door-handles", "Door handles", source.handleType === "none" ? 0 : doorCount, componentRef(resolveComponent(catalog, source, "handleComponentId"))),

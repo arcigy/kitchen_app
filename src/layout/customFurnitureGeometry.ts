@@ -5,6 +5,7 @@ import type {
   CustomFurniturePlanPoint,
   CustomFurnitureProfilePoint
 } from "./customFurnitureTypes";
+import { recipeThicknessMm } from "../core/project-manufacturing/project-manufacturing-types";
 
 const MIN_POINT_DISTANCE_MM = 1;
 
@@ -250,7 +251,7 @@ function makeVerticalPathOutlineGeometry(
 export function makeCustomFurnitureBoardGeometry(board: CustomFurnitureBoardParams): THREE.BufferGeometry {
   const profile = sanitizeCustomFurnitureProfile(board.profile);
   if (profile.length < 3) return new THREE.BoxGeometry(0.001, 0.001, 0.001);
-  const thicknessM = Math.max(1, board.thicknessMm) / 1000;
+  const thicknessM = Math.max(1, board.recipeSnapshot ? recipeThicknessMm(board.recipeSnapshot) : board.thicknessMm) / 1000;
   const [offsetA, offsetB] = justificationOffsets(thicknessM, board.justification);
 
   if (board.workplane.type === "horizontal") {
@@ -289,7 +290,7 @@ export function makeCustomFurnitureBoardOutlineGeometry(board: CustomFurnitureBo
       board.workplane.pathMm,
       bounds.minY,
       bounds.maxY,
-      Math.max(1, board.thicknessMm) / 1000,
+      Math.max(1, board.recipeSnapshot ? recipeThicknessMm(board.recipeSnapshot) : board.thicknessMm) / 1000,
       board.justification,
       board.workplane.mirrored
     );

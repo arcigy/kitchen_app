@@ -139,6 +139,17 @@ describe("auth endpoints", () => {
     expect((res.body as { ok: boolean }).ok).toBe(true);
   });
 
+  it("normalizes spacing in the organization and username for app and extension login", async () => {
+    const service = createTestUserService();
+    const browser = mockRes();
+    const bridge = mockRes();
+    const body = readBody({ company: "  Arcigy   Kitchen ", username: " branislav ", password: "branislav2026" });
+    await handleAuthLogin(mockReq(), browser, body, sendJson, { userService: service, loginRateLimiter: createLoginRateLimiter() });
+    await handleExtensionAuthLogin(mockReq(), bridge, body, sendJson, { userService: service, authSessionStore: createInMemoryAuthSessionStore(), loginRateLimiter: createLoginRateLimiter() });
+    expect(browser.statusCode).toBe(200);
+    expect(bridge.statusCode).toBe(200);
+  });
+
   it("requires a company for browser login", async () => {
     const res = mockRes();
     await handleAuthLogin(mockReq(), res, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {

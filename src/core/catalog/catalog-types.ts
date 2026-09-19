@@ -1,4 +1,5 @@
 import type { Material } from "../../types/material";
+import type { ManufacturingCatalogSettings } from "../project-manufacturing/project-manufacturing-types";
 import type {
   ComponentDefinition,
   ComponentGeometryDefinition,
@@ -186,6 +187,8 @@ export type ClientCatalog = {
   modules: ClientModuleDefinition[];
   priceList: PriceList;
   kitchenDefaults: KitchenDefaults;
+  /** Tenant-owned defaults. A project stores its own snapshot when it uses them. */
+  manufacturing?: ManufacturingCatalogSettings;
   vendorCatalog?: VendorCatalogIndex;
   meta: {
     catalogVersion: number;

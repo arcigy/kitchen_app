@@ -109,4 +109,23 @@ describe("customFurniturePricing", () => {
     expect(bom.items[0]).toMatchObject({ itemType: "board", pricingQuantity: 0.5, pricingUnit: "m2" });
     expect(bom.items[1]).toMatchObject({ itemType: "edge_band", pricingQuantity: 1, pricingUnit: "lm" });
   });
+
+  it("prices a selected recipe as one final board and exposes its resulting thickness", () => {
+    const recipeFurniture = { ...furniture, params: structuredClone(furniture.params) };
+    recipeFurniture.params.boards[0]!.recipeSnapshot = {
+      id: "lacquered-panel",
+      version: 2,
+      name: "Lacquered composite panel",
+      layers: [
+        { id: "core", materialId: "board.body", thicknessMm: 16 },
+        { id: "face", materialId: "board.body", thicknessMm: 2 }
+      ],
+      operations: [{ id: "spray", name: "Spray", basis: "area", unitRate: 4, repetitions: 1, targets: ["front"] }]
+    };
+    const bom = createCustomFurnitureQuoteBom(recipeFurniture, catalog);
+
+    expect(bom.items[0]).toMatchObject({ pricingQuantity: 0.5, unitPriceOverride: 24, dimensionsMm: { thickness: 18 } });
+    expect(bom.items[0]!.catalogRef).toBeNull();
+    expect(bom.items[0]!.notes).toContain("Recipe: Lacquered composite panel v2");
+  });
 });

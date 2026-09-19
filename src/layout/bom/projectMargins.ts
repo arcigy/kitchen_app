@@ -22,6 +22,7 @@ import {
   isProjectMarginCategory,
   validateProjectMarginSettingsState
 } from "../../core/project-margins/project-margin-validation";
+import { normalizeProjectManufacturingSettings, type ProjectManufacturingSettings } from "../../core/project-manufacturing/project-manufacturing-types";
 import type { PortableQuoteBomItem } from "../../modules/runtime/portableCommercial";
 import type { ProjectPricingView } from "./projectPricing";
 import { projectMaterialCategoryForBomItem } from "./projectMaterialCategory";
@@ -100,7 +101,8 @@ export type ProjectMarginSettingsOperation =
   | { type: "set_item"; target: ProjectMarginTarget; marginPercent: number }
   | { type: "reset_group"; category: ProjectMarginCategory }
   | { type: "reset_item"; target: ProjectMarginTarget }
-  | { type: "set_additional_labor"; additionalLaborCost: number };
+  | { type: "set_additional_labor"; additionalLaborCost: number }
+  | { type: "set_manufacturing"; manufacturing: ProjectManufacturingSettings };
 
 type DraftMarginItem = Omit<ProjectMarginItemView, "marginAmount" | "finalPrice"> & {
   costCents: number;
@@ -147,6 +149,9 @@ function assignedPriceResolution(
   targetCurrency: PriceCurrency
 ): AssignedPriceResolution | null {
   if (category === "labor") return null;
+  // A recipe is already one manufactured final material. Its layer snapshot must
+  // not be replaced by the generic board assignment and counted twice.
+  if (typeof item.unitPriceOverride === "number" && Number.isFinite(item.unitPriceOverride)) return null;
   const effective = resolveEffectiveProjectMaterialAssignment(assignments, scopeId, { id: item.id, category });
   const assignment = effective.assignment;
   if (!assignment) return null;
@@ -204,8 +209,9 @@ function draftItem(args: {
   unit: PricingUnit;
   baseCost: number;
   missingPrice: boolean;
+  marginPercent?: number;
 }): DraftMarginItem {
-  const marginPercent = resolveEffectiveProjectMarginPercent(args.state, args.target);
+  const marginPercent = args.marginPercent ?? resolveEffectiveProjectMarginPercent(args.state, args.target);
   const costCents = moneyCents(args.baseCost);
   return {
     targetId: projectMarginTargetId(args.target),
@@ -384,10 +390,21 @@ export function buildProjectMarginsView(
     const laborTargetId = projectMarginTargetId(laborTarget);
     if (seenTargetIds.has(laborTargetId)) throw new Error(`Duplicate project margin target ${laborTargetId} in the current BOM.`);
     seenTargetIds.add(laborTargetId);
+    const preassembly = entry.result.pricing.preassembly;
+    const isConfiguredPreassembly = preassembly && preassembly.source !== "legacy";
+    const preassemblySource = preassembly?.source === "instance"
+      ? "úprava skrinky"
+      : preassembly?.source === "preset"
+        ? "preset"
+        : preassembly?.source === "module"
+          ? "typ modulu"
+          : preassembly?.source === "missing"
+            ? "chýbajúca sadzba"
+            : "pôvodný výpočet";
     drafts.push(draftItem({
       state,
       target: laborTarget,
-      label: "Práca modulu",
+      label: isConfiguredPreassembly ? `Predmontáž · ${preassemblySource}` : "Práca modulu",
       scopeLabel: entry.label,
       resourceLabel: "Práca",
       quantity: 1,
@@ -397,7 +414,8 @@ export function buildProjectMarginsView(
         entry.result.pricing.priceInputs.currency,
         currency
       ) ?? 0,
-      missingPrice: false
+      missingPrice: preassembly?.source === "missing" || false,
+      ...(isConfiguredPreassembly ? { marginPercent: 0 } : {})
     }));
   }
 
@@ -521,6 +539,8 @@ export function applyProjectMarginSettingsOperation(
     next.itemOverrides = next.itemOverrides.filter((override) => override.category !== operation.category);
   } else if (operation.type === "set_additional_labor") {
     next.additionalLaborCost = round(operation.additionalLaborCost, 2);
+  } else if (operation.type === "set_manufacturing") {
+    next.manufacturing = normalizeProjectManufacturingSettings(operation.manufacturing);
   } else {
     if (!isProjectMarginCategory(operation.target.category)) throw new Error("Unsupported project margin category.");
     const targetId = projectMarginTargetId(operation.target);

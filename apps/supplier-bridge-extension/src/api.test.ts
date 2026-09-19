@@ -39,6 +39,21 @@ describe("Supplier Bridge API errors", () => {
     );
   });
 
+  it("normalizes the organization and username before the extension sends credentials", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      accessToken: "token",
+      session: { userId: "user", clientId: "client", role: "owner", displayName: "User", issuedAt: "2026-09-03T12:00:00.000Z", expiresAt: "2026-09-10T12:00:00.000Z" }
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await loginExtension("https://arcigy.example", "  Arcigy   Kitchen ", " branislav ", "safe-password");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://arcigy.example/api/auth/extension-login",
+      expect.objectContaining({ body: JSON.stringify({ company: "Arcigy Kitchen", username: "branislav", password: "safe-password" }) })
+    );
+  });
+
   it("sends a Démos preview image only to the session-bound colour endpoint", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ previewColorHex: "#B31B34" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

@@ -10,6 +10,7 @@ import {
   type ProjectMarginCategory,
   type ProjectMarginTarget
 } from "../core/project-margins/project-margin-types";
+import { normalizeProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
 import { isProjectMarginCategory } from "../core/project-margins/project-margin-validation";
 import {
   ProjectMarginRevisionConflictError,
@@ -120,6 +121,8 @@ export function parseProjectMarginSettingsOperation(value: unknown): ProjectMarg
         type: "set_additional_labor",
         additionalLaborCost: finiteNumber(body.additionalLaborCost, "operation.additionalLaborCost")
       };
+    case "set_manufacturing":
+      return { type: "set_manufacturing", manufacturing: normalizeProjectManufacturingSettings(body.manufacturing) };
     default:
       throw new ProjectMarginRequestError("Unsupported project margin operation.");
   }
@@ -130,25 +133,26 @@ function entriesFromSave(save: ProjectSaveFile, catalog: ClientCatalog): { entri
   const inputs = resolveProjectMaterialInputs(save, catalog, resolutionWarnings);
   const warnings = resolutionWarnings.map((warning) => warning.description);
   const entries: ProjectPricingView[] = [];
+  const manufacturing = normalizeProjectMarginSettingsState(save.appState.quoteSettings).manufacturing;
 
   for (const instance of inputs.instances) {
     try {
       const context = resolveProjectMarginKitchenContext(instance, inputs.kitchenContext, inputs.kitchenGroups);
-      entries.push(...buildProjectPricingViews([instance], [], [], context, catalog));
+      entries.push(...buildProjectPricingViews([instance], [], [], context, catalog, [], manufacturing));
     } catch (error) {
       warnings.push(`Modul ${instance.id}: cenu sa nepodarilo vypočítať (${error instanceof Error ? error.message : "neznáma chyba"}).`);
     }
   }
   for (const worktop of inputs.worktops) {
     try {
-      entries.push(...buildProjectPricingViews([], [worktop], [], inputs.kitchenContext, catalog));
+      entries.push(...buildProjectPricingViews([], [worktop], [], inputs.kitchenContext, catalog, [], manufacturing));
     } catch (error) {
       warnings.push(`Pracovná doska ${worktop.id}: cenu sa nepodarilo vypočítať (${error instanceof Error ? error.message : "neznáma chyba"}).`);
     }
   }
   for (const furniture of inputs.customFurniture) {
     try {
-      entries.push(...buildProjectPricingViews([], [], [furniture], inputs.kitchenContext, catalog));
+      entries.push(...buildProjectPricingViews([], [], [furniture], inputs.kitchenContext, catalog, [], manufacturing));
     } catch (error) {
       warnings.push(`Vlastný nábytok ${furniture.id}: cenu sa nepodarilo vypočítať (${error instanceof Error ? error.message : "neznáma chyba"}).`);
     }

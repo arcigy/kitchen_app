@@ -107,6 +107,12 @@ import type {
   CustomFurniturePlanPoint,
   CustomFurnitureSnapshotItem
 } from "../layout/customFurnitureTypes";
+import {
+  detachCustomFurnitureAttachments,
+  duplicateAttachedCustomFurnitureParams,
+  syncCustomFurnitureAttachments,
+  type CabinetAttachmentFrame
+} from "../layout/customFurnitureAttachments";
 
 export {
   alignCustomFurnitureBoundarySegmentToReference,
@@ -249,6 +255,8 @@ type CreateCustomFurnitureControllerArgs = {
   hideHoverCursor: () => void;
   getCounter: () => number;
   setCounter: (next: number) => void;
+  getCabinetOptions?: () => Array<{ id: string; label: string }>;
+  syncCabinetAttachment?: (cabinetId: string) => void;
   getViewerToolMode?: () => "select" | "pan" | "zoom-in" | "zoom-out" | "orbit" | "fit";
 };
 
@@ -2208,6 +2216,8 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
         constraintOptions,
         syncVerticalBoardProfileToConstraints,
         rebuildFurniture,
+        cabinetOptions: args.getCabinetOptions?.(),
+        syncCabinetAttachment: args.syncCabinetAttachment,
         commitHistory: args.commitHistory,
         refreshProps: args.refreshProps
       });
@@ -3117,6 +3127,31 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
   const getSaveItems = (): CustomFurnitureSnapshotItem[] =>
     args.customFurniture.map((item) => ({ id: item.id, params: cloneJson(item.params) }));
 
+  const duplicateAttachedToCabinet = (sourceId: string, targetId: string, translationMm: { x: number; z: number }) => {
+    const params = duplicateAttachedCustomFurnitureParams(getSaveItems(), sourceId, targetId, translationMm);
+    if (params.length === 0) return 0;
+    for (const item of params) createCustomFurniture(item, { skipHistory: true });
+    return params.length;
+  };
+
+  const syncAttachmentsForCabinet = (frame: CabinetAttachmentFrame) => {
+    const affected = args.customFurniture.filter((furniture) =>
+      furniture.params.boards.some((board) => board.cabinetAttachment?.cabinetId === frame.cabinetId)
+    );
+    const synchronized = syncCustomFurnitureAttachments(affected, frame);
+    for (const furniture of affected) rebuildFurniture(furniture);
+    return synchronized;
+  };
+
+  const detachAttachmentsForCabinet = (cabinetId: string) => {
+    const affected = args.customFurniture.filter((furniture) =>
+      furniture.params.boards.some((board) => board.cabinetAttachment?.cabinetId === cabinetId)
+    );
+    const detached = detachCustomFurnitureAttachments(affected, cabinetId);
+    for (const furniture of affected) rebuildFurniture(furniture);
+    return detached;
+  };
+
   const commitActiveDraft = () => {
     if (!shouldCommitCustomFurnitureDraftBeforeLeaving(activeTool, boundaryEditActive)) return true;
     const previousTool = activeTool;
@@ -3133,9 +3168,12 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     commitActiveDraft,
     createCustomFurniture,
     deleteSelected: removeSelected,
+    detachAttachmentsForCabinet,
+    duplicateAttachedToCabinet,
     enterNew,
     getSaveItems,
     getSelectedVisibilityTargetKeys,
+    syncAttachmentsForCabinet,
     getVisibilityTargets,
     handleEscapeKey,
     isCursorToolActive: () => boundaryEditActive || activeTool !== null,

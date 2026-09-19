@@ -127,9 +127,14 @@ export async function loginExtension(
   username: string,
   password: string
 ): Promise<{ accessToken: string; session: ExtensionAuthSession }> {
+  const normalizedCompany = company.trim().replace(/\s+/g, " ");
+  const normalizedUsername = username.trim();
+  if (!normalizedCompany || !normalizedUsername || !password) {
+    throw new Error("Company, username, and password are required.");
+  }
   const body = record(await requestJson(`${baseUrl}/api/auth/extension-login`, {
     method: "POST",
-    body: JSON.stringify({ company, username, password })
+    body: JSON.stringify({ company: normalizedCompany, username: normalizedUsername, password })
   }));
   const session = authSession(body?.session);
   if (!body || typeof body.accessToken !== "string" || !session) throw new Error("Arcigy login response is invalid.");
