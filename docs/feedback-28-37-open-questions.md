@@ -13,3 +13,7 @@ Funkcie pre reporty #28 až #37 sú pripravené na použitie s údajmi zadanými
 | Supplier Bridge | Presný postup, účet bez citlivých údajov, firma, mena a čas výskytu, ak sa chyba prihlásenia zopakuje. |
 
 Tieto údaje patria do konfigurácie firmy alebo projektu. Neuchovávajú sa v zdrojovom kóde ani v Gite.
+
+## Základný manuálny postup
+
+V testovacom projekte zapnite výrobné sadzby, vyplňte prerez dosiek a hrán a nastavte predmontáž pre skrinku; overte nulovú aj chýbajúcu sadzbu. Vytvorte krycí bok, priraďte ho ku skrinke, duplikujte skrinku, odstráňte pôvodnú a vyskúšajte Späť/Znova. Overte uloženie, otvorenie a `.fqp` roundtrip s receptúrou. V Nastaveniach prepnite veľkosť rozhrania a pri zväčšení prehliadača skontrolujte ovládacie prvky. V Supplier Bridge overte medzery okolo názvu firmy a používateľa; nesprávna firma musí zostať odmietnutá.
