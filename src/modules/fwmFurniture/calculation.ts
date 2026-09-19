@@ -670,7 +670,7 @@ export function calculateFwmFurnitureBOM(params: FwmFurnitureParams, ctx: Kitche
   const edgeLengthLm = round(items
     .filter((item) => item.itemType === "board")
     .reduce((sum, item) => sum + ((item.dimensionsMm?.length ?? 0) + (item.dimensionsMm?.width ?? 0)) * 2 * item.quantity / 1000, 0));
-  if (edgeLengthLm > 0 && edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", edgeLengthLm, edgeRef, "front"));
+  if (edgeLengthLm > 0) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", edgeLengthLm, edgeRef, "front"));
 
   const hardware = [
     hardwareItem("handles", "Visible handles", Math.max(0, spec.moduleType === BASE_BOTTLE_PULLOUT_MODULE_TYPE ? (drawerCount > 0 ? 1 : 0) : drawerCount + doorCount), componentUsage(catalog, p, "handleComponentId", "handle")),

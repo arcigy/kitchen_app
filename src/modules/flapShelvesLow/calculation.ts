@@ -66,7 +66,7 @@ export function calculateBOM(params: FlapShelvesLowParams, ctx: KitchenContext, 
   if (hasDoors) items.push(boardItem({ id: "door-front", category: "front", description: "Flap front", quantity: 1, length: frontWidth, width: frontHeight, thickness: frontT, material: frontRef, slot: "front", wasteMultiplier: 1.1 }));
 
   const visibleEdgeLm = round((height * 2 + innerWidth * (2 + shelfCount) + (hasDoors ? frontWidth * 2 + frontHeight * 2 : 0)) / 1000);
-  if (edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
+  if (visibleEdgeLm > 0) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
 
   const hardware = [
     hardwareItem("door-handle", "Door handle", !hasDoors || source.handleType === "none" ? 0 : 1, componentRef(resolveComponent(catalog, source, "handleComponentId"))),

@@ -90,7 +90,7 @@ export function calculateBOM(params: DrawerLowParams, ctx: KitchenContext, catal
   }
 
   const visibleEdgeLm = round((sideHeight * 2 + innerWidth * 3 + topRailDepth * 4 + frontWidth * drawerCount + drawerFrontTotalHeight * 2 + (plinthHeight > 0 ? width : 0)) / 1000);
-  if (edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
+  if (visibleEdgeLm > 0) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
 
   const hardware = [
     hardwareItem("handles", "Drawer handles", source.handleType === "none" ? 0 : drawerCount, componentRef(resolveComponent(catalog, source, "handleComponentId"))),

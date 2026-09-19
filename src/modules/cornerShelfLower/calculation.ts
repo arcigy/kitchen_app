@@ -95,7 +95,7 @@ export function calculateBOM(params: CornerShelfLowerParams, ctx: KitchenContext
   );
 
   const visibleEdgeLm = round((sideHeight * 2 + innerLengthX * 3 + innerLengthZ * 2 + shelfPairCount * (shelfXLength + shelfZLength) + (hasDoors ? doorWidthX * 2 + doorWidthZ * 2 + doorHeight * 4 : 0)) / 1000);
-  if (edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
+  if (visibleEdgeLm > 0) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
 
   const hardware = [
     hardwareItem("door-handles", "Door handles", !hasDoors || source.handleType === "none" ? 0 : 2, componentRef(resolveComponent(catalog, source, "handleComponentId"))),

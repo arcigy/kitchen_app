@@ -9,6 +9,7 @@ import { mountLoadingSkeleton } from "../ui/loadingSkeleton";
 import { createButtonElement, createFileInputElement, createHtmlButtonElement } from "./propsPanelElements";
 import { getAppContextMenuController, type ContextMenuItem } from "../ui/contextMenu";
 import { t } from "../i18n";
+import type { createUiScaleController } from "./uiScaleController";
 
 type WorkspaceNavId = "design" | "sheets" | "documents" | "visualisation" | "schedules" | "margins" | "materials" | "settings";
 
@@ -39,6 +40,7 @@ type WorkspaceNavigationControllerArgs = {
   setVisualisationTopbar: () => void;
   setDesignTopbar: () => void;
   selectModuleById?: (instanceId: string) => void;
+  uiScale?: ReturnType<typeof createUiScaleController>;
 };
 
 type SheetRecord = {
@@ -327,7 +329,16 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     else if (id === "materials") openMaterials();
     else if (id === "margins") openMargins();
     else if (id === "documents") showComingSoonDialog(t("Documents"));
-    else if (id === "settings") showComingSoonDialog(t("Settings"));
+    else if (id === "settings") {
+      if (!args.uiScale) {
+        showComingSoonDialog(t("Settings"));
+      } else {
+        const body = document.createElement("div");
+        body.className = "workspace-settings";
+        body.appendChild(args.uiScale.createControl());
+        openOverlay(t("Settings"), "Nastavenie sa uloží iba v tomto zariadení.", body);
+      }
+    }
   };
 
   for (const button of navButtons) {

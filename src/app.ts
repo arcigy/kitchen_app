@@ -268,6 +268,7 @@ import { createClassicTopbarController } from "./app/classicTopbarController";
 import { mountMobileWorkspaceShell } from "./ui/mobileWorkspaceShell";
 import { createMobileCommandHudController } from "./app/mobileCommandHudController";
 import { createWorkspaceNavigationController } from "./app/workspaceNavigationController";
+import { createUiScaleController } from "./app/uiScaleController";
 import { createMeasureSelectionActions } from "./app/measureSelectionActions";
 import { createRoomWallDefinitions } from "./app/wallDefinitions";
 import { createDetailViewController } from "./app/detailViewController";
@@ -1281,7 +1282,17 @@ export function startApp(initialArgs: AppArgs) {
     rebuildKitchenGroupWorktops,
     syncPlacedInstancePresentation,
     setSelectedModule,
-    updateLayoutPanel
+    updateLayoutPanel,
+    onDuplicateInstance: (source, duplicate) => {
+      customFurnitureMode?.duplicateAttachedToCabinet(source.id, duplicate.id, {
+        x: Math.round((duplicate.root.position.x - source.root.position.x) * 1000),
+        z: Math.round((duplicate.root.position.z - source.root.position.z) * 1000)
+      });
+      syncCustomFurnitureForInstance(duplicate);
+    },
+    onDeleteInstance: (instance) => {
+      customFurnitureMode?.detachAttachmentsForCabinet(instance.id);
+    }
   });
 
   let kitchenWorktopDrawController!: ReturnType<typeof createKitchenWorktopDrawController>;
@@ -3102,6 +3113,11 @@ export function startApp(initialArgs: AppArgs) {
       customFurnitureCounter = Math.max(1, Math.round(next));
       S.customFurnitureCounter = customFurnitureCounter;
     },
+    getCabinetOptions: () => instances.map((instance) => ({ id: instance.id, label: String(instance.params.label ?? instance.params.type ?? instance.id) })),
+    syncCabinetAttachment: (cabinetId) => {
+      const instance = findInstance(cabinetId);
+      if (instance) syncCustomFurnitureForInstance(instance);
+    },
     getViewerToolMode
   });
   helpers.restoreCustomFurniture = customFurnitureMode.restoreCustomFurnitureFromSnapshot;
@@ -3224,7 +3240,19 @@ export function startApp(initialArgs: AppArgs) {
     // kitchen editor owns the visible footprint treatment and reapplies it only
     // while its floorplan is active.
     kitchenMode?.syncPlanPresentation();
+    if (rebuilt) syncCustomFurnitureForInstance(args[0]);
     return rebuilt;
+  }
+
+  function syncCustomFurnitureForInstance(instance: LayoutInstance): void {
+    if (!customFurnitureMode) return;
+    const box = new THREE.Box3().setFromObject(instance.module);
+    if (box.isEmpty()) return;
+    customFurnitureMode.syncAttachmentsForCabinet({
+      cabinetId: instance.id,
+      minMm: { x: Math.round(box.min.x * 1000), y: Math.round(box.min.y * 1000), z: Math.round(box.min.z * 1000) },
+      maxMm: { x: Math.round(box.max.x * 1000), y: Math.round(box.max.y * 1000), z: Math.round(box.max.z * 1000) }
+    });
   }
 
   const moduleSelectionController = createModuleSelectionController({
@@ -4012,6 +4040,7 @@ export function startApp(initialArgs: AppArgs) {
       projectMarginSettings = cloneJson(view.settings);
     }
   });
+  const uiScaleController = createUiScaleController();
   createWorkspaceNavigationController({
     root: document.getElementById("app") ?? document.body,
     S,
@@ -4051,6 +4080,7 @@ export function startApp(initialArgs: AppArgs) {
         await marginsPhaseController?.close();
       }
     },
+    uiScale: uiScaleController,
     setVisualisationTopbar: () => {
       ensureLayoutMode();
       setClassicTopbarTab("visualisation");
