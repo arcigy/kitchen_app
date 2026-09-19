@@ -207,9 +207,17 @@ export function mountBomDevPanel(
     lockDisplayCurrency?: boolean;
   } = {}
 ): void {
-  const entries = buildProjectPricingViews(instances, worktops, customFurniture, ctx, catalog);
   const storageKey = quoteSettingsStorageKey(catalog);
   let settings: ProjectQuoteSettingsInput = options.quoteSettings ?? readStoredSettings(storageKey);
+  const entries = buildProjectPricingViews(
+    instances,
+    worktops,
+    customFurniture,
+    ctx,
+    catalog,
+    [],
+    isProjectMarginSettingsState(settings) ? settings.manufacturing : undefined
+  );
   let displayCurrency = options.displayCurrency ?? readPriceDisplayCurrency();
 
   container.className = "bom-dev";

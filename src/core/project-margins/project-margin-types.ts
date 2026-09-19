@@ -1,4 +1,9 @@
 import type { MaterialAssignmentCategory } from "../project-materials/project-material-types";
+import {
+  createDefaultProjectManufacturingSettings,
+  normalizeProjectManufacturingSettings,
+  type ProjectManufacturingSettings
+} from "../project-manufacturing/project-manufacturing-types";
 
 export const PROJECT_MARGIN_SETTINGS_SCHEMA_VERSION = 1 as const;
 export const DEFAULT_PROJECT_MARGIN_PERCENT = 20;
@@ -23,6 +28,7 @@ export type ProjectMarginSettingsState = {
   additionalLaborCost: number;
   groupMargins: Partial<Record<ProjectMarginCategory, number>>;
   itemOverrides: ProjectMarginItemOverride[];
+  manufacturing: ProjectManufacturingSettings;
   updatedAt?: string;
 };
 
@@ -51,7 +57,8 @@ export function createDefaultProjectMarginSettingsState(): ProjectMarginSettings
     defaultMarginPercent: DEFAULT_PROJECT_MARGIN_PERCENT,
     additionalLaborCost: DEFAULT_PROJECT_ADDITIONAL_LABOR_COST,
     groupMargins: {},
-    itemOverrides: []
+    itemOverrides: [],
+    manufacturing: createDefaultProjectManufacturingSettings()
   };
 }
 
@@ -60,7 +67,13 @@ export function isProjectMarginSettingsState(value: unknown): value is ProjectMa
 }
 
 export function normalizeProjectMarginSettingsState(value: unknown): ProjectMarginSettingsState {
-  if (isProjectMarginSettingsState(value)) return structuredClone(value);
+  if (isProjectMarginSettingsState(value)) {
+    const current = value as ProjectMarginSettingsState;
+    return {
+      ...structuredClone(current),
+      manufacturing: normalizeProjectManufacturingSettings(current.manufacturing)
+    };
+  }
 
   const legacy = isObject(value) ? value : {};
   const legacyDefault = legacy.defaultMarginPercent
@@ -76,7 +89,8 @@ export function normalizeProjectMarginSettingsState(value: unknown): ProjectMarg
       legacy.additionalLaborCost,
       DEFAULT_PROJECT_ADDITIONAL_LABOR_COST,
       10_000_000
-    )
+    ),
+    manufacturing: normalizeProjectManufacturingSettings(legacy.manufacturing)
   };
 }
 

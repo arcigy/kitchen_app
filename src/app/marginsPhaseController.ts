@@ -2,6 +2,7 @@ import type {
   ProjectMarginCategory,
   ProjectMarginTarget
 } from "../core/project-margins/project-margin-types";
+import type { ProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
 import type { ProjectMarginsView } from "../layout/bom/projectMargins";
 import {
   applyProjectMarginGroup,
@@ -9,6 +10,7 @@ import {
   resetProjectMarginGroup,
   resetProjectMarginItem,
   setProjectAdditionalLabor,
+  setProjectManufacturing,
   updateProjectMarginDefault,
   updateProjectMarginItem
 } from "./projectMarginsApi";
@@ -19,6 +21,7 @@ import {
   type ProjectMarginGroupCommitRequest,
   type ProjectMarginItemCommitRequest,
   type ProjectMarginLaborCommitRequest,
+  type ProjectMarginManufacturingCommitRequest,
   type ProjectMarginsPanelHandle
 } from "../ui/marginsPhasePanel";
 import { mountLoadingSkeleton } from "../ui/loadingSkeleton";
@@ -33,6 +36,11 @@ export type MarginsPhaseControllerApi = {
   setProjectAdditionalLabor: (
     projectId: string,
     request: { revision: number; additionalLaborCost: number },
+    signal?: AbortSignal
+  ) => Promise<ProjectMarginsView>;
+  setProjectManufacturing: (
+    projectId: string,
+    request: { revision: number; manufacturing: ProjectManufacturingSettings },
     signal?: AbortSignal
   ) => Promise<ProjectMarginsView>;
   applyProjectMarginGroup: (
@@ -69,6 +77,7 @@ const DEFAULT_API: MarginsPhaseControllerApi = {
   loadProjectMargins,
   updateProjectMarginDefault,
   setProjectAdditionalLabor,
+  setProjectManufacturing,
   applyProjectMarginGroup,
   resetProjectMarginGroup,
   updateProjectMarginItem,
@@ -101,6 +110,7 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
     panel = mountProjectMarginsPanel(args.container, initialView, {
       onCommitDefault: commitDefault,
       onCommitAdditionalLabor: commitAdditionalLabor,
+      onCommitManufacturing: commitManufacturing,
       onApplyGroup: commitGroup,
       onResetGroup: resetGroup,
       onCommitItem: commitItem,
@@ -202,6 +212,13 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
     return runMutation((projectId, currentView, signal) => api.setProjectAdditionalLabor(projectId, {
       revision: currentView.revision,
       additionalLaborCost: request.additionalLaborCost
+    }, signal));
+  }
+
+  function commitManufacturing(request: ProjectMarginManufacturingCommitRequest): Promise<ProjectMarginCommitResult> {
+    return runMutation((projectId, currentView, signal) => api.setProjectManufacturing(projectId, {
+      revision: currentView.revision,
+      manufacturing: request.manufacturing
     }, signal));
   }
 
@@ -308,6 +325,7 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
     commitGroup,
     commitDefault,
     commitAdditionalLabor,
+    commitManufacturing,
     resetGroup,
     commitItem,
     resetItem

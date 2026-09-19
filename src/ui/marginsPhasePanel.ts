@@ -8,6 +8,11 @@ import {
   PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX,
   PROJECT_MARGIN_PERCENT_MAX
 } from "../core/project-margins/project-margin-validation";
+import {
+  createDefaultProjectManufacturingSettings,
+  normalizeProjectManufacturingSettings,
+  type ProjectManufacturingSettings
+} from "../core/project-manufacturing/project-manufacturing-types";
 import { getAppContextMenuController, type ContextMenuItem } from "./contextMenu";
 
 export type { ProjectMarginsView } from "../layout/bom/projectMargins";
@@ -39,9 +44,14 @@ export type ProjectMarginLaborCommitRequest = {
   committedValue: number;
 };
 
+export type ProjectMarginManufacturingCommitRequest = {
+  manufacturing: ProjectManufacturingSettings;
+};
+
 export type ProjectMarginsPanelActions = {
   onCommitDefault: (request: ProjectMarginDefaultCommitRequest) => Promise<ProjectMarginCommitResult>;
   onCommitAdditionalLabor: (request: ProjectMarginLaborCommitRequest) => Promise<ProjectMarginCommitResult>;
+  onCommitManufacturing?: (request: ProjectMarginManufacturingCommitRequest) => Promise<ProjectMarginCommitResult>;
   onApplyGroup: (request: ProjectMarginGroupCommitRequest) => Promise<ProjectMarginCommitResult>;
   onResetGroup: (groupId: string) => Promise<ProjectMarginCommitResult>;
   onCommitItem: (request: ProjectMarginItemCommitRequest) => Promise<ProjectMarginCommitResult>;
@@ -253,6 +263,23 @@ export function mountProjectMarginsPanel(
       return;
     }
 
+    const manufacturingSave = element?.closest<HTMLButtonElement>("[data-manufacturing-save]");
+    if (manufacturingSave) {
+      const manufacturing = manufacturingFromPanel(view, container, footerContainer);
+      if (!manufacturing) {
+        globalError = "Prerez a predmontáž musia byť nezáporné čísla. Prázdna hodnota znamená chýbajúce nastavenie.";
+        render();
+        return;
+      }
+      if (!actions.onCommitManufacturing) {
+        globalError = "Ukladanie výrobného cenníka nie je v tejto relácii dostupné.";
+        render();
+        return;
+      }
+      runCommit("manufacturing", () => actions.onCommitManufacturing!({ manufacturing }));
+      return;
+    }
+
     const apply = element?.closest<HTMLButtonElement>("[data-margin-group-apply-all]");
     const groupId = apply?.dataset.marginGroupApplyAll;
     if (groupId) {
@@ -437,6 +464,9 @@ function renderProjectControls(
   const laborBusy = busyKeys.has("labor");
   const defaultDisabled = disabled || defaultBusy;
   const laborDisabled = disabled || laborBusy;
+  const manufacturingBusy = busyKeys.has("manufacturing");
+  const manufacturingDisabled = disabled || manufacturingBusy;
+  const manufacturing = normalizeProjectManufacturingSettings(view.settings.manufacturing);
   return `<section class="margins-project-controls" aria-label="Základné nastavenia marže">
     <div class="margins-project-control">
       <label for="margin-default-input"><strong>Základná marža projektu</strong><small>Fallback pre skupiny a položky bez vlastnej marže.</small></label>
@@ -446,7 +476,56 @@ function renderProjectControls(
       <label for="margin-additional-labor-input"><strong>Dodatočná práca</strong><small>Projektová práca navyše mimo práce vypočítanej z modulov.</small></label>
       <div class="margins-project-control__editor"><div><input id="margin-additional-labor-input" type="number" min="0" max="${PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(view.settings.additionalLaborCost)}" data-committed-value="${numberInputValue(view.settings.additionalLaborCost)}" data-margin-additional-labor-input ${laborDisabled ? "disabled" : ""} /><span aria-hidden="true">${escapeHtml(view.currency)}</span></div><button type="button" data-margin-additional-labor-save ${laborDisabled ? "disabled" : ""}>${laborBusy ? "Ukladám…" : "Uložiť"}</button></div>
     </div>
+    <div class="margins-project-control" data-manufacturing-settings>
+      <label><strong>Výrobný cenník projektu</strong><small>Prerez sa aplikuje presne raz na čisté množstvo. Predmontáž sa účtuje bez marže.</small></label>
+      <label><input type="checkbox" data-manufacturing-enabled ${manufacturing.pricingMode === "configured" ? "checked" : ""} ${manufacturingDisabled ? "disabled" : ""} /> Použiť explicitné sadzby</label>
+      <div class="margins-project-control__editor"><div><input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Prerez dosiek %" value="${optionalNumberInputValue(manufacturing.boardWastePercent)}" data-manufacturing-board-waste ${manufacturingDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><div><input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Prerez hrán %" value="${optionalNumberInputValue(manufacturing.edgeWastePercent)}" data-manufacturing-edge-waste ${manufacturingDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><button type="button" data-manufacturing-save ${manufacturingDisabled ? "disabled" : ""}>${manufacturingBusy ? "Ukladám…" : "Uložiť výrobu"}</button></div>
+      ${renderPreassemblyInputs(view, manufacturing, manufacturingDisabled)}
+      <small>Bez vyplnenej sadzby zostane cena označená ako neúplná. Hodnota 0 je platná sadzba.</small>
+    </div>
   </section>`;
+}
+
+function renderPreassemblyInputs(view: ProjectMarginsView, manufacturing: ProjectManufacturingSettings, disabled: boolean): string {
+  const modules = marginScopes(view, "module");
+  if (modules.length === 0) return "";
+  return `<div class="margins-preassembly-rates"><strong>Predmontáž konkrétnej skrinky</strong>${modules.map((scope) => {
+    const instanceId = scope.id.replace(/^module:/, "");
+    const value = Object.prototype.hasOwnProperty.call(manufacturing.preassemblyByInstanceId, instanceId)
+      ? manufacturing.preassemblyByInstanceId[instanceId]
+      : null;
+    return `<label>${escapeHtml(scope.label)}<input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Zdediť z presetu alebo typu" value="${optionalNumberInputValue(value)}" data-preassembly-instance="${escapeHtml(instanceId)}" ${disabled ? "disabled" : ""} /></label>`;
+  }).join("")}</div>`;
+}
+
+function optionalNumberInputValue(value: number | null | undefined): string {
+  return typeof value === "number" && Number.isFinite(value) ? numberInputValue(value) : "";
+}
+
+function optionalRate(input: HTMLInputElement | null): number | null | "invalid" {
+  if (!input || !input.value.trim()) return null;
+  const parsed = Number(input.value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : "invalid";
+}
+
+function manufacturingFromPanel(view: ProjectMarginsView, container: HTMLElement, footerContainer?: HTMLElement): ProjectManufacturingSettings | null {
+  const root = footerContainer ?? container;
+  const boardWastePercent = optionalRate(root.querySelector<HTMLInputElement>("[data-manufacturing-board-waste]"));
+  const edgeWastePercent = optionalRate(root.querySelector<HTMLInputElement>("[data-manufacturing-edge-waste]"));
+  if (boardWastePercent === "invalid" || edgeWastePercent === "invalid") return null;
+  const current = normalizeProjectManufacturingSettings(view.settings.manufacturing);
+  const next = structuredClone(current.pricingMode === "legacy" ? createDefaultProjectManufacturingSettings() : current);
+  next.pricingMode = root.querySelector<HTMLInputElement>("[data-manufacturing-enabled]")?.checked ? "configured" : "legacy";
+  next.boardWastePercent = boardWastePercent;
+  next.edgeWastePercent = edgeWastePercent;
+  next.preassemblyByInstanceId = {};
+  for (const input of root.querySelectorAll<HTMLInputElement>("[data-preassembly-instance]")) {
+    const rate = optionalRate(input);
+    const id = input.dataset.preassemblyInstance;
+    if (rate === "invalid" || !id) return null;
+    if (rate !== null) next.preassemblyByInstanceId[id] = rate;
+  }
+  return next;
 }
 
 function renderSummary(view: ProjectMarginsView): string {

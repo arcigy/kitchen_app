@@ -531,6 +531,22 @@ describe("project create/save/encryption", () => {
     const quoteSettings = {
       ...createDefaultProjectMarginSettingsState(),
       initialized: true,
+      manufacturing: {
+        ...createDefaultProjectMarginSettingsState().manufacturing,
+        pricingMode: "configured" as const,
+        boardWastePercent: 10,
+        edgeWastePercent: 4,
+        preassemblyByInstanceId: { "base-1": 0 },
+        recipeSnapshots: {
+          "recipe-1": {
+            id: "recipe-1",
+            version: 1,
+            name: "Captured recipe",
+            layers: [{ id: "layer-1", materialId: catalog.materials[0]!.id, thicknessMm: 18, unitPrice: 12 }],
+            operations: [{ id: "operation-1", name: "Coating", basis: "area" as const, unitRate: 3, repetitions: 1, targets: ["front"] }]
+          }
+        }
+      },
       groupMargins: { corpus: 15, front: 25 },
       itemOverrides: [{
         ...marginTarget,

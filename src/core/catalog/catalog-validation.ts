@@ -58,6 +58,42 @@ function kitchenDefaultRefs(defaults: KitchenDefaults) {
   ];
 }
 
+function validateManufacturingCatalog(catalog: ClientCatalog, materialIds: Set<string>, errors: string[]): void {
+  const manufacturing = catalog.manufacturing;
+  if (!manufacturing) return;
+  const recipeIds = new Set<string>();
+  for (const recipe of manufacturing.recipes) {
+    if (!recipe.id.trim()) errors.push("manufacturing recipe id is required");
+    if (recipeIds.has(recipe.id)) errors.push(`duplicate manufacturing recipe id: ${recipe.id}`);
+    recipeIds.add(recipe.id);
+    if (!recipe.name.trim() || !Number.isSafeInteger(recipe.version) || recipe.version < 1) {
+      errors.push(`manufacturing recipe ${recipe.id} must have a name and positive version`);
+    }
+    if (recipe.layers.length === 0) errors.push(`manufacturing recipe ${recipe.id} must contain a layer`);
+    for (const layer of recipe.layers) {
+      if (!materialIds.has(layer.materialId)) errors.push(`manufacturing recipe ${recipe.id} references missing material: ${layer.materialId}`);
+      if (!Number.isFinite(layer.thicknessMm) || layer.thicknessMm <= 0) errors.push(`manufacturing recipe ${recipe.id} has invalid layer thickness`);
+      if (layer.unitPrice !== undefined && layer.unitPrice !== null && (!Number.isFinite(layer.unitPrice) || layer.unitPrice < 0)) {
+        errors.push(`manufacturing recipe ${recipe.id} has invalid captured layer price`);
+      }
+    }
+    if (recipe.surfaceMaterialId && !materialIds.has(recipe.surfaceMaterialId)) {
+      errors.push(`manufacturing recipe ${recipe.id} references missing surface material: ${recipe.surfaceMaterialId}`);
+    }
+    for (const operation of recipe.operations) {
+      if (!Number.isFinite(operation.unitRate) || operation.unitRate < 0 || !Number.isSafeInteger(operation.repetitions) || operation.repetitions < 1) {
+        errors.push(`manufacturing recipe ${recipe.id} has invalid operation ${operation.id}`);
+      }
+    }
+  }
+  for (const rates of [manufacturing.boardWasteByMaterialId, manufacturing.edgeWasteByMaterialId]) {
+    for (const [materialId, rate] of Object.entries(rates)) {
+      if (!materialIds.has(materialId)) errors.push(`manufacturing waste references missing material: ${materialId}`);
+      if (!Number.isFinite(rate) || rate < 0) errors.push(`manufacturing waste has invalid rate for ${materialId}`);
+    }
+  }
+}
+
 export function normalizeCatalogMeta(catalog: ClientCatalog): ClientCatalog {
   const now = new Date().toISOString();
   return {
@@ -102,6 +138,7 @@ export function validateClientCatalog(input: ClientCatalog): ClientCatalog {
   }
 
   requireRefs(errors, "kitchenDefaults", kitchenDefaultRefs(catalog.kitchenDefaults), materialIds);
+  validateManufacturingCatalog(catalog, materialIds, errors);
   requireRefs(errors, "kitchenDefaults", [
     catalog.kitchenDefaults.defaultHandleComponentId,
     catalog.kitchenDefaults.defaultHingeComponentId,

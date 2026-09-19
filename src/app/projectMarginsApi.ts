@@ -1,6 +1,7 @@
 import type { ProjectMarginCategory, ProjectMarginTarget } from "../core/project-margins/project-margin-types";
 import { isPriceCurrency } from "../core/pricing/currency";
 import type { ProjectMarginSettingsOperation, ProjectMarginsView } from "../layout/bom/projectMargins";
+import type { ProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
 
 export class ProjectMarginsApiError extends Error {
   constructor(
@@ -49,6 +50,11 @@ export type ResetProjectMarginItemRequest = {
 export type SetProjectAdditionalLaborRequest = {
   revision: number;
   additionalLaborCost: number;
+};
+
+export type SetProjectManufacturingRequest = {
+  revision: number;
+  manufacturing: ProjectManufacturingSettings;
 };
 
 function responseRecord(value: unknown): Record<string, unknown> {
@@ -186,5 +192,16 @@ export function setProjectAdditionalLabor(
   return updateProjectMargins(projectId, {
     revision: request.revision,
     operation: { type: "set_additional_labor", additionalLaborCost: request.additionalLaborCost }
+  }, signal);
+}
+
+export function setProjectManufacturing(
+  projectId: string,
+  request: SetProjectManufacturingRequest,
+  signal?: AbortSignal
+): Promise<ProjectMarginsView> {
+  return updateProjectMargins(projectId, {
+    revision: request.revision,
+    operation: { type: "set_manufacturing", manufacturing: request.manufacturing }
   }, signal);
 }

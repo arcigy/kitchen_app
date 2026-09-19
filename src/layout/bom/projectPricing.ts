@@ -1,4 +1,5 @@
 import type { ClientCatalog } from "../../core/catalog/catalog-types";
+import type { ProjectManufacturingSettings } from "../../core/project-manufacturing/project-manufacturing-types";
 import { createPricingCatalog } from "../../core/catalog/pricing-catalog";
 import { calculateCommercialPricingFromQuoteBom, type PortableMaterialRef, type PortableQuoteBomPayload } from "../../modules/runtime/portableCommercial";
 import { getModuleDescriptor } from "../../modules/registry";
@@ -12,6 +13,7 @@ import { calculateModuleBOM } from "./calculateBOM";
 import type { BOMResult } from "./bomTypes";
 import { buildProjectQuoteSummary, type ProjectQuoteSettingsInput } from "./projectQuote";
 import { createLedStripBOM } from "./ledStripPricing";
+import { applyProjectManufacturingPricing } from "./projectManufacturingPricing";
 
 export type WorktopFormulaView = {
   shapeKey: "I" | "L" | "U" | "custom";
@@ -180,7 +182,8 @@ export function buildProjectPricingViews(
   customFurniture: CustomFurnitureInstance[],
   ctx: KitchenContext,
   catalog: ClientCatalog,
-  ledStripGroups: LedStripGroup[] = []
+  ledStripGroups: LedStripGroup[] = [],
+  manufacturing?: ProjectManufacturingSettings | unknown
 ): ProjectPricingView[] {
   const counts = new Map<string, number>();
 
@@ -188,35 +191,52 @@ export function buildProjectPricingViews(
     const label = moduleLabel(instance);
     const nextCount = (counts.get(label) ?? 0) + 1;
     counts.set(label, nextCount);
+    const result = calculateModuleBOM(instance, ctx, catalog);
     return {
       instanceId: instance.id,
       kind: "module" as const,
       label: `${label} #${nextCount}`,
-      result: calculateModuleBOM(instance, ctx, catalog)
+      result: applyProjectManufacturingPricing({
+        instanceId: instance.id,
+        kind: "module",
+        result,
+        catalog,
+        settings: manufacturing,
+        presetId: typeof instance.params.presetId === "string" ? instance.params.presetId : undefined
+      })
     };
   });
 
-  const worktopViews = worktops.map((worktop, index) => ({
-    instanceId: worktop.id,
-    kind: "worktop" as const,
-    label: `Pracovná doska #${index + 1}`,
-    result: createWorktopBOM(worktop, index + 1, catalog),
-    worktopFormula: buildWorktopFormulaView(worktop)
-  }));
+  const worktopViews = worktops.map((worktop, index) => {
+    const result = createWorktopBOM(worktop, index + 1, catalog);
+    return {
+      instanceId: worktop.id,
+      kind: "worktop" as const,
+      label: `Pracovná doska #${index + 1}`,
+      result: applyProjectManufacturingPricing({ instanceId: worktop.id, kind: "worktop", result, catalog, settings: manufacturing }),
+      worktopFormula: buildWorktopFormulaView(worktop)
+    };
+  });
 
-  const customFurnitureViews = customFurniture.map((furniture, index) => ({
-    instanceId: furniture.id,
-    kind: "customFurniture" as const,
-    label: `${furniture.params.name || "Custom furniture"} #${index + 1}`,
-    result: createCustomFurnitureBOM(furniture, catalog)
-  }));
+  const customFurnitureViews = customFurniture.map((furniture, index) => {
+    const result = createCustomFurnitureBOM(furniture, catalog);
+    return {
+      instanceId: furniture.id,
+      kind: "customFurniture" as const,
+      label: `${furniture.params.name || "Custom furniture"} #${index + 1}`,
+      result: applyProjectManufacturingPricing({ instanceId: furniture.id, kind: "customFurniture", result, catalog, settings: manufacturing })
+    };
+  });
 
-  const ledStripViews = ledStripGroups.map((group) => ({
-    instanceId: group.id,
-    kind: "ledStrip" as const,
-    label: group.params.name,
-    result: createLedStripBOM(group, catalog)
-  }));
+  const ledStripViews = ledStripGroups.map((group) => {
+    const result = createLedStripBOM(group, catalog);
+    return {
+      instanceId: group.id,
+      kind: "ledStrip" as const,
+      label: group.params.name,
+      result: applyProjectManufacturingPricing({ instanceId: group.id, kind: "ledStrip", result, catalog, settings: manufacturing })
+    };
+  });
 
   return [...moduleViews, ...worktopViews, ...customFurnitureViews, ...ledStripViews];
 }
