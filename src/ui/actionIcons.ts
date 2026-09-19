@@ -1,3 +1,5 @@
+import actionIconSprite from "./actionIcons.svg?raw";
+
 export const actionIconDetails = {
   select: { title: "Select", description: "Choose an object or return to the selection tool." },
   wall: { title: "Wall", description: "Start drawing a wall in the active plan." },
@@ -72,11 +74,30 @@ export const actionIconDetails = {
 export type ActionIconId = keyof typeof actionIconDetails;
 export type ActionIconInfo = { title: string; description: string; shortcut?: string };
 
-const spriteUrl = "/ui-icons/actions.svg";
+type ActionIconArtwork = {
+  attributes: string;
+  content: string;
+};
+
+const actionIconArtwork = readActionIconArtwork(actionIconSprite);
+
+function readActionIconArtwork(sprite: string): ReadonlyMap<string, ActionIconArtwork> {
+  const artwork = new Map<string, ActionIconArtwork>();
+  const symbols = /<symbol\s+id="([^"]+)"([^>]*)>([\s\S]*?)<\/symbol>/g;
+
+  for (const match of sprite.matchAll(symbols)) {
+    const [, iconId, attributes, content] = match;
+    artwork.set(iconId, { attributes, content });
+  }
+
+  return artwork;
+}
 
 export function actionIconMarkup(iconId: ActionIconId, className = ""): string {
   const classes = ["arcigy-action-icon", className].filter(Boolean).join(" ");
-  return `<svg class="${classes}" data-action-icon="${iconId}" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="${spriteUrl}#${iconId}"></use></svg>`;
+  const artwork = actionIconArtwork.get(iconId);
+  if (!artwork) throw new Error(`Missing action icon artwork for "${iconId}".`);
+  return `<svg class="${classes}" data-action-icon="${iconId}"${artwork.attributes} aria-hidden="true" focusable="false">${artwork.content}</svg>`;
 }
 
 export function actionIconInfo(iconId: string | undefined): ActionIconInfo | null {
