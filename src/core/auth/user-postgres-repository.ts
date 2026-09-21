@@ -72,21 +72,12 @@ export function createPostgresUserRepository(args: {
     async findByUsername(username) {
       return withSchemaClient(args.connectionString, args.schema, async (client) => {
         const result = await client.query<UserRow>(
-          `${selectSql} WHERE lower(i.username) = lower($1) LIMIT 1`,
+          `${selectSql} WHERE lower(i.username) = lower($1) LIMIT 2`,
           [username.trim()]
         );
-        return rowToUser(result.rows[0]);
-      });
-    },
-    async findByCompanyAndUsername(company, username) {
-      return withSchemaClient(args.connectionString, args.schema, async (client) => {
-        const result = await client.query<UserRow>(
-          `${selectSql} WHERE lower(i.username) = lower($1)
-            AND (lower(o.name) = lower($2) OR lower(COALESCE(o.legal_name, '')) = lower($2))
-            LIMIT 1`,
-          [username.trim(), company.trim().replace(/\s+/g, " ")]
-        );
-        return rowToUser(result.rows[0]);
+        // The schema makes usernames globally unique and a user belongs to one
+        // organization. Refuse ambiguous legacy data rather than selecting a tenant.
+        return result.rows.length === 1 ? rowToUser(result.rows[0]) : null;
       });
     },
     async findByUserId(userId) {

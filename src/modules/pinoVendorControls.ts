@@ -1,3 +1,4 @@
+import { RETIRED_MODULE_TYPES } from "../core/module-package/retired-module-types";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { listVendorCatalogGroupSummaries, listVendorCatalogTemplateSummaries } from "../core/catalog/vendor-catalog-browser";
 import { resolveVendorModuleSeed } from "../core/catalog/vendor-module-seed-resolver";
@@ -52,7 +53,7 @@ function preferredVariantSort(left: { needsReview: boolean; confidence: number }
 }
 
 function isPinoVendorBackedParams(params: VendorBackedParams, catalog: ClientCatalog): boolean {
-  if (params.type === "pino_side_cabinet") return false;
+  if (typeof params.type === "string" && RETIRED_MODULE_TYPES.has(params.type)) return false;
   if (typeof params.modulePackageId !== "string" || !params.modulePackageId.startsWith("pino_nobilia_")) return false;
   if (typeof params.vendorProductTemplateId !== "string" || params.vendorProductTemplateId.trim().length === 0) return false;
   return !!catalog.vendorCatalog;

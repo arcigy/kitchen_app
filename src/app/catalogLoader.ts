@@ -2,35 +2,14 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import { browserJourneyNow, reportBrowserJourney, type BrowserJourneyMetric } from "./clientJourneyTelemetry";
 
-const LOCAL_DEV_CLIENT_ID = "client_arcigy_demo";
-
-function shouldUseLocalDevFallback(expectedClientId?: string) {
-  return (
-    import.meta.env.DEV &&
-    import.meta.env.VITE_LOCAL_CLIENT_CATALOG_FROM_API !== "true" &&
-    (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") &&
-    (!expectedClientId || expectedClientId === LOCAL_DEV_CLIENT_ID)
-  );
-}
-
-async function createLocalDevCatalog(): Promise<ClientCatalog> {
-  const { createSystemCatalogSeed } = await import("../core/catalog/catalog-bootstrap");
-  return { clientId: LOCAL_DEV_CLIENT_ID, ...createSystemCatalogSeed() };
-}
-
-async function loadLocalDevModulePackages(): Promise<FurnQuoteModulePackage[]> {
-  const { systemModulePackageTemplates } = await import("../system/module-packages");
-  return systemModulePackageTemplates;
-}
-
-const APP_DATA_CACHE_KEY = "arcigy.kitchen.clientAppData.v1";
+const APP_DATA_CACHE_KEY = "arcigy.kitchen.clientAppData.v2";
 const APP_DATA_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const APP_DATA_CACHE_COMPRESSION_THRESHOLD = 512 * 1024;
 const APP_DATA_PERSISTENT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const APP_DATA_PERSISTENT_CACHE_DB = "arcigy-kitchen-client-app-data";
+const APP_DATA_PERSISTENT_CACHE_DB = "arcigy-kitchen-client-app-data-v2";
 const APP_DATA_PERSISTENT_CACHE_STORE = "tenant-app-data";
 const APP_DATA_REVISION_TIMEOUT_MS = 5_000;
-const CLIENT_APP_DATA_BOOTSTRAP_VERSION = "catalog-bootstrap-v1";
+const CLIENT_APP_DATA_BOOTSTRAP_VERSION = "tenant-catalog-v2";
 
 class ClientAppDataHttpError extends Error {
   constructor(message: string, readonly status: number) {
@@ -45,7 +24,6 @@ type ClientAppData = {
 };
 
 export type ClientAppDataLoadSource =
-  | "local"
   | "network"
   | "persistent_cache"
   | "session_cache"
@@ -112,34 +90,17 @@ function isClientCatalog(value: unknown): value is ClientCatalog {
 }
 
 export async function loadClientCatalogForApp(expectedClientId?: string): Promise<ClientCatalog> {
-  if (shouldUseLocalDevFallback(expectedClientId)) return createLocalDevCatalog();
-
-  let response: Response;
-  try {
-    response = await fetch("/api/catalog/bootstrap", {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" }
-    });
-  } catch (error) {
-    if (shouldUseLocalDevFallback(expectedClientId)) return createLocalDevCatalog();
-    throw error;
-  }
+  const response = await fetch("/api/catalog/bootstrap", {
+    method: "GET",
+    credentials: "include",
+    headers: { Accept: "application/json" }
+  });
   if (!response.ok) {
-    if (shouldUseLocalDevFallback(expectedClientId)) return createLocalDevCatalog();
     throw new ClientAppDataHttpError(`Failed to load client catalog: HTTP ${response.status}`, response.status);
   }
-
-  let body: unknown;
-  try {
-    body = await response.json() as unknown;
-  } catch (error) {
-    if (shouldUseLocalDevFallback(expectedClientId)) return createLocalDevCatalog();
-    throw error;
-  }
+  const body: unknown = await response.json();
   const catalog = body && typeof body === "object" ? (body as { catalog?: unknown }).catalog : undefined;
-  if (!isClientCatalog(catalog)) {
-    if (shouldUseLocalDevFallback(expectedClientId)) return createLocalDevCatalog();
+  if (!isClientCatalog(catalog) || (expectedClientId && catalog.clientId !== expectedClientId)) {
     throw new Error("Failed to load client catalog: invalid response.");
   }
   return catalog;
@@ -149,35 +110,18 @@ function isModulePackage(value: unknown): value is FurnQuoteModulePackage {
   return !!value && typeof value === "object" && (value as { format?: unknown }).format === "furnquote-module";
 }
 
-export async function loadClientModulePackagesForApp(expectedClientId?: string): Promise<FurnQuoteModulePackage[]> {
-  if (shouldUseLocalDevFallback(expectedClientId)) return loadLocalDevModulePackages();
-
-  let response: Response;
-  try {
-    response = await fetch("/api/modules", {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" }
-    });
-  } catch (error) {
-    if (shouldUseLocalDevFallback(expectedClientId)) return loadLocalDevModulePackages();
-    throw error;
-  }
+export async function loadClientModulePackagesForApp(_expectedClientId?: string): Promise<FurnQuoteModulePackage[]> {
+  const response = await fetch("/api/modules", {
+    method: "GET",
+    credentials: "include",
+    headers: { Accept: "application/json" }
+  });
   if (!response.ok) {
-    if (shouldUseLocalDevFallback(expectedClientId)) return loadLocalDevModulePackages();
     throw new ClientAppDataHttpError(`Failed to load client module packages: HTTP ${response.status}`, response.status);
   }
-
-  let body: unknown;
-  try {
-    body = await response.json() as unknown;
-  } catch (error) {
-    if (shouldUseLocalDevFallback(expectedClientId)) return loadLocalDevModulePackages();
-    throw error;
-  }
+  const body: unknown = await response.json();
   const modules = body && typeof body === "object" ? (body as { modules?: unknown }).modules : undefined;
   if (!Array.isArray(modules) || !modules.every(isModulePackage)) {
-    if (shouldUseLocalDevFallback(expectedClientId)) return loadLocalDevModulePackages();
     throw new Error("Failed to load client module packages: invalid response.");
   }
   return modules;
@@ -581,7 +525,6 @@ export function loadClientAppDataForApp(expectedClientId?: string): Promise<Clie
   }
 
   const startedAt = browserJourneyNow();
-  const localFallback = shouldUseLocalDevFallback(expectedClientId);
   const report = (variant: BrowserJourneyMetric["variant"], outcome: BrowserJourneyMetric["outcome"]) => {
     reportBrowserJourney({
       journey: "app_data_load",
@@ -593,7 +536,7 @@ export function loadClientAppDataForApp(expectedClientId?: string): Promise<Clie
   const generation = ++clientAppDataCacheGeneration;
   const promise = (async () => {
     try {
-      const revisionRequired = !!expectedClientId && !localFallback;
+      const revisionRequired = !!expectedClientId;
       const initialRevision = revisionRequired
         ? await loadClientAppDataRevision(expectedClientId).catch(() => null)
         : null;
@@ -640,12 +583,12 @@ export function loadClientAppDataForApp(expectedClientId?: string): Promise<Clie
         expectedClientId,
         initialRevision
       );
-      const source = localFallback ? "local" : "network";
+      const source = "network";
       clientAppDataLoadSources.set(data, source);
       report(source, "success");
       return data;
     } catch (error) {
-      report(localFallback ? "local" : "network", "failure");
+      report("network", "failure");
       throw error;
     }
   })();

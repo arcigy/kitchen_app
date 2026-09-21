@@ -65,7 +65,7 @@ function catalog(args: {
 }
 
 describe("resolveVendorModulePackage", () => {
-  it("resolves a lower drawer variant to the drawer_low tenant module", () => {
+  it("excludes retired modules: resolves a lower drawer variant to the drawer_low tenant module", () => {
     const result = resolveVendorModulePackage(catalog({
       modules: [
         moduleDef({
@@ -87,15 +87,14 @@ describe("resolveVendorModulePackage", () => {
       widthMm: 600
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.catalogKey).toBe("UA-60");
-    expect(result.moduleType).toBe("drawer_low");
-    expect(result.runtimeBuilderKey).toBe("drawerLow.v1");
-    expect(result.placementZone).toBe("low");
-    expect(result.requiresWorktop).toBe(true);
+    expect(result.status).toBe("missing");
+    expect(result.moduleType).toBeNull();
+    expect(result.resolvedModule).toBeNull();
+    expect(result.candidates).toEqual([]);
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("resolves corner lower variants to the corner module", () => {
+  it("excludes retired modules: resolves corner lower variants to the corner module", () => {
     const result = resolveVendorModulePackage(catalog({
       modules: [
         moduleDef({
@@ -118,13 +117,14 @@ describe("resolveVendorModulePackage", () => {
       widthMm: 900
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("corner_shelf_lower");
-    expect(result.placementZone).toBe("corner_low");
-    expect(result.requiresCorner).toBe(true);
+    expect(result.status).toBe("missing");
+    expect(result.moduleType).toBeNull();
+    expect(result.resolvedModule).toBeNull();
+    expect(result.candidates).toEqual([]);
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("resolves side-cabinet appliance variants to the PINO tall side-cabinet package", () => {
+  it("excludes retired modules: resolves side-cabinet appliance variants to the PINO tall side-cabinet package", () => {
     const result = resolveVendorModulePackage(catalog({
       modules: [
         moduleDef({
@@ -152,13 +152,14 @@ describe("resolveVendorModulePackage", () => {
       catalogKey: "GB2A-FB"
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("pino_side_cabinet");
-    expect(result.placementZone).toBe("tall_appliance");
-    expect(result.requiresApplianceOpening).toBe(true);
+    expect(result.status).toBe("missing");
+    expect(result.moduleType).toBeNull();
+    expect(result.resolvedModule).toBeNull();
+    expect(result.candidates).toEqual([]);
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("routes mixed lower door+drawer variants to the generic kitchen special module", () => {
+  it("excludes retired modules: routes mixed lower door+drawer variants to the generic kitchen special module", () => {
     const result = resolveVendorModulePackage(catalog({
       modules: [
         moduleDef({
@@ -181,13 +182,14 @@ describe("resolveVendorModulePackage", () => {
       widthMm: 600
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("fwm_kitchen_special_module_1");
-    expect(result.runtimeBuilderKey).toBe("fwm_kitchen_special_module_1.v1");
-    expect(result.placementZone).toBe("low");
+    expect(result.status).toBe("missing");
+    expect(result.moduleType).toBeNull();
+    expect(result.resolvedModule).toBeNull();
+    expect(result.candidates).toEqual([]);
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("routes open lower shelf families to the generic open-shelf kitchen special module", () => {
+  it("excludes retired modules: routes open lower shelf families to the generic open-shelf kitchen special module", () => {
     const result = resolveVendorModulePackage(catalog({
       modules: [
         moduleDef({
@@ -210,13 +212,14 @@ describe("resolveVendorModulePackage", () => {
       widthMm: 450
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("fwm_kitchen_special_module_3");
-    expect(result.runtimeBuilderKey).toBe("fwm_kitchen_special_module_3.v1");
-    expect(result.placementZone).toBe("low");
+    expect(result.status).toBe("missing");
+    expect(result.moduleType).toBeNull();
+    expect(result.resolvedModule).toBeNull();
+    expect(result.candidates).toEqual([]);
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("routes lower cover panels to interior cladding modules", () => {
+  it("excludes retired modules: routes lower cover panels to interior cladding modules", () => {
     const result = resolveVendorModulePackage(catalog({
       modules: [
         moduleDef({
@@ -239,13 +242,14 @@ describe("resolveVendorModulePackage", () => {
       widthMm: 100
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("fwm_interior_cladding_1");
-    expect(result.runtimeBuilderKey).toBe("fwm_interior_cladding_1.v1");
-    expect(result.placementZone).toBe("accessory");
+    expect(result.status).toBe("missing");
+    expect(result.moduleType).toBeNull();
+    expect(result.resolvedModule).toBeNull();
+    expect(result.candidates).toEqual([]);
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("keeps review variants in needs_review even when a module package exists", () => {
+  it("excludes retired modules: keeps review variants in needs_review even when a module package exists", () => {
     const result = resolveVendorModulePackage(catalog({
       modules: [moduleDef({ moduleType: "drawer_low", runtimeBuilderKey: "drawerLow.v1" })],
       productVariants: [variant({
@@ -259,13 +263,13 @@ describe("resolveVendorModulePackage", () => {
     });
 
     expect(result.status).toBe("needs_review");
-    expect(result.moduleType).toBe("drawer_low");
-    expect(result.resolvedModule?.moduleType).toBe("drawer_low");
-    expect(result.candidates[0]?.moduleType).toBe("drawer_low");
-    expect(result.vendorResolution.status).toBe("needs_review");
+    expect(result.moduleType).toBeNull();
+    expect(result.resolvedModule).toBeNull();
+    expect(result.candidates).toEqual([]);
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("returns ambiguous when duplicate vendor matches exist", () => {
+  it("excludes retired modules: returns ambiguous when duplicate vendor matches exist", () => {
     const result = resolveVendorModulePackage(catalog({
       modules: [moduleDef({ moduleType: "drawer_low", runtimeBuilderKey: "drawerLow.v1" })],
       productVariants: [
@@ -277,12 +281,14 @@ describe("resolveVendorModulePackage", () => {
       widthMm: 600
     });
 
-    expect(result.status).toBe("ambiguous");
-    expect(result.moduleType).toBe("drawer_low");
-    expect(result.reasons).toContain("multiple_vendor_variant_matches");
+    expect(result.status).toBe("missing");
+    expect(result.moduleType).toBeNull();
+    expect(result.resolvedModule).toBeNull();
+    expect(result.candidates).toEqual([]);
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("returns missing when the preferred runtime builder is not available in the tenant catalog", () => {
+  it("excludes retired modules: returns missing when the preferred runtime builder is not available in the tenant catalog", () => {
     const result = resolveVendorModulePackage(catalog({
       modules: [moduleDef({ moduleType: "swing_shelves_low", runtimeBuilderKey: "swingShelvesLow.v1" })],
       productVariants: [variant({ articleFamily: "UA", catalogKey: "UA-60" })]
@@ -292,7 +298,10 @@ describe("resolveVendorModulePackage", () => {
     });
 
     expect(result.status).toBe("missing");
-    expect(result.runtimeBuilderKey).toBe("drawerLow.v1");
+    expect(result.moduleType).toBeNull();
+    expect(result.resolvedModule).toBeNull();
+    expect(result.candidates).toEqual([]);
     expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
+
 });

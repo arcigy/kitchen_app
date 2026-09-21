@@ -105,7 +105,7 @@ function printHelp(): void {
 Assign module packages to a client catalog.
 
 Usage:
-  npm run db:assign-client-modules -- --clientId client_delfi --modules drawer_low_family_v1,swing_shelves_low_family_v1 --write
+  npm run db:assign-client-modules -- --clientId client_delfi --modules fwm_catalog_base_drawers_family_v1,fwm_catalog_base_doors_family_v1 --write
 
 Options:
   --clientId <id>             Required client/tenant id, for example client_delfi.

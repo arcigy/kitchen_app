@@ -141,6 +141,7 @@ async function main() {
         iconRects,
         labelMetrics,
         maxCardsPerRow,
+        gridColumns: [...new Set(genericCards.map(card => getComputedStyle(card.parentElement).gridTemplateColumns.split(" ").length))],
         text,
         toolTitles,
         viewerWidth: viewerRect?.width ?? 0
@@ -155,7 +156,8 @@ async function main() {
     assert(!kitchenTab.catalogHidden && /modul/.test(kitchenTab.catalogText), "Kitchen module catalog is not visible", kitchenTab);
     assert(kitchenTab.catalogWidth >= 280 && kitchenTab.catalogWidth <= 360 && kitchenTab.viewerWidth > kitchenTab.catalogWidth * 2, "Kitchen module catalog layout is stretched", kitchenTab);
     assert(
-      kitchenTab.maxCardsPerRow === 3 &&
+      kitchenTab.cardRects.length > 0 && kitchenTab.maxCardsPerRow <= 3 &&
+        kitchenTab.gridColumns.every(count => count === 3) &&
         kitchenTab.cardRects.every((rect) => rect.width >= 80 && rect.height >= 116) &&
         kitchenTab.iconRects.every((rect) => rect.height >= 72) &&
         kitchenTab.labelMetrics.every((label) => label.scrollHeight <= label.clientHeight + 1 && label.scrollWidth <= label.clientWidth + 1),
@@ -189,7 +191,7 @@ async function main() {
         justification: "back",
         mirrored: false,
         addModule: true,
-        moduleType: "drawer_low",
+        moduleType: "fwm_catalog_base_drawers",
         segmentIndex: 0,
         offsetAlongMm: 700
       })
@@ -207,13 +209,13 @@ async function main() {
     );
 
     const addSwing = await page.evaluate(
-      (id) => window.__kitchenDebug.addKitchenModule(id, { type: "swing_shelves_low", segmentIndex: 0, offsetAlongMm: 1700 }),
+      (id) => window.__kitchenDebug.addKitchenModule(id, { type: "fwm_catalog_base_doors", segmentIndex: 0, offsetAlongMm: 1700 }),
       scenario.group.id
     );
     assert(addSwing.instances?.length >= 2, "Adding second kitchen module failed", { count: addSwing.instances?.length });
 
     const addTemporary = await page.evaluate(
-      (id) => window.__kitchenDebug.addKitchenModule(id, { type: "drawer_low", segmentIndex: 0, offsetAlongMm: 2300 }),
+      (id) => window.__kitchenDebug.addKitchenModule(id, { type: "fwm_catalog_base_drawers", segmentIndex: 0, offsetAlongMm: 2300 }),
       scenario.group.id
     );
     const temporaryId = addTemporary.instances?.at(-1)?.id;

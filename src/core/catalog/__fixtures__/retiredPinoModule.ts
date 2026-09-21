@@ -1,10 +1,10 @@
-import type { FurnQuoteModulePackage } from "../../core/module-package/module-package-types";
+import type { FurnQuoteModulePackage } from "../../module-package/module-package-types";
 import {
   getPinoSideCabinetChoiceList,
   getPinoSideCabinetDefinitions,
   getPinoSideCabinetProductGroups,
   getPinoSideCabinetSystem
-} from "../../modules/pinoSideCabinet/types";
+} from "../../../modules/pinoSideCabinet/types";
 
 export function createPinoSideCabinetTenantPackage(): FurnQuoteModulePackage {
   const now = new Date().toISOString();

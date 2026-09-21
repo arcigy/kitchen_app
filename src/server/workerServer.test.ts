@@ -15,8 +15,9 @@ import { attachVendorModuleIntent } from "../core/catalog/vendor-module-intent";
 import { createCatalogModuleDefinitionFromPackage } from "../core/module-package/module-package-catalog";
 import { startWorkerServer } from "./workerServer";
 import { createHttpRequestBudget, type HttpRequestBudget } from "./http-request-budget";
-import cornerShelfLowerFixture from "../core/module-package/fixtures/cornerShelfLower.fqm.source.json";
-import { createPinoSideCabinetTenantPackage } from "../system/module-packages/pinoSideCabinet";
+import { systemModulePackageTemplates } from "../system/module-packages";
+const cornerShelfLowerFixture = systemModulePackageTemplates.find(pack => pack.module.moduleType === "fwm_catalog_base_corner")!;
+import { createPinoSideCabinetTenantPackage } from "../core/catalog/__fixtures__/retiredPinoModule";
 import type { ProjectSaveFile } from "../core/project-save/project-save-types";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
 
@@ -276,7 +277,6 @@ describe("multi-client worker isolation", () => {
   it("returns retryable 503 for a database session failure and keeps serving requests", async () => {
     const unavailableUserService: UserService = {
       authenticate: async () => null,
-      authenticateByUsername: async () => null,
       getUserById: async () => {
         throw new Error("Connection terminated due to connection timeout");
       }
@@ -317,7 +317,7 @@ describe("multi-client worker isolation", () => {
 
     const login = await requestWorker(controller!.port, "/api/auth/extension-login", {
       method: "POST",
-      body: { company: "Arcigy Kitchen", username: "arcigy", password: "kitchen2026" }
+      body: { username: "arcigy", password: "kitchen2026" }
     });
     expect(login.status).toBe(200);
     const accessToken = (login.body as { accessToken: string }).accessToken;
@@ -578,7 +578,7 @@ describe("multi-client worker isolation", () => {
     });
   }, 30_000);
 
-  it("resolves tenant vendor module lookup inside the current client catalog namespace", async () => {
+  it("rejects retired PINO modules: resolves tenant vendor module lookup inside the current client catalog namespace", async () => {
     const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
     const catalog = (catalogResponse.body as { catalog?: { priceList?: { id: string; name: string; currency: "EUR"; isActive: boolean; prices: Record<string, number> } } }).catalog;
@@ -636,15 +636,15 @@ describe("multi-client worker isolation", () => {
       { cookie }
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     const resolution = (response.body as { resolution?: { status?: string; moduleType?: string; placementZone?: string; requiresApplianceOpening?: boolean } }).resolution;
-    expect(resolution?.status).toBe("resolved");
-    expect(resolution?.moduleType).toBe("pino_side_cabinet");
+    expect(resolution?.status).toBe("missing");
+    expect(resolution?.moduleType).toBeNull();
     expect(resolution?.placementZone).toBe("tall_appliance");
     expect(resolution?.requiresApplianceOpening).toBe(true);
   }, 30_000);
 
-  it("resolves tenant vendor module seed lookup inside the current client catalog namespace", async () => {
+  it("does not restore retired module seeds through tenant catalog lookup", async () => {
     const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     await requestWorker(controller!.port, "/api/catalog", { cookie });
 
@@ -693,15 +693,13 @@ describe("multi-client worker isolation", () => {
       { cookie }
     );
 
-    expect(response.status).toBe(200);
-    const resolution = (response.body as { resolution?: { status?: string; moduleType?: string; params?: { width?: number; drawerCount?: number } } }).resolution;
-    expect(resolution?.status).toBe("resolved");
-    expect(resolution?.moduleType).toBe("drawer_low");
-    expect(resolution?.params?.width).toBe(600);
-    expect(resolution?.params?.drawerCount).toBe(1);
+    expect(response.status).toBe(404);
+    const resolution = (response.body as { resolution?: { status?: string; params?: unknown } }).resolution;
+    expect(resolution?.status).toBe("missing");
+    expect(resolution?.params).toBeNull();
   }, 30_000);
 
-  it("returns appliance host incompatibility for oversized PINO appliance side-cabinet lookups", async () => {
+  it("rejects retired PINO modules: returns appliance host incompatibility for oversized PINO appliance side-cabinet lookups", async () => {
     const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
     const catalog = (catalogResponse.body as { catalog?: { priceList?: { id: string; name: string; currency: "EUR"; isActive: boolean; prices: Record<string, number> } } }).catalog;
@@ -759,7 +757,7 @@ describe("multi-client worker isolation", () => {
       { cookie }
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     const resolution = (response.body as {
       resolution?: {
         status?: string;
@@ -768,11 +766,10 @@ describe("multi-client worker isolation", () => {
         applianceHostValidation?: { valid?: boolean; errors?: string[] };
       };
     }).resolution;
-    expect(resolution?.status).toBe("needs_review");
-    expect(resolution?.moduleType).toBe("pino_side_cabinet");
-    expect(resolution?.applianceHostStatus).toBe("incompatible");
-    expect(resolution?.applianceHostValidation?.valid).toBe(false);
-    expect(resolution?.applianceHostValidation?.errors?.join(" ")).toContain("exceeds opening width");
+    expect(resolution?.status).toBe("missing");
+    expect(resolution?.moduleType).toBeNull();
+    expect(resolution?.applianceHostStatus).toBe("not_applicable");
+    expect(resolution?.applianceHostValidation).toBeNull();
   }, 30_000);
 
   it("lists grouped tenant vendor catalog templates for group -> product -> width browsing", async () => {
@@ -1407,7 +1404,7 @@ describe("multi-client worker isolation", () => {
         appState: {
           layout: { windows: [], doors: [] },
           kitchen: {},
-          modules: [{ id: "m1", type: "drawer_low", params: makeDefaultModuleParams("drawer_low") }],
+          modules: [{ id: "m1", type: "fwm_catalog_base_drawers", params: makeDefaultModuleParams("fwm_catalog_base_drawers") }],
           scene: {}
         }
       }

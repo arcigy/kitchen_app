@@ -53,7 +53,7 @@ const createModuleInstance = (layoutRoot: THREE.Group, id = "module1", width = 1
     id,
     root,
     module,
-    params: { type: "base" },
+    params: { type: "fwm_catalog_base_doors" },
     kitchenGroupId: null,
     kitchenPlacement: null,
     localBox: new THREE.Box3(

@@ -91,7 +91,7 @@ async function main() {
       const scenario = debug.createKitchenScenario({
         path: [{ x: -1800, z: 0 }, { x: 1800, z: 0 }],
         addModule: true,
-        moduleType: "drawer_low",
+        moduleType: "fwm_catalog_base_drawers",
         offsetAlongMm: 700
       });
       const moduleId = scenario.instances[0]?.id;
@@ -109,7 +109,7 @@ async function main() {
       const projectMetadata = await call("project_metadata", "project.getMetadata");
       const parameterSchema = await call("parameter_schema", "module.getParameterSchema", { instanceId: moduleId });
       const catalogList = await call("catalog_list", "catalog.listModules");
-      const catalogSearch = await call("catalog_search", "catalog.searchModules", { moduleType: "drawer_low", limit: 20 });
+      const catalogSearch = await call("catalog_search", "catalog.searchModules", { moduleType: "fwm_catalog_base_drawers", limit: 20 });
       const pricingInitial = await call("pricing_initial", "pricing.getSummary");
       const projectValidation = await call("project_validation", "validation.inspectProject");
       const invalidMove = await assistant.executeToolCall({ id: "invalid_move", toolId: "editor.moveSelection", input: { dxMm: 10 } });
@@ -201,7 +201,7 @@ async function main() {
       const vendorInput = {
         catalogKey: "assistant-scope-negative",
         productTemplateId: "assistant-scope-negative",
-        moduleType: "drawer_low",
+        moduleType: "fwm_catalog_base_drawers",
         modulePackageId: enabledPackage ?? "missing",
         initialParams: originalModule?.params ?? {}
       };

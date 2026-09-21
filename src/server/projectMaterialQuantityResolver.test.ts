@@ -4,7 +4,7 @@ import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { assembleProjectSaveFile } from "../core/project-save/project-save-assembler";
 import type { ProjectMetadata } from "../core/project/project-types";
 import { makeDefaultKitchenContext } from "../layout/kitchenContext";
-import { makeDefaultDrawerLowParams } from "../modules/drawerLow/types";
+import { makeDefaultFwmFurnitureParams } from "../modules/fwmFurniture/types";
 import { resolveProjectMaterialQuantities } from "./projectMaterialQuantityResolver";
 import { resolveProjectMaterialScopes } from "./projectMaterialScopes";
 
@@ -88,7 +88,7 @@ describe("server project material quantity resolver", () => {
   });
 
   it("derives non-zero board and hardware quantities from a real saved module", () => {
-    const params = makeDefaultDrawerLowParams();
+    const params = makeDefaultFwmFurnitureParams("fwm_catalog_base_drawers");
     const savedModule = {
       id: "module_1",
       type: params.type,
@@ -117,7 +117,7 @@ describe("server project material quantity resolver", () => {
   });
 
   it("falls back to saved layout instances when the module summary is non-empty but malformed", () => {
-    const params = makeDefaultDrawerLowParams();
+    const params = makeDefaultFwmFurnitureParams("fwm_catalog_base_drawers");
     const savedModule = { id: "module_snapshot_1", type: params.type, params, kitchenGroupId: null };
     const save = createSave({
       modules: [savedModule],
@@ -133,7 +133,7 @@ describe("server project material quantity resolver", () => {
   });
 
   it("rebuilds one module scope with its individual BOM boards and components", () => {
-    const params = makeDefaultDrawerLowParams();
+    const params = makeDefaultFwmFurnitureParams("fwm_catalog_base_drawers");
     const savedModule = { id: "module_scope_1", type: params.type, params, kitchenGroupId: null };
     const scopes = resolveProjectMaterialScopes(createSave({ modules: [savedModule], snapshotInstances: [savedModule] }), catalog);
 
@@ -145,10 +145,11 @@ describe("server project material quantity resolver", () => {
 
   it("keeps drawer runner scope rows explicit about front height and corpus thickness", () => {
     const params = {
-      ...makeDefaultDrawerLowParams(),
+      ...makeDefaultFwmFurnitureParams("fwm_catalog_base_drawers"),
       drawerCount: 2,
-      drawerFrontHeights: [180, 260],
-      autoFit: false,
+      height: 546,
+      drawer1FrontHeightMm: 180,
+      drawer2FrontHeightMm: 260,
       boardThickness: 19
     };
     const savedModule = { id: "module_drawer_runner_scope", type: params.type, params, kitchenGroupId: null };

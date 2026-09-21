@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createPinoSideCabinetTenantPackage } from "../../../system/module-packages/pinoSideCabinet";
 import { extendedFurnitureModulePackages } from "../../../system/module-packages/extendedFurniture";
 import { resolveModuleControlStrategy } from "./module-package-controls";
 
 describe("module control strategy", () => {
-  it("prefers registered smart controls for known tenant module packages", () => {
-    const modulePackage = createPinoSideCabinetTenantPackage();
+  it("uses package controls for the supported cabinet family", () => {
+    const modulePackage = extendedFurnitureModulePackages.find(pack => pack.module.moduleType === "fwm_catalog_base_drawers")!;
 
-    expect(resolveModuleControlStrategy(modulePackage, { type: "pino_side_cabinet" })).toBe("module_descriptor");
-    expect(resolveModuleControlStrategy(modulePackage, {})).toBe("module_descriptor");
+    expect(resolveModuleControlStrategy(modulePackage, { type: "fwm_catalog_base_drawers" })).toBe("module_package");
+    expect(resolveModuleControlStrategy(modulePackage, {})).toBe("module_package");
   });
 
   it("falls back to package controls for unknown module types", () => {
@@ -24,12 +23,12 @@ describe("module control strategy", () => {
   it("uses package controls for Revit export preview packages even when a smart descriptor exists", () => {
     const modulePackage = {
       module: {
-        moduleType: "corner_shelf_lower",
+        moduleType: "fwm_catalog_base_corner",
         tags: ["revit-export-preview"]
       }
     } as Parameters<typeof resolveModuleControlStrategy>[0];
 
-    expect(resolveModuleControlStrategy(modulePackage, { type: "corner_shelf_lower" })).toBe("module_package");
+    expect(resolveModuleControlStrategy(modulePackage, { type: "fwm_catalog_base_corner" })).toBe("module_package");
   });
 
   it("uses package controls for composed tall hosts so users can edit slot layouts", () => {

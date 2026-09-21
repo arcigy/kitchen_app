@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ClientCatalog, ClientModuleDefinition, VendorProductVariant } from "../core/catalog/catalog-types";
 import { attachVendorModuleIntent } from "../core/catalog/vendor-module-intent";
-import { buildPinoCatalogAssistantRagChunks, normalizePinoSearchText, resolvePinoModuleDescription } from "./pinoModuleResolver";
+import { buildPinoCatalogAssistantRagChunks, resolvePinoModuleDescription } from "./pinoModuleResolver";
 
 function moduleDef(overrides: Partial<ClientModuleDefinition>): ClientModuleDefinition {
   return {
@@ -78,7 +78,7 @@ function catalog(args: {
 }
 
 describe("pinoModuleResolver", () => {
-  it("resolves a tall microwave side-cabinet description to the matching PINO module", () => {
+  it("rejects a description matching only a retired PINO module", () => {
     const result = resolvePinoModuleDescription(catalog({
       modules: [moduleDef({})],
       productVariants: [
@@ -93,11 +93,11 @@ describe("pinoModuleResolver", () => {
       ]
     }), "vloz mi tam vysoky modul, dole dvierka, potom jeden suflik, nad tym mikrovlnku a hore policky");
 
-    expect(result.status).toBe("resolved");
-    expect(result.candidates[0]?.entry.catalogKey).toBe("GBS-FB");
+    expect(result.status).toBe("missing");
+    expect(result.candidates).toEqual([]);
   });
 
-  it("marks underspecified tall cabinet requests as ambiguous", () => {
+  it("does not suggest retired modules for an underspecified tall cabinet", () => {
     const result = resolvePinoModuleDescription(catalog({
       modules: [moduleDef({})],
       productVariants: [
@@ -112,18 +112,16 @@ describe("pinoModuleResolver", () => {
       ]
     }), "vloz mi vysoky modul s policami");
 
-    expect(result.status === "ambiguous" || result.status === "needs_review").toBe(true);
-    expect(result.candidates.length).toBeGreaterThan(1);
+    expect(result.status).toBe("missing");
+    expect(result.candidates).toEqual([]);
   });
 
-  it("builds tenant-specific RAG chunks from the PINO catalog", () => {
+  it("omits retired PINO modules from assistant knowledge", () => {
     const chunks = buildPinoCatalogAssistantRagChunks(catalog({
       modules: [moduleDef({})],
       productVariants: [variant({})]
     }));
 
-    expect(chunks.length).toBeGreaterThan(0);
-    expect(chunks[0]?.source).toContain("tenant-catalog/");
-    expect(chunks.some((chunk) => normalizePinoSearchText(chunk.text).includes("drawer"))).toBe(true);
+    expect(chunks).toEqual([]);
   });
 });

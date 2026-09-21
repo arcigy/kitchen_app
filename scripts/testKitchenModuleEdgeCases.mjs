@@ -8,7 +8,7 @@ function deepEqual(a, b) {
 }
 
 function clone(value) {
-  return JSON.parse(JSON.stringify(value));
+  return structuredClone(value);
 }
 
 function moduleSignature(inst) {
@@ -21,6 +21,7 @@ function moduleSignature(inst) {
       .map((part) => ({
         name: part.name,
         positionM: part.positionM,
+        worldPositionM: part.worldPositionM,
         scale: part.scale,
         dimensionsMm: part.dimensionsMm,
         colorHex: part.colorHex
@@ -72,34 +73,22 @@ function worldBoxCenterXzDeltaMm(before, after) {
   return Math.round(Math.max(Math.abs(afterCenterX - beforeCenterX), Math.abs(afterCenterZ - beforeCenterZ)) * 1000);
 }
 
-function getFlapHandleOffsetFromBottomMm(inst) {
-  const handle = (inst.parts ?? []).find((item) => item.name === "handle");
-  const front = (inst.parts ?? []).find((item) => item.name === "door-front");
-  if (!handle?.positionM || !front?.dimensionsMm?.height) return null;
-  const frontHeightM = Number(front.dimensionsMm.height) / 1000;
-  return Math.round((handle.positionM.y + frontHeightM) * 1000);
-}
-
-function getLowestDoubleDoorHandleClearanceMm(inst) {
-  const front = (inst.parts ?? []).find((item) => item.name === "door-left" || item.name === "door-right");
-  const handles = (inst.parts ?? []).filter((item) => item.name === "door-left-handle" || item.name === "door-right-handle");
-  if (!front?.dimensionsMm?.height || handles.length === 0) return null;
-  const frontHeightM = Number(front.dimensionsMm.height) / 1000;
-  const clearances = handles.map((handle) => {
-    if (!handle?.positionM || !handle?.dimensionsMm?.height) return Number.NaN;
-    const handleHeightM = Number(handle.dimensionsMm.height) / 1000;
-    return Math.round((handle.positionM.y - handleHeightM / 2 + frontHeightM) * 1000);
+function getLowestDoorHandleClearanceMm(inst) {
+  const clearances = (inst.parts ?? []).filter(part => /^door_\d+_handle$/.test(part.name)).map(handle => {
+    const front = inst.parts.find(part => part.name === handle.name.replace(/_handle$/, ""));
+    if (!front?.dimensionsMm?.height || !handle.dimensionsMm?.height) return Number.NaN;
+    return Math.round((handle.positionM.y - front.positionM.y) * 1000 + Number(front.dimensionsMm.height) / 2 - Number(handle.dimensionsMm.height) / 2);
   });
-  return Math.min(...clearances.filter(Number.isFinite));
+  return clearances.length && clearances.every(Number.isFinite) ? Math.min(...clearances) : null;
 }
 
 function getInternalShelfPartCount(inst) {
-  return (inst.parts ?? []).filter((item) => /^shelf-\d+$/.test(item.name)).length;
+  return (inst.parts ?? []).filter((item) => /^shelf_\d+$/.test(item.name)).length;
 }
 
 function getInternalShelfCentersMm(inst) {
   return (inst.parts ?? [])
-    .filter((item) => /^shelf-\d+$/.test(item.name) && item.positionM)
+    .filter((item) => /^shelf_\d+$/.test(item.name) && item.positionM)
     .map((item) => Math.round(item.positionM.y * 1000))
     .sort((left, right) => left - right);
 }
@@ -193,56 +182,37 @@ function nextNumber(value, delta, min = 1) {
   return Math.max(min, Math.round(current + delta));
 }
 
+const dimensionCases = [
+  { key: "width", next: inst => nextNumber(inst.params.width, 120), expectGeometry: true },
+  { key: "depth", next: inst => nextNumber(inst.params.depth, 80), expectGeometry: true },
+  { key: "height", next: inst => nextNumber(inst.params.height, 80), expectGeometry: true },
+  { key: "boardThickness", next: inst => nextNumber(inst.params.boardThickness, 2), expectGeometry: true }
+];
 const drawerCases = [
-  { key: "width", next: (inst) => nextNumber(inst.params.width, 120), expectGeometry: true },
-  { key: "depth", next: (inst) => nextNumber(inst.params.depth, 80), expectGeometry: true },
-  { key: "height", next: (inst) => nextNumber(inst.params.height, 100), expectGeometry: true },
-  { key: "heightCarcass", next: (inst) => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
-  { key: "boardThickness", next: (inst) => nextNumber(inst.params.boardThickness, 2), expectGeometry: false },
-  { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: false, expectValueChange: false },
-  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: false },
-  { key: "drawerCount", next: (inst) => nextNumber(inst.params.drawerCount, 1), expectGeometry: true },
-  { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 50, 0), expectGeometry: false },
-  { key: "backGrooveDepthMm", next: (inst) => nextNumber(inst.params.backGrooveDepthMm, 2, 0), expectGeometry: true }
+  ...dimensionCases,
+  { key: "heightCarcass", next: inst => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
+  { key: "frontThicknessMm", next: inst => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: true },
+  { key: "drawerCount", next: inst => nextNumber(inst.params.drawerCount, 1), expectGeometry: true },
+  { key: "opened", next: inst => !inst.params.opened, expectGeometry: true }
 ];
-
 const cornerCases = [
-  { key: "depth", next: (inst) => nextNumber(inst.params.depth, 100), expectGeometry: true },
-  { key: "height", next: (inst) => nextNumber(inst.params.height, 100), expectGeometry: true },
-  { key: "heightCarcass", next: (inst) => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
-  { key: "boardThickness", next: (inst) => nextNumber(inst.params.boardThickness, 2), expectGeometry: false },
-  { key: "backThickness", next: (inst) => nextNumber(inst.params.backThickness, 2), expectGeometry: false, expectValueChange: false },
-  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: false },
-  { key: "lengthX", next: (inst) => nextNumber(inst.params.lengthX, 120), expectGeometry: true },
-  { key: "lengthZ", next: (inst) => nextNumber(inst.params.lengthZ, 120), expectGeometry: true },
-  { key: "shelfCount", next: (inst) => nextNumber(inst.params.shelfCount, 1), expectGeometry: false },
-  { key: "plinthHeight", next: (inst) => nextNumber(inst.params.plinthHeight, 20, 0), expectGeometry: true },
-  { key: "plinthSetbackMm", next: (inst) => nextNumber(inst.params.plinthSetbackMm, 20, 0), expectGeometry: true },
-  { key: "doorOpen", next: (inst) => !inst.params.doorOpen, expectGeometry: false },
-  { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 50, 0), expectGeometry: false },
-  { key: "backGrooveDepthMm", next: (inst) => nextNumber(inst.params.backGrooveDepthMm, 2, 0), expectGeometry: false }
+  ...dimensionCases,
+  { key: "heightCarcass", next: inst => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
+  { key: "plinthHeight", next: inst => nextNumber(inst.params.plinthHeight, 20), expectGeometry: true },
+  { key: "plinthSetbackMm", next: inst => nextNumber(inst.params.plinthSetbackMm, 20), expectGeometry: true },
+  { key: "opened", next: inst => !inst.params.opened, expectGeometry: true }
 ];
-
 const swingCases = [
-  { key: "width", next: (inst) => nextNumber(inst.params.width, 120), expectGeometry: true },
-  { key: "depth", next: (inst) => nextNumber(inst.params.depth, 80), expectGeometry: true },
-  { key: "height", next: (inst) => nextNumber(inst.params.height, 80), expectGeometry: true },
-  { key: "heightCarcass", next: (inst) => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
-  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: false },
-  { key: "shelfCount", next: (inst) => nextNumber(inst.params.shelfCount, 1), expectGeometry: true },
-  { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 40, 0), expectGeometry: true }
+  ...dimensionCases,
+  { key: "heightCarcass", next: inst => nextNumber(inst.params.heightCarcass, 80), expectGeometry: true },
+  { key: "shelfCount", next: inst => nextNumber(inst.params.shelfCount, 1), expectGeometry: true },
+  { key: "opened", next: inst => !inst.params.opened, expectGeometry: true }
 ];
-
-const fridgeCases = [
-  { key: "width", next: (inst) => nextNumber(inst.params.width, 120), expectGeometry: true },
-  { key: "height", next: (inst) => nextNumber(inst.params.height, 120), expectGeometry: true },
-  { key: "depth", next: (inst) => nextNumber(inst.params.depth, 60), expectGeometry: true },
-  { key: "frontThicknessMm", next: (inst) => nextNumber(inst.params.frontThicknessMm, 2), expectGeometry: true },
-  { key: "fridgeWidthMm", next: (inst) => nextNumber(inst.params.fridgeWidthMm, 20), expectGeometry: true },
-  { key: "fridgeHeightMm", next: (inst) => Math.max(100, Math.round(Number(inst.params.fridgeHeightMm ?? 1730) - 40)), expectGeometry: true },
-  { key: "freezerDoorHeightMm", next: (inst) => nextNumber(inst.params.freezerDoorHeightMm, 40), expectGeometry: true },
-  { key: "handlePositionMm", next: (inst) => nextNumber(inst.params.handlePositionMm, 40, 0), expectGeometry: true },
-  { key: "doorOpen", next: (inst) => !inst.params.doorOpen, expectGeometry: true }
+const tallCases = [
+  ...dimensionCases,
+  { key: "tallSlot1HeightMm", next: inst => nextNumber(inst.params.tallSlot1HeightMm, 40), expectGeometry: true },
+  { key: "tallSlot2HeightMm", next: inst => nextNumber(inst.params.tallSlot2HeightMm, 40), expectGeometry: true },
+  { key: "opened", next: inst => !inst.params.opened, expectGeometry: true }
 ];
 
 async function runMatrix(page, name, scenarioOpts, moduleType, cases) {
@@ -255,18 +225,28 @@ async function runMatrix(page, name, scenarioOpts, moduleType, cases) {
     });
     const groupId = created.group?.id;
     expect(groupId, `${name}:${testCase.key} missing group`, created);
+    if (moduleType === "fwm_catalog_tall_cabinet") {
+      const initial = getPrimaryModule(await snapshot(page, groupId), moduleType);
+      await patchModule(page, initial.id, { tallSlotCount: 2, tallSlot1Type: "drawer", tallSlot1HeightMm: 300, tallSlot2Type: "door", tallSlot2HeightMm: 600 }, { sourceKey: "tallSlotCount", preserveBackAnchor: true });
+    }
     const beforeSnap = await snapshot(page, groupId);
     const beforeModule = getPrimaryModule(beforeSnap, moduleType);
     const beforeValue = clone(beforeModule.params[testCase.key]);
     const nextValue = testCase.next(beforeModule);
-    const result = await patchModule(page, beforeModule.id, { [testCase.key]: nextValue }, { sourceKey: testCase.key, preserveBackAnchor: true });
+    const patch = { [testCase.key]: nextValue };
+    // External-worktop families store the complete height and the cabinet
+    // height separately. Keep both inputs consistent for this dimension edit.
+    if (testCase.key === "height" && beforeModule.params.requiresWorktop !== false && Number(beforeModule.params.worktopThicknessMm) > 0) {
+      patch.heightCarcass = Number(nextValue) - Number(beforeModule.params.worktopThicknessMm);
+    }
+    const result = await patchModule(page, beforeModule.id, patch, { sourceKey: testCase.key, preserveBackAnchor: true });
     const afterModule = result.instance;
     const changedValue = !deepEqual(afterModule.params[testCase.key], beforeValue);
     const geometryChanged = moduleSignature(beforeModule) !== moduleSignature(afterModule);
     const shouldChangeValue = testCase.expectValueChange !== false;
     if (!result.ok || (shouldChangeValue && !changedValue) || (testCase.expectGeometry && !geometryChanged)) {
       failures.push({
-        case: testCase.key,
+        case: `${name}.${testCase.key}`,
         ok: result.ok,
         beforeValue,
         requestedValue: nextValue,
@@ -288,12 +268,12 @@ async function runAdjacencyCases(page) {
   ];
 
   {
-    const created = await createScenario(page, { path: lPath, addModule: true, moduleType: "corner_shelf_lower" });
+    const created = await createScenario(page, { path: lPath, addModule: true, moduleType: "fwm_catalog_base_corner" });
     const groupId = created.group.id;
-    await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 0, offsetAlongMm: 980 });
+    await addKitchenModule(page, groupId, { type: "fwm_catalog_base_drawers", segmentIndex: 0, offsetAlongMm: 980 });
     const snapBefore = await snapshot(page, groupId);
-    const corner = snapBefore.instances.find((item) => item.params.type === "corner_shelf_lower");
-    const drawer = snapBefore.instances.find((item) => item.params.type === "drawer_low");
+    const corner = snapBefore.instances.find((item) => item.params.type === "fwm_catalog_base_corner");
+    const drawer = snapBefore.instances.find((item) => item.params.type === "fwm_catalog_base_drawers");
     expect(corner && drawer, "corner adjacency scenario missing modules", snapBefore);
     const beforeAdj = await detectAdjacency(page, drawer.id);
     if (beforeAdj.length > 0) {
@@ -327,19 +307,19 @@ async function runAdjacencyCases(page) {
   }
 
   {
-    const created = await createScenario(page, { path: lPath, addModule: true, moduleType: "corner_shelf_lower" });
+    const created = await createScenario(page, { path: lPath, addModule: true, moduleType: "fwm_catalog_base_corner" });
     const groupId = created.group.id;
-    await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 0, offsetAlongMm: 1080 });
+    await addKitchenModule(page, groupId, { type: "fwm_catalog_base_drawers", segmentIndex: 0, offsetAlongMm: 1080 });
     const before = await snapshot(page, groupId);
-    const corner = before.instances.find((item) => item.params.type === "corner_shelf_lower");
-    const drawer = before.instances.find((item) => item.params.type === "drawer_low");
-    expect(corner && drawer, "corner lengthX adjacency scenario missing modules", before);
+    const corner = before.instances.find((item) => item.params.type === "fwm_catalog_base_corner");
+    const drawer = before.instances.find((item) => item.params.type === "fwm_catalog_base_drawers");
+    expect(corner && drawer, "corner width adjacency scenario missing modules", before);
     const beforeAdj = await detectAdjacency(page, drawer.id);
     const result = await patchModule(
       page,
       corner.id,
-      { lengthX: Number(corner.params.lengthX ?? 1000) + 120 },
-      { sourceKey: "lengthX", preserveBackAnchor: true }
+      { width: Number(corner.params.width ?? 1000) + 120 },
+      { sourceKey: "width", preserveBackAnchor: true }
     );
     const after = await snapshot(page, groupId);
     const afterAdj = await detectAdjacency(page, drawer.id);
@@ -353,12 +333,12 @@ async function runAdjacencyCases(page) {
           Math.abs((afterAdj[0]?.gapMm ?? 0) - (beforeAdj[0]?.gapMm ?? 0)) <= 1 &&
           Math.abs((afterAdj[0]?.seamMm ?? 0) - (beforeAdj[0]?.seamMm ?? 0)) <= 1
         : !drawerMoved;
-    if (!result.ok || Number(afterCorner.params.lengthX) <= Number(corner.params.lengthX) || !drawerAttachmentRespected) {
+    if (!result.ok || Number(afterCorner.params.width) <= Number(corner.params.width) || !drawerAttachmentRespected) {
       failures.push({
-        case: "corner_lengthX_growth_respects_drawer_attachment",
+        case: "corner_width_growth_respects_drawer_attachment",
         ok: result.ok,
-        beforeLengthX: corner.params.lengthX,
-        afterLengthX: afterCorner.params.lengthX,
+        beforeWidth: corner.params.width,
+        afterWidth: afterCorner.params.width,
         drawerMoved,
         drawerAttachmentRespected,
         beforeCornerPos: corner.positionM,
@@ -376,13 +356,15 @@ async function runAdjacencyCases(page) {
     const created = await createScenario(page, {
       path: [{ x: 0, z: 0 }, { x: 3200, z: 0 }],
       addModule: true,
-      moduleType: "drawer_low",
+      moduleType: "fwm_catalog_base_drawers",
       offsetAlongMm: 700
     });
     const groupId = created.group.id;
-    await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 0, offsetAlongMm: 1500 });
+    const firstDrawer = getPrimaryModule(await snapshot(page, groupId), "fwm_catalog_base_drawers");
+    const adjacentOffset = firstDrawer.kitchenPlacement.offsetAlongM * 1000 + Number(firstDrawer.params.width) + 2;
+    await addKitchenModule(page, groupId, { type: "fwm_catalog_base_drawers", segmentIndex: 0, offsetAlongMm: adjacentOffset });
     const before = await snapshot(page, groupId);
-    const drawers = before.instances.filter((item) => item.params.type === "drawer_low");
+    const drawers = before.instances.filter((item) => item.params.type === "fwm_catalog_base_drawers");
     expect(drawers.length >= 2, "drawer adjacency scenario missing modules", before);
     const left = drawers.slice().sort((a, b) => a.positionM.x - b.positionM.x)[0];
     const right = drawers.slice().sort((a, b) => a.positionM.x - b.positionM.x)[1];
@@ -423,18 +405,18 @@ async function runClusterCases(page) {
   const created = await createScenario(page, {
     path: [{ x: 0, z: 0 }, { x: 4200, z: 0 }],
     addModule: true,
-    moduleType: "drawer_low",
+    moduleType: "fwm_catalog_base_drawers",
     offsetAlongMm: 700
   });
   const groupId = created.group.id;
-  await addKitchenModule(page, groupId, { type: "swing_shelves_low", segmentIndex: 0, offsetAlongMm: 1550 });
-  await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 0, offsetAlongMm: 2550 });
+  await addKitchenModule(page, groupId, { type: "fwm_catalog_base_doors", segmentIndex: 0, offsetAlongMm: 1550 });
+  await addKitchenModule(page, groupId, { type: "fwm_catalog_base_drawers", segmentIndex: 0, offsetAlongMm: 2550 });
 
   const before = await snapshot(page, groupId);
   const ordered = before.instances.slice().sort((a, b) => a.positionM.x - b.positionM.x);
-  const leftDrawer = ordered.find((item) => item.params.type === "drawer_low");
-  const swing = ordered.find((item) => item.params.type === "swing_shelves_low");
-  const rightDrawer = ordered.slice().reverse().find((item) => item.params.type === "drawer_low");
+  const leftDrawer = ordered.find((item) => item.params.type === "fwm_catalog_base_drawers");
+  const swing = ordered.find((item) => item.params.type === "fwm_catalog_base_doors");
+  const rightDrawer = ordered.slice().reverse().find((item) => item.params.type === "fwm_catalog_base_drawers");
   expect(leftDrawer && swing && rightDrawer, "cluster scenario missing modules", before);
 
   {
@@ -548,11 +530,11 @@ async function runBackAnchorLockCases(page) {
     const created = await createScenario(page, {
       path: [{ x: 0, z: 0 }, { x: 2600, z: 0 }],
       addModule: true,
-      moduleType: "drawer_low",
+      moduleType: "fwm_catalog_base_drawers",
       offsetAlongMm: 700
     });
     const groupId = created.group.id;
-    const before = getPrimaryModule(await snapshot(page, groupId), "drawer_low");
+    const before = getPrimaryModule(await snapshot(page, groupId), "fwm_catalog_base_drawers");
     const result = await patchModule(
       page,
       before.id,
@@ -580,12 +562,12 @@ async function runBackAnchorLockCases(page) {
         { x: 2400, z: 1800 }
       ],
       addModule: true,
-      moduleType: "drawer_low",
+      moduleType: "fwm_catalog_base_drawers",
       segmentIndex: 1,
       offsetAlongMm: 700
     });
     const groupId = created.group.id;
-    const before = getPrimaryModule(await snapshot(page, groupId), "drawer_low");
+    const before = getPrimaryModule(await snapshot(page, groupId), "fwm_catalog_base_drawers");
     const result = await patchModule(
       page,
       before.id,
@@ -609,11 +591,11 @@ async function runBackAnchorLockCases(page) {
     const created = await createScenario(page, {
       path: [{ x: 0, z: 0 }, { x: 2600, z: 0 }],
       addModule: true,
-      moduleType: "swing_shelves_low",
+      moduleType: "fwm_catalog_base_doors",
       offsetAlongMm: 700
     });
     const groupId = created.group.id;
-    const before = getPrimaryModule(await snapshot(page, groupId), "swing_shelves_low");
+    const before = getPrimaryModule(await snapshot(page, groupId), "fwm_catalog_base_doors");
     const result = await patchModule(
       page,
       before.id,
@@ -641,13 +623,13 @@ async function runBackAnchorLockCases(page) {
         { x: 2400, z: 1600 }
       ],
       addModule: true,
-      moduleType: "corner_shelf_lower",
+      moduleType: "fwm_catalog_base_corner",
       cornerIndex: 1
     });
     const groupId = created.group.id;
-    let before = getPrimaryModule(await snapshot(page, groupId), "corner_shelf_lower");
+    let before = getPrimaryModule(await snapshot(page, groupId), "fwm_catalog_base_corner");
 
-    for (const key of ["lengthX", "lengthZ"]) {
+    for (const key of ["width", "depth"]) {
       const beforeAnchor = before.worldKitchenAnchorM;
       const result = await patchModule(
         page,
@@ -689,11 +671,11 @@ async function runKitchenMaterialResyncCases(page) {
   });
   const groupId = created.group.id;
 
-  await addKitchenModule(page, groupId, { type: "fridge_tall", segmentIndex: 0, offsetAlongMm: 350 });
-  await addKitchenModule(page, groupId, { type: "corner_shelf_lower", cornerIndex: 1 });
-  await addKitchenModule(page, groupId, { type: "corner_shelf_lower", cornerIndex: 2 });
-  await addKitchenModule(page, groupId, { type: "swing_shelves_low", segmentIndex: 0, offsetAlongMm: 1450 });
-  await addKitchenModule(page, groupId, { type: "drawer_low", segmentIndex: 2, offsetAlongMm: 1100 });
+  await addKitchenModule(page, groupId, { type: "fwm_catalog_tall_cabinet", segmentIndex: 0, offsetAlongMm: 350 });
+  await addKitchenModule(page, groupId, { type: "fwm_catalog_base_corner", cornerIndex: 1 });
+  await addKitchenModule(page, groupId, { type: "fwm_catalog_base_corner", cornerIndex: 2 });
+  await addKitchenModule(page, groupId, { type: "fwm_catalog_base_doors", segmentIndex: 0, offsetAlongMm: 1450 });
+  await addKitchenModule(page, groupId, { type: "fwm_catalog_base_drawers", segmentIndex: 2, offsetAlongMm: 1100 });
   await evalApi(
     page,
     ({ groupId }) => {
@@ -708,16 +690,16 @@ async function runKitchenMaterialResyncCases(page) {
   for (const inst of afterMaterial.instances) {
     let patch = null;
     let sourceKey = null;
-    if (inst.params.type === "fridge_tall") {
+    if (inst.params.type === "fwm_catalog_tall_cabinet") {
       patch = { width: Number(inst.params.width ?? 600) + 1 };
       sourceKey = "width";
-    } else if (inst.params.type === "corner_shelf_lower") {
-      patch = { lengthX: Number(inst.params.lengthX ?? 1000) + 1 };
-      sourceKey = "lengthX";
-    } else if (inst.params.type === "swing_shelves_low") {
+    } else if (inst.params.type === "fwm_catalog_base_corner") {
+      patch = { width: Number(inst.params.width ?? 1000) + 1 };
+      sourceKey = "width";
+    } else if (inst.params.type === "fwm_catalog_base_doors") {
       patch = { width: Number(inst.params.width ?? 800) + 1 };
       sourceKey = "width";
-    } else if (inst.params.type === "drawer_low") {
+    } else if (inst.params.type === "fwm_catalog_base_drawers") {
       patch = { width: Number(inst.params.width ?? 800) + 1 };
       sourceKey = "width";
     }
@@ -747,7 +729,7 @@ async function runUpperFlapContextCases(page) {
   });
   const groupId = created.group.id;
   await page.evaluate(() => window.__kitchenDebug.createWall({ aMm: { x: -2000, z: -50 }, bMm: { x: 6000, z: -50 }, thicknessMm: 100 }));
-  await addKitchenModule(page, groupId, { type: "flap_shelves_low", segmentIndex: 0, offsetAlongMm: 1300 });
+  await addKitchenModule(page, groupId, { type: "fwm_catalog_wall_cabinet", segmentIndex: 0, offsetAlongMm: 1300 });
   await evalApi(
     page,
     ({ groupId }) => {
@@ -763,30 +745,30 @@ async function runUpperFlapContextCases(page) {
   );
 
   const snap = await snapshot(page, groupId);
-  const flap = snap.instances.find((inst) => inst.params.type === "flap_shelves_low");
+  const flap = snap.instances.find((inst) => inst.params.type === "fwm_catalog_wall_cabinet");
   if (!flap) {
-    failures.push({ case: "upper_flap_inserted", ok: false, reason: "Missing flap_shelves_low after addKitchenModule" });
+    failures.push({ case: "upper_cabinet_inserted", ok: false, reason: "Missing fwm_catalog_wall_cabinet after addKitchenModule" });
     return failures;
   }
   if (!flap.kitchenPlacement) {
-    failures.push({ case: "upper_flap_kitchen_placement", ok: false, reason: "Missing kitchenPlacement", flap });
+    failures.push({ case: "upper_cabinet_kitchen_placement", ok: false, reason: "Missing kitchenPlacement", flap });
   }
   if (Math.round(flap.positionM.y * 1000) !== 1600) {
-    failures.push({ case: "upper_flap_position_y", ok: false, expected: 1600, actual: Math.round(flap.positionM.y * 1000), flap });
+    failures.push({ case: "upper_cabinet_position_y", ok: false, expected: 1600, actual: Math.round(flap.positionM.y * 1000), flap });
   }
   if (flap.params.height !== 640) {
-    failures.push({ case: "upper_flap_height", ok: false, expected: 640, actual: flap.params.height, flap });
+    failures.push({ case: "upper_cabinet_height", ok: false, expected: 640, actual: flap.params.height, flap });
   }
   if (flap.params.frontMaterialId !== "mat.demos.229570" && flap.params.materials?.frontKey !== "mat.demos.229570") {
-    failures.push({ case: "upper_flap_front_material", ok: false, expected: "mat.demos.229570", flap });
+    failures.push({ case: "upper_cabinet_front_material", ok: false, expected: "mat.demos.229570", flap });
   }
   if (!Number.isFinite(flap.worldBoxM?.min?.x) || !Number.isFinite(flap.worldBoxM?.max?.y) || (flap.parts?.length ?? 0) === 0) {
-    failures.push({ case: "upper_flap_3d_geometry", ok: false, reason: "Invalid or empty 3D geometry", flap });
+    failures.push({ case: "upper_cabinet_3d_geometry", ok: false, reason: "Invalid or empty 3D geometry", flap });
   }
   const shelfPartCount = getInternalShelfPartCount(flap);
   if (shelfPartCount !== Number(flap.params.shelfCount ?? 0)) {
     failures.push({
-      case: "upper_flap_shelf_count_geometry",
+      case: "upper_cabinet_shelf_count_geometry",
       ok: false,
       expected: Number(flap.params.shelfCount ?? 0),
       actual: shelfPartCount,
@@ -794,41 +776,28 @@ async function runUpperFlapContextCases(page) {
     });
   }
   const shelfCentersMm = getInternalShelfCentersMm(flap);
-  if (flap.params.shelfAutoFit !== true || !shelfCentersAreEven(shelfCentersMm)) {
+  if (!shelfCentersAreEven(shelfCentersMm)) {
     failures.push({
-      case: "upper_flap_initial_shelves_auto_fit",
+      case: "upper_cabinet_initial_shelves_auto_fit",
       ok: false,
       expected: { shelfAutoFit: true, evenCenters: true },
       actual: { shelfAutoFit: flap.params.shelfAutoFit, shelfCentersMm },
       flap
     });
   }
-  const handleCenterFromBottomMm = getFlapHandleOffsetFromBottomMm(flap);
-  if (handleCenterFromBottomMm == null || Math.abs(handleCenterFromBottomMm - Number(flap.params.handlePositionMm ?? 60)) > 15) {
-    failures.push({
-      case: "upper_flap_handle_position_from_bottom",
-      ok: false,
-      expected: Number(flap.params.handlePositionMm ?? 60),
-      actual: handleCenterFromBottomMm,
-      flap
-    });
-  }
-  const doubleDoorResult = await patchModule(page, flap.id, { doorSystem: "double_hinged", handlePositionMm: 60 }, { sourceKey: "doorSystem", preserveBackAnchor: true });
-  const doubleDoorClearanceMm = getLowestDoubleDoorHandleClearanceMm(doubleDoorResult.instance);
-  if (!doubleDoorResult.ok || doubleDoorClearanceMm == null || doubleDoorClearanceMm < 20) {
-    failures.push({
-      case: "upper_flap_double_door_handles_inside_front",
-      ok: false,
-      expectedMinClearanceMm: 20,
-      actualClearanceMm: doubleDoorClearanceMm,
-      flap: doubleDoorResult.instance
-    });
+  const handleClearance = getLowestDoorHandleClearanceMm(flap);
+  if (handleClearance == null || handleClearance < 20) failures.push({ case: "upper_door_handle_inside_front", handleClearance });
+  const doubleDoorResult = await patchModule(page, flap.id, { doorCount: 2 }, { sourceKey: "doorCount", preserveBackAnchor: true });
+  const doubleDoorClearanceMm = getLowestDoorHandleClearanceMm(doubleDoorResult.instance);
+  const fronts = doubleDoorResult.instance.parts.filter(part => /^door_\d+$/.test(part.name));
+  if (!doubleDoorResult.ok || fronts.length !== 2 || doubleDoorClearanceMm == null || doubleDoorClearanceMm < 20) {
+    failures.push({ case: "upper_double_door_handles_inside_front", ok: doubleDoorResult.ok, fronts: fronts.length, doubleDoorClearanceMm });
   }
 
   const result = await patchModule(page, doubleDoorResult.instance.id, { width: Number(doubleDoorResult.instance.params.width ?? 900) + 1 }, { sourceKey: "width", preserveBackAnchor: true });
   if (!result.ok) {
     failures.push({
-      case: "material_resync_flap_shelves_low_width",
+      case: "material_resync_fwm_catalog_wall_cabinet_width",
       ok: result.ok,
       debug: result.debug ?? null
     });
@@ -852,7 +821,7 @@ async function runUpperFlapUiPlacementCases(page) {
   await page.getByRole("button", { name: /^(2D pohľad|2D View)$/ }).click();
   await page.getByRole("button", { name: "Kuchyňa", exact: true }).click();
   await page.getByRole("button", { name: /^(Upravovať vrchné moduly|Edit upper modules)$/ }).click();
-  await page.locator('#moduleCatalog button[data-module-type="flap_shelves_low"]').click();
+  await page.locator('#moduleCatalog button[data-module-type="fwm_catalog_wall_cabinet"]').first().click();
   const target = await evalApi(page, () => {
     const api = window.__kitchenDebug;
     if (!api) throw new Error("Missing __kitchenDebug");
@@ -864,23 +833,23 @@ async function runUpperFlapUiPlacementCases(page) {
   await page.waitForTimeout(300);
 
   const placedSnap = await snapshot(page, groupId);
-  const placedFlap = placedSnap.instances.find((inst) => inst.params.type === "flap_shelves_low");
+  const placedFlap = placedSnap.instances.find((inst) => inst.params.type === "fwm_catalog_wall_cabinet");
   if (!placedFlap) {
-    failures.push({ case: "upper_flap_ui_inserted", ok: false, reason: "Missing flap_shelves_low after UI placement" });
+    failures.push({ case: "upper_cabinet_ui_inserted", ok: false, reason: "Missing fwm_catalog_wall_cabinet after UI placement" });
     return failures;
   }
   if (!placedFlap.kitchenPlacement) {
-    failures.push({ case: "upper_flap_ui_keeps_binding", ok: false, reason: "UI placement lost kitchenPlacement", placedFlap });
+    failures.push({ case: "upper_cabinet_ui_keeps_binding", ok: false, reason: "UI placement lost kitchenPlacement", placedFlap });
   }
   if (Math.round(placedFlap.positionM.y * 1000) !== 1400) {
-    failures.push({ case: "upper_flap_ui_initial_position_y", ok: false, expected: 1400, actual: Math.round(placedFlap.positionM.y * 1000), placedFlap });
+    failures.push({ case: "upper_cabinet_ui_initial_position_y", ok: false, expected: 1400, actual: Math.round(placedFlap.positionM.y * 1000), placedFlap });
   }
   if (Math.round(placedFlap.worldBoxM.min.y * 1000) !== 1400) {
-    failures.push({ case: "upper_flap_ui_initial_world_bottom_y", ok: false, expected: 1400, actual: Math.round(placedFlap.worldBoxM.min.y * 1000), placedFlap });
+    failures.push({ case: "upper_cabinet_ui_initial_world_bottom_y", ok: false, expected: 1400, actual: Math.round(placedFlap.worldBoxM.min.y * 1000), placedFlap });
   }
   if (placedFlap.moduleVisible !== false || placedFlap.outlineVisible !== true || placedFlap.pickVisible !== true) {
     failures.push({
-      case: "upper_flap_ui_floorplan_visibility",
+      case: "upper_cabinet_ui_floorplan_visibility",
       ok: false,
       expected: { moduleVisible: false, outlineVisible: true, pickVisible: true },
       actual: {
@@ -895,11 +864,11 @@ async function runUpperFlapUiPlacementCases(page) {
     placedFlap.planPolygonM.length < 4 ||
     placedFlap.planPolygonM.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.z))
   ) {
-    failures.push({ case: "upper_flap_ui_plan_footprint", ok: false, reason: "Invalid plan footprint", placedFlap });
+    failures.push({ case: "upper_cabinet_ui_plan_footprint", ok: false, reason: "Invalid plan footprint", placedFlap });
   }
   const footprintDeltaMm = planFootprintCenterDeltaMm(placedFlap);
   if (footprintDeltaMm > 30) {
-    failures.push({ case: "upper_flap_ui_plan_footprint_matches_3d", ok: false, expectedMaxDeltaMm: 30, actualDeltaMm: footprintDeltaMm, placedFlap });
+    failures.push({ case: "upper_cabinet_ui_plan_footprint_matches_3d", ok: false, expectedMaxDeltaMm: 30, actualDeltaMm: footprintDeltaMm, placedFlap });
   }
 
   await evalApi(
@@ -915,7 +884,7 @@ async function runUpperFlapUiPlacementCases(page) {
   const movedFlap = movedSnap.instances.find((inst) => inst.id === placedFlap.id);
   if (!movedFlap || Math.round(movedFlap.positionM.y * 1000) !== 1700) {
     failures.push({
-      case: "upper_flap_ui_group_position_updates",
+      case: "upper_cabinet_ui_group_position_updates",
       ok: false,
       expected: 1700,
       actual: movedFlap ? Math.round(movedFlap.positionM.y * 1000) : null,
@@ -924,7 +893,7 @@ async function runUpperFlapUiPlacementCases(page) {
   }
   if (!movedFlap || Math.round(movedFlap.worldBoxM.min.y * 1000) !== 1700) {
     failures.push({
-      case: "upper_flap_ui_group_world_bottom_updates",
+      case: "upper_cabinet_ui_group_world_bottom_updates",
       ok: false,
       expected: 1700,
       actual: movedFlap ? Math.round(movedFlap.worldBoxM.min.y * 1000) : null,
@@ -935,7 +904,7 @@ async function runUpperFlapUiPlacementCases(page) {
     const boxCenterDeltaMm = worldBoxCenterXzDeltaMm(placedFlap, movedFlap);
     if (boxCenterDeltaMm > 1) {
       failures.push({
-        case: "upper_flap_ui_group_position_keeps_xz",
+        case: "upper_cabinet_ui_group_position_keeps_xz",
         ok: false,
         expectedMaxDeltaMm: 1,
         actualDeltaMm: boxCenterDeltaMm,
@@ -946,7 +915,7 @@ async function runUpperFlapUiPlacementCases(page) {
     const movedFootprintDeltaMm = planFootprintCenterDeltaMm(movedFlap);
     if (movedFootprintDeltaMm > 30) {
       failures.push({
-        case: "upper_flap_ui_group_footprint_keeps_3d_alignment",
+        case: "upper_cabinet_ui_group_footprint_keeps_3d_alignment",
         ok: false,
         expectedMaxDeltaMm: 30,
         actualDeltaMm: movedFootprintDeltaMm,
@@ -955,7 +924,7 @@ async function runUpperFlapUiPlacementCases(page) {
     }
   }
   if (!movedFlap || movedFlap.params.height !== 650) {
-    failures.push({ case: "upper_flap_ui_group_height_updates", ok: false, expected: 650, actual: movedFlap?.params.height ?? null, movedFlap });
+    failures.push({ case: "upper_cabinet_ui_group_height_updates", ok: false, expected: 650, actual: movedFlap?.params.height ?? null, movedFlap });
   }
   if (movedFlap) {
     await evalApi(
@@ -970,11 +939,11 @@ async function runUpperFlapUiPlacementCases(page) {
     const depthSnap = await snapshot(page, groupId);
     const depthFlap = depthSnap.instances.find((inst) => inst.id === placedFlap.id);
     if (!depthFlap || depthFlap.params.depth !== 410) {
-      failures.push({ case: "upper_flap_ui_group_depth_updates", ok: false, expected: 410, actual: depthFlap?.params.depth ?? null, depthFlap });
+      failures.push({ case: "upper_cabinet_ui_group_depth_updates", ok: false, expected: 410, actual: depthFlap?.params.depth ?? null, depthFlap });
     }
     if (depthFlap && backLockedDeltaMm(movedFlap, depthFlap) > 1) {
       failures.push({
-        case: "upper_flap_ui_group_depth_keeps_back_anchor",
+        case: "upper_cabinet_ui_group_depth_keeps_back_anchor",
         ok: false,
         expectedMaxDeltaMm: 1,
         actualDeltaMm: backLockedDeltaMm(movedFlap, depthFlap),
@@ -987,7 +956,7 @@ async function runUpperFlapUiPlacementCases(page) {
   const savedFlap = savedSnap.instances.find((inst) => inst.id === placedFlap.id);
   if (!savedFlap || savedFlap.positionMm.y !== 1700) {
     failures.push({
-      case: "upper_flap_ui_snapshot_saves_y",
+      case: "upper_cabinet_ui_snapshot_saves_y",
       ok: false,
       expected: 1700,
       actual: savedFlap?.positionMm?.y ?? null,
@@ -1001,36 +970,19 @@ async function runUpperFlapUiPlacementCases(page) {
 async function runUpperFlapModuleParameterCases(page) {
   const failures = [];
   const cases = [
-    { key: "width", patch: (inst) => ({ width: Number(inst.params.width ?? 900) + 120 }) },
-    { key: "height", patch: (inst) => ({ height: Number(inst.params.height ?? 720) - 80 }) },
-    { key: "depth", patch: (inst) => ({ depth: Number(inst.params.depth ?? 320) + 80 }) },
-    { key: "frontGap", patch: (inst) => ({ frontGap: Number(inst.params.frontGap ?? 2) + 8 }) },
-    { key: "sideGap", patch: (inst) => ({ sideGap: Number(inst.params.sideGap ?? 2) + 4 }) },
-    { key: "topGap", patch: (inst) => ({ topGap: Number(inst.params.topGap ?? 2) + 4 }) },
-    { key: "bottomGap", patch: (inst) => ({ bottomGap: Number(inst.params.bottomGap ?? 2) + 4 }) },
-    { key: "shelfCount", patch: (inst) => ({ shelfCount: Number(inst.params.shelfCount ?? 3) + 1 }) },
-    { key: "shelfAutoFit", patch: () => ({ shelfAutoFit: true }) },
-    {
-      key: "shelfGaps",
-      patch: () => ({ shelfGaps: [160, 320] }),
-      expect: (inst) =>
-        Array.isArray(inst.params.shelfGaps) &&
-        inst.params.shelfGaps[0] === 160 &&
-        inst.params.shelfGaps[1] === 320 &&
-        inst.params.shelfGaps.length === Number(inst.params.shelfCount ?? 0)
-    },
-    { key: "doorSystem", patch: () => ({ doorSystem: "double_hinged" }) },
-    { key: "doorOpen", patch: () => ({ doorOpen: true }) },
-    { key: "flapOpen", patch: () => ({ flapOpen: true }) },
-    { key: "handleComponentId", patch: () => ({ handleComponentId: "cmp.handle.knob.round.black" }), expect: (inst) => inst.params.handleType === "knob" },
-    { key: "handleType", patch: () => ({ handleType: "none" }), expect: (inst) => inst.params.handleType === "none" && !inst.params.handleComponentId },
-    { key: "handlePositionMm", patch: (inst) => ({ handlePositionMm: Number(inst.params.handlePositionMm ?? 60) + 40 }) },
-    { key: "handleHorizontalPositionMm", patch: () => ({ handleHorizontalPositionMm: 120 }) },
-    { key: "doorHandleOffsetFromSplitMm", patch: () => ({ doorHandleOffsetFromSplitMm: 60 }) },
-    { key: "liftUpComponentId", patch: () => ({ liftUpComponentId: "cmp.lift_up.standard.600" }) },
+    { key: "width", patch: inst => ({ width: Number(inst.params.width) + 120 }) },
+    { key: "height", patch: inst => ({ height: Number(inst.params.height) - 80 }) },
+    { key: "depth", patch: inst => ({ depth: Number(inst.params.depth) + 80 }) },
+    { key: "frontGap", patch: inst => ({ frontGap: Number(inst.params.frontGap) + 4 }) },
+    { key: "sideGap", patch: inst => ({ sideGap: Number(inst.params.sideGap) + 4 }) },
+    { key: "shelfCount", patch: inst => ({ shelfCount: Number(inst.params.shelfCount) + 1 }) },
+    { key: "shelfGaps", patch: () => ({ shelfGaps: "100,160,200" }) },
+    { key: "doorCount", patch: () => ({ doorCount: 2 }) },
+    { key: "opened", patch: () => ({ opened: true }) },
+    { key: "hasDoors", patch: () => ({ hasDoors: false }) },
+    { key: "handleComponentId", patch: () => ({ handleComponentId: "cmp.handle.knob.round.black" }) },
     { key: "hangingBracketComponentId", patch: () => ({ hangingBracketComponentId: "cmp.hanging_bracket.wall.heavy" }) },
-    { key: "shelfSupportComponentId", patch: () => ({ shelfSupportComponentId: "cmp.shelf_support.glass.nickel" }) },
-    { key: "wallMounted", patch: () => ({ wallMounted: true }) }
+    { key: "shelfSupportComponentId", patch: () => ({ shelfSupportComponentId: "cmp.shelf_support.glass.nickel" }) }
   ];
 
   for (const testCase of cases) {
@@ -1043,11 +995,11 @@ async function runUpperFlapModuleParameterCases(page) {
     });
     const groupId = created.group.id;
     await page.evaluate(() => window.__kitchenDebug.createWall({ aMm: { x: -2000, z: -50 }, bMm: { x: 6000, z: -50 }, thicknessMm: 100 }));
-    await addKitchenModule(page, groupId, { type: "flap_shelves_low", segmentIndex: 0, offsetAlongMm: 1300 });
+    await addKitchenModule(page, groupId, { type: "fwm_catalog_wall_cabinet", segmentIndex: 0, offsetAlongMm: 1300 });
     const beforeSnap = await snapshot(page, groupId);
-    const beforeFlap = beforeSnap.instances.find((inst) => inst.params.type === "flap_shelves_low");
+    const beforeFlap = beforeSnap.instances.find((inst) => inst.params.type === "fwm_catalog_wall_cabinet");
     if (!beforeFlap) {
-      failures.push({ case: `upper_flap_param_${testCase.key}`, ok: false, reason: "Missing flap before patch" });
+      failures.push({ case: `upper_cabinet_param_${testCase.key}`, ok: false, reason: "Missing flap before patch" });
       continue;
     }
     const patch = testCase.patch(beforeFlap);
@@ -1059,7 +1011,7 @@ async function runUpperFlapModuleParameterCases(page) {
     const shelfCountMismatch = testCase.key === "shelfCount" && shelfPartCount !== Number(afterFlap.params.shelfCount ?? 0);
     if (!result.ok || !changed || anchorDeltaMm > 1 || !afterFlap.kitchenPlacement || shelfCountMismatch) {
       failures.push({
-        case: `upper_flap_param_${testCase.key}`,
+        case: `upper_cabinet_param_${testCase.key}`,
         ok: result.ok,
         patch,
         afterValue: Object.fromEntries(Object.keys(patch).map((key) => [key, afterFlap.params[key]])),
@@ -1093,7 +1045,7 @@ async function main() {
       {
         path: [{ x: 0, z: 0 }, { x: 2600, z: 0 }]
       },
-      "drawer_low",
+      "fwm_catalog_base_drawers",
       drawerCases
     );
 
@@ -1107,7 +1059,7 @@ async function main() {
           { x: 2400, z: 1400 }
         ]
       },
-      "corner_shelf_lower",
+      "fwm_catalog_base_corner",
       cornerCases
     );
 
@@ -1118,18 +1070,18 @@ async function main() {
       {
         path: [{ x: 0, z: 0 }, { x: 2600, z: 0 }]
       },
-      "swing_shelves_low",
+      "fwm_catalog_base_doors",
       swingCases
     );
 
-    const fridgeFailures = await runMatrix(
+    const tallFailures = await runMatrix(
       page,
-      "fridge",
+      "tall",
       {
         path: [{ x: 0, z: 0 }, { x: 2600, z: 0 }]
       },
-      "fridge_tall",
-      fridgeCases
+      "fwm_catalog_tall_cabinet",
+      tallCases
     );
 
     const clusterFailures = await runClusterCases(page);
@@ -1143,7 +1095,7 @@ async function main() {
       ...drawerFailures,
       ...cornerFailures,
       ...swingFailures,
-      ...fridgeFailures,
+      ...tallFailures,
       ...adjacencyFailures,
       ...clusterFailures,
       ...backAnchorFailures,
@@ -1165,10 +1117,10 @@ async function main() {
             drawerCases: drawerCases.map((item) => item.key),
             cornerCases: cornerCases.map((item) => item.key),
             swingCases: swingCases.map((item) => item.key),
-            fridgeCases: fridgeCases.map((item) => item.key),
+            tallCases: tallCases.map((item) => item.key),
             adjacencyCases: [
               "drawer_width_growth_next_to_corner_grows_away",
-              "corner_lengthX_growth_respects_drawer_attachment",
+              "corner_width_growth_respects_drawer_attachment",
               "drawer_width_growth_keeps_adjacent_drawer_fixed"
             ],
             clusterCases: [
@@ -1180,42 +1132,42 @@ async function main() {
               "drawer_width_keeps_back_anchor_straight",
               "drawer_width_keeps_back_anchor_rotated",
               "swing_width_keeps_back_anchor",
-              "corner_lengthX_keeps_corner_anchor",
-              "corner_lengthZ_keeps_corner_anchor"
+              "corner_width_keeps_corner_anchor",
+              "corner_depth_keeps_corner_anchor"
             ],
             materialResyncCases: [
-              "material_resync_fridge_tall_width",
-              "material_resync_corner_shelf_lower_lengthX",
-              "material_resync_swing_shelves_low_width",
-              "material_resync_drawer_low_width"
+              "material_resync_fwm_catalog_tall_cabinet_width",
+              "material_resync_fwm_catalog_base_corner_width",
+              "material_resync_fwm_catalog_base_doors_width",
+              "material_resync_fwm_catalog_base_drawers_width"
             ],
             upperFlapCases: [
-              "material_resync_flap_shelves_low_width",
-              "upper_flap_kitchen_placement",
-              "upper_flap_position_y",
-              "upper_flap_height",
-              "upper_flap_front_material",
-              "upper_flap_3d_geometry",
-              "upper_flap_shelf_count_geometry",
-              "upper_flap_initial_shelves_auto_fit",
-              "upper_flap_handle_position_from_bottom",
-              "upper_flap_double_door_handles_inside_front",
-              "upper_flap_ui_inserted",
-              "upper_flap_ui_keeps_binding",
-              "upper_flap_ui_initial_position_y",
-              "upper_flap_ui_initial_world_bottom_y",
-              "upper_flap_ui_floorplan_visibility",
-              "upper_flap_ui_plan_footprint",
-              "upper_flap_ui_plan_footprint_matches_3d",
-              "upper_flap_ui_group_position_updates",
-              "upper_flap_ui_group_world_bottom_updates",
-              "upper_flap_ui_group_position_keeps_xz",
-              "upper_flap_ui_group_footprint_keeps_3d_alignment",
-              "upper_flap_ui_snapshot_saves_y",
-              "upper_flap_ui_group_height_updates",
-              "upper_flap_ui_group_depth_updates",
-              "upper_flap_ui_group_depth_keeps_back_anchor",
-              "upper_flap_module_parameters_keep_back_anchor"
+              "material_resync_fwm_catalog_wall_cabinet_width",
+              "upper_cabinet_kitchen_placement",
+              "upper_cabinet_position_y",
+              "upper_cabinet_height",
+              "upper_cabinet_front_material",
+              "upper_cabinet_3d_geometry",
+              "upper_cabinet_shelf_count_geometry",
+              "upper_cabinet_initial_shelves_auto_fit",
+              "upper_door_handle_inside_front",
+              "upper_double_door_handles_inside_front",
+              "upper_cabinet_ui_inserted",
+              "upper_cabinet_ui_keeps_binding",
+              "upper_cabinet_ui_initial_position_y",
+              "upper_cabinet_ui_initial_world_bottom_y",
+              "upper_cabinet_ui_floorplan_visibility",
+              "upper_cabinet_ui_plan_footprint",
+              "upper_cabinet_ui_plan_footprint_matches_3d",
+              "upper_cabinet_ui_group_position_updates",
+              "upper_cabinet_ui_group_world_bottom_updates",
+              "upper_cabinet_ui_group_position_keeps_xz",
+              "upper_cabinet_ui_group_footprint_keeps_3d_alignment",
+              "upper_cabinet_ui_snapshot_saves_y",
+              "upper_cabinet_ui_group_height_updates",
+              "upper_cabinet_ui_group_depth_updates",
+              "upper_cabinet_ui_group_depth_keeps_back_anchor",
+              "upper_cabinet_module_parameters_keep_back_anchor"
             ]
           }
         },

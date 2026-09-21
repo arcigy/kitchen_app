@@ -10,7 +10,7 @@ import { attachVendorModuleIntent } from "./vendor-module-intent";
 import { validateClientCatalog } from "./catalog-validation";
 import { getEnabledModuleDescriptors } from "./module-catalog";
 import { getModuleDescriptors } from "../../modules/registry";
-import { createPinoSideCabinetTenantPackage } from "../../system/module-packages/pinoSideCabinet";
+import { createPinoSideCabinetTenantPackage } from "./__fixtures__/retiredPinoModule";
 import { createCatalogModuleDefinitionFromPackage } from "../module-package/module-package-catalog";
 
 describe("ClientCatalog repository and service", () => {
@@ -115,13 +115,13 @@ describe("ClientCatalog repository and service", () => {
     const service = createClientCatalogService({ context: clientA, repository: repo });
     const materialId = repo.getCatalogForClient(clientA.clientId).materials[0]!.id;
     await service.updatePrice(materialId, 77);
-    await service.setModuleEnabled("drawer_low", false);
+    await service.setModuleEnabled("fwm_catalog_base_drawers", false);
 
     expect(await repo.getPrice(clientA, materialId)).toBe(77);
-    expect(service.getEnabledModules().some((module) => module.moduleType === "drawer_low")).toBe(false);
+    expect(service.getEnabledModules().some((module) => module.moduleType === "fwm_catalog_base_drawers")).toBe(false);
   }, 30_000);
 
-  it("service resolves vendor module packages against the stored tenant catalog", async () => {
+  it("service rejects retired packages remaining in a stored tenant catalog", async () => {
     const repo = createSystemSeedClientCatalogRepository();
     const service = createClientCatalogService({ context: clientA, repository: repo });
     const catalog = await service.loadCatalog();
@@ -175,13 +175,13 @@ describe("ClientCatalog repository and service", () => {
       moduleType: "pino_side_cabinet"
     });
 
-    expect(resolution.status).toBe("resolved");
-    expect(resolution.moduleType).toBe("pino_side_cabinet");
+    expect(resolution.status).toBe("missing");
+    expect(resolution.moduleType).toBeNull();
     expect(resolution.placementZone).toBe("tall_appliance");
     expect(resolution.requiresApplianceOpening).toBe(true);
   }, 30_000);
 
-  it("service resolves vendor module parameter seeds against the stored tenant catalog", async () => {
+  it("service does not restore retired module seeds absent from the tenant catalog", async () => {
     const repo = createSystemSeedClientCatalogRepository();
     const service = createClientCatalogService({ context: clientA, repository: repo });
     const catalog = await service.loadCatalog();
@@ -228,13 +228,11 @@ describe("ClientCatalog repository and service", () => {
       widthMm: 600
     });
 
-    expect(resolution.status).toBe("resolved");
-    expect(resolution.moduleType).toBe("drawer_low");
-    expect((resolution.params as { drawerCount?: number; width?: number } | null)?.drawerCount).toBe(1);
-    expect((resolution.params as { drawerCount?: number; width?: number } | null)?.width).toBe(600);
+    expect(resolution.status).toBe("missing");
+    expect(resolution.params).toBeNull();
   }, 30_000);
 
-  it("service exposes appliance host compatibility for PINO appliance side-cabinet seeds", async () => {
+  it("service does not produce retired appliance host seeds", async () => {
     const repo = createSystemSeedClientCatalogRepository();
     const service = createClientCatalogService({ context: clientA, repository: repo });
     const catalog = await service.loadCatalog();
@@ -293,30 +291,30 @@ describe("ClientCatalog repository and service", () => {
       applianceHeightMm: 580
     });
 
-    expect(resolution.status).toBe("needs_review");
-    expect(resolution.moduleType).toBe("pino_side_cabinet");
-    expect(resolution.applianceHostStatus).toBe("incompatible");
-    expect(resolution.applianceHostValidation?.errors.join(" ")).toContain("exceeds opening width");
+    expect(resolution.status).toBe("missing");
+    expect(resolution.params).toBeNull();
+    expect(resolution.applianceHostStatus).toBe("not_applicable");
+    expect(resolution.applianceHostValidation).toBeNull();
   }, 30_000);
 
   it("filters runtime module descriptors by enabled client modules", () => {
     const catalog = getSystemSeedCatalog();
-    catalog.modules = catalog.modules.map((module) => module.moduleType === "drawer_low" ? { ...module, enabled: false } : module);
+    catalog.modules = catalog.modules.map((module) => module.moduleType === "fwm_catalog_base_drawers" ? { ...module, enabled: false } : module);
     const descriptors = getEnabledModuleDescriptors(catalog, getModuleDescriptors());
 
-    expect(descriptors.some((descriptor) => descriptor.type === "drawer_low")).toBe(false);
+    expect(descriptors.some((descriptor) => descriptor.type === "fwm_catalog_base_drawers")).toBe(false);
     expect(descriptors.length).toBeGreaterThan(0);
   });
 
   it("returns enabled modules while keeping disabled modules out of the visible registry", () => {
     const catalog = getSystemSeedCatalog();
     catalog.modules = catalog.modules.map((module) =>
-      module.moduleType === "drawer_low" ? { ...module, enabled: true } : { ...module, enabled: false }
+      module.moduleType === "fwm_catalog_base_drawers" ? { ...module, enabled: true } : { ...module, enabled: false }
     );
 
     const descriptors = getEnabledModuleDescriptors(catalog, getModuleDescriptors());
 
-    expect(descriptors.map((descriptor) => descriptor.type)).toEqual(["drawer_low"]);
+    expect(descriptors.map((descriptor) => descriptor.type)).toEqual(["fwm_catalog_base_drawers"]);
   });
 });
 

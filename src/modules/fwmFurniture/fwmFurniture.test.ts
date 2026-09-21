@@ -544,8 +544,8 @@ describe("FWM furniture module packages", () => {
   });
 
   it("declares every requested module as a valid FurnQuote package", () => {
-    expect(FWM_FURNITURE_SPECS).toHaveLength(64);
-    expect(extendedFurnitureModulePackages).toHaveLength(65);
+    expect(FWM_FURNITURE_SPECS.map(spec => spec.moduleType).sort()).toEqual([...delfiActiveRuntimeModuleTypes].sort());
+    expect(extendedFurnitureModulePackages).toHaveLength(10);
 
     for (const modulePackage of extendedFurnitureModulePackages) {
       expect(() => validateFurnQuoteModulePackage(modulePackage)).not.toThrow();
@@ -583,37 +583,6 @@ describe("FWM furniture module packages", () => {
     }
   });
 
-  it("keeps the source catalog audit covered by neutral parametric module families", () => {
-    const packageTypes = new Set(extendedFurnitureModulePackages.map((entry) => entry.module.moduleType));
-    const historicalRuntimeAliases: Record<string, string> = {
-      base_corner: "fwm_catalog_base_corner",
-      base_doors: "fwm_catalog_base_doors",
-      base_drawers: "fwm_catalog_base_drawers",
-      base_bottle_pullout: "base_bottle_pullout",
-      base_sink: "fwm_catalog_base_sink",
-      base_appliance: "fwm_catalog_base_appliance",
-      base_open_end: "fwm_catalog_base_open_end",
-      tall_cabinet: "fwm_catalog_tall_cabinet",
-      wall_cabinet: "fwm_catalog_wall_cabinet",
-      wall_open_end: "fwm_catalog_wall_open_end",
-      suspended_unit: "fwm_catalog_suspended_unit",
-      worktop_surface: "fwm_catalog_worktop_surface",
-      worktop_accessory: "fwm_catalog_worktop_accessory",
-      cladding_panel: "fwm_catalog_cladding_panel",
-      free_shelf: "fwm_catalog_free_shelf",
-      trim_component: "fwm_catalog_trim_component",
-      lighting_accessory: "fwm_catalog_lighting_accessory",
-      front_component: "fwm_catalog_front_component",
-      hardware_accessory: "fwm_catalog_hardware_accessory"
-    };
-    expect(DELFI_CATALOG_COVERAGE).toHaveLength(19);
-    for (const entry of DELFI_CATALOG_COVERAGE) {
-      const runtimeType = historicalRuntimeAliases[entry.targetModuleType] ?? entry.targetModuleType;
-      expect(packageTypes.has(runtimeType), `${entry.id} missing runtime ${runtimeType}`).toBe(true);
-      expect(entry.requiredParameters.length, entry.id).toBeGreaterThan(0);
-      expect(entry.pdfPages, entry.id).toBeTruthy();
-    }
-  });
 
   it("declares the DELFI upper 90 corner with a neutral package id and its registered wall-cabinet runtime type", () => {
     const catalog = getSystemSeedCatalog();
@@ -709,7 +678,7 @@ describe("FWM furniture module packages", () => {
     const catalogPackages = extendedFurnitureModulePackages.filter((entry) =>
       entry.module.moduleType.startsWith("fwm_catalog_") && entry.module.modulePackageId !== "wall_corner_90"
     );
-    expect(catalogPackages).toHaveLength(18);
+    expect(catalogPackages).toHaveLength(7);
     for (const modulePackage of catalogPackages) {
       const parameterKeys = new Set(modulePackage.parameters.parameters.map((parameter) => parameter.key));
       const expectedCatalogParams = modulePackage.module.moduleType === "fwm_catalog_wall_open_end"
@@ -727,22 +696,6 @@ describe("FWM furniture module packages", () => {
     }
   });
 
-  it("validates flat catalog families without carcass clearance rules", () => {
-    const flatTypes = new Set([
-      "fwm_catalog_worktop_surface",
-      "fwm_catalog_worktop_accessory",
-      "fwm_catalog_cladding_panel",
-      "fwm_catalog_free_shelf",
-      "fwm_catalog_trim_component",
-      "fwm_catalog_front_component",
-      "fwm_catalog_hardware_accessory"
-    ]);
-
-    for (const modulePackage of extendedFurnitureModulePackages.filter((entry) => flatTypes.has(entry.module.moduleType))) {
-      const defaults = createDefaultModulePackageParameters(modulePackage) as FwmFurnitureParams;
-      expect(validateFwmFurniture(defaults), modulePackage.module.moduleType).toEqual([]);
-    }
-  });
 
   it("declares independent material parameters and slots for every FWM furniture module", () => {
     const requiredMaterialParams = [
@@ -1126,7 +1079,6 @@ describe("FWM furniture module packages", () => {
       const defaults = createDefaultModulePackageParameters(modulePackage) as FwmFurnitureParams;
       const normalizedDefaults = normalizeFwmFurnitureParams(defaults);
       const isExternalWorktopCabinet =
-        spec?.geometryKind !== "worktop" &&
         normalizedDefaults.requiresWorktop === true &&
         normalizedDefaults.kitchenModuleRole === "low";
 
@@ -1454,9 +1406,8 @@ describe("FWM furniture module packages", () => {
     expect(depthChangedDoorZ.width).not.toBeCloseTo(objectBoundsMm(getMeshNamed(corner90Closed, "door_front_z")!).width, 0);
   });
 
-  it("declares truthful internal-edit capabilities for composed and sink-capable modules", () => {
+  it("declares truthful internal-edit capabilities for supported modules", () => {
     const tallPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_tall_cabinet");
-    const sinkPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_sink");
     const doorPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_doors");
     expect(tallPackage?.internalEditing?.enabled).toBe(true);
     expect(tallPackage?.internalEditing?.hostKind).toBe("composed_tall");
@@ -1469,14 +1420,6 @@ describe("FWM furniture module packages", () => {
       "door"
     ]);
 
-    expect(sinkPackage?.internalEditing?.enabled).toBe(true);
-    expect(sinkPackage?.internalEditing?.submoduleTools).toEqual([
-      expect.objectContaining({
-        tool: "sink",
-        status: "planned",
-        insertionMode: "worktop_cutout"
-      })
-    ]);
     expect(doorPackage?.internalEditing?.submoduleTools).toEqual([]);
     expect(doorPackage?.internalEditing?.boardOperations.every((operation) => operation.status === "planned")).toBe(true);
   });
@@ -3303,13 +3246,7 @@ describe("FWM furniture module packages", () => {
   it("recalculates catalog board pricing when dimensions change", () => {
     const catalog = getSystemSeedCatalog();
     const ctx = makeDefaultKitchenContext(catalog);
-    const dimensionPricedTypes = [
-      "fwm_catalog_worktop_surface",
-      "fwm_catalog_cladding_panel",
-      "fwm_catalog_free_shelf",
-      "fwm_catalog_trim_component",
-      "fwm_catalog_front_component"
-    ];
+    const dimensionPricedTypes = ["fwm_catalog_base_doors", "fwm_catalog_base_drawers", "fwm_catalog_tall_cabinet", "fwm_catalog_wall_cabinet"];
 
     for (const moduleType of dimensionPricedTypes) {
       const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === moduleType);
@@ -3320,9 +3257,7 @@ describe("FWM furniture module packages", () => {
         ...defaults,
         width: (defaults.width as number) * 1.5,
         depth: (defaults.depth as number) * 1.5,
-        height: ["fwm_catalog_cladding_panel", "fwm_catalog_trim_component", "fwm_catalog_front_component"].includes(moduleType)
-          ? (defaults.height as number) * 1.25
-          : defaults.height
+        height: (defaults.height as number) * 1.25
       } as FwmFurnitureParams, ctx, catalog);
       const baseBoardArea = base.quoteBom.items
         .filter((item) => item.itemType === "board")
@@ -3449,8 +3384,8 @@ describe("FWM furniture module packages", () => {
     const legComponentId = catalog.components.find((component) => component.componentType === "leg" && component.id === "cmp.leg.adjustable.100.black")?.id;
     const clipComponentId = catalog.components.find((component) => component.componentType === "plinth_clip" && component.id === "cmp.clip.plinth.standard")?.id;
 
-    const drawerPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_base_drawer_cabinet");
-    const shelfPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_base_shelf_cabinet");
+    const drawerPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_drawers");
+    const shelfPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_doors");
     expect(drawerPackage).toBeTruthy();
     expect(shelfPackage).toBeTruthy();
 
@@ -3658,10 +3593,10 @@ describe("FWM furniture module packages", () => {
     const catalog = getSystemSeedCatalog();
     const missingClipId = "cmp.clip.plinth.missing-test";
     catalog.components = catalog.components.filter((component) => component.componentType !== "plinth_clip");
-    const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_base_drawer_cabinet")!;
+    const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_drawers")!;
     const params = {
       ...createDefaultModulePackageParameters(modulePackage),
-      type: "fwm_base_drawer_cabinet",
+      type: "fwm_catalog_base_drawers",
       clipComponentId: missingClipId,
       plinthHeight: 120
     } as FwmFurnitureParams;
@@ -3682,11 +3617,11 @@ describe("FWM furniture module packages", () => {
 
   it("keeps the back panel rear face fixed and moves drawer boxes with the inner back face", () => {
     const catalog = getSystemSeedCatalog();
-    const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_base_drawer_cabinet");
+    const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_drawers");
     expect(modulePackage).toBeTruthy();
     const baseParams = {
       ...createDefaultModulePackageParameters(modulePackage!),
-      type: "fwm_base_drawer_cabinet",
+      type: "fwm_catalog_base_drawers",
       width: 650,
       height: 860,
       depth: 560,
@@ -3715,8 +3650,8 @@ describe("FWM furniture module packages", () => {
     expect(mdfBack.minZ).toBeCloseTo(-280, 4);
     expect(defaultBack.maxZ).toBeCloseTo(-262, 4);
     expect(mdfBack.maxZ).toBeCloseTo(-276.7, 4);
-    expect(defaultDrawer.minZ - defaultBack.maxZ).toBeCloseTo(38, 4);
-    expect(mdfDrawer.minZ - mdfBack.maxZ).toBeCloseTo(38, 4);
+    expect(defaultDrawer.minZ - defaultBack.maxZ).toBeCloseTo(19, 4);
+    expect(mdfDrawer.minZ - mdfBack.maxZ).toBeCloseTo(19, 4);
     expect(mdfDrawer.minZ).toBeLessThan(defaultDrawer.minZ);
     expect(mdfDrawer.maxZ).toBeCloseTo(defaultDrawer.maxZ, 4);
     expect(mdfDrawer.depth - defaultDrawer.depth).toBeCloseTo(14.7, 4);
@@ -3731,8 +3666,8 @@ describe("FWM furniture module packages", () => {
 
   it("adds simple drawer boxes and opens drawers and doors outward", () => {
     const catalog = getSystemSeedCatalog();
-    const drawerPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_base_drawer_cabinet");
-    const shelfPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_base_shelf_cabinet");
+    const drawerPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_drawers");
+    const shelfPackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_catalog_base_doors");
     expect(drawerPackage).toBeTruthy();
     expect(shelfPackage).toBeTruthy();
 
@@ -3741,7 +3676,7 @@ describe("FWM furniture module packages", () => {
       catalog,
       parameters: normalizeFwmFurnitureParams({
         ...createDefaultModulePackageParameters(drawerPackage!),
-        type: "fwm_base_drawer_cabinet",
+        type: "fwm_catalog_base_drawers",
         width: 600,
         height: 860,
         depth: 560,
@@ -3754,7 +3689,7 @@ describe("FWM furniture module packages", () => {
       catalog,
       parameters: normalizeFwmFurnitureParams({
         ...createDefaultModulePackageParameters(drawerPackage!),
-        type: "fwm_base_drawer_cabinet",
+        type: "fwm_catalog_base_drawers",
         width: 600,
         height: 860,
         depth: 560,
@@ -3767,7 +3702,7 @@ describe("FWM furniture module packages", () => {
       catalog,
       parameters: normalizeFwmFurnitureParams({
         ...createDefaultModulePackageParameters(shelfPackage!),
-        type: "fwm_base_shelf_cabinet",
+        type: "fwm_catalog_base_doors",
         width: 600,
         height: 860,
         depth: 560,
@@ -3781,7 +3716,7 @@ describe("FWM furniture module packages", () => {
       catalog,
       parameters: normalizeFwmFurnitureParams({
         ...createDefaultModulePackageParameters(shelfPackage!),
-        type: "fwm_base_shelf_cabinet",
+        type: "fwm_catalog_base_doors",
         width: 600,
         height: 860,
         depth: 560,
@@ -3810,37 +3745,6 @@ describe("FWM furniture module packages", () => {
     expect(openedDoorLeaf.max.z).toBeGreaterThan(closedDoorLeaf.max.z);
   });
 
-  it("builds an integrated dishwasher with a real front cladding panel and BOM item", () => {
-    const catalog = getSystemSeedCatalog();
-    const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === "fwm_built_in_dishwasher");
-    expect(modulePackage).toBeTruthy();
-    const frontMaterialId = materialIdForFamily(catalog, "front");
-    const params = normalizeFwmFurnitureParams({
-      ...createDefaultModulePackageParameters(modulePackage!),
-      type: "fwm_built_in_dishwasher",
-      width: 600,
-      height: 862,
-      depth: 590,
-      plinthHeight: 120,
-      frontMaterialId,
-      worktopThicknessMm: 0,
-      requiresWorktop: false
-    } as FwmFurnitureParams);
-
-    const group = buildModulePackageGeometryFromPackage({ modulePackage: modulePackage!, parameters: params, catalog });
-    const panel = getMeshNamed(group, "dishwasher_front_panel");
-    const appliance = getMeshNamed(group, "dishwasher");
-
-    expect(panel).toBeTruthy();
-    expect(appliance).toBeTruthy();
-    expect(panel?.userData.catalogMaterialId).toBe(frontMaterialId);
-    expect(panel?.userData.materialRole).toBe("front");
-    expect(panel?.userData.dimensionsMm.height).toBeGreaterThan(700);
-    expect(panel?.position.z ?? 0).toBeGreaterThan(appliance?.position.z ?? 0);
-
-    const bom = calculateFwmFurnitureBOM(params, makeDefaultKitchenContext(catalog), catalog);
-    expect(bom.quoteBom.items.find((item) => item.id === "dishwasher-front-panel")?.material?.catalogId).toBe(frontMaterialId);
-  });
 
   it("builds a full kitchen FWM assembly and reacts to changed kitchen context", () => {
     const catalog = getSystemSeedCatalog();
@@ -3873,7 +3777,7 @@ describe("FWM furniture module packages", () => {
       plinthDepthMm: 80
     });
     const kitchenPackages = extendedFurnitureModulePackages.filter((entry) => entry.behavior?.contextBindings?.length);
-    expect(kitchenPackages).toHaveLength(29);
+    expect(kitchenPackages).toHaveLength(10);
 
     for (const modulePackage of kitchenPackages) {
       const paramsA = createDefaultModulePackageParameters(modulePackage) as FwmFurnitureParams;

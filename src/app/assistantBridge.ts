@@ -1464,7 +1464,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
       if (!initialParams || typeof initialParams !== "object" || Array.isArray(initialParams)) {
         throw new Error("initialParams are required.");
       }
-      const params = validateModuleParams({ ...(cloneJson(initialParams) as ModuleParams), type: moduleType }, catalogKey);
+      const params = validateModuleParams({ ...cloneJson(initialParams), type: moduleType } as ModuleParams, catalogKey);
       const inst = insertAssistantCatalogModule(ctx, params, typeof call.input.groupId === "string" ? call.input.groupId : null);
       return {
         ok: true,

@@ -48,7 +48,7 @@ describe("assistantCatalogInsertion", () => {
       updateSelectionHighlights: vi.fn(),
       mountProps: vi.fn(),
       commitHistory
-    }, { type: "pino_side_cabinet", width: 600, widthMm: 600 } as ModuleParams);
+    }, { type: "pino_side_cabinet", width: 600, widthMm: 600 } as unknown as ModuleParams);
 
     expect(inserted.kitchenGroupId).toBe("kg1");
     expect(instances).toHaveLength(1);

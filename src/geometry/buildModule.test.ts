@@ -7,7 +7,7 @@ import { buildModule } from "./buildModule";
 describe("buildModule", () => {
   it("strips automatic catalog materials from editor module geometry", () => {
     const catalog = { materials: [], components: [], kitchenDefaults: {} } as unknown as ClientCatalog;
-    const group = buildModule(makeDefaultModuleParams("drawer_low"), catalog);
+    const group = buildModule(makeDefaultModuleParams("fwm_catalog_base_drawers"), catalog);
     const meshes: THREE.Mesh[] = [];
 
     group.traverse((object) => {

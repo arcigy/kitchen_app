@@ -49,7 +49,7 @@ async function main() {
       const exactObject = await assistant.executeToolCall({ id: "exact_module", toolId: "context.getObject", input: { kind: "module", id: moduleId } });
       const projectMetadata = await assistant.executeToolCall({ id: "project_metadata", toolId: "project.getMetadata", input: {} });
       const parameterSchema = await assistant.executeToolCall({ id: "parameter_schema", toolId: "module.getParameterSchema", input: { instanceId: moduleId } });
-      const catalogSearch = await assistant.executeToolCall({ id: "catalog_search", toolId: "catalog.searchModules", input: { moduleType: "drawer_low", limit: 10 } });
+      const catalogSearch = await assistant.executeToolCall({ id: "catalog_search", toolId: "catalog.searchModules", input: { moduleType: "fwm_catalog_base_drawers", limit: 10 } });
       const upperCatalogSearch = await assistant.executeToolCall({ id: "upper_catalog_search", toolId: "catalog.searchModules", input: { moduleType: "fwm_catalog_wall_cabinet", limit: 10 } });
       const materialSearch = await assistant.executeToolCall({ id: "material_search", toolId: "catalog.searchMaterials", input: { boardFamily: "body", limit: 10 } });
       const projectValidation = await assistant.executeToolCall({ id: "project_validation", toolId: "validation.inspectProject", input: {} });

@@ -17,12 +17,7 @@ export function createUserService(
       return repository.findByUserId(userId);
     },
 
-    async authenticate(company: string, username: string, password: string, now = new Date()): Promise<AuthenticatedClientSession | null> {
-      const user = await repository.findByCompanyAndUsername(company, username);
-      return await createSession(user, password, now, verify);
-    },
-
-    async authenticateByUsername(username: string, password: string, now = new Date()): Promise<AuthenticatedClientSession | null> {
+    async authenticate(username: string, password: string, now = new Date()): Promise<AuthenticatedClientSession | null> {
       const user = await repository.findByUsername(username);
       return await createSession(user, password, now, verify);
     }

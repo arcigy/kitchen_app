@@ -245,7 +245,7 @@ async function main() {
       window.__kitchenDebug.createKitchenScenario({
         path: [{ x: -900, z: 250 }, { x: 900, z: 250 }],
         addModule: true,
-        moduleType: "drawer_low",
+        moduleType: "fwm_catalog_base_drawers",
         offsetAlongMm: 450
       });
     });

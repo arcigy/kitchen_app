@@ -10,19 +10,19 @@ describe("assignClientModules", () => {
   it("enables selected modules in merge mode without disabling unlisted modules", () => {
     const catalog = getSystemSeedCatalog();
     catalog.modules = catalog.modules.map((module) =>
-      module.modulePackageId === "drawer_low_family_v1" || module.modulePackageId === "swing_shelves_low_family_v1"
+      module.modulePackageId === "fwm_catalog_base_drawers_family_v1" || module.modulePackageId === "fwm_catalog_base_doors_family_v1"
         ? { ...module, enabled: false }
         : module
     );
 
     const result = assignClientModules(catalog, systemModulePackageTemplates, {
-      moduleIds: ["drawer_low_family_v1"],
+      moduleIds: ["fwm_catalog_base_drawers_family_v1"],
       mode: "merge",
       now
     });
 
-    expect(result.catalog.modules.find((module) => module.modulePackageId === "drawer_low_family_v1")?.enabled).toBe(true);
-    expect(result.catalog.modules.find((module) => module.modulePackageId === "swing_shelves_low_family_v1")?.enabled).toBe(false);
+    expect(result.catalog.modules.find((module) => module.modulePackageId === "fwm_catalog_base_drawers_family_v1")?.enabled).toBe(true);
+    expect(result.catalog.modules.find((module) => module.modulePackageId === "fwm_catalog_base_doors_family_v1")?.enabled).toBe(false);
     expect(result.summary.enabledCount).toBe(1);
     expect(result.summary.disabledCount).toBe(0);
     expect(result.catalog.meta.source).toBe("client-custom");
@@ -33,68 +33,68 @@ describe("assignClientModules", () => {
     const catalog = getSystemSeedCatalog();
 
     const result = assignClientModules(catalog, systemModulePackageTemplates, {
-      moduleIds: ["drawer_low"],
+      moduleIds: ["fwm_catalog_base_drawers"],
       mode: "replace",
       now
     });
 
     const enabled = result.catalog.modules.filter((module) => module.enabled);
-    expect(enabled.map((module) => module.modulePackageId)).toEqual(["drawer_low_family_v1"]);
+    expect(enabled.map((module) => module.modulePackageId)).toEqual(["fwm_catalog_base_drawers_family_v1"]);
     expect(result.summary.disabledCount).toBeGreaterThan(0);
   });
 
   it("treats same-moduleType package variants as separate modules during replace", () => {
     const catalog = getSystemSeedCatalog();
-    const sourcePackage = systemModulePackageTemplates.find((modulePackage) => modulePackage.module.modulePackageId === "drawer_low_family_v1");
+    const sourcePackage = systemModulePackageTemplates.find((modulePackage) => modulePackage.module.modulePackageId === "fwm_catalog_base_drawers_family_v1");
     expect(sourcePackage).toBeTruthy();
     const siblingPackage = structuredClone(sourcePackage!);
-    siblingPackage.module.modulePackageId = "drawer_low_second_variant";
+    siblingPackage.module.modulePackageId = "fwm_catalog_base_drawers_second_variant";
     siblingPackage.module.displayName = "Drawer Low Second Variant";
     const packages = [...systemModulePackageTemplates, siblingPackage];
     const withSibling = assignClientModules(catalog, packages, {
-      moduleIds: ["drawer_low_second_variant"],
+      moduleIds: ["fwm_catalog_base_drawers_second_variant"],
       mode: "merge",
       now
     }).catalog;
 
     const result = assignClientModules(withSibling, packages, {
-      moduleIds: ["drawer_low_family_v1"],
+      moduleIds: ["fwm_catalog_base_drawers_family_v1"],
       mode: "replace",
       now
     });
 
-    expect(result.catalog.modules.find((module) => module.modulePackageId === "drawer_low_family_v1")?.enabled).toBe(true);
-    expect(result.catalog.modules.find((module) => module.modulePackageId === "drawer_low_second_variant")?.enabled).toBe(false);
+    expect(result.catalog.modules.find((module) => module.modulePackageId === "fwm_catalog_base_drawers_family_v1")?.enabled).toBe(true);
+    expect(result.catalog.modules.find((module) => module.modulePackageId === "fwm_catalog_base_drawers_second_variant")?.enabled).toBe(false);
   });
 
   it("disables selected modules by module type", () => {
     const catalog = getSystemSeedCatalog();
 
     const result = assignClientModules(catalog, systemModulePackageTemplates, {
-      moduleIds: ["drawer_low"],
+      moduleIds: ["fwm_catalog_base_drawers"],
       mode: "disable",
       now
     });
 
-    expect(result.catalog.modules.find((module) => module.modulePackageId === "drawer_low_family_v1")?.enabled).toBe(false);
+    expect(result.catalog.modules.find((module) => module.modulePackageId === "fwm_catalog_base_drawers_family_v1")?.enabled).toBe(false);
     expect(result.summary.disabledCount).toBe(1);
   });
 
   it("updates catalog module metadata when a refreshed package is assigned", () => {
     const catalog = getSystemSeedCatalog();
-    const sourcePackage = systemModulePackageTemplates.find((modulePackage) => modulePackage.module.modulePackageId === "drawer_low_family_v1");
+    const sourcePackage = systemModulePackageTemplates.find((modulePackage) => modulePackage.module.modulePackageId === "fwm_catalog_base_drawers_family_v1");
     expect(sourcePackage).toBeTruthy();
     const refreshedPackage = structuredClone(sourcePackage!);
     refreshedPackage.module.displayName = "Drawer Low Refreshed";
     refreshedPackage.module.version = "9.9.9";
 
     const result = assignClientModules(catalog, [refreshedPackage], {
-      moduleIds: ["drawer_low_family_v1"],
+      moduleIds: ["fwm_catalog_base_drawers_family_v1"],
       mode: "merge",
       now
     });
 
-    const assigned = result.catalog.modules.find((module) => module.modulePackageId === "drawer_low_family_v1");
+    const assigned = result.catalog.modules.find((module) => module.modulePackageId === "fwm_catalog_base_drawers_family_v1");
     expect(assigned?.name).toBe("Drawer Low Refreshed");
     expect(assigned?.packageHash).toBe(computeModulePackageHash(refreshedPackage));
     expect(result.summary.updatedCount).toBe(1);
@@ -109,6 +109,6 @@ describe("assignClientModules", () => {
         mode: "merge",
         now
       })
-    ).toThrow(/Unknown module "missing_module".*drawer_low_family_v1/);
+    ).toThrow(/Unknown module "missing_module".*fwm_catalog_base_drawers_family_v1/);
   });
 });

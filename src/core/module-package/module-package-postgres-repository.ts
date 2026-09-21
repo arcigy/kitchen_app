@@ -10,7 +10,6 @@ import {
   normalizedSystemTemplateForStoredIdentity
 } from "./module-package-persistence-compatibility";
 import type { ModulePackageRepository, SaveModulePackageOptions } from "./module-package-repository";
-import { systemModulePackageTemplates } from "../../system/module-packages";
 
 type PackageRow = {
   package: unknown;
@@ -93,14 +92,6 @@ export function createPostgresModulePackageRepository(args: {
     return persisted;
   }
 
-  async function ensureSystemPackages(ctx: ClientContext): Promise<void> {
-    const existing = await listPackages(ctx);
-    if (existing.length > 0) return;
-    await Promise.all(systemModulePackageTemplates.map((modulePackage) =>
-      savePackage(ctx, structuredClone(modulePackage), { source: "system-template" })
-    ));
-  }
-
   async function listPackages(ctx: ClientContext): Promise<FurnQuoteModulePackage[]> {
     return withSchemaClient(args.connectionString, args.schema, async (client) => {
       const result = await client.query<PackageRow>(
@@ -114,7 +105,6 @@ export function createPostgresModulePackageRepository(args: {
   return {
     savePackage,
     async getPackage(ctx, modulePackageId) {
-      await ensureSystemPackages(ctx);
       return withSchemaClient(args.connectionString, args.schema, async (client) => {
         const result = await client.query<PackageRow>(
           "SELECT package, source FROM arcigy_module_packages WHERE client_id = $1 AND module_package_id = $2",
@@ -124,7 +114,6 @@ export function createPostgresModulePackageRepository(args: {
       });
     },
     async listPackages(ctx) {
-      await ensureSystemPackages(ctx);
       return listPackages(ctx);
     },
     async getRevision(ctx) {

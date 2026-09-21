@@ -49,23 +49,23 @@ export function createDevelopmentAuthUsers(password: string): readonly AuthUser[
 
 export type UserRepository = {
   findByUsername(username: string): Promise<AuthUser | null>;
-  findByCompanyAndUsername(company: string, username: string): Promise<AuthUser | null>;
   findByUserId(userId: string): Promise<AuthUser | null>;
 };
 
 export function createInMemoryUserRepository(users: readonly AuthUser[] = seedAuthUsers): UserRepository {
-  const usersByUsername = new Map(users.map((user) => [normalizeUsername(user.username), user]));
-  const usersByCompanyAndUsername = new Map(
-    users.map((user) => [loginLookupKey(user.organizationName, user.username), user])
-  );
+  const usersByUsername = new Map<string, AuthUser[]>();
+  for (const user of users) {
+    const key = normalizeUsername(user.username);
+    const candidates = usersByUsername.get(key) ?? [];
+    candidates.push(user);
+    usersByUsername.set(key, candidates);
+  }
   const usersById = new Map(users.map((user) => [user.userId, user]));
 
   return {
     async findByUsername(username: string): Promise<AuthUser | null> {
-      return usersByUsername.get(normalizeUsername(username)) ?? null;
-    },
-    async findByCompanyAndUsername(company: string, username: string): Promise<AuthUser | null> {
-      return usersByCompanyAndUsername.get(loginLookupKey(company, username)) ?? null;
+      const candidates = usersByUsername.get(normalizeUsername(username)) ?? [];
+      return candidates.length === 1 ? candidates[0]! : null;
     },
     async findByUserId(userId: string): Promise<AuthUser | null> {
       return usersById.get(userId) ?? null;
@@ -75,12 +75,4 @@ export function createInMemoryUserRepository(users: readonly AuthUser[] = seedAu
 
 function normalizeUsername(username: string): string {
   return username.trim().toLowerCase();
-}
-
-function normalizeCompany(company: string): string {
-  return company.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function loginLookupKey(company: string, username: string): string {
-  return `${normalizeCompany(company)}\u0000${normalizeUsername(username)}`;
 }

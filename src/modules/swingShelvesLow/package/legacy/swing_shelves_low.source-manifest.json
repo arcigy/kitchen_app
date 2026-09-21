@@ -1,9 +1,0 @@
-{
-  "moduleType": "swing_shelves_low",
-  "label": "Shelf Doors",
-  "functionNames": {
-    "defaultParams": "swingShelvesLowDefaultsV2",
-    "build": "swingShelvesLowBuildV2",
-    "controls": "swingShelvesLowControlsV2"
-  }
-}

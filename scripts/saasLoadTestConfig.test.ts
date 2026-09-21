@@ -31,11 +31,10 @@ describe("SaaS load test safety config", () => {
   });
 
   it("requires credentials and a synthetic project for authenticated scenarios", () => {
-    expect(() => resolveSaasLoadTestConfig({ ...isolated, LOAD_TEST_SCENARIO: "project-list" })).toThrow("ARCIGY_LOAD_TEST_COMPANY");
+    expect(() => resolveSaasLoadTestConfig({ ...isolated, LOAD_TEST_SCENARIO: "project-list" })).toThrow("ARCIGY_LOAD_TEST_USERNAME");
     expect(() => resolveSaasLoadTestConfig({
       ...isolated,
       LOAD_TEST_SCENARIO: "project-open",
-      ARCIGY_LOAD_TEST_COMPANY: "Load Test Company",
       ARCIGY_LOAD_TEST_USERNAME: "load-user",
       ARCIGY_LOAD_TEST_PASSWORD: "secret"
     })).toThrow("ARCIGY_LOAD_TEST_PROJECT_ID");

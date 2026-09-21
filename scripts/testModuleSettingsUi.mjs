@@ -217,14 +217,6 @@ try {
   await modal().locator(`[data-parameter-preset-id="${presetId}"]`).click();
   assert(Number(await field('width').inputValue()) === width + 170 && await field('frontMaterialId').inputValue() === importedModule.params.frontMaterialId, 'Company preset is available in another project and preserves dimensions and materials');
   await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
-  await page.evaluate(group => window.__kitchenDebug.addKitchenModule(group, { type: 'drawer_low', offsetAlongMm: 0 }), group);
-  id = await page.evaluate(group => window.__kitchenDebug.snapshot(group).instances.find(item => item.params.type === 'drawer_low').id, group);
-  const legacy = await module(); await open();
-  assert(await modal().locator('.portable-section--system').count() === 0, 'Legacy smart controls hide imported system parameters in the expanded window');
-  await page.screenshot({ path: `${out}/legacy.png` });
-  await editField('width', legacy.params.width + 40);
-  assert(JSON.stringify((await module()).params) === JSON.stringify(legacy.params), 'Legacy smart controls also edit a private draft');
-  await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
   assert(errors.length === 0, 'Browser console and page errors are zero');
   await writeFile(`${out}/result.json`, JSON.stringify({ checks, errors }, null, 2));
   console.log(`Module settings UI: ${checks.length} checks passed.`);
