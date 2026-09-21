@@ -127,56 +127,6 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
     if (failure?.status === "rejected") throw failure.reason;
   }
 
-  async function ensureSystemModulePackages(ctx: ClientContext, catalog: ClientCatalog): Promise<ClientCatalog> {
-    const existingPackages = await modulePackageRepository.listPackages(ctx);
-    const packagesById = new Map(existingPackages.map((modulePackage) => [modulePackage.module.modulePackageId, modulePackage]));
-    const nextModules = [...catalog.modules];
-    let changed = false;
-
-    for (const template of systemModulePackageTemplates) {
-      const persisted = packagesById.get(template.module.modulePackageId)
-        ?? await modulePackageRepository.savePackage(ctx, structuredClone(template), { source: "system-template" });
-      if (!persisted) continue;
-
-      const packageHash = computeModulePackageHash(persisted);
-      const existingIndex = nextModules.findIndex((module) =>
-        module.modulePackageId === persisted.module.modulePackageId ||
-        (!module.modulePackageId && module.moduleType === persisted.module.moduleType)
-      );
-      const hasClientOverrideForType = nextModules.some((module) =>
-        module.moduleType === persisted.module.moduleType &&
-        module.modulePackageId &&
-        module.modulePackageId !== persisted.module.modulePackageId
-      );
-      const templateTags = new Set((persisted.module.tags ?? []).map((tag) => tag.toLowerCase()));
-      if (existingIndex < 0 && hasClientOverrideForType && !templateTags.has("revit-export-preview")) continue;
-
-      const previous = existingIndex >= 0 ? nextModules[existingIndex] : null;
-      const nextDefinition = {
-        ...createCatalogModuleDefinitionFromPackage(persisted, {
-          catalog,
-          enabled: previous?.enabled ?? true,
-          packageHash
-        }),
-        ...(previous?.id && !previous.modulePackageId ? { id: previous.id } : {})
-      };
-      if (previous && JSON.stringify(previous) === JSON.stringify(nextDefinition)) continue;
-      if (existingIndex >= 0) nextModules[existingIndex] = nextDefinition;
-      else nextModules.push(nextDefinition);
-      changed = true;
-    }
-
-    if (!changed) return catalog;
-    return {
-      ...catalog,
-      modules: nextModules,
-      meta: {
-        ...catalog.meta,
-        updatedAt: new Date().toISOString()
-      }
-    };
-  }
-
   function ensureCurrentSystemCatalogData(catalog: ClientCatalog): ClientCatalog {
     if (!isDemosCatalogGenerated()) return catalog;
     const hasDemosMaterials = catalog.materials.some((material) => material.id.startsWith("mat.demos."));
@@ -203,8 +153,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
   const ensureCatalogExists = (ctx: ClientContext): Promise<ClientCatalog> => withCatalogAccess(projectRoot, ctx, async () => {
     const existing = await readCatalog(ctx);
     if (existing) {
-      const withCurrentSystemData = ensureCurrentSystemCatalogData(existing);
-      const repaired = await ensureSystemModulePackages(ctx, withCurrentSystemData);
+      const repaired = ensureCurrentSystemCatalogData(existing);
       if (repaired !== existing) await writeCatalog(ctx, repaired);
       return repaired;
     }
