@@ -71,6 +71,32 @@ async function audit(page, name) {
       return rect.bottom <= footer.bottom && rect.top >= footer.top;
     });
     assert(actionsFit, `${name}: pricing actions clipped by the footer`);
+
+    const actionIcons = await page.locator(".arcigy-action-icon").evaluateAll(icons => icons
+      .filter(icon => {
+        const rect = icon.getBoundingClientRect();
+        const style = getComputedStyle(icon);
+        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      })
+      .map(icon => {
+        const shapes = [...icon.querySelectorAll("path, rect, circle, polygon, line")];
+        const hasGeometry = shapes.some(shape => {
+          const box = shape.getBBox();
+          return box.width > 0 || box.height > 0;
+        });
+        return {
+          id: icon.getAttribute("data-action-icon"),
+          externalUseCount: icon.querySelectorAll("use").length,
+          shapeCount: shapes.length,
+          hasGeometry
+        };
+      }));
+    assert(actionIcons.length > 0, `${name}: no visible action icons found`);
+    assert(
+      actionIcons.every(icon => icon.externalUseCount === 0 && icon.shapeCount > 0 && icon.hasGeometry),
+      `${name}: an action icon has no inline visible artwork`,
+      actionIcons
+    );
   }
   await page.screenshot({ path: `${output}/${name}.png` });
   reports.push({ name, ...state });
