@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { actionIconDetails, actionIconMarkup } from "./actionIcons";
+import { actionIconDetails, actionIconMarkup, type ActionIconId } from "./actionIcons";
 import { bindIconTooltip, installIconTooltips } from "./iconTooltips";
 
 describe("action icon system", () => {
   it("registers one sprite symbol for every semantic action", () => {
-    const sprite = readFileSync("public/ui-icons/actions.svg", "utf8");
+    const sprite = readFileSync("src/ui/actionIcons.svg", "utf8");
     for (const iconId of Object.keys(actionIconDetails)) {
       const matches = sprite.match(new RegExp(`<symbol id="${iconId}"`, "g")) ?? [];
       expect(matches).toHaveLength(1);
@@ -14,7 +14,7 @@ describe("action icon system", () => {
   });
 
   it("does not assign identical SVG artwork to two semantic actions", () => {
-    const sprite = readFileSync("public/ui-icons/actions.svg", "utf8");
+    const sprite = readFileSync("src/ui/actionIcons.svg", "utf8");
     const artwork = new Map<string, string>();
     for (const iconId of Object.keys(actionIconDetails)) {
       const match = sprite.match(new RegExp(`<symbol id="${iconId}"[^>]*>([\\s\\S]*?)</symbol>`));
@@ -25,9 +25,21 @@ describe("action icon system", () => {
     }
   });
 
-  it("renders action icons from the shared SVG asset", () => {
-    expect(actionIconMarkup("fitGap")).toContain('/ui-icons/actions.svg#fitGap');
-    expect(actionIconMarkup("fitGap")).toContain('data-action-icon="fitGap"');
+  it("keeps the legacy public sprite identical to the bundled artwork", () => {
+    expect(readFileSync("public/ui-icons/actions.svg", "utf8")).toBe(readFileSync("src/ui/actionIcons.svg", "utf8"));
+  });
+
+  it("inlines visible artwork for every action without an external SVG request", () => {
+    for (const iconId of Object.keys(actionIconDetails) as ActionIconId[]) {
+      const markup = actionIconMarkup(iconId);
+      document.body.innerHTML = markup;
+      const icon = document.querySelector<SVGElement>(".arcigy-action-icon");
+
+      expect(markup).not.toContain("/ui-icons/actions.svg");
+      expect(icon?.querySelector("use")).toBeNull();
+      expect(icon?.querySelectorAll("path, rect, circle, polygon, line").length).toBeGreaterThan(0);
+      expect(icon?.getAttribute("stroke")).toBe("currentColor");
+    }
   });
 
   it("shows a descriptive tooltip on keyboard focus and closes it with Escape", () => {
