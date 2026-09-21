@@ -1,7 +1,6 @@
 import { chromium } from "playwright";
 
 const appUrl = process.env.APP_URL || "http://127.0.0.1:5180";
-const company = process.env.PINO_COMPANY || "PINO/Nobilia VKH 2026";
 const username = process.env.PINO_USERNAME || "pino_nobilia";
 const password = process.env.PINO_NOBILIA_SEED_PASSWORD;
 const projectName = process.env.PINO_SHOWROOM_PROJECT_NAME || "PINO showroom vsetky moduly";
@@ -16,7 +15,7 @@ const browser = await chromium.launch({ headless: true });
 try {
   const context = await browser.newContext({ baseURL: appUrl });
   const login = await context.request.post("/api/auth/login", {
-    data: { company, username, password }
+    data: { username, password }
   });
   if (!login.ok()) {
     console.error(`Login failed: ${login.status()} ${await login.text()}`);

@@ -128,7 +128,7 @@ export const CZECH_SYSTEM_TEXT: Readonly<Record<string, string>> = {
   "Projects, versions and activity are linked to a specific team member.": "Projekty, verze a aktivita jsou vázané na konkrétního člena týmu.",
   "Sign in": "Přihlášení",
   "Welcome back": "Vítejte zpět",
-  "Enter your company credentials to continue to the Arcigy workspace.": "Zadejte přihlašovací údaje vaší firmy a pokračujte do pracovního prostředí Arcigy.",
+  "Enter your username and password to continue to the Arcigy workspace.": "Zadejte uživatelské jméno a heslo a pokračujte do pracovního prostředí Arcigy.",
   Company: "Firma",
   User: "Uživatel",
   Password: "Heslo",

@@ -55,8 +55,8 @@ function readBody(body: unknown) {
   return async () => body;
 }
 
-function readAuthBody(username: string, password: string, company = "Arcigy Kitchen") {
-  return readBody({ company, username, password });
+function readAuthBody(username: string, password: string) {
+  return readBody({ username, password });
 }
 
 function createTestUserService(users = seedAuthUsers) {
@@ -121,7 +121,7 @@ describe("auth endpoints", () => {
     const passwordVerifier = vi.fn(async () => false);
     const userService = createUserService(createInMemoryUserRepository([]), { verifyPassword: passwordVerifier });
 
-    await expect(userService.authenticate("Arcigy", "missing", "candidate-password")).resolves.toBeNull();
+    await expect(userService.authenticate("missing", "candidate-password")).resolves.toBeNull();
     expect(passwordVerifier).toHaveBeenCalledWith(
       "candidate-password",
       expect.stringMatching(/^scrypt\$v1\$/)
@@ -139,44 +139,33 @@ describe("auth endpoints", () => {
     expect((res.body as { ok: boolean }).ok).toBe(true);
   });
 
-  it("normalizes spacing in the organization and username for app and extension login", async () => {
+  it("normalizes username whitespace for app and extension login", async () => {
     const service = createTestUserService();
     const browser = mockRes();
     const bridge = mockRes();
-    const body = readBody({ company: "  Arcigy   Kitchen ", username: " branislav ", password: "branislav2026" });
+    const body = readBody({ username: " branislav ", password: "branislav2026" });
     await handleAuthLogin(mockReq(), browser, body, sendJson, { userService: service, loginRateLimiter: createLoginRateLimiter() });
     await handleExtensionAuthLogin(mockReq(), bridge, body, sendJson, { userService: service, authSessionStore: createInMemoryAuthSessionStore(), loginRateLimiter: createLoginRateLimiter() });
     expect(browser.statusCode).toBe(200);
     expect(bridge.statusCode).toBe(200);
   });
 
-  it("requires a company for browser login", async () => {
+  it("resolves the organization from username and ignores a legacy company field", async () => {
     const res = mockRes();
-    await handleAuthLogin(mockReq(), res, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
+    await handleAuthLogin(mockReq(), res, readBody({ company: "Other Company", username: "arcigy", password: "kitchen2026" }), sendJson, {
       userService: createTestUserService(),
       loginRateLimiter: createLoginRateLimiter()
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(res.body).toEqual({ ok: false, error: "Invalid credentials." });
-  });
-
-  it("does not authenticate a user through another company", async () => {
-    const res = mockRes();
-    await handleAuthLogin(mockReq(), res, readAuthBody("arcigy", "kitchen2026", "Other Company"), sendJson, {
-      userService: createTestUserService(),
-      loginRateLimiter: createLoginRateLimiter()
-    });
-
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ ok: false, error: "Invalid credentials." });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ session: { clientId: "client_arcigy_demo" } });
   });
 
   it("issues a revocable bearer session for the extension without exposing the password or session id", async () => {
     const userService = createTestUserService();
     const authSessionStore = createInMemoryAuthSessionStore();
     const login = mockRes();
-    await handleExtensionAuthLogin(mockReq(), login, readBody({ company: "Arcigy Kitchen", username: "arcigy", password: "kitchen2026" }), sendJson, {
+    await handleExtensionAuthLogin(mockReq(), login, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
       userService,
       authSessionStore,
       loginRateLimiter: createLoginRateLimiter()
@@ -199,7 +188,7 @@ describe("auth endpoints", () => {
     expect(revoked.statusCode).toBe(401);
   });
 
-  it("authenticates the Bridge against the exact organization and username", async () => {
+  it("rejects ambiguous usernames for the app and Bridge", async () => {
     const otherBranislav = {
       ...seedAuthUsers[1]!,
       userId: "user_other_branislav",
@@ -207,53 +196,21 @@ describe("auth endpoints", () => {
       clientId: "client_other",
       passwordHash: seedAuthUsers[0]!.passwordHash
     };
-    const login = mockRes();
-    await handleExtensionAuthLogin(
-      mockReq(),
-      login,
-      readBody({ company: "Arcigy Kitchen", username: "branislav", password: "branislav2026" }),
-      sendJson,
-      { userService: createTestUserService([...seedAuthUsers, otherBranislav]), authSessionStore: createInMemoryAuthSessionStore(), loginRateLimiter: createLoginRateLimiter() }
-    );
-
-    expect(login.statusCode).toBe(200);
-    expect(login.body).toMatchObject({ session: { clientId: "client_arcigy_demo", displayName: "Branislav" } });
-  });
-
-  it("applies the same exact company and username rule to the app and Bridge", async () => {
-    const users = [...seedAuthUsers, {
-      ...seedAuthUsers[1]!,
-      userId: "user_other_branislav",
-      organizationName: "Other Company",
-      clientId: "client_other",
-      passwordHash: seedAuthUsers[0]!.passwordHash
-    }];
-    const userService = createTestUserService(users);
+    const userService = createTestUserService([...seedAuthUsers, otherBranislav]);
     const browser = mockRes();
     const bridge = mockRes();
-    const body = readBody({ company: "Arcigy Kitchen", username: "branislav", password: "branislav2026" });
+    const body = readBody({ username: "branislav", password: "branislav2026" });
 
     await handleAuthLogin(mockReq(), browser, body, sendJson, { userService, authSessionStore: createInMemoryAuthSessionStore(), loginRateLimiter: createLoginRateLimiter() });
     await handleExtensionAuthLogin(mockReq(), bridge, body, sendJson, { userService, authSessionStore: createInMemoryAuthSessionStore(), loginRateLimiter: createLoginRateLimiter() });
 
-    expect(browser.statusCode).toBe(200);
-    expect(bridge.statusCode).toBe(200);
-    expect((bridge.body as { session: { clientId: string; displayName: string } }).session).toMatchObject({ clientId: "client_arcigy_demo", displayName: "Branislav" });
-  });
-
-  it("requires the same company field for Bridge login as for app login", async () => {
-    const bridge = mockRes();
-    await handleExtensionAuthLogin(mockReq(), bridge, readBody({ username: "arcigy", password: "kitchen2026" }), sendJson, {
-      userService: createTestUserService(),
-      authSessionStore: createInMemoryAuthSessionStore(),
-      loginRateLimiter: createLoginRateLimiter()
-    });
-
-    expect(bridge.statusCode).toBe(400);
+    expect(browser.statusCode).toBe(401);
+    expect(bridge.statusCode).toBe(401);
+    expect(browser.body).toEqual({ ok: false, error: "Invalid credentials." });
     expect(bridge.body).toEqual({ ok: false, error: "Invalid credentials." });
   });
 
-  it("logs in Andrej with organization credentials", async () => {
+  it("logs in Andrej with username credentials", async () => {
     const res = mockRes();
     await handleAuthLogin(mockReq(), res, readAuthBody("andrej", "andrej2026"), sendJson, {
       userService: createTestUserService(),
@@ -267,7 +224,7 @@ describe("auth endpoints", () => {
     expect(session?.displayName).toBe("Andrej");
   });
 
-  it("logs in Branislav with his organization credentials", async () => {
+  it("logs in Branislav with username credentials", async () => {
     const res = mockRes();
     await handleAuthLogin(mockReq(), res, readAuthBody("branislav", "branislav2026"), sendJson, {
       userService: createTestUserService(),

@@ -276,7 +276,6 @@ describe("multi-client worker isolation", () => {
   it("returns retryable 503 for a database session failure and keeps serving requests", async () => {
     const unavailableUserService: UserService = {
       authenticate: async () => null,
-      authenticateByUsername: async () => null,
       getUserById: async () => {
         throw new Error("Connection terminated due to connection timeout");
       }
@@ -317,7 +316,7 @@ describe("multi-client worker isolation", () => {
 
     const login = await requestWorker(controller!.port, "/api/auth/extension-login", {
       method: "POST",
-      body: { company: "Arcigy Kitchen", username: "arcigy", password: "kitchen2026" }
+      body: { username: "arcigy", password: "kitchen2026" }
     });
     expect(login.status).toBe(200);
     const accessToken = (login.body as { accessToken: string }).accessToken;

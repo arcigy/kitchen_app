@@ -17,7 +17,7 @@ describe("Supplier Bridge API errors", () => {
     expect(failure).toMatchObject({ message: "Internal server error.", status: 500, requestId: "request-abc" });
   });
 
-  it("sends the company discriminator when signing the Bridge in", async () => {
+  it("sends username and password when signing the Bridge in", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       accessToken: "token",
       session: {
@@ -31,26 +31,26 @@ describe("Supplier Bridge API errors", () => {
     }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await loginExtension("https://arcigy.example", "Arcigy firma", "branislav", "safe-password");
+    await loginExtension("https://arcigy.example", "branislav", "safe-password");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://arcigy.example/api/auth/extension-login",
-      expect.objectContaining({ body: JSON.stringify({ company: "Arcigy firma", username: "branislav", password: "safe-password" }) })
+      expect.objectContaining({ body: JSON.stringify({ username: "branislav", password: "safe-password" }) })
     );
   });
 
-  it("normalizes the organization and username before the extension sends credentials", async () => {
+  it("normalizes the username before the extension sends credentials", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       accessToken: "token",
       session: { userId: "user", clientId: "client", role: "owner", displayName: "User", issuedAt: "2026-09-03T12:00:00.000Z", expiresAt: "2026-09-10T12:00:00.000Z" }
     }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await loginExtension("https://arcigy.example", "  Arcigy   Kitchen ", " branislav ", "safe-password");
+    await loginExtension("https://arcigy.example", " branislav ", "safe-password");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://arcigy.example/api/auth/extension-login",
-      expect.objectContaining({ body: JSON.stringify({ company: "Arcigy Kitchen", username: "branislav", password: "safe-password" }) })
+      expect.objectContaining({ body: JSON.stringify({ username: "branislav", password: "safe-password" }) })
     );
   });
 

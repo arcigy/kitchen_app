@@ -43,11 +43,15 @@ describe("database migration files", () => {
     expect(clientSuppliersSql).toContain("CREATE TABLE IF NOT EXISTS arcigy_client_suppliers");
     expect(clientSuppliersSql).toContain("PRIMARY KEY (client_id, supplier_id)");
 
-    const userActivitySql = await readFile(path.join(process.cwd(), "db", "migrations", `${REQUIRED_DATABASE_MIGRATION_VERSION}.sql`), "utf-8");
+    const userActivitySql = await readFile(path.join(process.cwd(), "db", "migrations", "0005_user_activity.sql"), "utf-8");
     expect(userActivitySql).toContain("CREATE TABLE IF NOT EXISTS arcigy_user_activity_trackers");
     expect(userActivitySql).toContain("CREATE TABLE IF NOT EXISTS arcigy_user_activity_presence");
     expect(userActivitySql).toContain("CREATE TABLE IF NOT EXISTS arcigy_user_activity_intervals");
     expect(userActivitySql).toContain("CREATE TABLE IF NOT EXISTS arcigy_user_activity_daily");
     expect(userActivitySql).toContain("CREATE TABLE IF NOT EXISTS arcigy_user_activity_outbox");
+
+    const usernameSql = await readFile(path.join(process.cwd(), "db", "migrations", "0006_case_insensitive_auth_username.sql"), "utf-8");
+    expect(usernameSql).toContain("CREATE UNIQUE INDEX");
+    expect(usernameSql).toContain("lower(username)");
   });
 });

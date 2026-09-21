@@ -117,22 +117,11 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
   heading.innerHTML = `
     <span>${t("Sign in")}</span>
     <h1>${t("Welcome back")}</h1>
-    <p>${t("Enter your company credentials to continue to the Arcigy workspace.")}</p>
+    <p>${t("Enter your username and password to continue to the Arcigy workspace.")}</p>
   `;
 
   const form = document.createElement("form");
   form.className = "auth-form";
-
-  const companyLabel = document.createElement("label");
-  const companyText = document.createElement("span");
-  companyText.textContent = t("Company");
-  const companyInput = createInputElement("text", "", {
-    autocomplete: "organization",
-    name: "company",
-    placeholder: t("Enter company"),
-    required: true
-  });
-  companyLabel.append(companyText, companyInput);
 
   const usernameLabel = document.createElement("label");
   const usernameText = document.createElement("span");
@@ -164,7 +153,7 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
   const submit = createButtonElement(t("Sign in to workspace"), { type: "submit", variant: "primary" });
 
   form.setAttribute("aria-describedby", error.id);
-  form.append(companyLabel, usernameLabel, passwordLabel, error, submit);
+  form.append(usernameLabel, passwordLabel, error, submit);
   content.append(heading, form, createThemePicker());
   panel.append(visual, content);
   root.appendChild(panel);
@@ -176,7 +165,7 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
       error.textContent = "";
       submit.disabled = true;
 
-      void login(companyInput.value, usernameInput.value, passwordInput.value).then((result) => {
+      void login(usernameInput.value, passwordInput.value).then((result) => {
         if (!result.ok) {
           error.textContent = result.message;
           submit.disabled = false;
@@ -191,13 +180,13 @@ async function renderLogin(root: HTMLElement): Promise<AuthenticatedClientSessio
   });
 }
 
-async function login(company: string, username: string, password: string): Promise<LoginResult> {
+async function login(username: string, password: string): Promise<LoginResult> {
   try {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ company, username, password })
+      body: JSON.stringify({ username, password })
     });
     if (!response.ok) return { ok: false, message: resolveLoginFailureMessage(response.status) };
     const data = await readAuthResponse(response);

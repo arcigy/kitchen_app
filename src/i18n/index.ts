@@ -271,7 +271,7 @@ const EXACT_SK_TEXT: Record<string, string> = {
   "Projects, versions and activity are linked to a specific team member.": "Projekty, verzie a aktivita sú viazané na konkrétneho člena tímu.",
   "Sign in": "Prihlásenie",
   "Welcome back": "Vitajte späť",
-  "Enter your company credentials to continue to the Arcigy workspace.": "Zadajte prihlasovacie údaje vašej firmy a pokračujte do pracoviska Arcigy.",
+  "Enter your username and password to continue to the Arcigy workspace.": "Zadajte meno používateľa a heslo a pokračujte do pracoviska Arcigy.",
   Company: "Firma",
   User: "Používateľ",
   Password: "Heslo",

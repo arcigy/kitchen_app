@@ -9,7 +9,6 @@ export type SaasLoadTestConfig = {
   thinkTimeMs: number;
   p95ThresholdMs: number;
   errorRateThreshold: number;
-  company?: string;
   username?: string;
   password?: string;
   projectId?: string;
@@ -96,7 +95,6 @@ export function resolveSaasLoadTestConfig(env: NodeJS.ProcessEnv): SaasLoadTestC
     p95ThresholdMs: finite(env, "LOAD_TEST_P95_THRESHOLD_MS", 2_000, 1, 600_000),
     errorRateThreshold: finite(env, "LOAD_TEST_ERROR_RATE_THRESHOLD", 0.01, 0, 1),
     ...(authenticated ? {
-      company: required(env, "ARCIGY_LOAD_TEST_COMPANY"),
       username: required(env, "ARCIGY_LOAD_TEST_USERNAME"),
       password: required(env, "ARCIGY_LOAD_TEST_PASSWORD")
     } : {}),
