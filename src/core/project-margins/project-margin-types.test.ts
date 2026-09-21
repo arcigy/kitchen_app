@@ -16,7 +16,19 @@ describe("project margin settings model", () => {
       defaultMarginPercent: 20,
       additionalLaborCost: 0,
       groupMargins: {},
-      itemOverrides: []
+      itemOverrides: [],
+      manufacturing: {
+        schemaVersion: 1,
+        pricingMode: "legacy",
+        boardWastePercent: null,
+        edgeWastePercent: null,
+        boardWasteByMaterialId: {},
+        edgeWasteByMaterialId: {},
+        preassemblyByModuleType: {},
+        preassemblyByPreset: {},
+        preassemblyByInstanceId: {},
+        recipeSnapshots: {}
+      }
     });
   });
 

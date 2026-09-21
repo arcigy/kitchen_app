@@ -19,7 +19,6 @@ type ReadJsonBody = (req: http.IncomingMessage) => Promise<unknown>;
 type SendJson = (res: http.ServerResponse, status: number, data: unknown) => void;
 type LoginRateLimiter = ReturnType<typeof createLoginRateLimiter>;
 type LoginCredentials = {
-  company: string;
   username: string;
   password: string;
 };
@@ -57,11 +56,11 @@ function getLoginRateLimitKey(
 }
 
 function readLoginCredentials(body: unknown): LoginCredentials | null {
-  const company = getStringField(body, "company");
   const username = getStringField(body, "username");
   const password = getStringField(body, "password");
-  if (!company || !username || !password) return null;
-  return { company, username, password };
+  const normalizedUsername = username?.trim() ?? "";
+  if (!normalizedUsername || !password) return null;
+  return { username: normalizedUsername, password };
 }
 
 async function authenticateLoginAttempt(
@@ -70,11 +69,10 @@ async function authenticateLoginAttempt(
   dependencies: AuthEndpointDependencies
 ): Promise<LoginAttempt> {
   const loginRateLimiter = dependencies.loginRateLimiter ?? defaultLoginRateLimiter;
-  const rateLimitKey = getLoginRateLimitKey(req, credentials.company, credentials.username, dependencies.trustedProxyHops);
+  const rateLimitKey = getLoginRateLimitKey(req, "username", credentials.username, dependencies.trustedProxyHops);
   if (loginRateLimiter.isLimited(rateLimitKey)) return { status: "limited" };
 
   const session = await (dependencies.userService ?? defaultUserService).authenticate(
-    credentials.company,
     credentials.username,
     credentials.password
   );

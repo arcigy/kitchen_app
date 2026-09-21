@@ -10,10 +10,25 @@ body {
 body {
   margin: 0;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  font-size: 12px;
+  font-size: calc(14px * var(--arcigy-ui-scale, 1));
   color: var(--text);
   background: var(--bg);
   overflow: hidden;
+}
+
+:root {
+  --arcigy-ui-scale: 1;
+}
+
+:root[data-ui-scale="large"] {
+  --arcigy-ui-scale: 1.2;
+}
+
+button,
+input,
+select,
+textarea {
+  font-size: max(1em, calc(12px * var(--arcigy-ui-scale, 1)));
 }
 
 #app {
@@ -4578,7 +4593,7 @@ textarea {
 
 .margins-project-controls {
   display: grid;
-  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 8px;
 }
 
@@ -4615,8 +4630,72 @@ textarea {
 .margins-project-control__editor {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(90px, 1fr) 72px;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 6px;
+}
+
+.margins-preassembly-rates {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  padding-top: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.margins-preassembly-rates > strong {
+  grid-column: 1 / -1;
+}
+
+.margins-preassembly-rates label {
+  display: grid;
+  gap: 4px;
+}
+
+.margins-preassembly-rates input {
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-2);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.workspace-settings-ui-scale {
+  display: grid;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.workspace-settings-ui-scale p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.workspace-settings-ui-scale > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-settings-ui-scale button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.workspace-settings-ui-scale button[aria-pressed="true"] {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 800;
 }
 
 .margins-project-control__editor > div {

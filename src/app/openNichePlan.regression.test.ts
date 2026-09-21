@@ -8,7 +8,7 @@ import { getModulePlanLocalPolygon } from './planSnap';
 import { buildModuleEdgeGeometry, buildModulePlanPickGeometry } from './moduleVisualGeometry';
 
 describe('open niche plan matches its complete cabinet', () => {
-  it.each(['fwm_tall_open_end', 'fwm_catalog_base_open_end'].flatMap(type =>
+  it.each((['fwm_tall_open_end', 'fwm_catalog_base_open_end'] as const).flatMap(type =>
     ['straight', 'chamfered', 'rounded'].flatMap(shape => ['left', 'right'].map(endingSide => ({ type, shape, endingSide })))))
   ('$type $shape $endingSide keeps its true footprint after resizing and view changes', ({ type, shape, endingSide }) => {
     for (const [width, depth] of [[300, 580], [450, 620]]) {

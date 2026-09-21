@@ -1073,7 +1073,7 @@ async function renderBlenderPreview(ctx: AssistantBridgeContext): Promise<Assist
 }
 
 async function exportMarketingPdf(ctx: AssistantBridgeContext): Promise<AssistantToolResult> {
-  const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog);
+  const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog, [], ctx.getProjectMarginSettings().manufacturing);
   if (entries.length === 0) throw new Error("Marketing PDF requires at least one priced project entity.");
   const quote = buildProjectQuoteSummary(entries, ctx.getProjectMarginSettings());
   const output = await exportMarketingOfferPdf(entries, quote);
@@ -1129,7 +1129,7 @@ function trimWallsToCorner(ctx: AssistantBridgeContext, input: Record<string, un
 }
 
 function exportPricingWorkbook(ctx: AssistantBridgeContext): AssistantToolResult {
-  const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog);
+  const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog, [], ctx.getProjectMarginSettings().manufacturing);
   if (entries.length === 0) throw new Error("Pricing workbook requires at least one priced project entity.");
   const quote = buildProjectQuoteSummary(entries, ctx.getProjectMarginSettings());
   const output = exportProjectPricingWorkbook(entries, quote);
@@ -1344,7 +1344,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
       };
     }
     if (definition.id === "pricing.getSummary") {
-      const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog);
+      const entries = buildProjectPricingViews(ctx.instances, ctx.kitchenWorktops, ctx.S.customFurniture, ctx.S.kitchenCtx, ctx.catalog, [], ctx.getProjectMarginSettings().manufacturing);
       const selectedIds = new Set(selectedInstanceIds(ctx));
       const selectedEntries = entries.filter((entry) => selectedIds.has(entry.instanceId));
       const selectedFinalPrice = selectedEntries.reduce((total, entry) => total + entry.result.pricing.finalPrice, 0);
@@ -1464,7 +1464,7 @@ async function executeToolCall(ctx: AssistantBridgeContext, call: AssistantToolC
       if (!initialParams || typeof initialParams !== "object" || Array.isArray(initialParams)) {
         throw new Error("initialParams are required.");
       }
-      const params = validateModuleParams({ ...(cloneJson(initialParams) as ModuleParams), type: moduleType }, catalogKey);
+      const params = validateModuleParams({ ...cloneJson(initialParams), type: moduleType } as ModuleParams, catalogKey);
       const inst = insertAssistantCatalogModule(ctx, params, typeof call.input.groupId === "string" ? call.input.groupId : null);
       return {
         ok: true,

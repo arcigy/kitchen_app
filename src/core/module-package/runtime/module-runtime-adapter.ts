@@ -1,3 +1,4 @@
+import { assertModuleTypeNotRetired } from "../retired-module-types";
 import * as THREE from "three";
 import type { ClientCatalog } from "../../catalog/catalog-types";
 import { createMaterialRequestFromCatalogMaterial } from "../../catalog/material-render-request";
@@ -10,15 +11,9 @@ import type { TrustedModuleRuntimeBuilder } from "./module-runtime-contract";
 const MM_TO_M = 0.001;
 const REVIT_PREVIEW_TAG = "revit-export-preview";
 
-const BUILDER_KEYS: Record<string, string> = {
-  "cornerShelfLower.v1": "corner_shelf_lower",
-  "drawerLow.v1": "drawer_low",
-  "flapShelvesLow.v1": "flap_shelves_low",
-  "fridgeTall.v1": "fridge_tall",
-  "pinoSideCabinet.v1": "pino_side_cabinet",
-  "swingShelvesLow.v1": "swing_shelves_low",
-  ...Object.fromEntries(FWM_FURNITURE_SPECS.map((spec) => [getFwmRuntimeBuilderKey(spec.moduleType), spec.moduleType]))
-};
+const BUILDER_KEYS: Record<string, string> = Object.fromEntries(
+  FWM_FURNITURE_SPECS.map((spec) => [getFwmRuntimeBuilderKey(spec.moduleType), spec.moduleType])
+);
 
 export function getTrustedRuntimeBuilderKeys(): string[] {
   return Object.keys(BUILDER_KEYS).sort();
@@ -662,6 +657,7 @@ export function buildModulePackageGeometryFromPackage(args: {
   parameters?: Record<string, unknown>;
   catalog: ClientCatalog;
 }): THREE.Group {
+  assertModuleTypeNotRetired(args.modulePackage.module.moduleType);
   const defaults = createDefaultModulePackageParameters(args.modulePackage);
   const mapped: Record<string, unknown> = { ...defaults, ...(args.parameters ?? {}) };
   if (args.modulePackage.geometry.mode === "declarative") {

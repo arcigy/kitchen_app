@@ -250,7 +250,7 @@ describe("assistant agent fallback", () => {
     expect(response.toolCalls).toEqual([]);
   });
 
-  it("creates a confirmed PINO insertion tool call from a verbal module description", async () => {
+  it("does not generate insertion calls for retired PINO modules", async () => {
     const response = await runAssistantTurn({
       message: "vloz mi vysoky modul, dole dvierka, potom jeden suflik, nad tym mikrovlnku a hore policky",
       clientContext: {
@@ -263,12 +263,6 @@ describe("assistant agent fallback", () => {
       catalog: tenantCatalog()
     });
 
-    expect(response.requiresConfirmation).toBe(false);
-    expect(response.toolCalls[0]?.toolId).toBe("vendorCatalog.insertResolvedModule");
-    expect(response.toolCalls[0]?.input).toMatchObject({
-      catalogKey: "GBS-FB",
-      moduleType: "pino_side_cabinet",
-      modulePackageId: "pino_nobilia_side_cabinet_vkh_2026_v1"
-    });
+    expect(response.toolCalls.some(call => call.toolId === "vendorCatalog.insertResolvedModule")).toBe(false);
   });
 });

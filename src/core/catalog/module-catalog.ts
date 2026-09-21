@@ -1,9 +1,10 @@
+import { RETIRED_MODULE_TYPES } from "../module-package/retired-module-types";
 import type { ClientCatalog, ClientModuleDefinition } from "./catalog-types";
 import type { ModuleDescriptor } from "../../modules/registry";
 import type { FurnQuoteModulePackage } from "../module-package/module-package-types";
 
 export function getEnabledClientModules(catalog: Pick<ClientCatalog, "modules">): ClientModuleDefinition[] {
-  return catalog.modules.filter((module) => module.enabled);
+  return catalog.modules.filter((module) => module.enabled && !RETIRED_MODULE_TYPES.has(module.moduleType));
 }
 
 export function getEnabledModuleDescriptors(

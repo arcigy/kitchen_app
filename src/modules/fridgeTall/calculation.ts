@@ -78,7 +78,7 @@ export function calculateBOM(params: FridgeTallParams, ctx: KitchenContext, cata
   }
 
   const visibleEdgeLm = round((sideHeight * 2 + innerWidth * 2 + width + doorWidth * 2 + clampedFreezerDoorHeight * 2 + fridgeDoorHeight * 2 + (plinthHeight > 0 ? width : 0)) / 1000);
-  if (edgeRef) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
+  if (visibleEdgeLm > 0) items.push(edgeItem("visible-edge-banding", "Visible ABS edge banding", visibleEdgeLm, edgeRef, "front"));
 
   const hardware = [
     hardwareItem("door-handles", "Door handles", source.handleType === "none" ? 0 : 2, componentRef(resolveComponent(catalog, source, "handleComponentId"))),

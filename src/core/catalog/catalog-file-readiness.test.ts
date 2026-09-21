@@ -60,14 +60,18 @@ describe("file catalog request readiness", () => {
     expect(seed).not.toHaveBeenCalled();
   }, 30_000);
 
-  it("reads each persisted package only once per reconciliation", async () => {
+  it("never restores removed modules when a persisted catalog is reopened", async () => {
     const root = await fixture();
-    await createFileClientCatalogRepository(root).ensureCatalogExists(ctx);
+    const repo = createFileClientCatalogRepository(root);
+    const catalog = await repo.ensureCatalogExists(ctx);
+    const retained = catalog.modules.slice(-1);
+    await repo.saveCatalog(ctx, { ...catalog, modules: retained });
     io.reads = [];
-    await createFileClientCatalogRepository(root).ensureCatalogExists(ctx);
-    const reads = io.reads.filter((file) => file.endsWith("module.package.json"));
-    expect(reads.length).toBeGreaterThan(0);
-    expect(reads.length).toBe(new Set(reads).size);
+    const reopened = await createFileClientCatalogRepository(root).ensureCatalogExists(ctx);
+    expect(reopened.modules).toEqual(retained);
+    expect(io.reads.filter((file) => file.endsWith("module.package.json"))).toEqual([]);
+    await repo.saveCatalog(ctx, { ...catalog, modules: [] });
+    expect((await createFileClientCatalogRepository(root).ensureCatalogExists(ctx)).modules).toEqual([]);
   }, 30_000);
 
   it("serializes concurrent cold requests across repository instances", async () => {

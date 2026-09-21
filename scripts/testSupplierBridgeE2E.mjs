@@ -12,7 +12,6 @@ const simulatorUrl = process.env.SUPPLIER_SIMULATOR_URL ?? "http://127.0.0.1:519
 const workerHealthUrl = process.env.KITCHEN_WORKER_HEALTH_URL ?? "http://127.0.0.1:5194/health";
 const testUsername = process.env.ARCIGY_UI_TEST_USERNAME;
 const testPassword = process.env.ARCIGY_UI_TEST_PASSWORD;
-const testCompany = process.env.ARCIGY_UI_TEST_COMPANY;
 const extensionPath = path.join(process.cwd(), "apps", "supplier-bridge-extension", "dist-debug");
 const result = { ok: false, checks: [], consoleErrors: [] };
 let context;
@@ -106,8 +105,8 @@ async function stopLocalProcesses() {
 }
 
 async function main() {
-  if (!testCompany || !testUsername || !testPassword) {
-    throw new Error("Supplier Bridge E2E requires ARCIGY_UI_TEST_COMPANY, ARCIGY_UI_TEST_USERNAME, and ARCIGY_UI_TEST_PASSWORD.");
+  if (!testUsername || !testPassword) {
+    throw new Error("Supplier Bridge E2E requires ARCIGY_UI_TEST_USERNAME and ARCIGY_UI_TEST_PASSWORD.");
   }
   await access(path.join(extensionPath, "manifest.json"));
   await ensureLocalServices();
@@ -131,7 +130,7 @@ async function main() {
   const extensionId = new URL(worker.url()).host;
   assert(Boolean(extensionId), "unpacked extension loaded");
 
-  const login = await context.request.post(new URL("/api/auth/login", appUrl).toString(), { data: { company: testCompany, username: testUsername, password: testPassword } });
+  const login = await context.request.post(new URL("/api/auth/login", appUrl).toString(), { data: { username: testUsername, password: testPassword } });
   assert(login.ok(), "Arcigy authenticated test session created", login.status());
   const app = context.pages()[0] ?? await context.newPage();
   app.on("console", (message) => {
@@ -189,7 +188,6 @@ async function main() {
   }));
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await panel.locator('select').first().selectOption(new URL(appUrl).origin);
-  await panel.locator('input[autocomplete="organization"]').fill(testCompany);
   await panel.locator('input[autocomplete="username"]').fill(testUsername);
   await panel.locator('input[autocomplete="current-password"]').fill(testPassword);
   await panel.getByRole("button", { name: "Prihlásiť" }).click();

@@ -1,3 +1,4 @@
+import { assertModuleTypeNotRetired } from "./retired-module-types";
 import type { FurnQuoteModulePackagePayload } from "./module-file-types";
 import { unpackModulePackage } from "./module-file-codec";
 import { computeModulePackageHash, parseModulePackageJson } from "./module-package-file";
@@ -32,6 +33,7 @@ export function parseModulePackageImport(
   } else {
     modulePackage = input.package;
   }
+  assertModuleTypeNotRetired(modulePackage?.module?.moduleType);
   const validated = validateFurnQuoteModulePackage(modulePackage, options);
   const packageHash = computeModulePackageHash(validated);
   const persistedPackage = {

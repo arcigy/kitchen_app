@@ -3,7 +3,7 @@ import type { ClientCatalog, VendorProductVariant } from "../../core/catalog/cat
 import { applyKitchenContextToModuleParams } from "../../layout/kitchenMaterialSync";
 import { makeDefaultKitchenContext, resolveContext } from "../../layout/kitchenContext";
 import { resolvePinoSideCabinetCatalogVariant } from "./catalogResolver";
-import { createPinoSideCabinetPreviewCatalog } from "./previewCatalog";
+import { createPinoSideCabinetPreviewCatalog } from "./previewCatalog.fixture";
 import {
   createPinoSideCabinetPlacementCandidate,
   getPinoSideCabinetCapability,

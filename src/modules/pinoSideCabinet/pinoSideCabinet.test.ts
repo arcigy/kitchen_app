@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import { buildModulePackageGeometry } from "../../core/module-package/runtime/module-runtime-adapter";
 import { buildPinoSideCabinet, validatePinoSideCabinetConstruction, type PinoSideCabinetConstructionMetrics } from "./geometry";
-import { createPinoSideCabinetPreviewCatalog } from "./previewCatalog";
+import { createPinoSideCabinetPreviewCatalog } from "./previewCatalog.fixture";
 import {
   createPinoSideCabinetLayout,
   getPinoSideCabinetApplianceOpening,
@@ -403,15 +403,12 @@ describe("PINO/Nobilia side cabinet module", () => {
     expect((handleBounds.max.y - handleBounds.min.y) * 1000).toBeLessThan(40);
   });
 
-  it("is available through the trusted runtime package adapter", () => {
-    const group = buildModulePackageGeometry({
+  it("cannot be restored through the retired runtime package adapter", () => {
+    expect(() => buildModulePackageGeometry({
       runtimeBuilderKey: "pinoSideCabinet.v1",
       parameters: makeDefaultPinoSideCabinetParams(),
       catalog: testCatalog()
-    });
-
-    expect(group.userData.runtimeBuilderKey).toBe("pinoSideCabinet.v1");
-    expect(group.userData.catalogKey).toBe("S-45-BK");
+    })).toThrow("Unknown trusted runtime builder");
   });
 });
 

@@ -1,13 +1,12 @@
 const defaultBaseUrl = process.env.KITCHEN_UI_BASE_URL ?? process.env.PRICING_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 
 export function readUiTestCredentials() {
-  const company = process.env.ARCIGY_UI_TEST_COMPANY?.trim();
   const username = process.env.ARCIGY_UI_TEST_USERNAME?.trim();
   const password = process.env.ARCIGY_UI_TEST_PASSWORD;
-  if (!company || !username || !password) {
-    throw new Error("UI authentication tests require ARCIGY_UI_TEST_COMPANY, ARCIGY_UI_TEST_USERNAME, and ARCIGY_UI_TEST_PASSWORD.");
+  if (!username || !password) {
+    throw new Error("UI authentication tests require ARCIGY_UI_TEST_USERNAME and ARCIGY_UI_TEST_PASSWORD.");
   }
-  return { company, username, password };
+  return { username, password };
 }
 
 export async function installAuthSession(page, options = {}) {

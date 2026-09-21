@@ -40,7 +40,7 @@ describe("module parameter dimension geometry", () => {
     expect(dimensions.find((d) => d.parameterKey === "height")?.valueMm).toBeCloseTo(780, 2);
     expect(root.children.some((child) => child.userData.materialGroup === "worktop")).toBe(false);
   });
-  it.each(["drawer_low", "swing_shelves_low", "corner_shelf_lower"])("resolves the worktop reference height for %s", (type) => {
+  it.each(["fwm_catalog_base_drawers", "fwm_catalog_base_doors", "fwm_catalog_base_corner"])("resolves the worktop reference height for %s", (type) => {
     const { dimensions } = build(type, { height: 780, heightCarcass: 742, worktopThicknessMm: 38 });
     expect(dimensions.find((d) => d.parameterKey === "height")?.valueMm).toBeCloseTo(780, 2);
   });

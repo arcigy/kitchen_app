@@ -77,7 +77,7 @@ function catalog(args: {
 }
 
 describe("resolveVendorModuleSeed", () => {
-  it("creates a concrete drawer_low parameter seed for pullout lower cabinets", () => {
+  it("rejects retired drawer seeds for pullout lower cabinets", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [moduleDef({ moduleType: "drawer_low", runtimeBuilderKey: "drawerLow.v1" })],
       productVariants: [variant()]
@@ -86,18 +86,13 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 600
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("drawer_low");
-    expect(result.params).toMatchObject({
-      type: "drawer_low",
-      width: 600,
-      drawerCount: 1,
-      modulePackageId: "drawer_low_pkg",
-      catalogKey: "UA-60"
-    });
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("creates a swing_shelves_low seed for pure door+shelf base variants", () => {
+  it("rejects retired door-and-shelf seeds", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [moduleDef({ moduleType: "swing_shelves_low", runtimeBuilderKey: "swingShelvesLow.v1" })],
       productVariants: [variant({
@@ -112,18 +107,13 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 600
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("swing_shelves_low");
-    expect(result.params).toMatchObject({
-      type: "swing_shelves_low",
-      width: 600,
-      shelfCount: 2,
-      doorDouble: false,
-      catalogKey: "U-60"
-    });
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("creates a corner seed for corner lower cabinets", () => {
+  it("rejects retired corner seeds", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [moduleDef({ moduleType: "corner_shelf_lower", runtimeBuilderKey: "cornerShelfLower.v1" })],
       productVariants: [variant({
@@ -142,19 +132,13 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 900
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("corner_shelf_lower");
-    expect(result.params).toMatchObject({
-      type: "corner_shelf_lower",
-      lengthX: 900,
-      lengthZ: 900,
-      shelfCount: 1,
-      doorDouble: true,
-      catalogKey: "UE-90"
-    });
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("creates a side-cabinet seed for PINO appliance tall variants", () => {
+  it("rejects retired PINO appliance tall seeds", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [
         moduleDef({
@@ -183,18 +167,13 @@ describe("resolveVendorModuleSeed", () => {
       moduleType: "pino_side_cabinet"
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("pino_side_cabinet");
-    expect(result.params).toMatchObject({
-      type: "pino_side_cabinet",
-      groupId: "appliance_tall",
-      catalogKey: "GB-FB",
-      width: 600
-    });
-    expect(result.applianceHostStatus).toBe("not_applicable");
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("marks PINO appliance side cabinets compatible for fitting appliance requests", () => {
+  it("does not revive retired PINO cabinets for fitting appliances", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [
         moduleDef({
@@ -227,13 +206,13 @@ describe("resolveVendorModuleSeed", () => {
       applianceDepthMm: 450
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.applianceHostStatus).toBe("compatible");
-    expect(result.applianceHostValidation?.valid).toBe(true);
-    expect(result.applianceHostValidation?.opening?.widthMm).toBeGreaterThanOrEqual(540);
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("downgrades PINO appliance side cabinets to needs_review when the requested appliance does not fit", () => {
+  it("does not revive retired PINO cabinets for oversized appliances", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [
         moduleDef({
@@ -265,14 +244,13 @@ describe("resolveVendorModuleSeed", () => {
       applianceHeightMm: 580
     });
 
-    expect(result.status).toBe("needs_review");
-    expect(result.applianceHostStatus).toBe("incompatible");
-    expect(result.applianceHostValidation?.valid).toBe(false);
-    expect(result.applianceHostValidation?.errors.join(" ")).toContain("exceeds opening width");
-    expect(result.reasons).toContain("requested_appliance_not_compatible_with_host");
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("returns needs_review instead of inventing an unsupported mixed door+drawer builder", () => {
+  it("does not infer mixed door-and-drawer seeds from vendor descriptions", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [
         moduleDef({
@@ -294,20 +272,13 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 600
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("fwm_kitchen_special_module_1");
-    expect(result.params).toMatchObject({
-      type: "fwm_kitchen_special_module_1",
-      width: 600,
-      drawerCount: 1,
-      doorCount: 1,
-      shelfCount: 1,
-      variant: "storage",
-      catalogKey: "US-60"
-    });
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("creates an appliance-ready generic kitchen base seed for hob-zone families", () => {
+  it("does not revive retired appliance-ready seeds", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [
         moduleDef({
@@ -331,20 +302,13 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 400
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("fwm_kitchen_special_module_2");
-    expect(result.params).toMatchObject({
-      type: "fwm_kitchen_special_module_2",
-      width: 400,
-      drawerCount: 2,
-      doorCount: 0,
-      variant: "appliance_ready",
-      catalogKey: "UKB2A-40"
-    });
-    expect((result.params as Record<string, unknown>).vendorPlacementHint).toBe("hob_zone");
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("creates an open-shelf generic kitchen base seed for shelf-only lower families", () => {
+  it("does not revive retired shelf seeds", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [
         moduleDef({
@@ -368,20 +332,13 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 450
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("fwm_kitchen_special_module_3");
-    expect(result.params).toMatchObject({
-      type: "fwm_kitchen_special_module_3",
-      width: 450,
-      drawerCount: 0,
-      doorCount: 0,
-      shelfCount: 2,
-      variant: "open_shelf",
-      catalogKey: "UR-45"
-    });
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("falls back to product template counts when inherited review notes do not contain structure counts", () => {
+  it("does not infer retired seeds from product template counts", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [moduleDef({ moduleType: "drawer_low", runtimeBuilderKey: "drawerLow.v1" })],
       productVariants: [variant({
@@ -398,15 +355,13 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 600
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.params).toMatchObject({
-      type: "drawer_low",
-      drawerCount: 5,
-      catalogKey: "VU5S-60"
-    });
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("creates an accessory cladding seed for lower cover panels", () => {
+  it("does not revive retired cladding seeds", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [
         moduleDef({
@@ -429,20 +384,13 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 100
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("fwm_interior_cladding_1");
-    expect(result.params).toMatchObject({
-      type: "fwm_interior_cladding_1",
-      width: 100,
-      height: 820,
-      depth: 40,
-      requiresWorktop: false,
-      catalogKey: "UPF-10"
-    });
-    expect((result.params as Record<string, unknown>).vendorPlacementHint).toBe("side_cover_panel");
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("creates a plain drawer seed for US2A families without inventing swing doors", () => {
+  it("rejects retired drawer seeds for US2A families", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [moduleDef({ moduleType: "drawer_low", runtimeBuilderKey: "drawerLow.v1" })],
       productVariants: [variant({
@@ -459,17 +407,13 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 600
     });
 
-    expect(result.status).toBe("resolved");
-    expect(result.moduleType).toBe("drawer_low");
-    expect(result.params).toMatchObject({
-      type: "drawer_low",
-      width: 600,
-      drawerCount: 3,
-      catalogKey: "US2A-60"
-    });
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("builds review-stage shallow seeds for inherited lower drawer families", () => {
+  it("rejects retired shallow drawer seeds", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [moduleDef({ moduleType: "drawer_low", runtimeBuilderKey: "drawerLow.v1" })],
       productVariants: [variant({
@@ -489,19 +433,13 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 600
     });
 
-    expect(result.status).toBe("needs_review");
-    expect(result.moduleType).toBe("drawer_low");
-    expect(result.params).toMatchObject({
-      type: "drawer_low",
-      width: 600,
-      depth: 326,
-      drawerCount: 5,
-      catalogKey: "VU5S-60"
-    });
-    expect((result.params as Record<string, unknown>).vendorShallowDepthMm).toBe(326);
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
 
-  it("builds review-stage shallow mixed seeds for inherited drawer-door families", () => {
+  it("requires review for retired mixed seeds", () => {
     const result = resolveVendorModuleSeed(catalog({
       modules: [
         moduleDef({
@@ -528,17 +466,10 @@ describe("resolveVendorModuleSeed", () => {
       widthMm: 600
     });
 
-    expect(result.status).toBe("needs_review");
-    expect(result.moduleType).toBe("fwm_kitchen_special_module_1");
-    expect(result.params).toMatchObject({
-      type: "fwm_kitchen_special_module_1",
-      width: 600,
-      depth: 326,
-      drawerCount: 1,
-      doorCount: 1,
-      shelfCount: 1,
-      variant: "storage",
-      catalogKey: "VUS-60"
-    });
+    expect(result.status).not.toBe("resolved");
+    expect(result.params).toBeNull();
+    expect(result.moduleType).toBeNull();
+    expect(result.reasons).toContain("no_enabled_catalog_module_for_runtime_builder");
   });
+
 });

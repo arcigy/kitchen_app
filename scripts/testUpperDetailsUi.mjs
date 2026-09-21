@@ -56,7 +56,7 @@ try {
   assert(!(await state()).active, 'Escape cancels insertion before the first pointer preview');
   let p = await hover(200, 200); await page.mouse.click(p.x, p.y);
   assert((await snap(group)).instances.length === 0, 'Click after Escape does not insert a module');
-  await page.evaluate(() => window.__kitchenDebug.startModulePlacement('flap_shelves_low'));
+  await page.evaluate(() => window.__kitchenDebug.startModulePlacement('fwm_catalog_wall_cabinet'));
   p = await hover(1200, 200); assert((await state()).valid, 'Straight upper preview is valid');
   await page.mouse.click(p.x, p.y); await page.keyboard.press('Escape');
   let upper = (await snap(group)).instances[0];
@@ -121,7 +121,7 @@ try {
   assert(await upperLayer().getAttribute('aria-pressed') === 'true', '3D retains the active upper catalog layer');
   assert(await baseCards().count() === 0 && await upperCards().count() > 0, 'Upper catalog excludes lower cabinets in 3D');
   assert(await tallCards().count() > 0, 'Tall cabinets remain available in upper layer');
-  await page.evaluate(() => window.__kitchenDebug.startModulePlacement('flap_shelves_low'));
+  await page.evaluate(() => window.__kitchenDebug.startModulePlacement('fwm_catalog_wall_cabinet'));
   await baseLayer().click();
   assert(!(await state()).active, 'Layer switch cancels in-progress insertion');
   assert(await baseCards().count() > 0 && await upperCards().count() === 0, 'Lower layer updates the catalog immediately');

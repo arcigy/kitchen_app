@@ -279,7 +279,7 @@ async function main() {
       assert(item.maxLongTaskMs < maxInteractiveMs, "Kitchen context edit causes delayed main-thread jank", item);
     }
 
-    const drawerButton = await clickButton(page, `(title, text) => title === "fwm_base_drawer_cabinet"`);
+    const drawerButton = await clickButton(page, `(title, text) => title === "fwm_catalog_base_drawers"`);
     assert(drawerButton.ok && drawerButton.ms < maxInteractiveMs, "FWM module button is too slow", drawerButton);
     const drawerSettle = await monitorMainThread(page, 650);
     assert(drawerSettle.maxLongTaskMs < maxInteractiveMs, "FWM module insert causes delayed main-thread jank", drawerSettle);
@@ -292,7 +292,7 @@ async function main() {
     assert(placeFirst.ok && placeFirst.ms < maxInteractiveMs, "First module placement is too slow", placeFirst);
     assert(placeFirst.maxLongTaskMs < maxInteractiveMs, "First module placement causes delayed main-thread jank", placeFirst);
 
-    const shelfButton = await clickButton(page, `(title, text) => title === "fwm_base_shelf_cabinet"`);
+    const shelfButton = await clickButton(page, `(title, text) => title === "fwm_catalog_base_doors"`);
     assert(shelfButton.ok && shelfButton.ms < maxInteractiveMs, "Second FWM module button is too slow", shelfButton);
     const shelfSettle = await monitorMainThread(page, 650);
     assert(shelfSettle.maxLongTaskMs < maxInteractiveMs, "Second FWM module insert causes delayed main-thread jank", shelfSettle);

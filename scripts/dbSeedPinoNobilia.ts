@@ -16,14 +16,12 @@ import type {
 } from "../src/core/catalog/catalog-types";
 import { attachVendorModuleIntent, summarizeVendorTemplateIntent } from "../src/core/catalog/vendor-module-intent";
 import { createCatalogModuleDefinitionFromPackage } from "../src/core/module-package/module-package-catalog";
-import { createPostgresModulePackageRepository } from "../src/core/module-package/module-package-postgres-repository";
 import type { FurnQuoteModulePackage } from "../src/core/module-package/module-package-types";
 import {
   getPinoSideCabinetDefinitions,
   getPinoSideCabinetSystem
 } from "../src/modules/pinoSideCabinet/types";
 import { buildPinoHandleComponentEntries, buildPinoHandleGeometryEntries } from "../src/modules/pinoSideCabinet/handleCatalog";
-import { createPinoNobiliaTenantModulePackages } from "../src/system/pinoNobiliaTenantPackages";
 
 const CLIENT_ID = "client_pino_nobilia_vkh_2026";
 const USER_ID = "user_pino_nobilia_owner";
@@ -687,11 +685,8 @@ try {
     );
   });
 
-  const packageRepository = createPostgresModulePackageRepository({ connectionString, schema });
-  const savedPackages = [];
-  for (const modulePackage of createPinoNobiliaTenantModulePackages()) {
-    savedPackages.push(await packageRepository.savePackage(ctx, modulePackage, { source: "dev-json" }));
-  }
+  // Module assignment is explicit. Importing vendor data must never reinstall retired demo builders.
+  const savedPackages: FurnQuoteModulePackage[] = [];
 
   const catalogRepository = createPostgresClientCatalogRepository({ connectionString, schema });
   const catalog = await createPinoCatalog({ outputDir, savedPackages });

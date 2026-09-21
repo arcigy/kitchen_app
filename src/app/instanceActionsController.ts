@@ -30,6 +30,8 @@ type InstanceActionsContext = {
   syncPlacedInstancePresentation?: (inst: LayoutInstance) => void;
   setSelectedModule: (id: string | null) => void;
   updateLayoutPanel: () => void;
+  onDuplicateInstance?: (source: LayoutInstance, duplicate: LayoutInstance) => void;
+  onDeleteInstance?: (instance: LayoutInstance) => void;
 };
 
 export function createInstanceActionsController(ctx: InstanceActionsContext) {
@@ -112,6 +114,7 @@ export function createInstanceActionsController(ctx: InstanceActionsContext) {
     ctx.layoutRoot.add(next.root);
     ctx.instances.push(next);
     ctx.placeWithoutOverlap(next);
+    ctx.onDuplicateInstance?.(inst, next);
     refreshModuleKitchenPlacement({
       instance: next,
       kitchenGroups: ctx.S.kitchenGroups,
@@ -132,6 +135,7 @@ export function createInstanceActionsController(ctx: InstanceActionsContext) {
     ctx.layoutRoot.remove(inst.root);
     disposeObject3D(inst.root);
     ctx.instances.splice(idx, 1);
+    ctx.onDeleteInstance?.(inst);
     if (inst.kitchenGroupId) {
       const group = ctx.S.kitchenGroups.find((item) => item.id === inst.kitchenGroupId);
       if (group) group.instanceIds = group.instanceIds.filter((instanceId) => instanceId !== id);

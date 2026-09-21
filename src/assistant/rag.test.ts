@@ -138,12 +138,12 @@ describe.sequential("assistant RAG", () => {
     expect(results[0]?.source).toBe("docs/materials.md");
   });
 
-  it("includes tenant PINO catalog chunks in assistant retrieval", async () => {
+  it("excludes retired PINO catalog chunks from assistant retrieval", async () => {
     const root = await trackedRoot("arcigy-rag-tenant-");
     await writeFile(path.join(root, "AGENTS.md"), "# Agent Rules\nUse safe tools.", "utf-8");
 
     const index = await buildAssistantRagIndex(root, tenantCatalog());
-    expect(index.chunks.some((chunk) => chunk.source.startsWith("tenant-catalog/"))).toBe(true);
+    expect(index.chunks.some((chunk) => chunk.source.startsWith("tenant-catalog/"))).toBe(false);
 
     const results = await searchAssistantRag({
       projectRoot: root,
@@ -152,7 +152,7 @@ describe.sequential("assistant RAG", () => {
       query: "vysoky modul s mikrovlnkou a zasuvkou",
       limit: 3
     });
-    expect(results.some((chunk) => chunk.source.startsWith("tenant-catalog/"))).toBe(true);
+    expect(results.some((chunk) => chunk.source.startsWith("tenant-catalog/"))).toBe(false);
   });
 
   it("keys transient tenant indexes by catalog revision and replaces stale tenant chunks", async () => {

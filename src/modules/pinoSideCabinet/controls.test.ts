@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { FakeElement } from "../../app/testUtils/propertiesPanelHarness";
 import { createPinoSideCabinetControls } from "./controls";
-import { createPinoSideCabinetPreviewCatalog } from "./previewCatalog";
+import { createPinoSideCabinetPreviewCatalog } from "./previewCatalog.fixture";
 import { makeDefaultPinoSideCabinetParams, normalizePinoSideCabinetParams } from "./types";
 
 function installTaggedFakeDocument() {

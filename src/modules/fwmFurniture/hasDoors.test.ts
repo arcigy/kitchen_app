@@ -19,10 +19,6 @@ const cases: Array<[string, Record<string, unknown>, RegExp]> = [
   ["wall_corner_90", {}, /^(door_front_|doorHandle_|hinge_front_)/],
   ["fwm_catalog_wall_cabinet", { variant: "corner_chamfered" }, /corner_chamfered_(diagonal_front|diagonal_handle|hinge_lower|hinge_upper)_/],
   ["fwm_catalog_tall_cabinet", { tallSlotCount: 3, tallSlot1Type: "drawer", tallSlot1HeightMm: 300, tallSlot2Type: "door", tallSlot2HeightMm: 600, tallSlot3Type: "door", tallSlot3HeightMm: 400, tallSlot3DoorOpeningMode: "lift_up" }, /^tower_door_/],
-  ["swing_shelves_low", { doorDouble: true }, /^door_front_/],
-  ["corner_shelf_lower", {}, /^(door_front_|doorHandle_|hinge_front_)/],
-  ["flap_shelves_low", { doorSystem: "lift_up" }, /^(door-front|handle|lift-hardware-)/],
-  ["flap_shelves_low", { doorSystem: "double_hinged" }, /^door-(left|right)/],
 ];
 
 function parts(group: Object3D) {

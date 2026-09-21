@@ -2,15 +2,13 @@ import { describe, expect, it } from "vitest";
 import { getSystemSeedCatalog } from "../core/catalog/catalog-repository";
 import { createDefaultModulePackageParameters } from "../core/module-package/runtime/module-runtime-adapter";
 import type { ModuleParams } from "../model/cabinetTypes";
-import { makeDefaultDrawerLowParams } from "../modules/drawerLow/types";
 import { makeDefaultFwmFurnitureParams } from "../modules/fwmFurniture/types";
 import { extendedFurnitureModulePackages } from "../system/module-packages/extendedFurniture";
-import { createPinoNobiliaTenantModulePackages } from "../system/pinoNobiliaTenantPackages";
 import { makeDefaultKitchenContext, resolveContext } from "./kitchenContext";
 import { applyKitchenContextToModuleParams } from "./kitchenMaterialSync";
 
 function getTenantPackage(moduleType: string) {
-  const modulePackage = createPinoNobiliaTenantModulePackages().find((entry) => entry.module.moduleType === moduleType);
+  const modulePackage = extendedFurnitureModulePackages.find((entry) => entry.module.moduleType === moduleType);
   expect(modulePackage, moduleType).toBeTruthy();
   return modulePackage!;
 }
@@ -20,9 +18,7 @@ function num(value: unknown, fallback = 0) {
 }
 
 function readDrawerFrontHeights(params: Record<string, unknown>) {
-  return Array.isArray(params.drawerFrontHeights)
-    ? params.drawerFrontHeights.filter((value): value is number => typeof value === "number" && Number.isFinite(value))
-    : [];
+  return String(params.drawerFrontHeightsMm ?? "").split(",").filter(Boolean).map(Number);
 }
 
 function materialIdForFamily(catalog: ReturnType<typeof getSystemSeedCatalog>, family: string, except: string[] = []) {
@@ -50,18 +46,16 @@ function getVisibleDrawerStackHeight(params: Record<string, unknown>) {
   return Math.max(
     drawerCount,
     Math.round(num(params.height, 0)) -
-      worktopThicknessMm -
       Math.max(0, Math.round(num(params.plinthHeight, 0))) -
-      Math.max(0, Math.round(num(params.topGap, 0))) -
-      Math.max(0, Math.round(num(params.bottomGap, 0))) -
+      2 * Math.max(0, Math.round(num(params.frontGap, 0))) -
       Math.max(0, Math.round(num(params.frontGap, 0))) * (drawerCount - 1)
   );
 }
 
 describe("applyKitchenContextToModuleParams", () => {
-  it("re-normalizes PINO tenant drawer modules after package kitchen-context sync", () => {
+  it("re-normalizes tenant drawer modules after package kitchen-context sync", () => {
     const catalog = getSystemSeedCatalog();
-    const modulePackage = getTenantPackage("drawer_low");
+    const modulePackage = getTenantPackage("fwm_catalog_base_drawers");
     const ctx = resolveContext({
       ...makeDefaultKitchenContext(catalog),
       heightMm: 910,
@@ -73,7 +67,7 @@ describe("applyKitchenContextToModuleParams", () => {
       plinthDepthMm: 70
     });
     const params = {
-      ...makeDefaultDrawerLowParams(),
+      ...makeDefaultFwmFurnitureParams("fwm_catalog_base_drawers"),
       modulePackageId: modulePackage.module.modulePackageId,
       catalogKey: "UA-60",
       drawerCount: 5,
@@ -84,22 +78,22 @@ describe("applyKitchenContextToModuleParams", () => {
 
     applyKitchenContextToModuleParams(params, ctx, catalog, modulePackage);
 
-    const drawerFrontHeights = readDrawerFrontHeights(params);
+    const drawerFrontHeightsMm = readDrawerFrontHeights(params);
     expect(params.height).toBe(ctx.heightMm);
-    expect(params.heightCarcass).toBe(num(params.height) - num(params.worktopThicknessMm));
+    expect(params.heightCarcass).toBe(ctx.moduleHeightMm);
     expect(params.depth).toBe(ctx.moduleDepthMm);
     expect(params.plinthHeight).toBe(ctx.plinthHeightMm);
-    expect(drawerFrontHeights).toHaveLength(5);
-    expect(drawerFrontHeights.reduce((sum, value) => sum + value, 0)).toBe(getVisibleDrawerStackHeight(params));
-    expect(drawerFrontHeights.reduce((sum, value) => sum + value, 0)).not.toBe(beforeStackHeight);
+    expect(drawerFrontHeightsMm).toHaveLength(5);
+    expect(drawerFrontHeightsMm.reduce((sum, value) => sum + value, 0)).toBe(getVisibleDrawerStackHeight(params));
+    expect(drawerFrontHeightsMm.reduce((sum, value) => sum + value, 0)).not.toBe(beforeStackHeight);
     expect(params.catalogKey).toBe("UA-60");
     expect(params.vendorPlacementZone).toBe("low");
     expect(params.vendorFeatureTags).toEqual(["drawer_stack"]);
   });
 
-  it("keeps PINO appliance-ready base metadata while syncing kitchen dimensions and materials", () => {
+  it("keeps vendor metadata while syncing kitchen dimensions and materials", () => {
     const catalog = getSystemSeedCatalog();
-    const modulePackage = getTenantPackage("fwm_kitchen_special_module_2");
+    const modulePackage = getTenantPackage("fwm_catalog_base_doors");
     const ctx = resolveContext({
       ...makeDefaultKitchenContext(catalog),
       heightMm: 930,
@@ -111,7 +105,7 @@ describe("applyKitchenContextToModuleParams", () => {
       plinthDepthMm: 80
     });
     const params = {
-      ...makeDefaultFwmFurnitureParams("fwm_kitchen_special_module_2"),
+      ...makeDefaultFwmFurnitureParams("fwm_catalog_base_doors"),
       modulePackageId: modulePackage.module.modulePackageId,
       catalogKey: "UKB2A-40",
       vendorPlacementZone: "low",
@@ -126,7 +120,7 @@ describe("applyKitchenContextToModuleParams", () => {
     expect(params.kitchenModuleRole).toBe("low");
     expect(params.requiresWorktop).toBe(true);
     expect(params.height).toBe(ctx.heightMm);
-    expect(params.heightCarcass).toBe(num(params.height) - num(params.worktopThicknessMm));
+    expect(params.heightCarcass).toBe(ctx.moduleHeightMm);
     expect(params.depth).toBe(ctx.moduleDepthMm);
     expect(params.plinthHeight).toBe(ctx.plinthHeightMm);
     expect(params.worktopThicknessMm).toBe(ctx.worktopThicknessMm);

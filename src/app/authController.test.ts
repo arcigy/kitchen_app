@@ -42,15 +42,7 @@ describe("requireClientSession login form", () => {
     const form = content.children[1]!;
     expect(form.className).toBe("auth-form");
 
-    const companyInput = form.children[0]!.children[1]! as HTMLInputElement;
-    expect(companyInput.type).toBe("text");
-    expect(companyInput.value).toBe("");
-    expect(companyInput.name).toBe("company");
-    expect(companyInput.autocomplete).toBe("organization");
-    expect(companyInput.placeholder).toBe("Zadajte firmu");
-    expect(companyInput.required).toBe(true);
-
-    const usernameInput = form.children[1]!.children[1]! as HTMLInputElement;
+    const usernameInput = form.children[0]!.children[1]! as HTMLInputElement;
     expect(usernameInput.type).toBe("text");
     expect(usernameInput.value).toBe("");
     expect(usernameInput.name).toBe("username");
@@ -58,17 +50,18 @@ describe("requireClientSession login form", () => {
     expect(usernameInput.placeholder).toBe("Zadajte meno používateľa");
     expect(usernameInput.required).toBe(true);
 
-    const passwordInput = form.children[2]!.children[1]! as HTMLInputElement;
+    const passwordInput = form.children[1]!.children[1]! as HTMLInputElement;
     expect(passwordInput.type).toBe("password");
     expect(passwordInput.placeholder).toBe("Zadajte heslo");
     expect(passwordInput.name).toBe("password");
     expect(passwordInput.autocomplete).toBe("current-password");
     expect(passwordInput.required).toBe(true);
 
-    const submit = form.children[4]! as HTMLButtonElement;
+    const submit = form.children[3]! as HTMLButtonElement;
     expect(submit.type).toBe("submit");
     expect(submit.textContent).toBe("Prihlásiť sa do pracoviska");
-    expect(form.children).toHaveLength(5);
+    expect(form.children).toHaveLength(4);
+    expect(form.querySelector('input[name="company"]')).toBeNull();
     expect(root.querySelectorAll('.theme-picker input[type="radio"]')).toHaveLength(3);
     expect(root.querySelector<HTMLInputElement>('.theme-picker input[value="system"]')?.checked).toBe(true);
     expect(content.textContent).not.toContain("Dostupné účty");
@@ -76,7 +69,7 @@ describe("requireClientSession login form", () => {
     expect(content.textContent).not.toContain("Andrej");
   });
 
-  it("sends company, username, and password to the browser login endpoint", async () => {
+  it("sends username and password to the browser login endpoint", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response("", { status: 401 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -99,17 +92,15 @@ describe("requireClientSession login form", () => {
     await Promise.resolve();
 
     const form = root.children[0]!.children[1]!.children[1]!;
-    const companyInput = form.children[0]!.children[1]! as HTMLInputElement;
-    const usernameInput = form.children[1]!.children[1]! as HTMLInputElement;
-    const passwordInput = form.children[2]!.children[1]! as HTMLInputElement;
-    companyInput.value = "Arcigy Kitchen";
+    const usernameInput = form.children[0]!.children[1]! as HTMLInputElement;
+    const passwordInput = form.children[1]!.children[1]! as HTMLInputElement;
     usernameInput.value = "arcigy";
     passwordInput.value = "test-password";
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 
     await expect(sessionPromise).resolves.toMatchObject({ clientId: "client-test", userId: "user-test" });
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/auth/login", expect.objectContaining({
-      body: JSON.stringify({ company: "Arcigy Kitchen", username: "arcigy", password: "test-password" })
+      body: JSON.stringify({ username: "arcigy", password: "test-password" })
     }));
   });
 });

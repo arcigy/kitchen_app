@@ -8,7 +8,7 @@ describe("logoutClient", () => {
   });
 
   it("clears tenant app-data caches after the server invalidates the session", async () => {
-    const sessionData = new Map<string, string>([["arcigy.kitchen.clientAppData.v1", "cached"]]);
+    const sessionData = new Map<string, string>([["arcigy.kitchen.clientAppData.v2", "cached"]]);
     const removeLocal = vi.fn();
     const assign = vi.fn();
     vi.stubGlobal("window", {
@@ -26,7 +26,7 @@ describe("logoutClient", () => {
     await logoutClient();
 
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", { method: "POST", credentials: "include" });
-    expect(sessionData.has("arcigy.kitchen.clientAppData.v1")).toBe(false);
+    expect(sessionData.has("arcigy.kitchen.clientAppData.v2")).toBe(false);
     expect(removeLocal).toHaveBeenCalledWith("arcigy.kitchen.autostartWorkspace");
     expect(assign).toHaveBeenCalledWith("/");
   });

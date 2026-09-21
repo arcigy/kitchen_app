@@ -1,3 +1,4 @@
+import { assertModuleTypeNotRetired } from "./retired-module-types";
 import type { ClientCatalog } from "../catalog/catalog-types";
 import { sanitizeStorageFileName, sanitizeStorageId } from "../storage/storage-types";
 import { hasTrustedRuntimeBuilder, resolveTrustedRuntimeBuilder } from "./runtime/module-runtime-adapter";
@@ -344,6 +345,7 @@ export function validateFurnQuoteModulePackage(
   if (!input.module?.modulePackageId) errors.push("modulePackageId is required");
   else assertSafePackageId(input.module.modulePackageId, errors);
   if (!input.module?.moduleType?.trim()) errors.push("moduleType is required");
+  assertModuleTypeNotRetired(input.module?.moduleType);
   if (!input.module?.familyName?.trim()) errors.push("familyName is required");
   if (!input.module?.displayName?.trim()) errors.push("displayName is required");
   if (!input.module?.version?.trim()) errors.push("module version is required");

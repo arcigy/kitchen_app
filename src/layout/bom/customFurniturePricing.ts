@@ -1,4 +1,5 @@
 import type { ClientCatalog, MaterialDefinition } from "../../core/catalog/catalog-types";
+import { recipeThicknessMm, type ManufacturingRecipeSnapshot } from "../../core/project-manufacturing/project-manufacturing-types";
 import { createPricingCatalog } from "../../core/catalog/pricing-catalog";
 import {
   calculateCommercialPricingFromQuoteBom,
@@ -33,6 +34,22 @@ function resolveMaterial(catalog: ClientCatalog, materialId: string, materialTyp
   return catalog.materials.find((material) => material.materialType === materialType && material.isActive) ?? null;
 }
 
+function recipeUnitPrice(catalog: ClientCatalog, recipe: ManufacturingRecipeSnapshot, areaM2: number, perimeterLm: number): number | null {
+  const pricing = createPricingCatalog(catalog);
+  let total = 0;
+  for (const layer of recipe.layers) {
+    const unit = layer.unitPrice === undefined ? pricing.getUnitPriceForCatalogId(layer.materialId) : layer.unitPrice;
+    if (unit == null) return null;
+    total += unit * areaM2;
+  }
+  for (const operation of recipe.operations) {
+    const count = operation.repetitions;
+    const quantity = operation.basis === "area" ? areaM2 : operation.basis === "length" ? perimeterLm : operation.basis === "pieces" ? 1 : 1;
+    total += operation.unitRate * quantity * count;
+  }
+  return areaM2 > 0 ? round(total / areaM2, 6) : null;
+}
+
 export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance, catalog: ClientCatalog): PortableQuoteBomPayload {
   const items: PortableQuoteBomItem[] = [];
   const materials: Record<string, PortableMaterialRef> = {};
@@ -44,6 +61,9 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
     const boardPortable = toPortableMaterial(boardMaterial);
     const bounds = polygonBoundsMm(profile);
     const areaM2 = round(polygonAreaMm2(profile) / 1_000_000);
+    const perimeterLm = round(profile.reduce((sum, _point, index) => sum + polygonEdgeLengthMm(profile, index), 0) / 1000);
+    const recipe = board.recipeSnapshot;
+    const recipePrice = recipe ? recipeUnitPrice(catalog, recipe, areaM2, perimeterLm) : null;
     const materialSlotId = `board:${board.id}`;
     if (boardPortable) materials[materialSlotId] = boardPortable;
 
@@ -51,8 +71,8 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
       id: `custom-board-${furniture.id}-${board.id}`,
       itemType: "board",
       category: board.kind === "worktop" ? "worktop" : "custom_furniture_board",
-      name: board.name,
-      description: `${board.name} (${board.kind})`,
+      name: recipe?.name ?? board.name,
+      description: recipe ? `${recipe.name} (${board.name})` : `${board.name} (${board.kind})`,
       pricingBasis: "sheet_area",
       pricingUnit: "m2",
       quantity: 1,
@@ -61,7 +81,7 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
       dimensionsMm: {
         length: Math.max(1, Math.round(bounds.widthMm)),
         width: Math.max(1, Math.round(bounds.heightMm)),
-        thickness: Math.max(1, Math.round(board.thicknessMm))
+        thickness: Math.max(1, Math.round(recipe ? recipeThicknessMm(recipe) : board.thicknessMm))
       },
       metrics: {
         areaM2,
@@ -71,7 +91,7 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
       materialSlotId,
       materialGroup: board.kind === "worktop" ? "worktop" : boardMaterial?.boardFamily ?? "body",
       material: boardPortable,
-      catalogRef: boardPortable
+      catalogRef: !recipe && boardPortable
         ? {
             entityType: "material",
             catalogId: boardPortable.catalogId,
@@ -81,7 +101,7 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
             pricingUnit: "m2"
           }
         : null,
-      pricingLookup: boardPortable
+      pricingLookup: !recipe && boardPortable
         ? {
             key: boardPortable.catalogId,
             sourceCatalogId: boardPortable.catalogId,
@@ -89,8 +109,13 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
             resolution: "catalog_id"
           }
         : null,
+      ...(recipe ? { unitPriceOverride: recipePrice } : {}),
       sourcePartIds: [board.id],
-      notes: [`Area: ${areaM2} m2`, `Thickness: ${Math.round(board.thicknessMm)} mm`],
+      notes: [
+        `Area: ${areaM2} m2`,
+        `Thickness: ${Math.round(recipe ? recipeThicknessMm(recipe) : board.thicknessMm)} mm`,
+        ...(recipe ? [`Recipe: ${recipe.name} v${recipe.version}`, `Recipe layers: ${recipe.layers.length}`, `Recipe operations: ${recipe.operations.length}`] : [])
+      ],
       pricingGroup: "boards"
     });
 

@@ -78,14 +78,11 @@ function catalog(args: {
 }
 
 describe("pinoVendorKitchenCatalog", () => {
-  it("recognizes the PINO vendor tenant catalog", () => {
-    expect(hasPinoVendorKitchenCatalog({
-      clientId: "client_pino_nobilia_vkh_2026",
-      vendorCatalog: null as never
-    })).toBe(true);
+  it("recognizes vendor metadata even when its retired modules are unavailable", () => {
+    expect(hasPinoVendorKitchenCatalog(catalog({ modules: [], productVariants: [] }))).toBe(true);
   });
 
-  it("builds one catalog entry per vendor template and folds widths into the same product", () => {
+  it("excludes retired catalog entries: builds one catalog entry per vendor template and folds widths into the same product", () => {
     const result = buildPinoVendorKitchenCatalog(catalog({
       modules: [moduleDef({
         moduleType: "drawer_low",
@@ -111,20 +108,11 @@ describe("pinoVendorKitchenCatalog", () => {
       ]
     }));
 
-    expect(result.entries).toHaveLength(1);
-    expect(result.entries[0]).toMatchObject({
-      role: "low",
-      groupId: "drawer_base_cabinets",
-      moduleType: "drawer_low",
-      modulePackageId: "pino_nobilia_drawer_low_vkh_2026_v1",
-      catalogKey: "UA-60",
-      widthLabel: "45 cm / 60 cm"
-    });
-    expect(result.entries[0]?.availableWidthsMm).toEqual([450, 600]);
-    expect(result.groups.low.get("drawer_base_cabinets")).toHaveLength(1);
+    expect(result.entries).toEqual([]);
+    expect(Object.values(result.groups).every(groups => groups.size === 0)).toBe(true);
   });
 
-  it("keeps accessory cover panels in the accessory role with their own group", () => {
+  it("excludes retired catalog entries: keeps accessory cover panels in the accessory role with their own group", () => {
     const result = buildPinoVendorKitchenCatalog(catalog({
       modules: [moduleDef({
         moduleType: "fwm_interior_cladding_1",
@@ -145,13 +133,11 @@ describe("pinoVendorKitchenCatalog", () => {
       })]
     }));
 
-    expect(result.entries).toHaveLength(1);
-    expect(result.entries[0]?.role).toBe("accessory");
-    expect(result.entries[0]?.groupId).toBe("cover_panels");
-    expect(result.groups.accessory.get("cover_panels")?.[0]?.moduleType).toBe("fwm_interior_cladding_1");
+    expect(result.entries).toEqual([]);
+    expect(Object.values(result.groups).every(groups => groups.size === 0)).toBe(true);
   });
 
-  it("uses exact PINO side-cabinet groups and module labels instead of generic heuristic labels", () => {
+  it("excludes retired catalog entries: uses exact PINO side-cabinet groups and module labels instead of generic heuristic labels", () => {
     const result = buildPinoVendorKitchenCatalog(catalog({
       modules: [moduleDef({
         moduleType: "pino_side_cabinet",
@@ -190,22 +176,11 @@ describe("pinoVendorKitchenCatalog", () => {
       ]
     }));
 
-    expect(result.entries).toHaveLength(1);
-    expect(result.entries[0]).toMatchObject({
-      role: "tall",
-      groupId: "dish_storage_drawers",
-      groupLabel: "Bočné skrinky so zásuvkami/výsuvmi",
-      productTemplateName: "Boční skříňka na nádobí SS2A",
-      moduleType: "pino_side_cabinet",
-      modulePackageId: "pino_nobilia_side_cabinet_vkh_2026_v1",
-      catalogKey: "SS2A-60-K",
-      widthLabel: "45 cm / 60 cm",
-      templateNeedsReview: false
-    });
-    expect(result.groups.tall.get("dish_storage_drawers")).toHaveLength(1);
+    expect(result.entries).toEqual([]);
+    expect(Object.values(result.groups).every(groups => groups.size === 0)).toBe(true);
   });
 
-  it("can include review templates so the picker exposes staged tall and accessory PINO modules", () => {
+  it("excludes retired catalog entries: can include review templates so the picker exposes staged tall and accessory PINO modules", () => {
     const result = buildPinoVendorKitchenCatalog(catalog({
       modules: [
         moduleDef({
@@ -251,8 +226,8 @@ describe("pinoVendorKitchenCatalog", () => {
       ]
     }), "", { includeNeedsReview: true });
 
-    expect(result.entries).toHaveLength(2);
-    expect(result.entries.map((entry) => entry.role)).toEqual(expect.arrayContaining(["tall", "accessory"]));
-    expect(result.entries.every((entry) => entry.templateNeedsReview)).toBe(true);
+    expect(result.entries).toEqual([]);
+    expect(Object.values(result.groups).every(groups => groups.size === 0)).toBe(true);
   });
+
 });

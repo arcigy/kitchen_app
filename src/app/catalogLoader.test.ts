@@ -110,13 +110,22 @@ describe("catalogLoader PINO tenant loading", () => {
     });
   });
 
-  it("can test persisted demo presets through the real tenant API on localhost", async () => {
-    vi.stubEnv("VITE_LOCAL_CLIENT_CATALOG_FROM_API", "true");
+  it("always loads the persisted localhost tenant catalog without a fallback flag", async () => {
     const serverCatalog = { clientId: "client_arcigy_demo", ...createSystemCatalogSeed() };
     const fetchMock = vi.fn(async () => createResponse({ catalog: serverCatalog }));
     vi.stubGlobal("fetch", fetchMock);
     expect(await loadClientCatalogForApp("client_arcigy_demo")).toEqual(serverCatalog);
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("never reinstalls local demo templates when the tenant API fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 503 })));
+    await expect(loadClientCatalogForApp("client_arcigy_demo")).rejects.toThrow("HTTP 503");
+  });
+
+  it("refuses another company's catalog returned to the local account", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => createResponse({ catalog: { clientId: "foreign", ...createSystemCatalogSeed() } })));
+    await expect(loadClientCatalogForApp("client_arcigy_demo")).rejects.toThrow("invalid response");
   });
 
   it("loads the server catalog for a non-demo localhost tenant instead of forcing local fallback", async () => {
@@ -144,7 +153,7 @@ describe("catalogLoader PINO tenant loading", () => {
       ...createSystemCatalogSeed()
     };
     window.sessionStorage.setItem(
-      "arcigy.kitchen.clientAppData.v1",
+      "arcigy.kitchen.clientAppData.v2",
       JSON.stringify({
         clientId: "client_arcigy_demo",
         clientCatalog: demoCatalog,
@@ -173,7 +182,7 @@ describe("catalogLoader PINO tenant loading", () => {
       ...createSystemCatalogSeed()
     };
     window.sessionStorage.setItem(
-      "arcigy.kitchen.clientAppData.v1",
+      "arcigy.kitchen.clientAppData.v2",
       JSON.stringify({
         clientId: catalog.clientId,
         clientCatalog: catalog,
@@ -197,7 +206,7 @@ describe("catalogLoader PINO tenant loading", () => {
     const staleCatalog = { clientId, ...createSystemCatalogSeed(), marker: "stale" };
     const currentCatalog = { clientId, ...createSystemCatalogSeed(), marker: "current" };
     window.sessionStorage.setItem(
-      "arcigy.kitchen.clientAppData.v1",
+      "arcigy.kitchen.clientAppData.v2",
       JSON.stringify({
         clientId,
         clientCatalog: staleCatalog,
@@ -225,7 +234,7 @@ describe("catalogLoader PINO tenant loading", () => {
     const clientId = "client_auth_expired";
     const catalog = { clientId, ...createSystemCatalogSeed() };
     window.sessionStorage.setItem(
-      "arcigy.kitchen.clientAppData.v1",
+      "arcigy.kitchen.clientAppData.v2",
       JSON.stringify({
         clientId,
         clientCatalog: catalog,
@@ -292,10 +301,10 @@ describe("catalogLoader PINO tenant loading", () => {
     expect((first.clientCatalog as typeof catalog).largePayload).toBe(largePayload);
     expect(fetchMock).toHaveBeenCalledTimes(4);
     await vi.waitFor(() => {
-      const value = window.sessionStorage.getItem("arcigy.kitchen.clientAppData.v1");
+      const value = window.sessionStorage.getItem("arcigy.kitchen.clientAppData.v2");
       expect(value ? (JSON.parse(value) as { clientId?: string }).clientId : null).toBe(catalog.clientId);
     }, { timeout: 10_000 });
-    const stored = window.sessionStorage.getItem("arcigy.kitchen.clientAppData.v1");
+    const stored = window.sessionStorage.getItem("arcigy.kitchen.clientAppData.v2");
     expect(stored).not.toBeNull();
     expect(stored!.length).toBeLessThan(5 * 1024 * 1024);
     expect(JSON.parse(stored!) as unknown).toMatchObject({
@@ -327,7 +336,7 @@ describe("catalogLoader PINO tenant loading", () => {
     const staleCatalog = { clientId, ...createSystemCatalogSeed(), marker: "stale" };
     const currentCatalog = { clientId, ...createSystemCatalogSeed(), marker: "current" };
     window.sessionStorage.setItem(
-      "arcigy.kitchen.clientAppData.v1",
+      "arcigy.kitchen.clientAppData.v2",
       JSON.stringify({
         clientId,
         clientCatalog: staleCatalog,
@@ -385,11 +394,11 @@ describe("catalogLoader PINO tenant loading", () => {
       clientCatalog: { clientId, marker: "ready" }
     });
     expect(revisionCalls).toBe(2);
-    expect(window.sessionStorage.getItem("arcigy.kitchen.clientAppData.v1")).toBeNull();
+    expect(window.sessionStorage.getItem("arcigy.kitchen.clientAppData.v2")).toBeNull();
 
     releaseFinalRevision!(createResponse({ revision }));
     await vi.waitFor(() => {
-      expect(window.sessionStorage.getItem("arcigy.kitchen.clientAppData.v1")).not.toBeNull();
+      expect(window.sessionStorage.getItem("arcigy.kitchen.clientAppData.v2")).not.toBeNull();
     });
   });
 
@@ -456,7 +465,7 @@ describe("catalogLoader PINO tenant loading", () => {
     await loadClientAppDataForApp(newestCatalog.clientId);
     await new Promise((resolve) => setTimeout(resolve, 2500));
 
-    const stored = window.sessionStorage.getItem("arcigy.kitchen.clientAppData.v1");
+    const stored = window.sessionStorage.getItem("arcigy.kitchen.clientAppData.v2");
     expect(stored).not.toBeNull();
     expect(JSON.parse(stored!) as unknown).toMatchObject({ clientId: newestCatalog.clientId });
   }, 15_000);
