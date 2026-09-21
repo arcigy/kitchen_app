@@ -154,7 +154,7 @@ describe("module placement helpers", () => {
     left.params = { type: "drawer_low", width: 600 } as LayoutInstance["params"];
     const right = moduleInstance("kg1");
     right.id = "shelf";
-    right.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    right.params = { type: "fwm_catalog_base_doors", width: 600 } as LayoutInstance["params"];
     const prevBoxes = new Map([
       ["drawer", new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.3), new THREE.Vector3(0, 0.8, 0.3))],
       ["shelf", new THREE.Box3(new THREE.Vector3(0.08, 0, -0.3), new THREE.Vector3(0.68, 0.8, 0.3))]
@@ -182,7 +182,7 @@ describe("module placement helpers", () => {
     const corner = cornerModule();
     const shelf = moduleInstance("kg1");
     shelf.id = "shelf";
-    shelf.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    shelf.params = { type: "fwm_catalog_base_doors", width: 600 } as LayoutInstance["params"];
     const prevBoxes = new Map([
       ["corner", new THREE.Box3(new THREE.Vector3(-0.8, 0, -0.8), new THREE.Vector3(0, 0.8, 0))],
       ["shelf", new THREE.Box3(new THREE.Vector3(0.12, 0, -0.3), new THREE.Vector3(0.72, 0.8, 0.3))]
@@ -203,10 +203,10 @@ describe("module placement helpers", () => {
   it("lets the protected moved-to-anchor module push the weaker anchor if needed", () => {
     const a = moduleInstance("kg1");
     a.id = "shelf-a";
-    a.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    a.params = { type: "fwm_catalog_base_doors", width: 600 } as LayoutInstance["params"];
     const b = moduleInstance("kg1");
     b.id = "shelf-b";
-    b.params = { type: "shelves", width: 600 } as LayoutInstance["params"];
+    b.params = { type: "fwm_catalog_base_doors", width: 600 } as LayoutInstance["params"];
     const prevBoxes = new Map([
       ["shelf-a", new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.3), new THREE.Vector3(0, 0.8, 0.3))],
       ["shelf-b", new THREE.Box3(new THREE.Vector3(0.1, 0, -0.3), new THREE.Vector3(0.7, 0.8, 0.3))]

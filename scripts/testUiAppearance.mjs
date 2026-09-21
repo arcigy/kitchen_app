@@ -143,7 +143,7 @@ try {
   await page.waitForFunction(() => Boolean(window.__kitchenDebug), null, { timeout: 120_000 });
   await page.evaluate(() => window.__kitchenDebug.createKitchenScenario({
     path: [{ x: 0, z: 0 }, { x: 3000, z: 0 }], justification: "back",
-    addModule: true, moduleType: "drawer_low", offsetAlongMm: 700
+    addModule: true, moduleType: "fwm_catalog_base_drawers", offsetAlongMm: 700
   }));
   for (const value of ["dark", "light"]) {
     const before = await page.evaluate(() => window.__kitchenDebug.layoutSnapshot());

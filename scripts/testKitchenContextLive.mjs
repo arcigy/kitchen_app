@@ -88,7 +88,7 @@ async function main() {
         justification: "back",
         mirrored: false,
         addModule: true,
-        moduleType: "drawer_low",
+        moduleType: "fwm_catalog_base_drawers",
         segmentIndex: 0,
         offsetAlongMm: 800
       });

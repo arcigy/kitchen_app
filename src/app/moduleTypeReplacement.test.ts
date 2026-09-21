@@ -23,10 +23,12 @@ describe("module type replacement", () => {
   it("offers only enabled modules from the same Revit-like category, kitchen role and corner class", () => {
     const catalog = testCatalog();
     const current = modulePackage("fwm_catalog_base_corner");
-    const lowerCorner = modulePackage("fwm_corner_base_module_1");
+    const lowerCorner = structuredClone(current);
+    lowerCorner.module.modulePackageId = "test_corner_variant";
     const upperCorner = modulePackage("wall_corner_90");
     const straightBase = modulePackage("fwm_catalog_base_doors");
-    const disabledLowerCorner = modulePackage("fwm_corner_base_module_2");
+    const disabledLowerCorner = structuredClone(current);
+    disabledLowerCorner.module.modulePackageId = "test_disabled_corner_variant";
     catalog.modules = [
       createCatalogModuleDefinitionFromPackage(current, { catalog, enabled: true }),
       createCatalogModuleDefinitionFromPackage(lowerCorner, { catalog, enabled: true }),

@@ -11,7 +11,7 @@ import type {
 import { attachVendorModuleIntent, summarizeVendorTemplateIntent } from "../../core/catalog/vendor-module-intent";
 import { createCatalogModuleDefinitionFromPackage } from "../../core/module-package/module-package-catalog";
 import { getPinoSideCabinetDefinitions, getPinoSideCabinetSystem } from "./types";
-import { createPinoSideCabinetTenantPackage } from "../../system/module-packages/pinoSideCabinet";
+import { createPinoSideCabinetTenantPackage } from "../../core/catalog/__fixtures__/retiredPinoModule";
 import { buildPinoHandleComponentEntries, buildPinoHandleGeometryEntries } from "./handleCatalog";
 
 function material(args: {

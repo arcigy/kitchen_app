@@ -213,7 +213,7 @@ async function createFullFixture(page) {
       path: [{ x: -1100, z: 250 }, { x: 1100, z: 250 }, { x: 1100, z: 1450 }],
       segmentDepthsMm: [620, 760],
       addModule: true,
-      moduleType: "drawer_low",
+      moduleType: "fwm_catalog_base_drawers",
       offsetAlongMm: 550
     });
     const inst = kitchen.instances[0];

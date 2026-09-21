@@ -46,7 +46,7 @@ function makeCatalog() {
 }
 
 function makeCornerPackage(): FurnQuoteModulePackage {
-  return structuredClone(cornerShelfLowerFixture) as FurnQuoteModulePackage;
+  return structuredClone(systemModulePackageTemplates.find(pack => pack.module.moduleType === "fwm_catalog_base_corner")!);
 }
 
 function makePackage(overrides: Partial<FurnQuoteModulePackage> = {}): FurnQuoteModulePackage {
@@ -55,8 +55,8 @@ function makePackage(overrides: Partial<FurnQuoteModulePackage> = {}): FurnQuote
     format: "furnquote-module",
     packageVersion: 1,
     module: {
-      modulePackageId: "drawer_low_standard",
-      moduleType: "drawer_low",
+      modulePackageId: "fwm_catalog_base_drawers_standard",
+      moduleType: "fwm_catalog_base_drawers",
       familyName: "Drawer Low",
       displayName: "Drawer Low",
       category: "base_cabinet",
@@ -95,7 +95,7 @@ function makePackage(overrides: Partial<FurnQuoteModulePackage> = {}): FurnQuote
     },
     geometry: {
       mode: "trusted-runtime",
-      runtimeBuilderKey: "drawerLow.v1"
+      runtimeBuilderKey: "fwm_catalog_base_drawers.v1"
     },
     materials: {
       slots: [
@@ -155,7 +155,7 @@ function makePackage(overrides: Partial<FurnQuoteModulePackage> = {}): FurnQuote
       ]
     },
     compatibility: {
-      requiredRuntimeBuilderKeys: ["drawerLow.v1"]
+      requiredRuntimeBuilderKeys: ["fwm_catalog_base_drawers.v1"]
     },
     integrity: {
       createdAt: now,
@@ -225,7 +225,7 @@ describe("FurnQuote module package validation", () => {
     }))).toThrow("trusted runtime builder");
     expect(() => validateFurnQuoteModulePackage(makePackage({
       module: { ...makePackage().module, moduleType: "package_alias_instead_of_runtime_type" }
-    }))).toThrow("does not match trusted runtime builder type drawer_low");
+    }))).toThrow("does not match trusted runtime builder type fwm_catalog_base_drawers");
     expect(() => validateFurnQuoteModulePackage(makePackage({
       assets: { files: [{ assetId: "bad", fileName: "../bad.png", mimeType: "image/png" }] }
     }))).toThrow("unsafe path segment");
@@ -238,15 +238,15 @@ describe("FurnQuote module package validation", () => {
   it("rejects unsupported versions and incompatible app versions", () => {
     expect(() => validateFurnQuoteModulePackage(makePackage({ packageVersion: 99 }))).toThrow("unsupported packageVersion");
     expect(() => validateFurnQuoteModulePackage(makePackage({
-      compatibility: { minAppVersion: "999.0.0", requiredRuntimeBuilderKeys: ["drawerLow.v1"] }
+      compatibility: { minAppVersion: "999.0.0", requiredRuntimeBuilderKeys: ["fwm_catalog_base_drawers.v1"] }
     }), { appVersion: "1.0.0" })).toThrow("minAppVersion");
   });
 
   it("validates the real cornerShelfLower .fqm fixture", () => {
     const modulePackage = validateFurnQuoteModulePackage(makeCornerPackage());
-    expect(modulePackage.module.moduleType).toBe("corner_shelf_lower");
+    expect(modulePackage.module.moduleType).toBe("fwm_catalog_base_corner");
     expect(modulePackage.module.category).toBe("corner_cabinet");
-    expect(modulePackage.geometry).toMatchObject({ mode: "trusted-runtime", runtimeBuilderKey: "cornerShelfLower.v1" });
+    expect(modulePackage.geometry).toMatchObject({ mode: "trusted-runtime", runtimeBuilderKey: "fwm_catalog_base_corner.v1" });
     expect(modulePackage.placement.allowedContexts).toEqual(["kitchen_corner"]);
     expect(modulePackage.behavior?.contextBindings?.[0]).toMatchObject({
       contextType: "kitchenGroup",
@@ -263,17 +263,7 @@ describe("FurnQuote module package validation", () => {
   });
 
   it("validates all system .fqm templates used for tenant seeding", () => {
-    const basePackageIds = [
-      "corner_shelf_lower_family_v1",
-      "drawer_low_family_v1",
-      "flap_shelves_low_family_v1",
-      "fridge_tall_family_v1",
-      "swing_shelves_low_family_v1"
-    ];
-    expect(systemModulePackageTemplates.map((modulePackage) => modulePackage.module.modulePackageId).sort()).toEqual([
-      ...basePackageIds,
-      ...extendedFurnitureModulePackages.map((modulePackage) => modulePackage.module.modulePackageId)
-    ].sort());
+    expect(systemModulePackageTemplates).toEqual(extendedFurnitureModulePackages);
     for (const modulePackage of systemModulePackageTemplates) {
       const validated = validateFurnQuoteModulePackage(modulePackage);
       expect(["trusted-runtime", "declarative"]).toContain(validated.geometry.mode);
@@ -362,16 +352,16 @@ describe("tenant module package import", () => {
     const serviceA = createModulePackageService({ context: ctxA, packageRepository, catalogRepository });
     await serviceA.importPackage({ package: makePackage() });
 
-    expect(await packageRepository.getPackage(ctxA, "drawer_low_standard")).not.toBeNull();
-    expect(await packageRepository.getPackage(ctxB, "drawer_low_standard")).toBeNull();
+    expect(await packageRepository.getPackage(ctxA, "fwm_catalog_base_drawers_standard")).not.toBeNull();
+    expect(await packageRepository.getPackage(ctxB, "fwm_catalog_base_drawers_standard")).toBeNull();
     expect((await packageRepository.listPackages(ctxB))).toEqual([]);
     const catalogA = await catalogRepository.getCatalog(ctxA);
     const catalogB = await catalogRepository.getCatalog(ctxB);
-    expect(catalogA.modules.some((module) => module.modulePackageId === "drawer_low_standard" && module.enabled)).toBe(true);
-    expect(catalogB.modules.some((module) => module.modulePackageId === "drawer_low_standard")).toBe(false);
+    expect(catalogA.modules.some((module) => module.modulePackageId === "fwm_catalog_base_drawers_standard" && module.enabled)).toBe(true);
+    expect(catalogB.modules.some((module) => module.modulePackageId === "fwm_catalog_base_drawers_standard")).toBe(false);
 
-    const storedFilePath = path.join(root, "storage", "clients", "client_a", "catalog", "modules", "drawer_low_standard", "module.fqm");
-    const storedManifestPath = path.join(root, "storage", "clients", "client_a", "catalog", "modules", "drawer_low_standard", "module.package.json");
+    const storedFilePath = path.join(root, "storage", "clients", "client_a", "catalog", "modules", "fwm_catalog_base_drawers_standard", "module.fqm");
+    const storedManifestPath = path.join(root, "storage", "clients", "client_a", "catalog", "modules", "fwm_catalog_base_drawers_standard", "module.package.json");
     expect(JSON.parse(await readFile(storedFilePath, "utf-8"))).toMatchObject({ magic: "FURNQUOTE_MODULE_PACKAGE" });
     expect(JSON.parse(await readFile(storedManifestPath, "utf-8"))).toMatchObject({ format: "furnquote-module" });
   }, 30_000);
@@ -383,14 +373,14 @@ describe("tenant module package import", () => {
     const leftVariant = makePackage({
       module: {
         ...makePackage().module,
-        modulePackageId: "drawer_low_left_variant",
+        modulePackageId: "fwm_catalog_base_drawers_left_variant",
         displayName: "Drawer Low Left"
       }
     });
     const rightVariant = makePackage({
       module: {
         ...makePackage().module,
-        modulePackageId: "drawer_low_right_variant",
+        modulePackageId: "fwm_catalog_base_drawers_right_variant",
         displayName: "Drawer Low Right"
       }
     });
@@ -400,18 +390,18 @@ describe("tenant module package import", () => {
 
     const catalogA = await catalogRepository.getCatalog(ctxA);
     const variants = catalogA.modules.filter((module) =>
-      module.modulePackageId === "drawer_low_left_variant" ||
-      module.modulePackageId === "drawer_low_right_variant"
+      module.modulePackageId === "fwm_catalog_base_drawers_left_variant" ||
+      module.modulePackageId === "fwm_catalog_base_drawers_right_variant"
     );
-    expect(variants.map((module) => module.id).sort()).toEqual(["drawer_low_left_variant", "drawer_low_right_variant"]);
-    expect(variants.map((module) => module.moduleType)).toEqual(["drawer_low", "drawer_low"]);
+    expect(variants.map((module) => module.id).sort()).toEqual(["fwm_catalog_base_drawers_left_variant", "fwm_catalog_base_drawers_right_variant"]);
+    expect(variants.map((module) => module.moduleType)).toEqual(["fwm_catalog_base_drawers", "fwm_catalog_base_drawers"]);
     expect(variants.every((module) => module.enabled)).toBe(true);
   }, 30_000);
 
   it("imports a real .fqm file, stores the envelope, runtime manifest, meta, and assets", async () => {
     const bytes = Buffer.from("preview-bytes");
     const modulePackage = makePackage({
-      module: { ...makePackage().module, modulePackageId: "drawer_low_fqm_import" },
+      module: { ...makePackage().module, modulePackageId: "fwm_catalog_base_drawers_fqm_import" },
       assets: {
         files: [{ assetId: "preview", fileName: "preview.png", mimeType: "image/png", sizeBytes: bytes.length, sha256: sha256Hex(bytes) }]
       }
@@ -433,16 +423,16 @@ describe("tenant module package import", () => {
     const serviceA = createModulePackageService({ context: ctxA, packageRepository, catalogRepository });
     const imported = await serviceA.importPackage({ fqm });
 
-    const moduleDir = path.join(root, "storage", "clients", "client_a", "catalog", "modules", "drawer_low_fqm_import");
+    const moduleDir = path.join(root, "storage", "clients", "client_a", "catalog", "modules", "fwm_catalog_base_drawers_fqm_import");
     expect(JSON.parse(await readFile(path.join(moduleDir, "module.fqm"), "utf-8")).magic).toBe("FURNQUOTE_MODULE_PACKAGE");
-    expect(JSON.parse(await readFile(path.join(moduleDir, "module.package.json"), "utf-8")).module.modulePackageId).toBe("drawer_low_fqm_import");
+    expect(JSON.parse(await readFile(path.join(moduleDir, "module.package.json"), "utf-8")).module.modulePackageId).toBe("fwm_catalog_base_drawers_fqm_import");
     expect(JSON.parse(await readFile(path.join(moduleDir, "module.meta.json"), "utf-8"))).toMatchObject({
-      modulePackageId: "drawer_low_fqm_import",
+      modulePackageId: "fwm_catalog_base_drawers_fqm_import",
       source: "fqm",
       importedByUserId: ctxA.userId
     });
     expect(await readFile(path.join(moduleDir, "assets", "preview.png"), "utf-8")).toBe("preview-bytes");
-    expect(imported.catalogModule.modulePackageId).toBe("drawer_low_fqm_import");
+    expect(imported.catalogModule.modulePackageId).toBe("fwm_catalog_base_drawers_fqm_import");
   }, 30_000);
 
   it("creates tenant parameter presets from current module parameters without storing free dimensions", async () => {
@@ -510,14 +500,14 @@ describe("tenant module package import", () => {
     const modulePackage = makePackage();
     const catalog = makeCatalog();
     catalog.modules.push({
-      id: "drawer_low_package",
-      moduleType: "drawer_low",
+      id: "fwm_catalog_base_drawers_package",
+      moduleType: "fwm_catalog_base_drawers",
       modulePackageId: modulePackage.module.modulePackageId,
       packageVersion: modulePackage.module.version,
       packageHash: computeModulePackageHash(modulePackage),
       name: modulePackage.module.displayName,
       enabled: true,
-      runtimeBuilderKey: "drawerLow.v1"
+      runtimeBuilderKey: "fwm_catalog_base_drawers.v1"
     });
     expect(listVisibleModulePackages({ catalog, packages: [modulePackage] })).toHaveLength(1);
     catalog.modules = catalog.modules.map((module) => module.modulePackageId === modulePackage.module.modulePackageId ? { ...module, enabled: false } : module);
@@ -532,9 +522,9 @@ describe("tenant module package import", () => {
     const imported = await serviceA.importPackage({ package: modulePackage });
 
     expect(imported.catalogModule).toMatchObject({
-      modulePackageId: "corner_shelf_lower_family_v1",
-      moduleType: "corner_shelf_lower",
-      runtimeBuilderKey: "cornerShelfLower.v1",
+      modulePackageId: "fwm_catalog_base_corner_family_v1",
+      moduleType: "fwm_catalog_base_corner",
+      runtimeBuilderKey: "fwm_catalog_base_corner.v1",
       enabled: true
     });
     expect(await packageRepository.getPackage(ctxB, modulePackage.module.modulePackageId)).toBeNull();
@@ -560,15 +550,15 @@ describe("tenant module package import", () => {
     expect(getEnabledModulePackageDefinitions(catalogB, packagesB)).toHaveLength(systemModulePackageTemplates.length);
     expect(catalogA.modules.every((module) => module.modulePackageId)).toBe(true);
 
-    const clientAPath = path.join(root, "storage", "clients", ctxA.clientId, "catalog", "modules", "drawer_low_family_v1", "module.package.json");
-    const clientBPath = path.join(root, "storage", "clients", ctxB.clientId, "catalog", "modules", "drawer_low_family_v1", "module.package.json");
+    const clientAPath = path.join(root, "storage", "clients", ctxA.clientId, "catalog", "modules", "fwm_catalog_base_drawers_family_v1", "module.package.json");
+    const clientBPath = path.join(root, "storage", "clients", ctxB.clientId, "catalog", "modules", "fwm_catalog_base_drawers_family_v1", "module.package.json");
     const clientAPackage = JSON.parse(await readFile(clientAPath, "utf-8")) as FurnQuoteModulePackage;
     clientAPackage.module.displayName = "Client A Drawer";
     await writeFile(clientAPath, `${JSON.stringify(clientAPackage, null, 2)}\n`, "utf-8");
 
-    expect((await packageRepository.getPackage(ctxA, "drawer_low_family_v1"))?.module.displayName).toBe("Client A Drawer");
-    expect((await packageRepository.getPackage(ctxB, "drawer_low_family_v1"))?.module.displayName).not.toBe("Client A Drawer");
-    expect(await readFile(clientBPath, "utf-8")).toContain("Drawer Low");
+    expect((await packageRepository.getPackage(ctxA, "fwm_catalog_base_drawers_family_v1"))?.module.displayName).toBe("Client A Drawer");
+    expect((await packageRepository.getPackage(ctxB, "fwm_catalog_base_drawers_family_v1"))?.module.displayName).not.toBe("Client A Drawer");
+    expect(JSON.parse(await readFile(clientBPath, "utf-8")).module.displayName).toBe(packagesB.find(pack => pack.module.modulePackageId === "fwm_catalog_base_drawers_family_v1")!.module.displayName);
   }, 30_000);
 
   it("uses ClientCatalog plus tenant packages as the module visibility source of truth", async () => {
@@ -577,23 +567,14 @@ describe("tenant module package import", () => {
     const catalog = await catalogRepository.ensureCatalogExists(ctxA);
     const packages = await packageRepository.listPackages(ctxA);
 
-    const baseModuleTypes = [
-      "corner_shelf_lower",
-      "drawer_low",
-      "flap_shelves_low",
-      "fridge_tall",
-      "swing_shelves_low"
-    ];
-    expect(listVisibleModulePackages({ catalog, packages }).map((modulePackage) => modulePackage.module.moduleType).sort()).toEqual([
-      ...baseModuleTypes,
-      ...extendedFurnitureModulePackages.map((modulePackage) => modulePackage.module.moduleType)
-    ].sort());
+    expect(listVisibleModulePackages({ catalog, packages }).map(pack => pack.module.modulePackageId).sort())
+      .toEqual(extendedFurnitureModulePackages.map(pack => pack.module.modulePackageId).sort());
 
     const disabledCatalog = {
       ...catalog,
-      modules: catalog.modules.map((module) => module.moduleType === "drawer_low" ? { ...module, enabled: false } : module)
+      modules: catalog.modules.map((module) => module.moduleType === "fwm_catalog_base_drawers" ? { ...module, enabled: false } : module)
     };
-    expect(listVisibleModulePackages({ catalog: disabledCatalog, packages }).map((modulePackage) => modulePackage.module.moduleType)).not.toContain("drawer_low");
+    expect(listVisibleModulePackages({ catalog: disabledCatalog, packages }).map((modulePackage) => modulePackage.module.moduleType)).not.toContain("fwm_catalog_base_drawers");
     expect(listVisibleModulePackages({
       catalog: {
         ...catalog,
@@ -704,7 +685,7 @@ describe("runtime and project save integration", () => {
     const modulePackage = makePackage();
     const catalog = makeCatalog();
     const group = buildModulePackageGeometry({
-      runtimeBuilderKey: "drawerLow.v1",
+      runtimeBuilderKey: "fwm_catalog_base_drawers.v1",
       parameters: { width: 900 },
       catalog
     });
@@ -737,18 +718,17 @@ describe("runtime and project save integration", () => {
     const catalog = makeCatalog();
     const defaults = createDefaultModulePackageParameters(modulePackage);
     const group = buildModulePackageGeometryFromPackage({ modulePackage, catalog });
-    expect(group.userData.runtimeBuilderKey).toBe("cornerShelfLower.v1");
+    expect(group.userData.runtimeBuilderKey).toBe("fwm_catalog_base_corner.v1");
     expect(group.userData.modulePackageBuildParameters).toMatchObject({
-      modulePackageId: "corner_shelf_lower_family_v1",
-      type: "corner_shelf_lower",
-      lengthX: 1000,
-      lengthZ: 1000,
-      height: 720,
-      depth: 560
+      modulePackageId: "fwm_catalog_base_corner_family_v1",
+      type: "fwm_catalog_base_corner",
+      width: 900,
+      height: 722,
+      depth: 900
     });
-    expect(defaults.lengthX).toBe(1000);
+    expect(defaults.width).toBe(900);
     expect(resolveModulePackageMaterialAssignments({ modulePackage, catalog })).toMatchObject({
-      carcass: catalog.kitchenDefaults.carcassMaterialId,
+      corpus: catalog.kitchenDefaults.carcassMaterialId,
       front: catalog.kitchenDefaults.frontMaterialId
     });
     expect(resolveModulePackageComponentAssignments({ modulePackage, catalog }).handle).toBe(catalog.kitchenDefaults.defaultHandleComponentId);
@@ -866,15 +846,15 @@ describe("runtime and project save integration", () => {
   it("uses package parameter defaults and UI labels as runtime source data", () => {
     const modulePackage = makeCornerPackage();
     modulePackage.parameters.parameters = modulePackage.parameters.parameters.map((parameter) =>
-      parameter.key === "lengthX" ? { ...parameter, defaultValue: 1375, label: "Tenant custom width" } : parameter
+      parameter.key === "width" ? { ...parameter, defaultValue: 1375, label: "Tenant custom width" } : parameter
     );
     modulePackage.ui.groups = modulePackage.ui.groups.map((group) =>
       group.id === "dimensions" ? { ...group, label: "Tenant dimensions" } : group
     );
 
     const defaults = createDefaultModulePackageParameters(modulePackage);
-    expect(defaults.lengthX).toBe(1375);
-    expect(modulePackage.parameters.parameters.find((parameter) => parameter.key === "lengthX")?.label).toBe("Tenant custom width");
+    expect(defaults.width).toBe(1375);
+    expect(modulePackage.parameters.parameters.find((parameter) => parameter.key === "width")?.label).toBe("Tenant custom width");
     expect(modulePackage.ui.groups.find((group) => group.id === "dimensions")?.label).toBe("Tenant dimensions");
   });
 
@@ -904,12 +884,12 @@ describe("runtime and project save integration", () => {
     ) as Record<string, unknown>;
 
     expect(params.height).toBe(910);
-    expect(params.heightCarcass).toBe(872);
+    expect(params.heightCarcass).toBe(kitchenCtx.moduleHeightMm);
     expect(params.depth).toBe(545);
     expect(params.plinthHeight).toBe(123);
     expect(params.plinthSetbackMm).toBe(44);
     expect(params.materialAssignments).toMatchObject({
-      carcass: kitchenCtx.corpusMaterialId,
+      corpus: kitchenCtx.corpusMaterialId,
       front: kitchenCtx.frontsMaterialId
     });
     expect(params.componentAssignments).toMatchObject({
@@ -917,35 +897,31 @@ describe("runtime and project save integration", () => {
     });
     expect(params.handleComponentId).toBe(kitchenCtx.handleComponentId);
     expect(params.handleType).toBe("bar");
-    expect((params.commercialSelections as { boardMaterials: Record<string, string> }).boardMaterials["left-side"]).toBe(kitchenCtx.corpusMaterialId);
+    expect(params.bodyMaterialId).toBe(kitchenCtx.corpusMaterialId);
   });
 
-  it("creates dynamic drawer material slots from .fqm drawerCount rules", () => {
-    const modulePackage = systemModulePackageTemplates.find((candidate) => candidate.module.moduleType === "drawer_low");
+  it("keeps drawer count and resolves supported drawer material assignments", () => {
+    const modulePackage = systemModulePackageTemplates.find((candidate) => candidate.module.moduleType === "fwm_catalog_base_drawers");
     expect(modulePackage).toBeTruthy();
     const catalog = makeCatalog();
     const kitchenCtx = makeDefaultKitchenContext(catalog);
     const params = applyKitchenContextToModuleParams(
       {
         ...createDefaultModulePackageParameters(modulePackage!),
-        type: "drawer_low",
+        type: "fwm_catalog_base_drawers",
         drawerCount: 4
       } as unknown as ModuleParams,
       kitchenCtx,
       catalog,
       modulePackage
     ) as Record<string, unknown>;
-    const selections = params.commercialSelections as {
-      boardMaterials: Record<string, string>;
-      boardThicknesses: Record<string, number>;
-    };
-
-    expect(selections.boardMaterials["drawer-front-4"]).toBe(kitchenCtx.frontsMaterialId);
-    expect(selections.boardMaterials["drawer-box-4-bottom-panel"]).toBe(kitchenCtx.drawerBottomMaterialId);
-    expect(selections.boardMaterials["drawer-box-4-side-panels"]).toMatch(/^(mat\.board\.drawer_box\.|mat\.demos\.drawer_box\.)/);
-    expect(selections.boardMaterials["drawer-box-4-front-back-panels"]).toBe(selections.boardMaterials["drawer-box-4-side-panels"]);
-    expect(selections.boardThicknesses["drawer-front-4"]).toBeGreaterThan(0);
-    expect(selections.boardThicknesses["drawer-box-4-bottom-panel"]).toBeGreaterThan(0);
+    expect(params.drawerCount).toBe(4);
+    expect(params.frontMaterialId).toBe(kitchenCtx.frontsMaterialId);
+    expect(params.drawerBottomMaterialId).toBe(kitchenCtx.drawerBottomMaterialId);
+    expect(params.materialAssignments).toMatchObject({
+      corpus: kitchenCtx.corpusMaterialId,
+      front: kitchenCtx.frontsMaterialId
+    });
   });
 
   it("stores used module package snapshots in .fqp catalog snapshot", async () => {
@@ -961,14 +937,14 @@ describe("runtime and project save integration", () => {
       const hash = computeModulePackageHash(modulePackage);
       const catalog = makeCatalog();
       catalog.modules.push({
-        id: "drawer_low_package",
-        moduleType: "drawer_low",
+        id: "fwm_catalog_base_drawers_package",
+        moduleType: "fwm_catalog_base_drawers",
         modulePackageId: modulePackage.module.modulePackageId,
         packageVersion: modulePackage.module.version,
         packageHash: hash,
         name: modulePackage.module.displayName,
         enabled: true,
-        runtimeBuilderKey: "drawerLow.v1"
+        runtimeBuilderKey: "fwm_catalog_base_drawers.v1"
       });
       const save = assembleProjectSaveFile({
         clientId: ctxA.clientId,
@@ -1015,14 +991,14 @@ describe("runtime and project save integration", () => {
       const hash = computeModulePackageHash(modulePackage);
       const catalog = makeCatalog();
       catalog.modules.push({
-        id: "corner_shelf_lower_package",
-        moduleType: "corner_shelf_lower",
+        id: "fwm_catalog_base_corner_package",
+        moduleType: "fwm_catalog_base_corner",
         modulePackageId: modulePackage.module.modulePackageId,
         packageVersion: modulePackage.module.version,
         packageHash: hash,
         name: modulePackage.module.displayName,
         enabled: true,
-        runtimeBuilderKey: "cornerShelfLower.v1"
+        runtimeBuilderKey: "fwm_catalog_base_corner.v1"
       });
       const moduleInstance = {
         instanceId: "corner-1",

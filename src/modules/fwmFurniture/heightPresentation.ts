@@ -1,6 +1,6 @@
 import { t } from "../../i18n";
 import { FWM_FURNITURE_SPEC_BY_TYPE } from "./definitions";
-import { normalizeFwmFurnitureParams } from "./types";
+import { isFwmFurnitureModuleType, normalizeFwmFurnitureParams } from "./types";
 
 export type ModuleHeightPresentation = {
   label: string;
@@ -13,6 +13,7 @@ export type ModuleHeightPresentation = {
 /** Describe the existing FWM geometry contract without changing any stored dimensions. */
 export function describeFwmModuleHeight(parameters: Record<string, unknown>, bottomElevationMm?: number): ModuleHeightPresentation | null {
   const type = String(parameters.type ?? parameters.moduleType ?? "");
+  if (!isFwmFurnitureModuleType(type)) return null;
   const spec = FWM_FURNITURE_SPEC_BY_TYPE.get(type);
   if (!spec?.kitchenRole || !["base", "corner", "sink", "appliance", "island", "open_end", "tall", "wall"].includes(spec.geometryKind)) return null;
   const params = normalizeFwmFurnitureParams({ ...parameters, type });
