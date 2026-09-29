@@ -97,7 +97,9 @@ try {
   await editField('width', width + 150);
   await modal().locator('[data-module-parameter-preset-trigger]').click();
   await modal().locator('[data-parameter-preset-id="drawers_2_top_shallow"]').click();
-  assert(Number(await field('drawerCount').inputValue()) === 2, 'Preset changes the draft');
+  await page.waitForFunction(() => document.querySelector('[data-module-settings] [data-parameter-key="drawerCount"] input')?.value === '2', null, { timeout: 5000 });
+  const presetDrawerCount = Number(await field('drawerCount').inputValue());
+  assert(presetDrawerCount === 2, `Preset changes the draft (drawerCount=${presetDrawerCount})`);
   assert(Number(await field('width').inputValue()) === width + 150, 'Preset preserves draft dimensions');
   assert(JSON.stringify((await module()).params) === JSON.stringify(initial.params), 'Preset leaves project unchanged');
   const frontBefore = Number(await field('drawer1FrontHeightMm').inputValue());
@@ -129,12 +131,13 @@ try {
   const presetName = `QA advanced ${Date.now()}`;
   await modal().locator('.module-parameter-preset-create').click();
   const presetDialog = () => page.locator('[data-preset-dialog]');
-  await presetDialog().locator('input').fill(presetName);
+  const presetNameInput = () => presetDialog().getByRole('textbox', { name: 'Názov', exact: true });
+  await presetNameInput().fill(presetName);
   await presetDialog().locator('textarea').fill('Independent company preset');
   await page.route('**/parameter-presets', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Preset save failed (test).' }) }), { times: 1 });
   await presetDialog().locator('button[type=submit]').click();
   await presetDialog().getByText('Preset save failed (test).', { exact: true }).waitFor();
-  assert(await presetDialog().locator('input').inputValue() === presetName && await presetDialog().locator('textarea').inputValue() === 'Independent company preset', 'Failed preset creation preserves the completed form for retry');
+  assert(await presetNameInput().inputValue() === presetName && await presetDialog().locator('textarea').inputValue() === 'Independent company preset', 'Failed preset creation preserves the completed form for retry');
   const [createdResponse] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/parameter-presets') && response.request().method() === 'POST'),
     presetDialog().locator('button[type=submit]').click(),
@@ -148,6 +151,7 @@ try {
   await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
   await open(); await modal().locator('[data-module-parameter-preset-trigger]').click();
   await modal().locator(`[data-parameter-preset-id="${presetId}"]`).click();
+  await page.waitForFunction(() => document.querySelector('[data-module-settings] [data-parameter-key="drawerCount"] input')?.value === '3', null, { timeout: 5000 });
   assert(Number(await field('drawerCount').inputValue()) === 3, 'New preset survives discarded module edits');
   assert(Number(await field('width').inputValue()) === saved.params.width, 'Saved preset preserves target dimensions');
   await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
@@ -215,6 +219,7 @@ try {
   }, { group, id, expectedWidth: importedModule.params.width });
   await open(); await modal().locator('[data-module-parameter-preset-trigger]').click();
   await modal().locator(`[data-parameter-preset-id="${presetId}"]`).click();
+  await page.waitForFunction(() => document.querySelector('[data-module-settings] [data-parameter-key="drawerCount"] input')?.value === '3', null, { timeout: 5000 });
   assert(Number(await field('width').inputValue()) === width + 170 && await field('frontMaterialId').inputValue() === importedModule.params.frontMaterialId, 'Company preset is available in another project and preserves dimensions and materials');
   await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
   assert(errors.length === 0, 'Browser console and page errors are zero');

@@ -1,3 +1,4 @@
+import { mountBacksplashBoardProps, mountBacksplashGroupProps } from "./backsplashProps";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { polygonBoundsMm } from "../layout/customFurnitureGeometry";
 import { recipeThicknessMm } from "../core/project-manufacturing/project-manufacturing-types";
@@ -20,6 +21,7 @@ export type CustomFurnitureSelectedPropsApi = {
 };
 
 export function mountCustomFurnitureProps(args: {
+  onBacksplashSettings?: () => void;
   props: CustomFurnitureSelectedPropsApi;
   furniture: CustomFurnitureInstance;
   constraintOptions: readonly CustomFurnitureConstraint[];
@@ -28,7 +30,8 @@ export function mountCustomFurnitureProps(args: {
   refreshProps: () => void;
 }) {
   const { furniture } = args;
-  args.props.setTitle("Custom furniture");
+  args.props.setTitle(furniture.params.backsplash ? "Zástena" : "Custom furniture");
+  if (furniture.params.backsplash) mountBacksplashGroupProps(args);
   const section = args.props.section();
   args.props.row(section, "Name", textInput(furniture.params.name, (next) => {
     furniture.params.name = next;
@@ -61,6 +64,7 @@ export function mountCustomFurnitureBoardProps(args: {
   catalog: ClientCatalog;
   furniture: CustomFurnitureInstance;
   board: CustomFurnitureBoardParams;
+  onEditEdges?: () => void;
   constraintOptions: readonly CustomFurnitureConstraint[];
   syncVerticalBoardProfileToConstraints: (furniture: CustomFurnitureInstance, board: CustomFurnitureBoardParams) => void;
   rebuildFurniture: (furniture: CustomFurnitureInstance) => void;
@@ -70,8 +74,13 @@ export function mountCustomFurnitureBoardProps(args: {
   refreshProps: () => void;
 }) {
   const { furniture, board } = args;
-  args.props.setTitle("Custom board");
+  args.props.setTitle(board.backsplashSource ? "Zástena · doska" : "Custom board");
+  mountBacksplashBoardProps(args);
   const section = args.props.section();
+  if (args.onEditEdges) {
+    const edgeButton = document.createElement("button"); edgeButton.type = "button"; edgeButton.textContent = "Olepenie · rozšírené nastavenia";
+    edgeButton.dataset.openBoardEdgeSettings = "true"; edgeButton.addEventListener("click", args.onEditEdges); section.append(edgeButton);
+  }
   args.props.row(section, "Name", textInput(board.name, (next) => {
     board.name = next;
     args.commitHistory();

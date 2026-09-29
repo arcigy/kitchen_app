@@ -1,3 +1,4 @@
+import { quoteContribution } from "./projectQuote";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import * as XLSX from "xlsx";
 import { convertPriceCurrency, type PriceCurrency } from "../../core/pricing/currency";
@@ -257,6 +258,7 @@ function buildPriceSourceRows(entries: ProjectPricingView[], currency: PriceCurr
   for (const entry of entries) {
     for (const item of entry.result.pricing.items) {
       const source = resolvePriceSource(item);
+      source.unitPrice = money(convertPriceCurrency(source.unitPrice, entry.result.pricing.priceInputs.currency, currency));
       const existing = sourceMap.get(source.key);
       if (!existing) {
         sourceMap.set(source.key, source);
@@ -267,10 +269,7 @@ function buildPriceSourceRows(entries: ProjectPricingView[], currency: PriceCurr
       if (!existing.label && source.label) existing.label = source.label;
     }
   }
-  return [...sourceMap.values()].map((source) => ({
-    ...source,
-    unitPrice: money(convertPriceCurrency(source.unitPrice, "EUR", currency))
-  })).sort((left, right) =>
+  return [...sourceMap.values()].sort((left, right) =>
     left.category.localeCompare(right.category) ||
     left.label.localeCompare(right.label) ||
     left.catalogId.localeCompare(right.catalogId)
@@ -476,7 +475,7 @@ function buildModuleSheet(args: {
     { value: typeLabel, style: "metaValue" },
     "",
     { value: "Praca", style: "metaLabel" },
-    { value: convertPriceCurrency(entry.result.pricing.laborCostFixed, "EUR", args.currency), style: "currency" },
+    { value: convertPriceCurrency(entry.result.pricing.laborCostFixed, entry.result.pricing.priceInputs.currency, args.currency), style: "currency" },
     "",
     { value: "Vzorec ceny", style: "metaLabel" },
     { value: "fakturovane mnozstvo x jednotkova cena", style: "metaValue" }
@@ -681,39 +680,41 @@ function buildOverviewSheet(
   builder.merge(summaryTitleRow, 0, summaryTitleRow, 3);
   const materialsRow = builder.addRow([
     { value: "Material spolu", style: "summaryLabel" },
-    { value: convertPriceCurrency(summary.materialCost, "EUR", currency), style: "summaryCurrency" }
+    { value: convertPriceCurrency(summary.materialCost, summary.currency ?? "EUR", currency), style: "summaryCurrency" }
   ]);
   const moduleLaborRow = builder.addRow([
     { value: "Modulova praca", style: "summaryLabel" },
-    { value: convertPriceCurrency(summary.moduleLaborCost, "EUR", currency), style: "summaryCurrency" }
+    { value: convertPriceCurrency(summary.moduleLaborCost, summary.currency ?? "EUR", currency), style: "summaryCurrency" }
   ]);
   const extraLaborRow = builder.addRow([
     { value: "Dodatocna praca projektu", style: "summaryLabel" },
-    { value: convertPriceCurrency(summary.additionalLaborCost, "EUR", currency), style: "summaryCurrency" }
+    { value: convertPriceCurrency(summary.additionalLaborCost, summary.currency ?? "EUR", currency), style: "summaryCurrency" }
   ]);
   const totalLaborRow = builder.addRow([
     { value: "Praca spolu", style: "summaryLabel" },
     { value: formulaNumber(`B${moduleLaborRow}+B${extraLaborRow}`), style: "summaryCurrency" }
   ]);
   const subtotalRow = builder.addRow([
-    { value: "Medzisucet pred marzou", style: "summaryLabel" },
+    { value: "Medzisucet pred prirazkou", style: "summaryLabel" },
     { value: formulaNumber(`B${materialsRow}+B${totalLaborRow}`), style: "summaryCurrency" }
   ]);
   builder.addRow([
-    { value: "Kombinovana marza %", style: "summaryLabel" },
+    { value: "Povodna kombinovana prirazka %", style: "summaryLabel" },
     { value: summary.marginPercent, style: "decimal" }
   ]);
   const marginAmountRow = builder.addRow([
-    { value: "Marza", style: "summaryLabel" },
-    { value: convertPriceCurrency(summary.marginAmount, "EUR", currency), style: "summaryCurrency" }
+    { value: "Prirazka", style: "summaryLabel" },
+    { value: convertPriceCurrency(summary.marginAmount, summary.currency ?? "EUR", currency), style: "summaryCurrency" }
   ]);
   const finalOfferRow = builder.addRow([
     { value: "Vysledok Create Sheet / ponuka", style: "totalLabel" },
     { value: formulaNumber(`B${subtotalRow}+B${marginAmountRow}`), style: "totalCurrency" }
   ]);
+  builder.addRow([{ value: "Nakupne naklady", style: "summaryLabel" }, { value: convertPriceCurrency(quoteContribution(summary).purchaseCost, summary.currency ?? "EUR", currency), style: "summaryCurrency" }]);
+  builder.addRow([{ value: "Marza vratane celej prace", style: "summaryLabel" }, { value: convertPriceCurrency(quoteContribution(summary).contributionAmount, summary.currency ?? "EUR", currency), style: "summaryCurrency" }]);
   const appResultRow = builder.addRow([
     { value: "Vysledok app BOM", style: "summaryLabel" },
-    { value: convertPriceCurrency(summary.finalPrice, "EUR", currency), style: "summaryCurrency" }
+    { value: convertPriceCurrency(summary.finalPrice, summary.currency ?? "EUR", currency), style: "summaryCurrency" }
   ]);
   const deltaRow = builder.addRow([
     { value: "Rozdiel app vs sheet", style: "summaryLabel" },

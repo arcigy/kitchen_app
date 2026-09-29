@@ -1,3 +1,4 @@
+import { synchronizeLayoutMaterials } from "../project-save/project-layout-materials";
 import type { ComponentDefinition, MaterialDefinition } from "../catalog/catalog-types";
 import type { ProjectSaveFile } from "../project-save/project-save-types";
 import type {
@@ -97,6 +98,7 @@ export function patchProjectSaveMaterialAssignments(input: PatchProjectMaterialA
   const nextState = structuredClone(input.nextState);
   nextState.updatedAt = updatedAt;
   next.appState.materialAssignments = structuredClone(nextState);
+  next.appState.layout = synchronizeLayoutMaterials(next.appState.layout,nextState);
   next.phases[phaseIndex] = {
     ...next.phases[phaseIndex],
     materialAssignments: structuredClone(nextState),

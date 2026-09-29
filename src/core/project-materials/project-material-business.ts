@@ -1,3 +1,4 @@
+import { repairSupplierMaterialPricing } from "./supplierMaterialPricingRepair";
 import type {
   BoardFamily,
   ClientCatalog,
@@ -91,6 +92,9 @@ export const MATERIAL_ASSIGNMENT_CATEGORIES = [
     boardFamilies: ["worktop"],
     defaultCatalogKey: "worktopMaterialId"
   },
+  { category: "backsplash", label: "Zástena", description: "Dosky kuchynskej zásteny a nákupné formáty",
+    kind: "material", idField: "materialId", quantityUnit: "m2", alwaysVisible: false,
+    requiredByDefault: false, materialType: "board" },
   {
     category: "plinth",
     label: "Sokel",
@@ -167,7 +171,7 @@ export const MATERIAL_ASSIGNMENT_CATEGORIES = [
   {
     category: "hinge",
     label: "Pánty",
-    description: "Pánty a súvisiace kovanie",
+    description: "Pánty dvierok bez samostatne predávaných podložiek",
     kind: "component",
     idField: "componentId",
     quantityUnit: "pcs",
@@ -209,6 +213,24 @@ export const MATERIAL_ASSIGNMENT_CATEGORIES = [
     requiredByDefault: false,
     componentTypes: ["leg"]
   },
+  { category: "hinge_plate", label: "Podložky pántov", description: "Predvolene jedna podložka ku každému pántu",
+    kind: "component", idField: "componentId", quantityUnit: "pcs", alwaysVisible: true,
+    requiredByDefault: false, componentTypes: ["hinge_plate"] },
+  { category: "leg_plate", label: "Podložky nôh", description: "Predvolene jedna podložka ku každej nohe",
+    kind: "component", idField: "componentId", quantityUnit: "pcs", alwaysVisible: true,
+    requiredByDefault: false, componentTypes: ["leg_plate"] },
+  { category: "plinth_clip", label: "Soklové klipy", description: "Predné a bočné klipy podľa skutočných úchytov",
+    kind: "component", idField: "componentId", quantityUnit: "pcs", alwaysVisible: true,
+    requiredByDefault: false, componentTypes: ["plinth_clip"] },
+  { category: "hanging_bracket", label: "Závesné kovanie", description: "Závesy horných skriniek",
+    kind: "component", idField: "componentId", quantityUnit: "pcs", alwaysVisible: true,
+    requiredByDefault: false, componentTypes: ["hanging_bracket"] },
+  { category: "shelf_support", label: "Policové podpery", description: "Podpery nastaviteľných políc",
+    kind: "component", idField: "componentId", quantityUnit: "pcs", alwaysVisible: true,
+    requiredByDefault: false, componentTypes: ["shelf_support"] },
+  { category: "assembly_pack", label: "Montážny balíček", description: "Skrutky, konfirmáty, kolíky a lepidlo; predvolene jeden balíček na skrinku",
+    kind: "component", idField: "componentId", quantityUnit: "pcs", alwaysVisible: true,
+    requiredByDefault: false, componentTypes: ["assembly_pack"] },
   {
     category: "fastener",
     label: "Spojovací materiál",
@@ -218,7 +240,7 @@ export const MATERIAL_ASSIGNMENT_CATEGORIES = [
     quantityUnit: "pcs",
     alwaysVisible: true,
     requiredByDefault: false,
-    componentTypes: ["fastener", "plinth_clip", "shelf_support", "hanging_bracket"]
+    componentTypes: ["fastener"]
   },
   {
     category: "other_component",
@@ -341,14 +363,14 @@ export function isMaterialAllowedForCategory(material: MaterialDefinition, categ
   if (
     definition.kind !== "material" ||
     material.materialType !== definition.materialType ||
-    material.pricingUnit !== definition.quantityUnit
+    (material.pricingUnit !== definition.quantityUnit && !(category === "plinth" && material.pricingUnit === "m2"))
   ) return false;
   return !definition.boardFamilies?.length || (!!material.boardFamily && definition.boardFamilies.includes(material.boardFamily));
 }
 
 export function isComponentAllowedForCategory(component: ComponentDefinition, category: MaterialAssignmentCategory): boolean {
   const definition = getMaterialAssignmentCategoryDefinition(category);
-  if (definition.kind !== "component" || component.pricingUnit !== definition.quantityUnit) return false;
+  if (definition.kind !== "component" || !["pcs", "set", "profile", "lm"].includes(component.pricingUnit)) return false;
   return !definition.componentTypes?.length || definition.componentTypes.includes(component.componentType);
 }
 
@@ -377,7 +399,7 @@ export function normalizeAutoProjectMaterialAssignments(
   const defaults = createDefaultProjectMaterialAssignments(catalog, now);
   const defaultByCategory = new Map(defaults.assignments.map((assignment) => [assignment.category, assignment]));
   const assignments = state.assignments.map((assignment) => {
-    if (assignment.source !== "auto") return structuredClone(assignment);
+    if (assignment.source !== "auto" || (assignment.category === "fastener" && assignment.snapshots.component?.definition.componentType !== "fastener")) return structuredClone(assignment);
     const currentDefault = defaultByCategory.get(assignment.category);
     const valid = assignment.kind === "material"
       ? !assignment.materialId || catalog.materials.some((item) =>
@@ -495,11 +517,12 @@ function validateSupplierBridgeFieldWarnings(state: ProjectMaterialAssignmentsSt
 }
 
 function isGeneralMaterialAssignment(assignment: ProjectMaterialAssignment): boolean {
+  if (assignment.extraComponent) return false;
   const id = assignment.assignmentId;
   if (id.startsWith("material-assignment:module:") || id.startsWith("material-assignment:addition:")) return false;
   if (
     (assignment.category === "edge_front" || assignment.category === "edge_other") &&
-    id.startsWith(`material-assignment:${assignment.category}:split:`)
+    (id.startsWith(`material-assignment:${assignment.category}:split:`) || id.startsWith("material-assignment:edge-group:") || id.startsWith("material-assignment:edge-legacy:"))
   ) {
     return false;
   }
@@ -572,7 +595,7 @@ function validateMaterialAssignment(
       assignment.assignmentId
     ));
   }
-  if (material.pricingUnit !== definition.quantityUnit) {
+  if ((material.pricingUnit !== definition.quantityUnit && !(definition.category === "plinth" && material.pricingUnit === "m2"))) {
     warnings.push(warning(
       `pricing-unit:${assignment.assignmentId}`,
       "error",
@@ -615,7 +638,8 @@ function validateComponentAssignment(
 ): void {
   const id = assignment.componentId?.trim();
   if (!id) return;
-  const component = catalog.components.find((candidate) => candidate.id === id);
+  const component = assignment.snapshots.component?.definition.id === id
+    ? assignment.snapshots.component.definition : catalog.components.find((candidate) => candidate.id === id);
   if (!component) {
     warnings.push(warning(
       `invalid-component:${assignment.assignmentId}`,
@@ -637,7 +661,7 @@ function validateComponentAssignment(
       assignment.assignmentId
     ));
   }
-  if (component.pricingUnit !== definition.quantityUnit) {
+  if (!["pcs", "set", "profile", "lm"].includes(component.pricingUnit)) {
     warnings.push(warning(
       `pricing-unit:${assignment.assignmentId}`,
       "error",
@@ -683,6 +707,7 @@ export function createProjectMaterialsView(
   quantities: readonly ProjectMaterialQuantity[],
   catalog: ClientCatalog
 ): ProjectMaterialsView {
+  state = repairSupplierMaterialPricing(state);
   const warnings = validateProjectMaterialAssignments(state, catalog);
   const assignmentByCategory = new Map(state.assignments
     .filter((assignment) => assignment.assignmentId === `material-assignment:${assignment.category}`)

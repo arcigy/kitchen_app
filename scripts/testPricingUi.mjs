@@ -43,7 +43,7 @@ async function verifyMarginPerSquareMeter(browser) {
     const sheet = view.summary.sheetMaterial;
     assert(sheet?.areaM2 > 0 && sheet.marginPerM2 != null,
       `Complete board measurement and price: ${JSON.stringify({ summary: view.summary, warnings: view.warnings })}`);
-    const expected = Math.round((view.summary.marginAmount / sheet.areaM2 + Number.EPSILON) * 100) / 100;
+    const expected = Math.round((view.summary.contribution.contributionAmount / sheet.areaM2 + Number.EPSILON) * 100) / 100;
     assert(sheet.marginPerM2 === expected, "API rate equals complete margin divided by qualifying area");
     const displayed = Number((await metric().locator("strong").innerText()).replace(/[^\d,.-]/g, "").replace(",", "."));
     assert(displayed === expected, "Visible rate matches the authoritative result");
@@ -106,8 +106,8 @@ async function verifyMarginPerSquareMeter(browser) {
     assert(changed.summary.sheetMaterial?.areaM2 === initial.summary.sheetMaterial?.areaM2 && changed.summary.baseCost === initial.summary.baseCost, "Margin edit preserves geometry and costs");
     const labor = await mutate("[data-margin-additional-labor-input]", 200, "[data-margin-additional-labor-save]");
     assert(Math.round(labor.summary.baseCost * 100) === Math.round(changed.summary.baseCost * 100) + 20_000
-      && Math.round(labor.summary.marginAmount * 100) === Math.round(changed.summary.marginAmount * 100) + 7_000,
-      "Project labor contributes to the complete margin numerator");
+      && Math.round(labor.summary.contribution.contributionAmount * 100) === Math.round(changed.summary.contribution.contributionAmount * 100) + 20_000,
+      "Project labor contributes to the complete contribution numerator without receiving a duplicate markup");
     await page.locator('[data-workspace-nav="design"]').click();
     const reopened = await openMargins();
     assert(JSON.stringify(reopened.summary) === JSON.stringify(labor.summary), "Reopening margins restores the persisted settings and derived rate");

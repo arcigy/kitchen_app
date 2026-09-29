@@ -1,3 +1,5 @@
+import { applyEdgeGroupChanges } from "../../core/edge-banding/edgeGroupTransaction";
+import { confirmProjectEdgeGroups } from "./projectEdgeGroupBaseline";
 import type { ClientContext } from "../../core/client/client-context";
 import type { ProjectMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
@@ -97,6 +99,10 @@ export async function resolveProjectWorkspace(args: {
       recoveryScope: scope,
       notice: "Obnovený lokálny draft po prerušení alebo refreshi."
     };
+  }
+  if (decision.envelope.scope.projectId && decision.envelope.edgeGroupChanges?.length) {
+    const baseline=applyEdgeGroupChanges(decision.envelope.appState.materialAssignments,decision.envelope.edgeGroupChanges.map(change=>({before:change.after,after:change.before})));
+    confirmProjectEdgeGroups(decision.envelope.scope.projectId,baseline);
   }
   return {
     initialProject: decision.envelope.workspace.project,

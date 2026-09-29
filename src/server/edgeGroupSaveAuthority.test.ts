@@ -1,0 +1,20 @@
+import { describe, it, expect } from "vitest";
+import { createSystemCatalogSeed } from "../core/catalog/catalog-bootstrap";
+import { ensureEdgeGroups, updateEdgeGroup } from "../core/edge-banding/edgeGroups";
+import { edgeGroupChangesBetween } from "../core/edge-banding/edgeGroupTransaction";
+import { authorizeEdgeGroupChanges } from "./edgeGroupSaveAuthority";
+it("uses authoritative tenant edge prices and preserves previously captured prices for renames",()=>{
+  const catalog={clientId:"test",...createSystemCatalogSeed()};
+  const material={...catalog.materials[0]!,id:"qa-edge",materialType:"edge" as const,pricingUnit:"lm" as const,pricingBasis:"linear_length" as const};
+  catalog.materials.push(material);catalog.priceList.prices[material.id]=7;
+  const base=ensureEdgeGroups(undefined,catalog),next=updateEdgeGroup(base,"edge-qa","Group",material,catalog);
+  const group=next.assignments.find(a=>a.assignmentId==="edge-qa")!;
+  group.snapshots.material!.unitPrice=.01;
+  let result=authorizeEdgeGroupChanges(edgeGroupChangesBetween(base,next),base,catalog);
+  expect(result[0]!.after!.snapshots.material!.unitPrice).toBe(7);
+  group.snapshots.material!.unitPrice=5;
+  const renamed=updateEdgeGroup(next,"edge-qa","Renamed",material,catalog);
+  result=authorizeEdgeGroupChanges(edgeGroupChangesBetween(next,renamed),next,catalog);
+  expect(result[0]!.after!.snapshots.material!.unitPrice).toBe(5);
+  expect(result[0]!.after!.customValues.edgeGroupName).toBe("Renamed");
+});

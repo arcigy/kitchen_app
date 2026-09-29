@@ -1,3 +1,4 @@
+import { synchronizeLayoutMaterials } from "./project-layout-materials";
 import type { ClientCatalog } from "../catalog/catalog-types";
 import { computeModulePackageHash } from "../module-package/module-package-file";
 import type { FurnQuoteModulePackage } from "../module-package/module-package-types";
@@ -160,7 +161,7 @@ export function createCatalogSnapshot(
 export function assembleProjectSaveFile(input: ProjectSaveAssemblerInput): ProjectSaveFile {
   const savedAt = nowIso();
   const project = cloneJson(input.project);
-  const layoutState = cloneJson(input.layoutState);
+  const layoutState = synchronizeLayoutMaterials(cloneJson(input.layoutState), input.materialAssignments ?? createEmptyProjectMaterialAssignmentsState());
   const kitchenState = cloneJson(input.kitchenState);
   const moduleInstances = cloneJson(input.moduleInstances);
   const materialAssignments = cloneJson(input.materialAssignments ?? createEmptyProjectMaterialAssignmentsState());

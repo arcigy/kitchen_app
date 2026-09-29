@@ -57,3 +57,19 @@ describe("project app state kitchen references", () => {
     })).not.toThrow();
   });
 });
+
+
+describe("wall dimensional integrity", () => {
+  const fixture = () => ({layout:{snapshot:{walls:[{id:"wall",params:{aMm:{x:0,z:0},bMm:{x:3000,z:500},thicknessMm:150,heightMm:2600}}]},windows:[],doors:[]}});
+  it("accepts a genuine diagonal without snapping it to an axis", () => {
+    const data=fixture(),before=structuredClone(data);validateProjectAppState(data);expect(data).toEqual(before);
+  });
+  it.each([0,-100])("rejects nonpositive thickness %s", thicknessMm => {
+    const data=fixture();data.layout.snapshot.walls[0]!.params.thicknessMm=thicknessMm;
+    expect(()=>validateProjectAppState(data)).toThrow(/positive/);
+  });
+  it("rejects an opening above its host wall", () => {
+    const data=fixture();
+    expect(()=>validateProjectAppState({...data,layout:{...data.layout,windows:[{id:"w",params:{wallId:"wall",centerMm:1000,widthMm:800,sillHeightMm:1800,heightMm:1200}}]}})).toThrow(/height/);
+  });
+});

@@ -6,14 +6,11 @@ const DIRECT_HARDWARE_CATEGORIES = new Set<MaterialAssignmentCategory>([
   "hinge",
   "runner",
   "lift_up",
-  "leg"
+  "leg", "hinge_plate", "leg_plate", "plinth_clip", "hanging_bracket", "shelf_support", "assembly_pack"
 ]);
 
 const FASTENER_COMPONENT_TYPES = new Set([
-  "fastener",
-  "plinth_clip",
-  "shelf_support",
-  "hanging_bracket"
+  "fastener"
 ]);
 
 function normalizedGroup(item: PortableQuoteBomItem): string {
@@ -30,9 +27,15 @@ function normalizedGroup(item: PortableQuoteBomItem): string {
 export function projectMaterialCategoryForBomItem(
   item: PortableQuoteBomItem
 ): MaterialAssignmentCategory | null {
+  if (item.id.startsWith("material-assignment:extra:")) return "other_component";
   if (item.itemType === "lighting") return "lighting";
   if (item.itemType === "edge_band") {
-    const family = String(item.material?.edgeFamily ?? item.materialGroup ?? item.category ?? "")
+    // The same catalogue edge can be used on a front and on a corpus. Its
+    // catalogue family must not move measured usage between project roles.
+    const role = String(item.materialGroup ?? "").trim().toLowerCase();
+    if (["front", "edge_front"].includes(role)) return "edge_front";
+    if (["body", "corpus", "carcass", "shelf", "plinth", "worktop", "drawer_box", "edge_other"].includes(role)) return "edge_other";
+    const family = String(item.material?.edgeFamily ?? item.category ?? "")
       .trim()
       .toLowerCase();
     return family.includes("front") ? "edge_front" : "edge_other";
@@ -52,6 +55,7 @@ export function projectMaterialCategoryForBomItem(
   const group = normalizedGroup(item);
   if (["corpus", "carcass", "body", "shelf"].includes(group)) return "corpus";
   if (group === "front") return "front";
+  if (group === "backsplash") return "backsplash";
   if (group === "worktop") return "worktop";
   if (group === "plinth") return "plinth";
   if (group === "back" || group === "back_panel") return "back";

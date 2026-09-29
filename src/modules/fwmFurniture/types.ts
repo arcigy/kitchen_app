@@ -51,7 +51,8 @@ function indexedDrawerFrontHeights(params: Record<string, PortableJsonValue>, dr
 
 function resolveDrawerFrontHeights(params: Record<string, PortableJsonValue>, drawerCount: number) {
   if (drawerCount <= 0) return [];
-  const height = num(params.height, 720);
+  const externalWorktop = params.requiresWorktop !== false && num(params.worktopThicknessMm, 0) > 0;
+  const height = externalWorktop ? num(params.heightCarcass, num(params.height, 720)) : num(params.height, 720);
   const plinth = num(params.plinthHeight, 0);
   const gap = num(params.frontGap, 2);
   const frontAreaHeight = Math.max(80, height - plinth - gap * 2);

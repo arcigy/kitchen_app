@@ -1,3 +1,5 @@
+import { validateLaborRate, type LaborRate } from "../core/project-manufacturing/module-labor";
+import { ModulePackageRevisionConflictError } from "../core/module-package/module-package-write-lock";
 import type http from "node:http";
 import type { ClientCatalogRepository } from "../core/catalog/catalog-repository";
 import type { ClientContext } from "../core/client/client-context";
@@ -91,12 +93,31 @@ export async function handleModulePackageApi(
     return true;
   }
 
+  const laborMatch = url.pathname.match(/^\/api\/modules\/([^/]+)\/parameter-presets\/([^/]+)\/labor$/);
+  if (req.method === "PATCH" && laborMatch) {
+    if (context.role === "viewer") { deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot edit presets." }); return true; }
+    try {
+      const body = bodyRecord(await deps.readJsonBody(req));
+      if (body.clientId !== undefined) throw new Error("Unexpected clientId in request body.");
+      if (body.laborRate !== null) validateLaborRate(body.laborRate);
+      const result = await service.updatePresetLabor({ modulePackageId: decodeURIComponent(laborMatch[1]!),
+        presetId: decodeURIComponent(laborMatch[2]!), expectedPackageHash: typeof body.expectedPackageHash === "string" ? body.expectedPackageHash : "",
+        laborRate: body.laborRate as LaborRate | null });
+      deps.sendJson(res, 200, { ok: true, ...result });
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      deps.sendJson(res, error instanceof ModulePackageRevisionConflictError ? 409 : 422, { ok: false, error: error.message });
+    }
+    return true;
+  }
+
   const presetMatch = url.pathname.match(/^\/api\/modules\/([^/]+)\/parameter-presets$/);
   if (req.method === "POST" && presetMatch) {
     if (context.role === "viewer") {
       deps.sendJson(res, 403, { ok: false, error: "Viewer role cannot create module parameter presets." });
       return true;
     }
+    try {
     const body = bodyRecord(await deps.readJsonBody(req));
     if (typeof body.clientId === "string") throw new Error("Unexpected clientId in request body.");
     const name = typeof body.name === "string" ? body.name : "";
@@ -106,7 +127,9 @@ export async function handleModulePackageApi(
       modulePackageId: decodeURIComponent(presetMatch[1]!),
       name,
       note,
-      parameters
+      parameters,
+      ...(body.laborRate !== undefined ? { laborRate: body.laborRate as LaborRate | null } : {}),
+      ...(typeof body.expectedPackageHash === "string" ? { expectedPackageHash: body.expectedPackageHash } : {})
     });
     deps.sendJson(res, 201, {
       ok: true,
@@ -118,6 +141,10 @@ export async function handleModulePackageApi(
         note: result.preset.note
       }
     });
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      deps.sendJson(res, error instanceof ModulePackageRevisionConflictError ? 409 : 422, { ok: false, error: error.message });
+    }
     return true;
   }
 

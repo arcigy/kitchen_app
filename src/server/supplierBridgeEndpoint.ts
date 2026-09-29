@@ -170,7 +170,7 @@ async function projectMaterialInputs(
           ...(scoped ? {
             materialAssignmentId: lookup.materialAssignmentId,
             targetLabel: `${scoped.scope.label} · ${scoped.item.label} · ${currentAssignmentText(assignment)}`,
-            targetScope: scoped.scope.kind
+            targetScope: scoped.scope.kind === "project" ? "general" as const : scoped.scope.kind
           } : {})
         };
       })
@@ -184,7 +184,7 @@ async function projectMaterialInputs(
       ...scopes.flatMap((scope) => scope.items.flatMap((item) => {
         const effective = resolveEffectiveProjectMaterialAssignment(assignments, scope.id, item);
         if (!effective.assignment) return [];
-        return [{ assignment: effective.assignment, lookup: null, materialAssignmentId: effective.assignmentId, targetLabel: `${scope.label} · ${item.label} · ${currentAssignmentText(effective.assignment)}`, targetScope: scope.kind }];
+        return [{ assignment: effective.assignment, lookup: null, materialAssignmentId: effective.assignmentId, targetLabel: `${scope.label} · ${item.label} · ${currentAssignmentText(effective.assignment)}`, targetScope: scope.kind === "project" ? "general" as const : scope.kind }];
       }))
     ];
   return selectedAssignments.flatMap<SupplierSyncMaterialInput>(({ assignment, lookup, materialAssignmentId, targetLabel, targetScope }) => {

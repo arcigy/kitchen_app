@@ -1521,7 +1521,10 @@ describe("FWM furniture module packages", () => {
     const bom = calculateFwmFurnitureBOM({ ...defaults, variant: "1d", width: 600, depth: 530, height: 722, doorCount: 1, hasWorktop: false, worktopThicknessMm: 0 }, makeDefaultKitchenContext(catalog), catalog);
     const bomIds = new Set(bom.quoteBom.items.map((item) => item.id));
     expect(bomIds.has("bottom-panel")).toBe(true);
-    expect(bomIds.has("top-front-back-rails")).toBe(true);
+    expect(bomIds.has("top-front-rail")).toBe(true);
+    expect(bomIds.has("top-back-rail")).toBe(true);
+    expect(bomIds.has("top-front-rail-edge")).toBe(true);
+    expect(bomIds.has("top-back-rail-edge")).toBe(false);
     expect(bomIds.has("bottom-top-panels")).toBe(false);
   });
 
@@ -2282,7 +2285,8 @@ describe("FWM furniture module packages", () => {
     expect(frontBom?.quantity).toBe(1);
     expect(drawerFrontBom).toBeUndefined();
     expect(drawerBottomBom?.quantity).toBe(2);
-    expect(drawerBottomBom?.dimensionsMm?.width).toBeCloseTo(94, 3);
+    // The physical tray is front width 196 - runner reserve 48 - two 16 mm sides.
+    expect(drawerBottomBom?.dimensionsMm?.width).toBeCloseTo(116, 3);
     expect(handleBom?.quantity).toBe(1);
     expect(runnerBom?.quantity).toBe(2);
   });
@@ -2544,7 +2548,8 @@ describe("FWM furniture module packages", () => {
     expect(bom.quoteBom.items.some((item) => item.id === "corner-chamfered-shelves")).toBe(true);
     expect(bom.quoteBom.items.some((item) => item.id === "corner-chamfered-top-panel")).toBe(true);
     expect(bom.quoteBom.items.some((item) => item.id === "corner-chamfered-back-corner-panel")).toBe(true);
-    expect(bom.quoteBom.items.some((item) => item.id === "corner-chamfered-support-diagonal")).toBe(true);
+    // The baked runtime has no extra diagonal support board; the old estimate invented one.
+    expect(bom.quoteBom.items.some((item) => item.id === "corner-chamfered-support-diagonal")).toBe(false);
     expect(bom.quoteBom.items.some((item) => item.id === "corner-chamfered-diagonal-front")).toBe(true);
     expect(bom.pricing.finalPrice).toBeGreaterThan(0);
   });
@@ -2668,7 +2673,8 @@ describe("FWM furniture module packages", () => {
       const backLeft = objectBoundsMm(getMeshByBoardName(root, "back_left_panel")!);
       const rightSide = objectBoundsMm(getMeshByBoardName(root, "right_side_panel")!);
       expect(backLeft.maxX).toBeCloseTo(rightSide.minX, 1);
-      expect(backLeft.maxZ).toBeCloseTo(rightSide.minZ, 1);
+      expect(backLeft.minZ).toBeCloseTo(rightSide.minZ, 1);
+      expect(backLeft.maxZ - backLeft.minZ).toBeCloseTo(18, 1);
     };
     assertSquareBackJoin(base);
     assertSquareBackJoin(syncedDepth);

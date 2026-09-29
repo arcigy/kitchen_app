@@ -112,7 +112,7 @@ describe("project margin calculation", () => {
   it("leaves the standard margin summary unchanged unless a tenant policy enables the metric", () => {
     const entries = [entry({ instanceId: "a", items: [pricedItem({ id: "board", cost: 100 })] })];
     const view = buildProjectMarginsView(entries, initializedState());
-    expect(view.summary).toEqual({ baseCost: 100, marginAmount: 20, combinedMarginPercent: 20, finalPrice: 120, overrideCount: 0, missingPriceCount: 0 });
+    expect(view.summary).toMatchObject({ baseCost: 100, marginAmount: 20, combinedMarginPercent: 20, finalPrice: 120, overrideCount: 0, missingPriceCount: 0 });
     expect(view.summary).not.toHaveProperty("sheetMaterial");
   });
 
@@ -143,7 +143,7 @@ describe("project margin calculation", () => {
 
     expect(view.summary).toMatchObject({
       baseCost: 1000, marginAmount: 200, finalPrice: 1200,
-      sheetMaterial: { areaM2: 3.5, marginPerM2: 57.14, unmeasuredBoardCount: 0 }
+      sheetMaterial: { areaM2: 3.5, marginPerM2: 97.14, unmeasuredBoardCount: 0 }
     });
     expect({ items, addition, state }).toEqual(before);
   });
@@ -183,12 +183,24 @@ describe("project margin calculation", () => {
   it("does not present partial costs or invalid area as complete margin per m2", () => {
     const item = { ...pricedItem({ id: "board", cost: null }), dimensionsMm: { length: 1000, width: 1000, thickness: 18 } };
     expect(buildDelfiMarginsView([entry({ instanceId: "a", items: [item] })], initializedState()).summary)
-      .toMatchObject({ missingPriceCount: 1, sheetMaterial: { areaM2: 1, marginPerM2: null } });
+      .toMatchObject({ missingPriceCount: 1, sheetMaterial: { areaM2: 1, marginPerM2: 0, preliminary: true } });
     const invalid = { ...item, itemCost: 100, metrics: { areaM2: -1 } };
     expect(buildDelfiMarginsView([entry({ instanceId: "a", items: [invalid] })], initializedState()).summary)
       .toMatchObject({ sheetMaterial: { areaM2: 0, marginPerM2: null, unmeasuredBoardCount: 1 } });
     expect(buildDelfiMarginsView([entry({ instanceId: "a", items: [{ ...item, itemCost: 100 }] })],
-      initializedState(), { warnings: ["Another module failed to build."] }).summary.sheetMaterial?.marginPerM2).toBeNull();
+      initializedState(), { warnings: ["Another module failed to build."] }).summary.sheetMaterial).toMatchObject({ marginPerM2: 20, preliminary: true });
+  });
+
+  it("shows current margin over known area when a price and another board measurement are missing", () => {
+    const items = [
+      { ...pricedItem({ id: "known", cost: 100 }), dimensionsMm: { length: 1000, width: 2000, thickness: 18 } },
+      { ...pricedItem({ id: "unpriced", cost: null }), dimensionsMm: { length: 1000, width: 1000, thickness: 18 } },
+      { ...pricedItem({ id: "unmeasured", cost: 50 }), metrics: { areaM2: NaN } }
+    ];
+    const view = buildDelfiMarginsView([entry({ instanceId: "a", items })], initializedState());
+    expect(view.summary).toMatchObject({ marginAmount: 30, missingPriceCount: 1,
+      sheetMaterial: { areaM2: 3, marginPerM2: 10, preliminary: true, unmeasuredBoardCount: 1 } });
+    expect(view.warnings.some(warning => warning.code === "missing_price")).toBe(true);
   });
 
   it("uses effective assigned material snapshots, including scoped overrides, as the CZK cost authority", () => {
@@ -422,5 +434,68 @@ describe("project quote compatibility", () => {
       marginAmount: 30,
       finalCost: 230
     });
+  });
+});
+
+
+describe("report 50 labor contribution", () => {
+  it("preserves sale 1700 while reporting purchase 1000 and contribution 700, including labor once", () => {
+    const board = { ...pricedItem({ id: "board", cost: 1000 }), dimensionsMm: { length: 2000, width: 1000, thickness: 18 }, metrics: { areaM2: 2 } };
+    const entries = [entry({ instanceId: "cabinet", items: [board], labor: 200 })];
+    entries[0]!.result.pricing.priceInputs.currency = "CZK";
+    const state = initializedState({ defaultMarginPercent: 50, groupMargins: { labor: 0 } });
+    const view = buildDelfiMarginsView(entries, state, { currency: "CZK" });
+    expect(view.summary.finalPrice).toBe(1700);
+    expect(view.summary.contribution).toEqual({ purchaseCost: 1000, laborRevenue: 200, contributionAmount: 700, contributionPercent: 70 });
+    expect(view.summary.sheetMaterial?.marginPerM2).toBe(350);
+    expect(view.groups.find(g => g.category === "labor")?.contribution).toEqual({ purchaseCost: 0, laborRevenue: 200, contributionAmount: 200, contributionPercent: null });
+    // Existing v4 fields retain markup semantics for integration compatibility.
+    expect(view.summary).toMatchObject({ baseCost: 1200, marginAmount: 500 });
+  });
+  it("keeps nonzero historical labor markup in the sale and includes the whole labor revenue", () => {
+    const entries = [entry({ instanceId: "cabinet", items: [pricedItem({ id: "board", cost: 1000 })], labor: 200 })];
+    const state = initializedState({ defaultMarginPercent: 50, groupMargins: { labor: 20 }, additionalLaborCost: 100 });
+    const quote = buildProjectQuoteSummary(entries, state);
+    expect(quote.finalPrice).toBe(1860);
+    expect(quote.contribution).toMatchObject({ purchaseCost: 1000, laborRevenue: 360, contributionAmount: 860 });
+    expect(buildProjectPricingPayload(entries, state).totals.contribution).toEqual(quote.contribution);
+  });
+  it("handles labor-only projects and missing prices without dividing by zero", () => {
+    const entries = [entry({ instanceId: "cabinet", items: [pricedItem({ id: "missing", cost: null })], labor: 200 })];
+    const view = buildDelfiMarginsView(entries, initializedState({ groupMargins: { labor: 0 } }));
+    expect(view.summary.contribution).toMatchObject({ purchaseCost: 0, contributionAmount: 200, contributionPercent: null });
+    expect(view.summary.sheetMaterial).toMatchObject({ marginPerM2: null, preliminary: true });
+    expect(view.warnings.some(w => w.code === "missing_price")).toBe(true);
+  });
+});
+
+
+describe("fixed additional work and currency parity", () => {
+  it("round-trips fixed additional work in standalone quote settings while retaining historical sales", () => {
+    const legacy = buildProjectQuoteSummary([], { additionalLaborCost: 200, marginPercent: 50 });
+    expect(legacy.finalPrice).toBe(300);
+    const fixed = buildProjectQuoteSummary([], { ...legacy.settings, additionalLaborFixed: true });
+    expect(fixed.finalPrice).toBe(200);
+    expect(fixed.contribution?.laborRevenue).toBe(200);
+    expect(buildProjectQuoteSummary([], JSON.parse(JSON.stringify(fixed.settings))).finalPrice).toBe(200);
+  });
+  it("bills 3 × 200 plus newly entered additional work 100 as exactly 700", () => {
+    const entries = [entry({ instanceId: "three", items: [], labor: 600 })];
+    entries[0]!.result.pricing.preassembly = { source: "instance", amount: 200 };
+    const settings = applyProjectMarginSettingsOperation(initializedState(), { type: "set_additional_labor", additionalLaborCost: 100 }, new Set());
+    expect(buildProjectQuoteSummary(entries, settings).contribution).toMatchObject({ purchaseCost: 0, laborRevenue: 700, contributionAmount: 700 });
+  });
+  it("converts an explicitly configured CZK work amount into the EUR export exactly once", () => {
+    const entries = [entry({ instanceId: "three", items: [], labor: 600 })];
+    entries[0]!.result.pricing.priceInputs.currency = "CZK";
+    entries[0]!.result.pricing.preassembly = { source: "instance", amount: 200 };
+    const settings = initializedState({ additionalLaborCost: 100, additionalLaborFixed: true });
+    const quote = buildProjectQuoteSummary(entries, settings, { settingsCurrency: "CZK" });
+    const inCzk = buildProjectQuoteSummary(entries, settings, { currency: "CZK", settingsCurrency: "CZK" });
+    expect(inCzk.finalPrice).toBe(700);
+    expect(quote.moduleLaborCost).toBe(24.8);
+    expect(quote.additionalLaborCost).toBe(4.13);
+    expect(quote.finalPrice).toBe(28.93);
+    expect(quote.contribution?.contributionAmount).toBe(28.93);
   });
 });

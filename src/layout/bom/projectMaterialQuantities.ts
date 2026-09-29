@@ -8,6 +8,7 @@ const CATEGORY_UNITS: ReadonlyArray<[MaterialAssignmentCategory, ProjectMaterial
   ["corpus", "m2"],
   ["front", "m2"],
   ["worktop", "m2"],
+  ["backsplash", "m2"],
   ["plinth", "lm"],
   ["back", "m2"],
   ["drawer_bottom", "m2"],
@@ -19,6 +20,13 @@ const CATEGORY_UNITS: ReadonlyArray<[MaterialAssignmentCategory, ProjectMaterial
   ["lift_up", "pcs"],
   ["leg", "pcs"],
   ["fastener", "pcs"],
+  ["hinge_plate", "pcs"],
+  ["leg_plate", "pcs"],
+  ["plinth_clip", "pcs"],
+  ["hanging_bracket", "pcs"],
+  ["shelf_support", "pcs"],
+  ["assembly_pack", "pcs"],
+
   ["other_component", "pcs"],
   ["lighting", "m2"]
 ];
@@ -29,13 +37,13 @@ const HARDWARE_CATEGORIES = new Set<MaterialAssignmentCategory>([
   "runner",
   "lift_up",
   "leg",
-  "fastener"
+  "fastener", "hinge_plate", "leg_plate", "plinth_clip", "hanging_bracket", "shelf_support", "assembly_pack"
 ]);
 
 const HARDWARE_CATEGORY_ALIASES: Readonly<Record<string, MaterialAssignmentCategory>> = {
-  plinth_clip: "fastener",
-  shelf_support: "fastener",
-  hanging_bracket: "fastener"
+  plinth_clip: "plinth_clip",
+  shelf_support: "shelf_support",
+  hanging_bracket: "hanging_bracket"
 };
 
 export function projectMaterialQuantitiesFromUsageSummary(summary: ProjectMaterialUsageSummary): ProjectMaterialQuantity[] {
@@ -44,7 +52,7 @@ export function projectMaterialQuantitiesFromUsageSummary(summary: ProjectMateri
   );
 
   for (const group of summary.groups) {
-    if (["corpus", "front", "worktop", "plinth", "back", "drawer_bottom", "lighting"].includes(group.id)) {
+    if (["corpus", "front", "worktop", "plinth", "back", "drawer_bottom", "backsplash", "lighting"].includes(group.id)) {
       addQuantity(quantities, group.id as MaterialAssignmentCategory, group.quantity, group.pieces);
       continue;
     }
@@ -60,7 +68,7 @@ export function projectMaterialQuantitiesFromUsageSummary(summary: ProjectMateri
         const category = role && HARDWARE_CATEGORIES.has(role)
           ? role
           : HARDWARE_CATEGORY_ALIASES[item.usageRole ?? ""] ?? "other_component";
-        addQuantity(quantities, category, item.quantity, item.pieces);
+        addQuantity(quantities, category, item.quantity, item.pieces, item.unit);
       }
     }
   }
@@ -72,11 +80,12 @@ function addQuantity(
   quantities: Map<MaterialAssignmentCategory, ProjectMaterialQuantity>,
   category: MaterialAssignmentCategory,
   quantity: number,
-  pieces: number
+  pieces: number, unit?: ProjectMaterialQuantity["unit"]
 ): void {
   const target = quantities.get(category);
   if (!target) return;
-  target.quantity = round(target.quantity + quantity);
+  if (unit) target.unit = target.unit === "custom" ? "custom" : (target.pieces ?? 0) === 0 ? unit : target.unit === unit ? unit : "custom";
+  target.quantity = target.unit === "custom" ? 0 : round(target.quantity + quantity);
   target.pieces = round((target.pieces ?? 0) + pieces);
 }
 

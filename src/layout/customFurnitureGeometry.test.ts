@@ -10,6 +10,7 @@ import {
   sanitizeCustomFurnitureProfile
 } from "./customFurnitureGeometry";
 import type { CustomFurnitureBoardParams } from "./customFurnitureTypes";
+import { customBoardNetAreaMm2 } from "./customBoardProfile";
 
 const horizontalBoard: CustomFurnitureBoardParams = {
   id: "b1",
@@ -130,5 +131,35 @@ describe("customFurnitureGeometry", () => {
   it("finds nearest board edge in workplane space", () => {
     expect(nearestBoardProfileEdge(horizontalBoard, new THREE.Vector3(0.45, 0.72, 0.02))).toBe(0);
     expect(nearestBoardProfileEdge(horizontalBoard, new THREE.Vector3(0.98, 0.72, 0.25))).toBe(1);
+  });
+
+  it("keeps a cutout open across both arms of a bent vertical board", () => {
+    const board: CustomFurnitureBoardParams = {
+      ...horizontalBoard, kind: "vertical", justification: "center",
+      profile: [{ x: 0, y: 0 }, { x: 2000, y: 0 }, { x: 2000, y: 720 }, { x: 0, y: 720 }],
+      workplane: { type: "vertical", aMm: { x: 0, z: 0 }, bMm: { x: 1000, z: 1000 }, mirrored: false,
+        pathMm: [{ x: 0, z: 0 }, { x: 1000, z: 0 }, { x: 1000, z: 1000 }] },
+      cutouts: [{ id: "across-bend", profile: [{ x: 800, y: 200 }, { x: 1200, y: 200 }, { x: 1200, y: 500 }, { x: 800, y: 500 }] }]
+    };
+    const geometry = makeCustomFurnitureBoardGeometry(board);
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geometry, material);
+    const hit = (origin: THREE.Vector3, direction: THREE.Vector3) => new THREE.Raycaster(origin, direction).intersectObject(mesh).length > 0;
+    expect(hit(new THREE.Vector3(0.9, 0.3, -1), new THREE.Vector3(0, 0, 1))).toBe(false);
+    expect(hit(new THREE.Vector3(2, 0.3, 0.1), new THREE.Vector3(-1, 0, 0))).toBe(false);
+    expect(hit(new THREE.Vector3(0.6, 0.3, -1), new THREE.Vector3(0, 0, 1))).toBe(true);
+    expect(hit(new THREE.Vector3(2, 0.3, 0.4), new THREE.Vector3(-1, 0, 0))).toBe(true);
+    expect(customBoardNetAreaMm2(board)).toBe(1320000);
+    expect(makeCustomFurnitureBoardOutlineGeometry(board, geometry).getAttribute("position").count).toBeGreaterThan(0);
+    geometry.dispose(); material.dispose();
+  });
+
+  it("renders a fully removed board as an empty, valid geometry", () => {
+    const board = { ...horizontalBoard, cutouts: [{ id: "whole", profile: horizontalBoard.profile }] };
+    const geometry = makeCustomFurnitureBoardGeometry(board);
+    expect(customBoardNetAreaMm2(board)).toBe(0);
+    expect(geometry.getAttribute("position").count).toBe(0);
+    expect(makeCustomFurnitureBoardOutlineGeometry(board, geometry).getAttribute("position").count).toBe(0);
+    geometry.dispose();
   });
 });

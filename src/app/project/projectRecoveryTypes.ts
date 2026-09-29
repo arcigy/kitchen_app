@@ -1,3 +1,4 @@
+import type { EdgeGroupChange } from "../../core/edge-banding/edgeGroupTransaction";
 import type { ProjectMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 
@@ -39,6 +40,7 @@ export type ProjectRecoveryEnvelopeV1 = {
   workspace: ProjectRecoveryWorkspace;
   interaction: ProjectInteractionCheckpoint | null;
   historyTail: unknown[];
+  edgeGroupChanges?: EdgeGroupChange[];
 };
 
 export type ProjectRecoveryArchiveV1 = {

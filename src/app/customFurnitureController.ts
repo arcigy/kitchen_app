@@ -1,3 +1,5 @@
+import { createBacksplashController } from "./backsplashController";
+import { customBoardBandedIndexes } from "../layout/customFurnitureEdges";
 import * as THREE from "three";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { disposeObject3D } from "../core/dispose";
@@ -202,6 +204,7 @@ type CustomFurnitureBoundarySelectRect = {
   mode: "contain" | "touch";
 };
 type CreateCustomFurnitureControllerArgs = {
+  finishKitchenEditing?: () => void;
   S: AppState;
   catalog: ClientCatalog;
   customFurniture: CustomFurnitureInstance[];
@@ -1455,6 +1458,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
       topConstraint: source?.topConstraint ?? draftBoardTopConstraint,
       topOffsetMm: source?.topOffsetMm ?? draftBoardTopOffsetMm,
       justification: source?.justification ?? draftBoardJustification,
+      ...(source?.edgeBandingOverrides ? { edgeBandingOverrides: cloneJson(source.edgeBandingOverrides) } : {}),
       edgeBanding: cloneJson(source?.edgeBanding ?? [])
     };
   };
@@ -1522,6 +1526,11 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     args.layoutRoot.add(root);
   };
 
+  const openBoardEdges = async (furniture: CustomFurnitureInstance, board: CustomFurnitureBoardParams) => {
+    const { openCustomBoardEdgeSettings } = await import("./customBoardEdgeSettings");
+    openCustomBoardEdgeSettings({ state: args.S, furniture, board, catalog: args.catalog, rebuildFurniture, commitHistory: args.commitHistory, onClose: args.refreshProps });
+  };
+
   const createBoardObject = (furniture: CustomFurnitureInstance, board: CustomFurnitureBoardParams): CustomFurnitureBoardObject => {
     const selected = furniture.id === selectedFurnitureId && board.id === selectedBoardId;
     const root = new THREE.Group();
@@ -1550,7 +1559,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     root.add(outline);
 
     const edgeBandLines = new THREE.LineSegments(
-      makeCustomFurnitureBoardEdgeGeometry(board, board.edgeBanding.map((edge) => edge.edgeIndex)),
+      makeCustomFurnitureBoardEdgeGeometry(board, customBoardBandedIndexes(board)),
       new THREE.LineBasicMaterial({ color: 0xff8c2a, linewidth: 2, depthTest: false })
     );
     edgeBandLines.renderOrder = 90;
@@ -1616,6 +1625,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
   };
 
   const enterFurnitureEditor = (furnitureId: string, boardId: string | null = null) => {
+    args.clearAppSelection();
     editorFurnitureId = furnitureId;
     selectedFurnitureId = furnitureId;
     selectedBoardId = boardId;
@@ -1696,6 +1706,8 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     if (selectedBoardId) {
       const index = furniture.params.boards.findIndex((board) => board.id === selectedBoardId);
       if (index < 0) return false;
+      const removed = furniture.params.boards[index]!;
+      if (removed.backsplashSource && furniture.params.backsplash) furniture.params.backsplash.suppressedKeys.push(removed.backsplashSource.key);
       furniture.params.boards.splice(index, 1);
       selectedBoardId = null;
       rebuildFurniture(furniture);
@@ -2173,6 +2185,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
   }
 
   const tryMountActiveCustomFurnitureProps = () => {
+    if (!editorFurnitureId && !activeTool && args.S.selectedKind) { selectedFurnitureId = null; selectedBoardId = null; return false; }
     const furniture = findFurniture();
     if (activeTool || boundaryEditActive) {
       return mountCustomFurnitureActiveToolProps({
@@ -2214,6 +2227,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
         furniture,
         board,
         constraintOptions,
+        onEditEdges: () => openBoardEdges(furniture, board),
         syncVerticalBoardProfileToConstraints,
         rebuildFurniture,
         cabinetOptions: args.getCabinetOptions?.(),
@@ -2225,6 +2239,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
       mountCustomFurnitureProps({
         props: args.props,
         furniture,
+        onBacksplashSettings: () => backsplash.editSettings(furniture.id),
         constraintOptions,
         rebuildFurniture,
         commitHistory: args.commitHistory,
@@ -2851,14 +2866,9 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
       if (!hit) return;
       const edgeIndex = nearestBoardProfileEdge(hit.board, hit.point);
       if (edgeIndex == null) return;
-      const existingIndex = hit.board.edgeBanding.findIndex((edge) => edge.edgeIndex === edgeIndex);
-      if (existingIndex >= 0) hit.board.edgeBanding.splice(existingIndex, 1);
-      else hit.board.edgeBanding.push({ edgeIndex, materialId: firstMaterial(args.catalog, "edge") });
       selectedFurnitureId = hit.furniture.id;
       selectedBoardId = hit.board.id;
-      rebuildFurniture(hit.furniture);
-      args.commitHistory();
-      args.refreshProps();
+      void openBoardEdges(hit.furniture, hit.board);
       ev.preventDefault();
       ev.stopPropagation();
       return;
@@ -3124,8 +3134,10 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     args.refreshProps();
   };
 
-  const getSaveItems = (): CustomFurnitureSnapshotItem[] =>
-    args.customFurniture.map((item) => ({ id: item.id, params: cloneJson(item.params) }));
+  const getSaveItems = (): CustomFurnitureSnapshotItem[] => {
+    backsplash.sync();
+    return args.customFurniture.map((item) => ({ id: item.id, params: cloneJson(item.params) }));
+  };
 
   const duplicateAttachedToCabinet = (sourceId: string, targetId: string, translationMm: { x: number; z: number }) => {
     const params = duplicateAttachedCustomFurnitureParams(getSaveItems(), sourceId, targetId, translationMm);
@@ -3162,7 +3174,11 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
   const getVisibilityTargets = () => args.customFurniture.map((item) => ({ key: `customFurniture:${item.id}`, root: item.root }));
   const getSelectedVisibilityTargetKeys = () => (selectedFurnitureId ? [`customFurniture:${selectedFurnitureId}`] : []);
 
+  const backsplash = createBacksplashController({ finishKitchenEditing: args.finishKitchenEditing, state: args.S, catalog: args.catalog, canvas: args.renderer.domElement, getCamera: args.getCamera, create: createCustomFurniture, rebuild: rebuildFurniture, edit: enterFurnitureEditor, commit: args.commitHistory, status: args.setStatus, ensureLayout: args.ensureLayoutMode });
+
   return {
+    backsplash,
+    enterFurnitureEditor,
     addBoard,
     buildCustomFurnitureTopbar,
     commitActiveDraft,

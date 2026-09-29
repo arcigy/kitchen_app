@@ -15,6 +15,17 @@ function quoteBom(items: PortableQuoteBomPayload["items"]): PortableQuoteBomPayl
 }
 
 describe("material usage summary", () => {
+  it("never adds sets, profiles and running metres into a count of hardware pieces", () => {
+    const items = (["pcs", "set", "lm", "profile"] as const).map((unit, index) => ({
+      id: unit, itemType: "hardware" as const, category: "other_component", name: unit, description: unit,
+      pricingBasis: "piece" as const, pricingUnit: unit, quantity: index + 1, pricingQuantity: index + 1,
+      component: { catalogId: unit, displayName: unit, componentType: "fastener" } as never
+    }));
+    const summary = summarizeMaterialUsage([quoteBom(items)]);
+    expect(summary.groups.find(group => group.id === "hardware")).toMatchObject({ unit: "custom", quantity: 0 });
+    expect(summary.hardwarePieces).toBe(1);
+    expect(summary.groups.find(group => group.id === "hardware")!.items.map(item => item.unit).sort()).toEqual(["lm", "pcs", "profile", "set"]);
+  });
   it("keeps real board, edge and hardware quantities separated by material group without prices", () => {
     const summary = summarizeMaterialUsage([
       quoteBom([
@@ -222,7 +233,10 @@ describe("material usage summary", () => {
     expect(value("edge_other")).toBe(2.1);
     expect(value("hinge")).toBe(1);
     expect(value("runner")).toBe(2);
-    expect(value("fastener")).toBe(15);
+    expect(value("fastener")).toBe(0);
+    expect(value("plinth_clip")).toBe(4);
+    expect(value("shelf_support")).toBe(5);
+    expect(value("hanging_bracket")).toBe(6);
     expect(value("other_component")).toBe(3);
   });
 });

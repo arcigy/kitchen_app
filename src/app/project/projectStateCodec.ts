@@ -1,3 +1,4 @@
+import { synchronizeAppStateMaterials } from "../../core/project-save/project-layout-materials";
 import { validateProjectAppState } from "../../core/project-save/project-app-state-validation";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import type { ProjectInteractionCheckpoint } from "./projectRecoveryTypes";
@@ -31,8 +32,9 @@ export function createProjectStateCodec(args: {
   prepareAppStateForRestore?: (appState: ProjectSaveFile["appState"]) => { appState: ProjectSaveFile["appState"]; notice?: string | null };
 }): ProjectStateCodec {
   const validateAppState = (appState: ProjectSaveFile["appState"]) => {
-    validateProjectAppState(appState);
-    return appState;
+    const canonical=synchronizeAppStateMaterials(appState);
+    validateProjectAppState(canonical);
+    return canonical;
   };
   return {
     captureServer() {
@@ -47,7 +49,7 @@ export function createProjectStateCodec(args: {
     },
     async restoreServer(appState) {
       const prepared = args.prepareAppStateForRestore?.(appState) ?? { appState };
-      validateAppState(prepared.appState);
+      prepared.appState=validateAppState(prepared.appState);
       args.interaction.clear();
       const options: { recovery: false; historyTail: unknown[]; notice?: string | null } = { recovery: false, historyTail: [] };
       if (prepared.notice !== undefined) options.notice = prepared.notice;
@@ -55,7 +57,7 @@ export function createProjectStateCodec(args: {
     },
     async restoreRecovery(capture) {
       const prepared = args.prepareAppStateForRestore?.(capture.appState) ?? { appState: capture.appState };
-      validateAppState(prepared.appState);
+      prepared.appState=validateAppState(prepared.appState);
       const options: { recovery: true; historyTail: unknown[]; notice?: string | null } = { recovery: true, historyTail: capture.historyTail };
       if (prepared.notice !== undefined) options.notice = prepared.notice;
       await args.restoreAppState(prepared.appState, options);

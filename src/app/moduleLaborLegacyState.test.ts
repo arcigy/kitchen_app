@@ -1,0 +1,23 @@
+import { Group, Mesh, Box3, LineSegments } from "three";
+import { createModulePackageDefaultParams } from "../core/module-package/runtime/module-runtime-adapter";
+import { expect, it } from "vitest";
+import type { LayoutInstance } from "../layout/appState";
+import { makeDefaultKitchenContext } from "../layout/kitchenContext";
+import { createSystemCatalogSeed } from "../core/catalog/catalog-bootstrap";
+import { createDefaultProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
+import { legacyModuleLaborState } from "./moduleLaborLegacyState";
+import { adoptPresetLabor, readModuleLabor } from "../core/project-manufacturing/module-labor";
+import { systemModulePackageTemplates } from "../system/module-packages";
+it("preserves an old explicit cabinet rate when applying a new company preset", () => {
+  const catalog = { clientId: "fixture", ...createSystemCatalogSeed() };
+  const instance: LayoutInstance = { id: "cabinet", params: { ...createModulePackageDefaultParams({ modulePackage: systemModulePackageTemplates.find(pkg => pkg.module.moduleType === "fwm_catalog_base_drawers")!, catalog }), type: "fwm_catalog_base_drawers", quantity: 3 }, kitchenGroupId: null, kitchenPlacement: null, root: new Group(), module: new Group(), pick: new Mesh(), localBox: new Box3(), outline: new LineSegments() };
+  const settings = createDefaultProjectManufacturingSettings(); settings.pricingMode = "configured";
+  settings.preassemblyByInstanceId.cabinet = 0; settings.preassemblyByModuleType.fwm_catalog_base_drawers = 240;
+  const initial = legacyModuleLaborState(instance, makeDefaultKitchenContext(catalog), catalog, settings);
+  expect(initial.override?.amount).toBe(0); expect(initial.inherited.rate?.amount).toBe(80);
+  const params: Record<string, unknown> = { moduleLabor: initial };
+  adoptPresetLabor(params, systemModulePackageTemplates[0], { presetId: "work", label: "Work", note: "fixture", parameterValues: {}, laborRate: { amount: 200, currency: "CZK" } }, catalog);
+  expect(readModuleLabor(params.moduleLabor)?.override?.amount).toBe(0);
+  expect(readModuleLabor(params.moduleLabor)?.inherited.rate?.amount).toBe(200);
+  expect(instance.params.moduleLabor).toBeUndefined();
+});

@@ -1,3 +1,4 @@
+import { ensureEdgeGroups, updateEdgeGroup } from "../edge-banding/edgeGroups";
 import {
   access,
   mkdir,
@@ -242,6 +243,30 @@ describe("project create/save/encryption", () => {
     await expect(repo.getProject(ctxB, projectA.projectId)).rejects.toThrow(
       /metadata is missing|different client|does not belong/i,
     );
+  });
+
+  it("preserves shared edge groups, removals and stock prices through encrypted FQP and rejects missing groups", async () => {
+    const repo = createFileProjectRepository(root);
+    const project = await repo.createProject(ctxA, createInput);
+    const catalog = { ...getSystemSeedCatalog(), clientId: ctxA.clientId };
+    const edge = { ...catalog.materials[0]!, id: "test.edge.snapshot", materialType: "edge" as const, pricingUnit: "lm" as const, pricingBasis: "linear_length" as const, edgeFamily: "body" as const };
+    catalog.materials = [...catalog.materials, edge]; catalog.priceList.prices = { ...catalog.priceList.prices, [edge.id]: 6.75 };
+    const groupId = "material-assignment:edge-group:shared";
+    const materials = updateEdgeGroup(ensureEdgeGroups(undefined, catalog), groupId, "Dubové olepenie", edge, catalog);
+    const params = { type: "fwm_catalog_wall_cabinet", edgeBandingOverrides: { "door:edge:0": groupId, "door:edge:1": null }, plinthLeftEnabled: true };
+    const board = { id: "b1", edgeBandingOverrides: { "b1:edge:0": groupId, "b1:edge:1": null } };
+    const layout = { snapshot: { instances: [{ id: "m1", params }], customFurniture: [{ id: "c1", params: { boards: [board] } }] }, windows: [], doors: [] };
+    const save = assembleProjectSaveFile({ clientId: ctxA.clientId, projectId: project.projectId, activePhaseId: project.activePhaseId,
+      project, catalog, layoutState: layout, kitchenState: {}, moduleInstances: [{ id: "m1", params }], materialAssignments: materials, sceneState: {} });
+    const options = { secret: "synthetic-edge-roundtrip-secret" };
+    const restored = loadProjectSaveFile(decryptProjectSaveFile(encryptProjectSaveFile(save, options), options));
+    expect(restored.appState.layout).toEqual(layout);
+    expect(restored.appState.modules).toEqual([{ id: "m1", params }]);
+    expect(restored.appState.materialAssignments).toEqual(materials);
+    expect(restored.phases[0]!.materialAssignments.assignments.find(a => a.assignmentId === groupId)?.snapshots.material?.unitPrice).toBe(6.75);
+    const broken = structuredClone(restored);
+    broken.appState.materialAssignments.assignments = broken.appState.materialAssignments.assignments.filter(a => a.assignmentId !== groupId);
+    expect(() => loadProjectSaveFile(broken)).toThrow(/missing group|material assignment/i);
   });
 
   it("assembles a complete serializable save with catalog snapshot", async () => {

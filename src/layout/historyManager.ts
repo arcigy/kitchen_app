@@ -1,3 +1,4 @@
+import { synchronizeDerivedLayout } from "./derivedLayout";
 import * as THREE from "three";
 import type {
   AppState,
@@ -109,7 +110,7 @@ export const snapshotSignature = (s: LayoutSnapshot) => {
   const ledStrips = (s.ledStripGroups ?? []).map((group) => JSON.stringify(group)).join("|");
   const wardrobe = s.wardrobe ? JSON.stringify(s.wardrobe) : "";
   const pins = `${s.pinnedWallIds.slice().sort().join(",")}#${s.pinnedInstanceIds.slice().sort().join(",")}#${s.underlayPinned ? 1 : 0}`;
-  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.alignLockCounter ?? 1}:${s.customFurnitureCounter ?? 1}:${s.ledStripCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${alignLocks}::${customFurniture}::${ledStrips}::${wardrobe}::${stableJson(s.materialAssignments ?? null)}::${mods}::${stableJson(s.kitchen ?? null)}`;
+  return `${s.wallCounter}:${s.floorCounter ?? 1}:${s.columnCounter ?? 1}:${s.sectionCounter ?? 1}:${s.worktopCounter ?? 1}:${s.alignLockCounter ?? 1}:${s.customFurnitureCounter ?? 1}:${s.ledStripCounter ?? 1}:${s.instanceCounter}::${pins}::${w}::${floors}::${columns}::${sections}::${worktops}::${alignLocks}::${customFurniture}::${ledStrips}::${wardrobe}::${stableJson(s.materialAssignments ?? null)}::${mods}::${stableJson(s.kitchen ?? null)}::${stableJson(s.openings ?? null)}`;
 };
 
 export const updateUndoRedoUi = (S: AppState) => {
@@ -210,7 +211,7 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
     const refA = new THREE.Vector3(w.params.aMm.x / 1000, 0, w.params.aMm.z / 1000);
     const refB = new THREE.Vector3(w.params.bMm.x / 1000, 0, w.params.bMm.z / 1000);
     const params = JSON.parse(JSON.stringify(w.params)) as WallParams;
-    params.heightMm = Math.max(1, Math.round(params.heightMm ?? 2600));
+    params.heightMm ??= 2600;
     const mesh = helpers.createWallMesh(refA, refB, params.thicknessMm, params.heightMm);
     mesh.name = `wallMesh_${id}`;
     mesh.userData.kind = "wall";
@@ -221,9 +222,10 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
     const inst: WallInstance = { id, params, heightMm: params.heightMm, root, mesh, outline };
     helpers.layoutRoot.add(root);
     S.walls.push(inst);
-    helpers.rebuildWall(inst);
   }
 
+  if (snap.openings) S.openingHistory?.restore(snap.openings);
+  for (const wall of S.walls) helpers.rebuildWall(wall);
   helpers.restoreFloors?.(snap.floors ?? [], snap.floorCounter);
 
   helpers.layoutRoot.updateMatrixWorld(true);
@@ -256,12 +258,14 @@ export const restoreLayoutSnapshot = (S: AppState, helpers: HistoryHelpers, snap
   helpers.mountProps();
 };
 
-export const captureLayoutSnapshot = (S: AppState): LayoutSnapshot => {
+export const captureLayoutSnapshot = (S: AppState, options: { includeOpenings?: boolean } = {}): LayoutSnapshot => {
+  synchronizeDerivedLayout(S);
   const copyParams = (p: WallParams) => JSON.parse(JSON.stringify(p)) as WallParams;
   const copyWorktopParams = (p: KitchenWorktopParams) => JSON.parse(JSON.stringify(p)) as KitchenWorktopParams;
   const copySectionParams = (p: SectionParams) => JSON.parse(JSON.stringify(p)) as SectionParams;
   const copyColumnParams = (p: ColumnParams) => JSON.parse(JSON.stringify(p)) as ColumnParams;
   return {
+    ...((options.includeOpenings ?? true) && S.openingHistory ? { openings: S.openingHistory.capture() } : {}),
     kitchen: S.kitchenCtx && S.kitchenGroups ? { context: structuredClone(S.kitchenCtx), groups: structuredClone(S.kitchenGroups) } : undefined,
     materialAssignments: structuredClone(S.projectMaterialAssignments),
     wallCounter: S.wallCounter,
