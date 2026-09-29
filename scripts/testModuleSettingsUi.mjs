@@ -153,8 +153,12 @@ try {
   await presetDialog().getByText('Preset save failed (test).', { exact: true }).waitFor();
   assert(await presetNameInput().inputValue() === presetName && await presetDialog().locator('textarea').inputValue() === 'Independent company preset', 'Failed preset creation preserves the completed form for retry');
   await page.unroute('**/parameter-presets');
-  await presetDialog().locator('button[type=submit]').click();
-  await presetDialog().waitFor({ state: 'detached' });
+  const [presetResponse] = await Promise.all([
+    page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/parameter-presets') && response.request().method() === 'POST', { timeout: 90_000 }),
+    presetDialog().locator('button[type=submit]').click(),
+  ]);
+  assert(presetResponse.ok(), `Advanced preset POST succeeds (HTTP ${presetResponse.status()})`);
+  await presetDialog().waitFor({ state: 'detached', timeout: 10_000 });
   const modulePackageId = String((await module()).params.modulePackageId);
   const createdResponse = await page.context().request.get(new URL(`/api/modules/${encodeURIComponent(modulePackageId)}`, baseUrl).toString());
   assert(createdResponse.ok(), 'Advanced preset saves independently to the company');
