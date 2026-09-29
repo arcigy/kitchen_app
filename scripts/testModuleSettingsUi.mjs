@@ -144,6 +144,7 @@ try {
   await presetDialog().locator('button[type=submit]').click();
   await presetDialog().getByText('Preset save failed (test).', { exact: true }).waitFor();
   assert(await presetNameInput().inputValue() === presetName && await presetDialog().locator('textarea').inputValue() === 'Independent company preset', 'Failed preset creation preserves the completed form for retry');
+  await page.unroute('**/parameter-presets');
   await presetDialog().locator('button[type=submit]').click();
   await presetDialog().waitFor({ state: 'detached' });
   const modulePackageId = String((await module()).params.modulePackageId);
