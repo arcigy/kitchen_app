@@ -13,10 +13,18 @@ const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors = [], checks = [];
 const saveRequests = [];
+const presetTraffic = [];
 page.on('pageerror', error => errors.push(String(error)));
 page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 page.on('request', request => {
   if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/save')) saveRequests.push(request.url());
+  if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/parameter-presets')) presetTraffic.push({ event: 'request', url: request.url() });
+});
+page.on('response', response => {
+  if (new URL(response.url()).pathname.endsWith('/parameter-presets')) presetTraffic.push({ event: 'response', status: response.status() });
+});
+page.on('requestfailed', request => {
+  if (new URL(request.url()).pathname.endsWith('/parameter-presets')) presetTraffic.push({ event: 'failed', error: request.failure()?.errorText ?? 'unknown' });
 });
 const assert = (ok, message) => { if (!ok) throw new Error(message); checks.push(message); };
 const modal = () => page.locator('dialog[data-module-settings]');
@@ -252,6 +260,8 @@ try {
   console.log(`Module settings UI: ${checks.length} checks passed.`);
 } catch (error) {
   await page.screenshot({ path: `${out}/failure.png` });
-  await writeFile(`${out}/failure.json`, JSON.stringify({ error: String(error), checks, errors, saveRequests, body: await page.locator('body').innerText() }, null, 2));
+  const presetDialogText = await page.locator('[data-preset-dialog]').innerText().catch(() => null);
+  console.error(JSON.stringify({ presetDialogText, presetTraffic }));
+  await writeFile(`${out}/failure.json`, JSON.stringify({ error: String(error), checks, errors, saveRequests, presetTraffic, presetDialogText, body: await page.locator('body').innerText() }, null, 2));
   throw error;
 } finally { await browser.close(); }
