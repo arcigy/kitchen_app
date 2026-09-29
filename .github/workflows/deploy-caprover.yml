@@ -100,10 +100,10 @@ jobs:
       - name: Test
         # A duplicate deploy gate must never hold the protected develop
         # deployment indefinitely. The same full suite runs in CI with a
-        # 30-minute job limit; this shorter, explicit step bound leaves time
+        # 45-minute job limit; this shorter, explicit step bound leaves time
         # for a clear failure and preserves the CapRover deploy timeout.
         timeout-minutes: 15
-        run: npm test
+        run: npm test -- --maxWorkers=2
 
       - name: Production dependency policy
         run: npm run security:dependencies
