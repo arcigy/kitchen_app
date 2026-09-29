@@ -21,6 +21,9 @@ import { createPostgresSupplierConfigurationRepository } from "../core/supplier-
 import { createInMemoryUserActivityRepository } from "../core/user-activity/user-activity-repository";
 import { createPostgresUserActivityRepository } from "../core/user-activity/user-activity-postgres-repository";
 import type { UserActivityRepository } from "../core/user-activity/user-activity-types";
+import { createInMemoryReleaseNewsRepository } from "../core/release-news/releaseNewsMemoryRepository";
+import { createPostgresReleaseNewsRepository } from "../core/release-news/releaseNewsPostgresRepository";
+import type { ReleaseNewsRepository } from "../core/release-news/releaseNewsRepository";
 
 export function shouldUseDatabase(env: NodeJS.ProcessEnv = process.env): boolean {
   const storage = env.KITCHEN_PROJECT_STORAGE?.toLowerCase();
@@ -53,6 +56,13 @@ export function createServerUserActivityRepository(): UserActivityRepository {
   return databaseConfig
     ? createPostgresUserActivityRepository(databaseConfig)
     : createInMemoryUserActivityRepository();
+}
+
+export function createServerReleaseNewsRepository(): ReleaseNewsRepository {
+  const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  return databaseConfig
+    ? createPostgresReleaseNewsRepository(databaseConfig)
+    : createInMemoryReleaseNewsRepository();
 }
 
 export function createServerCatalogRepository(projectRoot: string): ClientCatalogRepository {

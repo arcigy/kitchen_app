@@ -56,6 +56,7 @@ describe("project material business rules", () => {
       "corpus",
       "front",
       "worktop",
+      "backsplash",
       "plinth",
       "back",
       "drawer_bottom",
@@ -66,6 +67,7 @@ describe("project material business rules", () => {
       "runner",
       "lift_up",
       "leg",
+      "hinge_plate", "leg_plate", "plinth_clip", "hanging_bracket", "shelf_support", "assembly_pack",
       "fastener",
       "other_component"
     ]);
@@ -77,8 +79,8 @@ describe("project material business rules", () => {
     expect(corpus.snapshots.material?.priceListId).toBe(catalog.priceList.id);
     expect(corpus.updatedAt).toBe(NOW);
     const plinth = state.assignments.find((item) => item.category === "plinth")!;
-    expect(plinth.materialId).toBeUndefined();
-    expect(plinth.snapshots.material).toBeUndefined();
+    expect(plinth.materialId).toBeDefined();
+    expect(plinth.snapshots.material?.definition.pricingUnit).toBe("m2");
   });
 
   it("prefers current project material IDs over tenant defaults", () => {
@@ -144,7 +146,7 @@ describe("project material business rules", () => {
     expect(view.priceSource.lastSynchronizedAt).toBeNull();
   });
 
-  it("rejects a linear plinth assignment backed by an area-priced board", () => {
+  it("accepts area-priced plinth boards while the quantity overview remains in running metres", () => {
     const catalog = testCatalog();
     const state = createDefaultProjectMaterialAssignments(catalog, NOW);
     const plinth = state.assignments.find((item) => item.category === "plinth")!;
@@ -158,7 +160,7 @@ describe("project material business rules", () => {
       capturedAt: NOW
     };
 
-    expect(validateProjectMaterialAssignments(state, catalog)).toContainEqual(expect.objectContaining({
+    expect(validateProjectMaterialAssignments(state, catalog)).not.toContainEqual(expect.objectContaining({
       id: `pricing-unit:${plinth.assignmentId}`,
       affectedCategory: "plinth"
     }));
@@ -183,7 +185,7 @@ describe("project material business rules", () => {
 
     const normalized = normalizeAutoProjectMaterialAssignments(state, catalog, NOW);
 
-    expect(normalized.assignments.find((item) => item.category === "plinth")?.materialId).toBeUndefined();
+    expect(normalized.assignments.find((item) => item.category === "plinth")?.snapshots.material?.definition.pricingUnit).toBe("m2");
     expect(normalized.assignments.find((item) => item.category === "corpus")?.materialId).toBe(corpus.materialId);
     expect(normalized.revision).toBe(state.revision);
   });

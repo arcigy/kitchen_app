@@ -238,6 +238,25 @@ export function getKitchenWorktopSegmentPolygon(params: KitchenWorktopParams, se
   return polygon;
 }
 
+/** Rectangular blanks that contain the actual mitred geometry of each run.
+ * UI length labels may be rounded; purchasing must use unrounded projections. */
+export function getKitchenWorktopCutDimensionsMm(params: KitchenWorktopParams): Array<{length:number;width:number}> {
+  const path = sanitizeKitchenWorktopPath(params.path).map(kitchenWorktopPointToWorld);
+  if (path.length < 2) return [];
+  const independent = !!params.segmentDepthsMm?.length || isCollinearReversingPath(path);
+  const sides = getKitchenWorktopDepthSides(params, Math.max(1, params.depthMm) / 1000);
+  const left = independent ? [] : offsetKitchenWorktopPath(path, sides.leftDepthM);
+  const right = independent ? [] : offsetKitchenWorktopPath(path, -sides.rightDepthM);
+  return path.slice(0,-1).map((start,index) => {
+    const direction = path[index+1]!.clone().sub(start).normalize();
+    const normal = new THREE.Vector3(-direction.z,0,direction.x);
+    const points = independent ? getKitchenWorktopSegmentPolygon(params,index) : [left[index]!,left[index+1]!,right[index+1]!,right[index]!];
+    const lengths = points.map(p => p.clone().sub(start).dot(direction)*1000);
+    const widths = points.map(p => p.clone().sub(start).dot(normal)*1000);
+    return {length: Math.max(...lengths)-Math.min(...lengths), width: Math.max(...widths)-Math.min(...widths)};
+  });
+}
+
 export function getKitchenWorktopPolygon(params: KitchenWorktopParams) {
   const path = sanitizeKitchenWorktopPath(params.path);
   if (path.length < 2) return [] as THREE.Vector3[];

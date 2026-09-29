@@ -1,3 +1,6 @@
+import { mergeEdgeGroupChanges } from "../core/edge-banding/edgeGroupTransaction";
+import { publishProjectEdgeMaterials } from "./projectEdgeMaterials";
+import type { ProjectMaterialAssignmentsState } from "../core/project-materials/project-material-types";
 import * as THREE from "three";
 import type { AppState, LayoutInstance } from "../layout/appState";
 import type { ModuleParams } from "../model/cabinetTypes";
@@ -11,11 +14,13 @@ type CommitContext = {
 };
 
 /** Preserve both domain data and affected scene objects if a downstream rebuild fails. */
-export function commitModuleSettingsToLayout(ctx: CommitContext, id: string, candidate: ModuleParams, baseline: ModuleParams): ModuleParams {
+export function commitModuleSettingsToLayout(ctx: CommitContext, id: string, candidate: ModuleParams, baseline: ModuleParams, materials?: { candidate: ProjectMaterialAssignmentsState; baseline: ProjectMaterialAssignmentsState }): ModuleParams {
   const instance = ctx.findInstance(id);
   if (!instance || JSON.stringify(instance.params) !== JSON.stringify(baseline)) {
     throw new Error(t("The module changed outside this window. Reopen its settings."));
   }
+  const previousMaterials = structuredClone(ctx.state.projectMaterialAssignments);
+  const mergedMaterials = materials ? mergeEdgeGroupChanges(previousMaterials, materials.baseline, materials.candidate) : undefined;
   const instances = [...ctx.state.instances];
   const worktops = [...ctx.state.kitchenWorktops];
   const groups = structuredClone(ctx.state.kitchenGroups);
@@ -33,11 +38,15 @@ export function commitModuleSettingsToLayout(ctx: CommitContext, id: string, can
       ...(node instanceof THREE.Mesh || node instanceof THREE.Line ? { geometry: node.geometry, material: node.material } : {}) });
   });
   try {
+    if (mergedMaterials) ctx.state.projectMaterialAssignments = mergedMaterials;
     instance.params = structuredClone(candidate);
     if (!ctx.rebuildInstance(instance, { previousParams: baseline, preserveBackAnchor: true })) {
       throw new Error(t("The module does not fit here. Adjust its dimensions and try again."));
     }
+    if (materials) publishProjectEdgeMaterials(ctx.state);
   } catch (error) {
+    ctx.state.projectMaterialAssignments = previousMaterials;
+    if (materials) publishProjectEdgeMaterials(ctx.state);
     for (const current of [...ctx.state.instances, ...ctx.state.kitchenWorktops]) if (!parents.has(current.root)) current.root.removeFromParent();
     ctx.state.instances.splice(0, ctx.state.instances.length, ...instances);
     ctx.state.kitchenWorktops.splice(0, ctx.state.kitchenWorktops.length, ...worktops);

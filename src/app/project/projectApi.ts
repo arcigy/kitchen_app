@@ -1,3 +1,4 @@
+import { confirmProjectEdgeGroups, pendingProjectEdgeGroups } from "./projectEdgeGroupBaseline";
 import type { ProjectMetadata, ProjectVersionMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import { toSafeProjectFileName } from "../../core/project-save/project-save-file";
@@ -108,17 +109,20 @@ export async function saveProject(
     credentials: "include",
     body: JSON.stringify({
       appState,
+      edgeGroupChanges: pendingProjectEdgeGroups(projectId, appState.materialAssignments),
       editingSessionId,
       bomSnapshot,
       expectedSaveRevision,
       appVersion: import.meta.env?.VITE_APP_VERSION
     })
   }));
+  confirmProjectEdgeGroups(data.save.projectId, data.save.appState.materialAssignments);
   return data.save;
 }
 
 export async function loadProject(projectId: string): Promise<ProjectSaveFile> {
   const data = await readJson<{ save: ProjectSaveFile }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/load`, { credentials: "include" }));
+  confirmProjectEdgeGroups(data.save.projectId, data.save.appState.materialAssignments);
   return data.save;
 }
 
@@ -140,6 +144,7 @@ export async function restoreProjectVersion(projectId: string, versionNumber: nu
     credentials: "include",
     body: JSON.stringify({})
   }));
+  confirmProjectEdgeGroups(data.save.projectId, data.save.appState.materialAssignments);
   return data.save;
 }
 
@@ -164,5 +169,6 @@ export async function importProjectFile(file: File): Promise<ProjectSaveFile> {
     credentials: "include",
     body: JSON.stringify({ envelope })
   }));
+  confirmProjectEdgeGroups(data.save.projectId, data.save.appState.materialAssignments);
   return data.save;
 }

@@ -1,3 +1,4 @@
+import { createEdgePreviewOverlay, type EdgePreviewState } from "./edgeBandingPreview";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { drawProjectedTechnicalDimension, TECHNICAL_DIMENSION_STYLE } from "./dimensionOverlay";
@@ -20,7 +21,7 @@ export function createModuleSettingsViewport(host: HTMLElement, args: {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.domElement.dataset.moduleSettingsCanvas = "true";
+  renderer.domElement.dataset.moduleSettingsCanvas = "true"; renderer.domElement.tabIndex = 0;
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.001, 100);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = false;
@@ -61,6 +62,7 @@ export function createModuleSettingsViewport(host: HTMLElement, args: {
 
   const project = (point: THREE.Vector3, localReference = false) => projectModuleSettingsPoint(point, camera,
     { width: host.clientWidth, height: host.clientHeight }, localReference ? root : null);
+  const edges = createEdgePreviewOverlay(renderer.domElement, project);
   const render = () => {
     frame = 0;
     if (disposed || host.clientWidth < 1 || host.clientHeight < 1) return;
@@ -78,6 +80,9 @@ export function createModuleSettingsViewport(host: HTMLElement, args: {
         const screen = project(new THREE.Vector3(x, y, z)); modelBounds.expandByPoint(new THREE.Vector2(screen.x, screen.y));
       }
     }
+    edges.draw(context);
+    labels.hidden = edges.active();
+    if (edges.active()) return;
     const placed: ModuleDimensionLabelBox[] = [];
     dimensions.forEach((dimension, index) => {
       const button = buttons.get(dimension.id);
@@ -182,9 +187,10 @@ export function createModuleSettingsViewport(host: HTMLElement, args: {
       root = next; dimensions = nextDimensions; scene.add(root);
       refreshLabels(); if (first) reset(); else schedule();
     },
+    setEdges(state: EdgePreviewState | null) { edges.set(state); schedule(); },
     setActiveParameter(key: string) { activeKey = key; schedule(); },
     dispose() {
-      cancelEdit();
+      cancelEdit(); edges.dispose();
       disposed = true; if (frame) cancelAnimationFrame(frame);
       observer.disconnect(); controls.dispose(); renderer.dispose(); renderer.forceContextLoss();
       canvas.remove(); labels.remove(); renderer.domElement.remove();

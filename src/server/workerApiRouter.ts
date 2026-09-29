@@ -19,6 +19,8 @@ import type { ClientCatalogBootstrapResponseCache } from "./clientCatalogBootstr
 import type { ClientModulePackagesResponseCache } from "./clientModulePackagesResponseCache";
 import type { UserActivityRepository } from "../core/user-activity/user-activity-types";
 import { handleUserActivityApi } from "./userActivityEndpoint";
+import { handleReleaseNewsApi } from "./releaseNewsEndpoint";
+import type { ReleaseNewsRepository } from "../core/release-news/releaseNewsRepository";
 
 type GetClientContext = (cookieHeader: string | string[] | undefined) => Promise<ClientContext>;
 type ReadJsonBody = (req: http.IncomingMessage) => Promise<unknown>;
@@ -36,6 +38,7 @@ export type WorkerApiRouterContext = {
   clientModulePackagesResponseCache: ClientModulePackagesResponseCache;
   catalogLookupCache: CatalogExactLookupCache;
   userActivityRepository: UserActivityRepository;
+  releaseNewsRepository?: ReleaseNewsRepository;
   createCatalogRepository(): ClientCatalogRepository;
   createModulePackageRepository(): ModulePackageRepository;
   handleCatalog: DirectRouteHandler;
@@ -70,6 +73,13 @@ export async function handleWorkerApiRequest(
       repository: context.userActivityRepository
     })
   ) return;
+
+  if (context.releaseNewsRepository && await handleReleaseNewsApi(req, res, url, {
+    getContext: context.getClientContext,
+    readJsonBody: context.readJsonBody,
+    sendJson: context.sendJson,
+    repository: context.releaseNewsRepository
+  })) return;
 
   if (
     await handleClientAppDataRevisionApi(req, res, url, {

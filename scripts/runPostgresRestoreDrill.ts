@@ -4,6 +4,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { Pool, type PoolClient } from "pg";
 import { quotePgIdentifier } from "../src/core/database/database-config";
+import { createPostgresReleaseNewsRepository } from "../src/core/release-news/releaseNewsPostgresRepository";
+import type { ClientContext } from "../src/core/client/client-context";
+import { closeSchemaPools } from "../src/core/database/postgres-client";
 import {
   RESTORE_DRILL_DOCKER_LABEL,
   RESTORE_DRILL_SCHEMA,
@@ -238,6 +241,30 @@ export async function seedSyntheticArcigyData(url: string): Promise<void> {
   });
 }
 
+async function verifyReleaseNewsPostgresRepository(connectionString: string): Promise<void> {
+  const repository = createPostgresReleaseNewsRepository({ connectionString, schema: RESTORE_DRILL_SCHEMA });
+  const context = (clientId: string, userId: string): ClientContext => ({ clientId, userId, role: "owner" });
+  const firstUser = context("client_news_a", "user_news_a");
+  const secondUser = context("client_news_a", "user_news_b");
+  const otherClient = context("client_news_b", "user_news_a");
+  const writes = await Promise.all(Array.from({ length: 8 }, (_, index) =>
+    repository.acknowledge(firstUser, "2026-09-kitchen-pricing-and-production", new Date(Date.UTC(2026, 8, 29, 12, 0, index)))
+  ));
+  if (new Set(writes.map((acknowledgement) => acknowledgement.acknowledgedAt)).size !== 1) {
+    throw new Error("Concurrent release news acknowledgements were not idempotent.");
+  }
+  if (JSON.stringify(await repository.listAcknowledged(firstUser)) !== JSON.stringify(["2026-09-kitchen-pricing-and-production"])) {
+    throw new Error("Release news acknowledgement was not visible to its user.");
+  }
+  if ((await repository.listAcknowledged(secondUser)).length || (await repository.listAcknowledged(otherClient)).length) {
+    throw new Error("Release news acknowledgement crossed a user or tenant boundary.");
+  }
+  await repository.acknowledge(secondUser, "2026-09-kitchen-pricing-and-production", new Date("2026-09-30T00:00:00.000Z"));
+  if ((await repository.listAcknowledged(firstUser)).length !== 1 || (await repository.listAcknowledged(secondUser)).length !== 1) {
+    throw new Error("Release news acknowledgements were not isolated by user.");
+  }
+}
+
 export async function collectRestoreDrillEvidence(url: string): Promise<RestoreDrillEvidence> {
   return withClient(url, async (client) => {
     const tablesResult = await client.query<{ table_name: string }>(
@@ -383,6 +410,7 @@ export async function runDockerPostgresRestoreDrill(): Promise<void> {
     runRestoreDrillMigrations(sourceUrl);
     runRestoreDrillMigrations(sourceUrl);
     await seedSyntheticArcigyData(sourceUrl);
+    await verifyReleaseNewsPostgresRepository(sourceUrl);
     const sourceEvidence = await collectRestoreDrillEvidence(sourceUrl);
 
     runDocker([
@@ -458,10 +486,12 @@ export async function runDockerPostgresRestoreDrill(): Promise<void> {
         assetReferenceCount: targetEvidence.representative.assetReferenceCount,
         tenantBoundaryLeakCount: targetEvidence.representative.tenantBoundaryLeakCount
       },
+      releaseNewsRepositoryIsolation: true,
       achievedRpoSeconds: 0,
       achievedRtoSeconds: Number((restoreDurationMs / 1000).toFixed(3))
     }));
   } finally {
+    await closeSchemaPools();
     cleanup();
   }
 }

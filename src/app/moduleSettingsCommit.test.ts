@@ -1,3 +1,5 @@
+import { connectProjectEdgeMaterials } from "./projectEdgeMaterials";
+import { createEmptyProjectMaterialAssignmentsState } from "../core/project-materials/project-material-types";
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppState, LayoutInstance } from "../layout/appState";
@@ -49,6 +51,21 @@ describe("advanced module layout commit", () => {
     expect(f.neighbor.params).toEqual(neighborParams); expect(f.commitHistory).not.toHaveBeenCalled();
     expect(consoleError).not.toHaveBeenCalled();
   });
+  it("commits group snapshots and bindings together and restores both after failed placement", () => {
+    const f = fixture(); const baseline = structuredClone(f.first.params);
+    const materials = { ...createEmptyProjectMaterialAssignmentsState(), initialized: true };
+    f.state.projectMaterialAssignments = structuredClone(materials);
+    const publish = vi.fn(); connectProjectEdgeMaterials(f.state, publish);
+    const candidateMaterials = { ...materials, revision: 1, assignments: [{assignmentId:"group",category:"edge_other" as const,kind:"material" as const,source:"user" as const,customValues:{edgeGroupName:"Shared"},snapshots:{},updatedAt:new Date().toISOString()}] };
+    const candidate = { ...baseline, edgeBandingOverrides: { edge: "group" } };
+    expect(() => commitModuleSettingsToLayout({ ...f, rebuildInstance: () => false }, f.first.id, candidate, baseline,
+      { candidate: candidateMaterials, baseline: materials })).toThrow();
+    expect(f.state.projectMaterialAssignments).toEqual(materials); expect(f.first.params).toEqual(baseline); expect(f.commitHistory).not.toHaveBeenCalled();
+    commitModuleSettingsToLayout({ ...f, rebuildInstance: () => true }, f.first.id, candidate, baseline, { candidate: candidateMaterials, baseline: materials });
+    expect(f.state.projectMaterialAssignments.revision).toBe(1); expect(f.first.params.edgeBandingOverrides).toEqual({ edge: "group" }); expect(f.commitHistory).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 1 }));
+  });
+
   it("rejects a stale baseline without overwriting an external change", () => {
     const f = fixture(); const baseline = structuredClone(f.first.params); f.first.params.width = 999;
     const rebuildInstance = vi.fn(() => true);

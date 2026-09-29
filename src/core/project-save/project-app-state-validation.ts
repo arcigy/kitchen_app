@@ -1,3 +1,7 @@
+import { readModuleLabor } from "../project-manufacturing/module-labor";
+import { validateBacksplashFurniture } from "./backsplash-validation";
+import { explicitLegCounts } from "../../modules/fwmFurniture/legCounts";
+import { readEdgeBindings } from "../edge-banding/edgeEntities";
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -39,8 +43,8 @@ function paramsOf(item: Record<string, unknown>, label: string): Record<string, 
   return item.params;
 }
 
-function validateWalls(walls: Record<string, unknown>[]): Map<string, { lengthMm: number }> {
-  const out = new Map<string, { lengthMm: number }>();
+function validateWalls(walls: Record<string, unknown>[]): Map<string, { lengthMm: number; heightMm: number }> {
+  const out = new Map<string, { lengthMm: number; heightMm: number }>();
   for (const wall of walls) {
     const id = idOf(wall);
     const params = paramsOf(wall, "wall");
@@ -48,9 +52,10 @@ function validateWalls(walls: Record<string, unknown>[]): Map<string, { lengthMm
     const b = pointMm(params.bMm, `wall ${id}.params.bMm`);
     const lengthMm = Math.hypot(b.x - a.x, b.z - a.z);
     if (lengthMm < 1) throw new Error(`Project save wall ${id} has zero length.`);
-    numberAt(params.thicknessMm, `wall ${id}.params.thicknessMm`);
-    numberAt(params.heightMm, `wall ${id}.params.heightMm`);
-    out.set(id!, { lengthMm });
+    const thicknessMm = numberAt(params.thicknessMm, `wall ${id}.params.thicknessMm`);
+    const heightMm = numberAt(params.heightMm, `wall ${id}.params.heightMm`);
+    if (thicknessMm <= 0 || heightMm <= 0) throw new Error(`Project save wall ${id} dimensions must be positive.`);
+    out.set(id!, { lengthMm, heightMm });
   }
   return out;
 }
@@ -96,7 +101,7 @@ function validateLedStripGroups(groups: Record<string, unknown>[]): void {
 function validateOpenings(
   openings: Record<string, unknown>[],
   label: "window" | "door",
-  wallInfo: Map<string, { lengthMm: number }>
+  wallInfo: Map<string, { lengthMm: number; heightMm: number }>
 ): void {
   for (const opening of openings) {
     const id = idOf(opening);
@@ -108,6 +113,9 @@ function validateOpenings(
       const centerMm = numberAt(params.centerMm, `${label} ${id}.params.centerMm`);
       const widthMm = numberAt(params.widthMm, `${label} ${id}.params.widthMm`);
       if (widthMm <= 0) throw new Error(`Project save ${label} ${id} width must be positive.`);
+      const heightMm = numberAt(params.heightMm, `${label} ${id}.params.heightMm`);
+      const sillMm = label === "window" ? numberAt(params.sillHeightMm, `${label} ${id}.params.sillHeightMm`) : 0;
+      if (heightMm <= 0 || sillMm < 0 || sillMm+heightMm > wall.heightMm+1) throw new Error(`Project save ${label} ${id} height does not fit inside wall ${wallId}.`);
       const half = widthMm / 2;
       if (centerMm - half < -1 || centerMm + half > wall.lengthMm + 1) {
         throw new Error(`Project save ${label} ${id} does not fit inside wall ${wallId}.`);
@@ -151,6 +159,29 @@ export function validateProjectAppState(appState: unknown): void {
   const wallInfo = validateWalls(walls);
   validateOpenings(windows, "window", wallInfo);
   validateOpenings(doors, "door", wallInfo);
+
+  const materialState = isObject(appState.materialAssignments) ? appState.materialAssignments : isObject(snapshot.materialAssignments) ? snapshot.materialAssignments : null;
+  const edgeGroups = new Set(asArray(materialState?.assignments).filter(a => a.category === "edge_front" || a.category === "edge_other").map(a => a.assignmentId));
+  const validateBindings = (value: unknown) => {
+    for (const group of Object.values(readEdgeBindings(value))) if (group !== null && !edgeGroups.has(group)) throw new Error(`Project save edge references missing group ${group}.`);
+  };
+  for (const instance of [...instances, ...modules]) if (isObject(instance.params)) {
+    validateBindings(instance.params.edgeBandingOverrides);
+    explicitLegCounts(instance.params);
+    readModuleLabor(instance.params.moduleLabor);
+    const count = instance.params.hangingBracketCount;
+    if (count !== undefined && (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0)) throw new Error("Počet závesov musí byť celé nezáporné číslo.");
+  }
+  for (const module of modules) {
+    if (isObject(module.parameters)) validateBindings(module.parameters.edgeBandingOverrides);
+    if (isObject(module.params)) validateBindings(module.params.edgeBandingOverrides);
+  }
+  for (const furniture of customFurniture) if (isObject(furniture.params)) {
+    validateBacksplashFurniture(furniture.params);
+    const boards = asArray(furniture.params.boards);
+    requireUniqueIds(boards, `customFurniture ${idOf(furniture)} boards`);
+    for (const board of boards) validateBindings(board.edgeBandingOverrides);
+  }
 
   const moduleIds = new Set<string>();
   for (const module of modules) {

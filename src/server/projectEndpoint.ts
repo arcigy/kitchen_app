@@ -1,3 +1,5 @@
+import { authorizeEdgeGroupChanges } from "./edgeGroupSaveAuthority";
+import { applyEdgeGroupChanges, parseEdgeGroupChanges } from "../core/edge-banding/edgeGroupTransaction";
 import type http from "node:http";
 import { clientSessionHeaderFromRequest } from "./requestAuthentication";
 import type { ClientContext } from "../core/client/client-context";
@@ -234,6 +236,13 @@ export async function handleProjectApi(
     } catch (error) {
       if (!isMissingProjectSave(error)) throw error;
     }
+    const edgeChanges = record.edgeGroupChanges === undefined ? [] : parseEdgeGroupChanges(record.edgeGroupChanges);
+    const beforeEdgeChanges = materialAssignments;
+    // First-save user choices replace the corresponding automatic defaults.
+    const normalizedEdgeChanges = edgeChanges.map(change => !change.before && change.after && !beforeEdgeChanges.revision && beforeEdgeChanges.assignments.find(g => g.assignmentId === change.after!.assignmentId)?.source === "auto"
+      ? { ...change, before: beforeEdgeChanges.assignments.find(g => g.assignmentId === change.after!.assignmentId)! } : change);
+    materialAssignments = applyEdgeGroupChanges(materialAssignments, authorizeEdgeGroupChanges(normalizedEdgeChanges, materialAssignments, catalog));
+    const edgeGroupsChanged = materialAssignments.revision !== beforeEdgeChanges.revision;
     const incomingQuoteSettings = appState.quoteSettings;
     const storedMarginsRecognized = isProjectMarginSettingsState(storedQuoteSettings);
     const incomingMarginsRecognized = isProjectMarginSettingsState(incomingQuoteSettings);
@@ -268,7 +277,8 @@ export async function handleProjectApi(
       bomSnapshot: record.bomSnapshot,
       appVersion: typeof record.appVersion === "string" ? record.appVersion : undefined
     }, {
-      materialAssignmentsMode: initializeStoredAssignments ? "initialize" : "preserve",
+      materialAssignmentsMode: edgeGroupsChanged ? "edge-groups" : initializeStoredAssignments ? "initialize" : "preserve",
+      expectedMaterialRevision: beforeEdgeChanges.revision,
       marginSettingsMode: !storedMarginsRecognized && incomingMarginsRecognized ? "initialize" : "preserve",
       expectedRevision,
       idempotency

@@ -1,3 +1,4 @@
+import { adoptPresetLabor } from "../../project-manufacturing/module-labor";
 import { assertModuleTypeNotRetired } from "../retired-module-types";
 import * as THREE from "three";
 import type { ClientCatalog } from "../../catalog/catalog-types";
@@ -100,6 +101,7 @@ export function applyModuleParameterPreset(args: {
   modulePackage: FurnQuoteModulePackage;
   parameters: Record<string, unknown>;
   presetId: string;
+  catalog?: ClientCatalog;
 }): Record<string, unknown> {
   const preset = args.modulePackage.parameterPresets?.presets.find((candidate) => candidate.presetId === args.presetId);
   if (!preset) return { ...args.parameters };
@@ -124,6 +126,7 @@ export function applyModuleParameterPreset(args: {
       }
     }
   }
+  if (args.catalog) adoptPresetLabor(next, args.modulePackage, preset, args.catalog);
   return next;
 }
 

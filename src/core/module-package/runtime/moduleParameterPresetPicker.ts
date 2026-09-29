@@ -1,3 +1,4 @@
+import { readModuleLabor } from "../../project-manufacturing/module-labor";
 import type { FurnQuoteModulePackage, ModuleParameterPreset } from "../module-package-types";
 import type { ClientCatalog } from "../../catalog/catalog-types";
 import { applyModuleParameterPreset } from "./module-runtime-adapter";
@@ -26,6 +27,8 @@ export function resolveMatchingModuleParameterPresetId(
   modulePackage: FurnQuoteModulePackage,
   params: Record<string, unknown>
 ): string {
+  const reference = readModuleLabor(params.moduleLabor)?.preset;
+  if (reference?.modulePackageId === modulePackage.module.modulePackageId) return reference.presetId;
   for (const preset of modulePackage.parameterPresets?.presets ?? []) {
     const applied = applyModuleParameterPreset({ modulePackage, parameters: params, presetId: preset.presetId });
     const keys = controlledKeys(preset, applied);

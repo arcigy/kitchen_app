@@ -1,3 +1,4 @@
+import { pendingProjectEdgeGroups } from "./projectEdgeGroupBaseline";
 import { ProjectApiError } from "./projectApi";
 import type { ProjectActions } from "./projectActions";
 import type { ProjectRecoveryLease } from "./projectRecoveryLease";
@@ -173,7 +174,8 @@ export function createProjectPersistenceController(args: {
       appState: capture.appState,
       workspace,
       interaction: capture.interaction,
-      historyTail: capture.historyTail
+      historyTail: capture.historyTail,
+      ...(scope.projectId && capture.appState.materialAssignments?.initialized ? {edgeGroupChanges:pendingProjectEdgeGroups(scope.projectId,capture.appState.materialAssignments)} : {})
     };
   };
 

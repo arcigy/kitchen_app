@@ -17,6 +17,13 @@ const LOCALES: Record<AppLanguage, AppLocale> = {
 };
 
 const EXACT_CS_TEXT: Record<string, string> = {
+  "Interface size": "Velikost rozhraní",
+  "Enlarges controls, forms and tables. Model dimensions and drawing scale are unchanged.": "Zvětší ovládací prvky, formuláře a tabulky. Rozměry modelu ani měřítko výkresů se nemění.",
+  "Standard": "Standardní",
+  "Large": "Zvětšená",
+  "What's new?": "Co je nového?",
+  "Got it": "Rozumím",
+  "Preliminary value": "Předběžná hodnota",
   "Margin per 1 m²": "Marže na 1 m²",
   "Board area": "Plocha desek",
   "Some boards have no valid thickness or area. The result cannot be determined yet.": "Některým deskám chybí platná tloušťka nebo plocha. Výsledek zatím nelze určit.",
@@ -90,6 +97,13 @@ const EXACT_CS_TEXT: Record<string, string> = {
 };
 
 const EXACT_SK_TEXT: Record<string, string> = {
+  "Interface size": "Veľkosť rozhrania",
+  "Enlarges controls, forms and tables. Model dimensions and drawing scale are unchanged.": "Zväčší ovládacie prvky, formuláre a tabuľky. Rozmery modelu ani mierka výkresov sa nemenia.",
+  "Standard": "Štandardná",
+  "Large": "Zväčšená",
+  "What's new?": "Čo je nové?",
+  "Got it": "Rozumiem",
+  "Preliminary value": "Priebežná hodnota",
   "Margin per 1 m²": "Marža na 1 m²",
   "Board area": "Plocha dosiek",
   "Some boards have no valid thickness or area. The result cannot be determined yet.": "Niektorým doskám chýba platná hrúbka alebo plocha. Výsledok zatiaľ nemožno určiť.",

@@ -1,3 +1,4 @@
+import { validateLaborRate } from "../project-manufacturing/module-labor";
 import { assertModuleTypeNotRetired } from "./retired-module-types";
 import type { ClientCatalog } from "../catalog/catalog-types";
 import { sanitizeStorageFileName, sanitizeStorageId } from "../storage/storage-types";
@@ -297,6 +298,9 @@ function validateParameterPresets(modulePackage: FurnQuoteModulePackage, errors:
     errors.push(`duplicate parameter preset id: ${duplicate}`);
   }
   for (const preset of parameterPresets.presets) {
+    if (preset.laborRate != null) {
+      try { validateLaborRate(preset.laborRate); } catch (error) { errors.push(`parameter preset ${preset.presetId}: ${String(error)}`); }
+    }
     if (!preset.presetId?.trim()) errors.push("parameter preset id is required");
     if (!preset.label?.trim()) errors.push(`parameter preset ${preset.presetId || "(missing)"} label is required`);
     if (!preset.note?.trim()) errors.push(`parameter preset ${preset.presetId || "(missing)"} note is required`);

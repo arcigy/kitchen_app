@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { ManufacturingRecipeSnapshot } from "../core/project-manufacturing/project-manufacturing-types";
+import type { MaterialDefinition } from "../core/catalog/catalog-types";
+import type { CatalogItemSnapshot } from "../core/project-materials/project-material-types";
 
 export type CustomFurnitureConstraint = "projectBase" | "furnitureBase" | "furnitureTop" | "absolute";
 export type CustomFurnitureBoardKind = "horizontal" | "vertical" | "worktop" | "custom";
@@ -44,7 +46,30 @@ export type CustomFurnitureCabinetAttachment = {
   followDimensions: Array<"width" | "height" | "depth">;
 };
 
+export type CustomBoardCutout = { id: string; profile: CustomFurnitureProfilePoint[]; sourceOpeningId?: string };
+export type BacksplashAutomaticField = "profile" | "workplane" | "thicknessMm" | "materialId" | "cutouts" | "baseOffsetMm" | "topOffsetMm";
+export type BacksplashBoardSource = {
+  materialSnapshot?: CatalogItemSnapshot<MaterialDefinition>;
+  key: string; wallId: string; worktopId: string;
+  automatic: Partial<Pick<CustomFurnitureBoardParams, BacksplashAutomaticField>>;
+  overrides: BacksplashAutomaticField[];
+  suppressedOpeningIds?: string[];
+};
+export type BacksplashGroupSource = {
+  materialSnapshot?: CatalogItemSnapshot<MaterialDefinition>;
+  scope?: "all" | "walls";
+  materialOverride?: boolean; thicknessOverride?: boolean;
+  kitchenId: string; wallIds: string[]; materialId: string; thicknessMm: number;
+  offsetMm: number; kerfMm: number; allowHalf: boolean; grain: "length" | "width" | "free";
+  maxLengthMm: number; stockLengthMm?: number; stockWidthMm?: number;
+  /** Wall-local joint positions, in mm. */
+  joints: Record<string, number[]>;
+  suppressedKeys: string[]; orphanedWallIds: string[]; detached?: boolean;
+};
 export type CustomFurnitureBoardParams = {
+  cutouts?: CustomBoardCutout[];
+  backsplashSource?: BacksplashBoardSource;
+  edgeBandingOverrides?: import("../core/edge-banding/edgeEntities").EdgeBindingMap;
   id: string;
   name: string;
   kind: CustomFurnitureBoardKind;
@@ -65,6 +90,8 @@ export type CustomFurnitureBoardParams = {
 };
 
 export type CustomFurnitureParams = {
+  groupKind?: "backsplash";
+  backsplash?: BacksplashGroupSource;
   name: string;
   baseConstraint: CustomFurnitureConstraint;
   baseOffsetMm: number;

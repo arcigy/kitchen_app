@@ -22,7 +22,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("project API", () => {
   it("persists the BOM-derived material quantity snapshot with the current app state", async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ save: {} }), {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ save: {projectId: "project_1", appState} }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     }));
@@ -59,7 +59,7 @@ describe("project API", () => {
 
   it("sends a fresh idempotency key for create and import user actions", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(
-      String(input).endsWith("/import") ? { save: {} } : { project: {} }
+      (String(input).endsWith("/import") || String(input).endsWith("/restore")) ? { save: {projectId: "project_1", appState} } : { project: {} }
     ), {
       status: 200,
       headers: { "Content-Type": "application/json" }

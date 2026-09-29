@@ -1,3 +1,7 @@
+import { applyBacksplashPurchases } from "./backsplashPurchase";
+import { projectExtraComponentsBOM } from "./projectExtraComponents";
+import { applyProjectAssignedPricing } from "./projectAssignedPricing";
+import { worktopPurchase } from "./worktopPurchase";
 import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import type { ProjectManufacturingSettings } from "../../core/project-manufacturing/project-manufacturing-types";
 import { createPricingCatalog } from "../../core/catalog/pricing-catalog";
@@ -7,7 +11,7 @@ import type { KitchenWorktopInstance, LayoutInstance } from "../appState";
 import type { LedStripGroup } from "../ledStripTypes";
 import type { KitchenContext } from "../kitchenContext";
 import type { CustomFurnitureInstance } from "../customFurnitureTypes";
-import { getKitchenWorktopAreaM2, getKitchenWorktopBoundsMm, sanitizeKitchenWorktopPath } from "../worktopGeometry";
+import { getKitchenWorktopAreaM2, getKitchenWorktopBoundsMm, getKitchenWorktopCutDimensionsMm, sanitizeKitchenWorktopPath } from "../worktopGeometry";
 import { createCustomFurnitureBOM } from "./customFurniturePricing";
 import { calculateModuleBOM } from "./calculateBOM";
 import type { BOMResult } from "./bomTypes";
@@ -26,10 +30,11 @@ export type WorktopFormulaView = {
 
 export type ProjectPricingView = {
   instanceId: string;
-  kind: "module" | "worktop" | "customFurniture" | "ledStrip";
+  kind: "module" | "worktop" | "customFurniture" | "ledStrip" | "project";
   label: string;
   result: BOMResult;
   worktopFormula?: WorktopFormulaView;
+  laborManaged?: boolean;
 };
 
 function round(value: number, digits = 2) {
@@ -91,7 +96,7 @@ function createWorktopQuoteBom(worktop: KitchenWorktopInstance, index: number, c
   const formulaView = buildWorktopFormulaView(worktop);
   const description = areaM2 > 0 ? formulaView.shapeLabel : "Pracovná doska";
 
-  return {
+  const bom: PortableQuoteBomPayload = {
     schemaVersion: "module-quote-bom.v1",
     moduleType: "kitchen_worktop",
     displayName: `Pracovná doska #${index}`,
@@ -107,6 +112,7 @@ function createWorktopQuoteBom(worktop: KitchenWorktopInstance, index: number, c
       {
         id: `worktop-board-${worktop.id}`,
         itemType: "board",
+        worktopCutsMm: getKitchenWorktopCutDimensionsMm(worktop.params),
         category: "worktop",
         name: description,
         description,
@@ -158,6 +164,13 @@ function createWorktopQuoteBom(worktop: KitchenWorktopInstance, index: number, c
       }
     ]
   };
+  const item = bom.items[0]!;
+  const purchase = material ? worktopPurchase(item, material) : null;
+  if (purchase && !purchase.error) {
+    item.pricingQuantity = purchase.areaM2; item.purchasedStockPieces = purchase.pieces;
+    item.metrics!.billableAreaM2 = purchase.areaM2;
+  }
+  return bom;
 }
 
 function createWorktopBOM(worktop: KitchenWorktopInstance, index: number, catalog: ClientCatalog): BOMResult {
@@ -183,7 +196,8 @@ export function buildProjectPricingViews(
   ctx: KitchenContext,
   catalog: ClientCatalog,
   ledStripGroups: LedStripGroup[] = [],
-  manufacturing?: ProjectManufacturingSettings | unknown
+  manufacturing?: ProjectManufacturingSettings | unknown,
+  includeProjectExtras = true
 ): ProjectPricingView[] {
   const counts = new Map<string, number>();
 
@@ -195,6 +209,7 @@ export function buildProjectPricingViews(
     return {
       instanceId: instance.id,
       kind: "module" as const,
+      laborManaged: instance.params.moduleLabor !== undefined,
       label: `${label} #${nextCount}`,
       result: applyProjectManufacturingPricing({
         instanceId: instance.id,
@@ -202,6 +217,7 @@ export function buildProjectPricingViews(
         result,
         catalog,
         settings: manufacturing,
+        moduleLabor: instance.params.moduleLabor,
         presetId: typeof instance.params.presetId === "string" ? instance.params.presetId : undefined
       })
     };
@@ -238,11 +254,16 @@ export function buildProjectPricingViews(
     };
   });
 
-  return [...moduleViews, ...worktopViews, ...customFurnitureViews, ...ledStripViews];
+  const projectExtras = includeProjectExtras ? projectExtraComponentsBOM(catalog) : null;
+  const entries: ProjectPricingView[] = [...moduleViews, ...worktopViews, ...customFurnitureViews, ...ledStripViews,
+    ...(projectExtras ? [{ instanceId: "project-components", kind: "project" as const, label: "Samostatné komponenty", result: projectExtras }] : [])];
+  return applyBacksplashPurchases(entries.map(entry => ({
+    ...entry, result: applyProjectAssignedPricing(entry.result, entry.kind === "project" ? "project" : `${entry.kind === "module" ? "module" : "addition"}:${entry.instanceId}`, catalog)
+  })), catalog);
 }
 
-export function buildProjectPricingPayload(entries: ProjectPricingView[], settings?: ProjectQuoteSettingsInput) {
-  const summary = buildProjectQuoteSummary(entries, settings);
+export function buildProjectPricingPayload(entries: ProjectPricingView[], settings?: ProjectQuoteSettingsInput, options?: Parameters<typeof buildProjectQuoteSummary>[2]) {
+  const summary = buildProjectQuoteSummary(entries, settings, options);
   return {
     schemaVersion: "project-commercial-pricing.v4",
     generatedAt: new Date().toISOString(),
@@ -256,6 +277,7 @@ export function buildProjectPricingPayload(entries: ProjectPricingView[], settin
     })),
     summary,
     totals: {
+      contribution: summary.contribution,
       boardsCost: summary.boardsCost,
       edgesCost: summary.edgesCost,
       hardwareCost: summary.hardwareCost,

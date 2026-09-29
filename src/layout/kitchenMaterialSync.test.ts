@@ -45,7 +45,7 @@ function getVisibleDrawerStackHeight(params: Record<string, unknown>) {
   const worktopThicknessMm = params.requiresWorktop === false ? 0 : Math.max(0, Math.round(num(params.worktopThicknessMm, 0)));
   return Math.max(
     drawerCount,
-    Math.round(num(params.height, 0)) -
+    Math.round(num(params.heightCarcass, num(params.height, 0) - worktopThicknessMm)) -
       Math.max(0, Math.round(num(params.plinthHeight, 0))) -
       2 * Math.max(0, Math.round(num(params.frontGap, 0))) -
       Math.max(0, Math.round(num(params.frontGap, 0))) * (drawerCount - 1)

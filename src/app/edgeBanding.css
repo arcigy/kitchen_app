@@ -1,0 +1,15 @@
+.edge-banding-panel { display:flex; flex-direction:column; gap:10px; padding:12px; color:#17212b; }
+.edge-banding-panel h3,.edge-banding-panel p { margin:0; }
+.edge-banding-panel p,.edge-banding-panel small { font-size:12px; line-height:1.5; }
+.edge-banding-panel label { display:grid; gap:4px; font-size:12px; font-weight:600; }
+.edge-banding-panel select,.edge-banding-panel input,.edge-banding-panel button { min-height:34px; border:1px solid #cbd5e1; border-radius:6px; padding:6px 8px; background:white; color:#17212b; width:100%; }
+.edge-banding-actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.edge-banding-list { display:flex; flex-direction:column; gap:5px; max-height:360px; overflow:auto; }
+.edge-banding-list button { text-align:left; font-size:11px; border-left-width:5px; }
+.edge-banding-list button[aria-pressed=true] { background:#fff7ed; outline:2px solid #f97316; outline-offset:-2px; }
+.edge-banding-panel button:disabled { opacity:.45; cursor:default; }
+.edge-banding-panel [role=alert] { color:#b91c1c; }
+.module-settings-view-tools button[aria-pressed=true] { background:#e0f2fe; }
+.module-settings [hidden] { display:none !important; }
+
+.module-settings .edge-banding-panel label,dialog.edge-banding-panel label { color:#334155; }

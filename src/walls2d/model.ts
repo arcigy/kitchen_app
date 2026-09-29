@@ -32,7 +32,7 @@ export function leftNormal(w: Wall): Point {
   return norm(perpLeft(baseDir(w)));
 }
 
-export function offsetsM(w: Wall): { left: number; right: number } {
+export function offsetsM<T extends Pick<Wall, "thicknessM" | "justification" | "exteriorSign">>(w: T): { left: number; right: number } {
   const t = Math.max(1e-6, w.thicknessM);
   const half = t / 2;
   const extIsLeft = w.exteriorSign === 1;

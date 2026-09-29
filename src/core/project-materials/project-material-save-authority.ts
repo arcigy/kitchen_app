@@ -4,9 +4,10 @@ import type { ProjectMaterialAssignmentsState } from "./project-material-types";
 import type { ProjectWriteConsistencyOptions } from "../project/project-write-consistency";
 import type { ProjectSnapshotMarginSettingsMode } from "../project-margins/project-margin-save-authority";
 
-export type ProjectSnapshotMaterialAssignmentsMode = "preserve" | "initialize" | "restore-version";
+export type ProjectSnapshotMaterialAssignmentsMode = "preserve" | "initialize" | "restore-version" | "edge-groups";
 
 export type ProjectSnapshotSaveOptions = ProjectWriteConsistencyOptions & {
+  expectedMaterialRevision?: number;
   materialAssignmentsMode?: ProjectSnapshotMaterialAssignmentsMode;
   marginSettingsMode?: ProjectSnapshotMarginSettingsMode;
 };
@@ -14,9 +15,14 @@ export type ProjectSnapshotSaveOptions = ProjectWriteConsistencyOptions & {
 export function assertFullSaveMaterialAssignmentsAllowed(
   stored: ProjectMaterialAssignmentsState,
   incoming: ProjectMaterialAssignmentsState,
-  mode: ProjectSnapshotMaterialAssignmentsMode = "preserve"
+  mode: ProjectSnapshotMaterialAssignmentsMode = "preserve",
+  expectedMaterialRevision?: number
 ): void {
   if (mode === "restore-version") return;
+  if (mode === "edge-groups" && expectedMaterialRevision === stored.revision && incoming.revision === stored.revision + 1) {
+    const unrelated = (state: ProjectMaterialAssignmentsState) => state.assignments.filter(a => a.category !== "edge_front" && a.category !== "edge_other");
+    if (isDeepStrictEqual(unrelated(stored), unrelated(incoming)) || !stored.initialized) return;
+  }
 
   if (mode === "initialize") {
     const isControlledInitialization =

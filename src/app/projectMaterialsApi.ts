@@ -1,3 +1,5 @@
+import type { ProjectComponentOperation } from "../core/project-materials/project-component-operations";
+import { confirmProjectEdgeGroups } from "./project/projectEdgeGroupBaseline";
 import type { ComponentDefinition, MaterialDefinition } from "../core/catalog/catalog-types";
 import {
   getMaterialAssignmentCategoryDefinition,
@@ -77,7 +79,9 @@ export async function loadProjectMaterials(projectId: string, signal?: AbortSign
     headers: { Accept: "application/json" },
     signal
   });
-  return unwrapProjectMaterialsView(await readJson(response));
+  const view = unwrapProjectMaterialsView(await readJson(response));
+  confirmProjectEdgeGroups(projectId, view.assignments);
+  return view;
 }
 
 export async function updateProjectMaterialAssignment(
@@ -92,7 +96,9 @@ export async function updateProjectMaterialAssignment(
     body: JSON.stringify(request),
     signal
   });
-  return unwrapProjectMaterialsView(await readJson(response));
+  const view = unwrapProjectMaterialsView(await readJson(response));
+  confirmProjectEdgeGroups(projectId, view.assignments);
+  return view;
 }
 
 export async function copyProjectMaterialAssignment(
@@ -114,7 +120,9 @@ export async function copyProjectMaterialAssignment(
     }),
     signal
   });
-  return unwrapProjectMaterialsView(await readJson(response));
+  const view = unwrapProjectMaterialsView(await readJson(response));
+  confirmProjectEdgeGroups(projectId, view.assignments);
+  return view;
 }
 
 export async function removeProjectMaterialAssignment(
@@ -132,7 +140,9 @@ export async function removeProjectMaterialAssignment(
     }),
     signal
   });
-  return unwrapProjectMaterialsView(await readJson(response));
+  const view = unwrapProjectMaterialsView(await readJson(response));
+  confirmProjectEdgeGroups(projectId, view.assignments);
+  return view;
 }
 
 function lookupParams(definition: MaterialAssignmentCategoryDefinition, id: string): URLSearchParams {
@@ -173,4 +183,14 @@ export async function lookupProjectMaterialCatalogItem(
   }
   const component = body.component as ComponentDefinition | null | undefined;
   return component ? { kind: "component", definition: component, unitPrice } : null;
+}
+
+export async function updateProjectComponentValues(projectId: string, revision: number, operation: ProjectComponentOperation): Promise<ProjectMaterialsView> {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/materials`, {
+    method: "PUT", credentials: "include", headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ revision, operation })
+  });
+  const view = unwrapProjectMaterialsView(await readJson(response));
+  confirmProjectEdgeGroups(projectId, view.assignments);
+  return view;
 }

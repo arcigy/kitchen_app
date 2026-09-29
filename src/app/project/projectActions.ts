@@ -1,3 +1,4 @@
+import { confirmProjectEdgeGroups, confirmedProjectEdgeGroups } from "./projectEdgeGroupBaseline";
 import type { ProjectMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import { createProject, downloadProject, importProjectFile, listProjects, loadProject, saveProject, type CreateProjectRequest } from "./projectApi";
@@ -45,6 +46,7 @@ export function createProjectActions(args: {
     saveRevision: args.initialProjectSave?.integrity.saveRevision ?? args.initialSaveRevision ?? 0,
     hasServerSnapshot: !!args.initialProjectSave || (args.initialSaveRevision ?? 0) > 0
   };
+  if (args.initialProjectSave && !confirmedProjectEdgeGroups(args.initialProjectSave.projectId)) confirmProjectEdgeGroups(args.initialProjectSave.projectId, args.initialProjectSave.appState.materialAssignments);
   let saveInFlight: Promise<ProjectSaveFile> | null = null;
   let saveInFlightIsBackground = false;
 

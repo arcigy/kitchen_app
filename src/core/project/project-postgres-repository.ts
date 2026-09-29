@@ -298,7 +298,8 @@ export function createPostgresProjectRepository(args: {
             assertFullSaveMaterialAssignmentsAllowed(
               stored.appState.materialAssignments,
               prepared.save.appState.materialAssignments,
-              options?.materialAssignmentsMode
+              options?.materialAssignmentsMode,
+            options?.expectedMaterialRevision
             );
             assertFullSaveProjectMarginSettingsAllowed(
               stored.appState.quoteSettings,

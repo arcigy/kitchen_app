@@ -1,3 +1,4 @@
+import { validateProjectComponentValues, projectComponentUnit } from "./project-component-values";
 import type {
   JsonValue,
   MaterialAssignmentCategory,
@@ -20,6 +21,7 @@ const MATERIAL_ASSIGNMENT_CATEGORIES = new Set<MaterialAssignmentCategory>([
   "runner",
   "lift_up",
   "leg",
+  "hinge_plate", "leg_plate", "plinth_clip", "hanging_bracket", "shelf_support", "assembly_pack", "backsplash",
   "fastener",
   "other_component",
   "lighting"
@@ -64,7 +66,7 @@ function optionalId(value: unknown, path: string): string | undefined {
   return requireNonEmptyString(value, path);
 }
 
-function validateSnapshot(
+export function validateSnapshot(
   value: unknown,
   expectedId: string | undefined,
   expectedEntityType: "material" | "component",
@@ -118,6 +120,19 @@ function validateAssignment(value: unknown, path: string): asserts value is Proj
   validateSnapshot(value.snapshots.component, componentId, "component", `${path}.snapshots.component`);
   validateSnapshot(value.snapshots.edgeFront, edgeFrontId, "material", `${path}.snapshots.edgeFront`);
   validateSnapshot(value.snapshots.edgeOther, edgeOtherId, "material", `${path}.snapshots.edgeOther`);
+  if (value.projectValues !== undefined) {
+    if (value.kind !== "component") throw new Error("Projektové hodnoty sú určené pre komponenty.");
+    validateProjectComponentValues(value.projectValues);
+    if (value.projectValues.quantity !== undefined && !value.extraComponent && ["leg", "plinth_clip"].includes(String(value.category))) throw new Error("Počet nôh a klipov upravte vo vlastnostiach modulu.");
+    if (value.projectValues.quantity !== undefined && !value.extraComponent && !String(value.assignmentId).startsWith("material-assignment:module:")) throw new Error("Množstvo upravte pri konkrétnej skrinke alebo samostatnom doplnku.");
+    if (value.projectValues.quantity !== undefined && projectComponentUnit(value as ProjectMaterialAssignment) !== "lm" && !Number.isSafeInteger(value.projectValues.quantity)) throw new Error("Počet kusov musí byť celé číslo.");
+  }
+  if (value.extraComponent !== undefined) {
+    if (value.kind !== "component" || value.category !== "other_component" || !isObject(value.extraComponent)) throw new Error("Neplatný samostatný komponent.");
+    const scope = requireNonEmptyString(value.extraComponent.scopeId, `${path}.extraComponent.scopeId`);
+    if (scope !== "project" && !/^module:.+/.test(scope)) throw new Error("Neplatný rozsah komponentu.");
+    requireNonEmptyString(value.extraComponent.label, `${path}.extraComponent.label`);
+  }
   requireIsoDate(value.updatedAt, `${path}.updatedAt`);
 }
 

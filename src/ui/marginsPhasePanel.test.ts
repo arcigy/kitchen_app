@@ -94,6 +94,54 @@ afterEach(() => {
 });
 
 describe("project margins phase panel", () => {
+  it("keeps the numeric margin per area visible with a preliminary label and price warnings", () => {
+    const html = renderProjectMarginsPanel(marginsView({
+      summary: { ...marginsView().summary, missingPriceCount: 1,
+        sheetMaterial: { minimumThicknessMm: 16, areaM2: 3, marginPerM2: 10, unmeasuredBoardCount: 1, preliminary: true } },
+      warnings: [{ code: "missing_price", message: "Chýbajúca cena výsuvu" }]
+    }));
+    const host = document.createElement("div"); host.innerHTML = html;
+    const metric = host.querySelector('[data-margin-summary-value="margin-per-m2"]')!;
+    expect(metric.querySelector("strong")!.textContent).toContain("10,00");
+    expect(metric.querySelector("[data-margin-sheet-preliminary]")!.textContent).toBe("Priebežná hodnota");
+    expect(html).toContain("Chýbajúca cena výsuvu");
+  });
+
+  it("preserves saved material rates and recipes when re-enabling manufacturing after Materials turned it off", async () => {
+    const host = document.createElement("section");
+    document.body.append(host);
+    const view = marginsView();
+    view.settings.manufacturing = {
+      ...view.settings.manufacturing,
+      pricingMode: "legacy",
+      boardWastePercent: 12,
+      edgeWastePercent: 5,
+      boardWasteByMaterialId: { "special-board": 7 },
+      edgeWasteByMaterialId: { "special-edge": 8 },
+      preassemblyByModuleType: { base: 22 },
+      preassemblyByPreset: { preset: 11 },
+      preassemblyByInstanceId: { "base-1": 0 },
+      recipeSnapshots: { layered: { id: "layered", version: 1, name: "Layered board", layers: [{ id: "a", materialId: "special-board", thicknessMm: 18, unitPrice: 70 }], operations: [] } }
+    };
+    const original = structuredClone(view.settings.manufacturing);
+    const action = vi.fn(async () => ({ ok: true }));
+    const onCommitManufacturing = vi.fn(async () => ({ ok: true }));
+    const handle = mountProjectMarginsPanel(host, view, {
+      onCommitDefault: action, onCommitAdditionalLabor: action, onApplyGroup: action,
+      onResetGroup: action, onCommitItem: action, onResetItem: action, onCommitManufacturing
+    });
+    handle.setInputsDisabled(false);
+    host.querySelector<HTMLInputElement>("[data-manufacturing-enabled]")!.checked = true;
+    host.querySelector<HTMLInputElement>("[data-manufacturing-board-waste]")!.value = "30";
+    host.querySelector<HTMLButtonElement>("[data-manufacturing-save]")!.click();
+    await handle.flushPending();
+    expect(onCommitManufacturing).toHaveBeenCalledExactlyOnceWith({
+      manufacturing: { ...original, pricingMode: "configured", boardWastePercent: 30 }
+    });
+    expect(view.settings.manufacturing).toEqual(original);
+    handle.destroy();
+  });
+
   it("keeps the original summary for tenants without the Delfi metric", () => {
     const html = renderProjectMarginsPanel(marginsView());
     expect(html).not.toContain('data-margin-summary-value="margin-per-m2"');

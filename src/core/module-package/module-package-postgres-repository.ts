@@ -1,3 +1,4 @@
+import { ModulePackageRevisionConflictError } from "./module-package-write-lock";
 import { createHash } from "node:crypto";
 import type { ClientContext } from "../client/client-context";
 import { withSchemaClient } from "../database/postgres-client";
@@ -56,6 +57,22 @@ export function createPostgresModulePackageRepository(args: {
     };
     const source: ModulePackageStoredMeta["source"] = options.source ?? "dev-json";
     await withSchemaClient(args.connectionString, args.schema, async (client) => {
+      if (options.expectedPackageHash !== undefined) {
+        // Stored system templates may be normalized on read. Compare the same
+        // public revision, then guard the write with the actual database hash.
+        const current = await client.query<PackageRow & { package_hash: string }>(
+          "SELECT package, source, package_hash FROM arcigy_module_packages WHERE client_id=$1 AND module_package_id=$2",
+          [ctx.clientId, persisted.module.modulePackageId]);
+        const row = current.rows[0];
+        if (!row || computeModulePackageHash(validatePersistedPackage(row)) !== options.expectedPackageHash) throw new ModulePackageRevisionConflictError();
+        const updated = await client.query(`UPDATE arcigy_module_packages SET module_type=$3, package_version=$4,
+          package_hash=$5, package=$6::jsonb, source=$7, updated_at=now()
+          WHERE client_id=$1 AND module_package_id=$2 AND package_hash=$8 RETURNING module_package_id`,
+          [ctx.clientId, persisted.module.modulePackageId, persisted.module.moduleType, persisted.module.version,
+            packageHash, JSON.stringify(persisted), source, row.package_hash]);
+        if (updated.rowCount !== 1) throw new ModulePackageRevisionConflictError();
+        return;
+      }
       await client.query(
         `
           INSERT INTO arcigy_module_packages (

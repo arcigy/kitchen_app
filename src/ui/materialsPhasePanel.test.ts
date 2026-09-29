@@ -87,7 +87,7 @@ describe("materials phase panel", () => {
     expect(html).toContain("data-material-assignment-category=\"edge_front\"");
     expect(html).toContain("Hrany frontov");
     expect(html).toContain("Hrany korpusu");
-    expect(html).toContain("data-material-edge-split=\"edge_front\"");
+    expect(html).toContain("data-edit-edge-group=\"\"");
     expect(html).toContain("data-material-assignment-category=\"handle\"");
     expect(html).not.toContain("Materiál ID");
     expect(html).not.toContain("Komponent ID");

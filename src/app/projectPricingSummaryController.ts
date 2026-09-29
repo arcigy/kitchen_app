@@ -102,7 +102,7 @@ export function createProjectPricingSummaryController(ctx: ProjectPricingSummary
         [],
         isProjectMarginSettingsState(input.quoteSettings) ? input.quoteSettings.manufacturing : undefined
       );
-      const summary = buildProjectQuoteSummary(entries, input.quoteSettings);
+      const summary = buildProjectQuoteSummary(entries, input.quoteSettings, { currency: input.currency, settingsCurrency: input.currency });
       const missingCount = missingPrices(entries);
       const itemCount = entries.reduce((count, entry) => count + entry.result.pricing.items.length, 0);
 

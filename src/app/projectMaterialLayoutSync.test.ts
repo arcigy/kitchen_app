@@ -22,6 +22,21 @@ function assignment(materialId: string, thicknessMm?: number): ProjectMaterialAs
 }
 
 describe("project material layout projection", () => {
+  it("preserves authored backsplash material and thickness when projecting unrelated General assignments", () => {
+    const boardMaterial = catalog().materials.find(item => item.materialType === "board" && item.isActive)!;
+    const board = { id: "b", materialId: "own", thicknessMm: 25, backsplashSource: { overrides: [], automatic: { materialId: "own", thicknessMm: 25 } } };
+    const furniture = { id: "f", params: { groupKind: "backsplash", backsplash: { materialOverride: true, thicknessOverride: true, materialId: "own", thicknessMm: 25 }, boards: [board] } };
+    const general = { ...assignment(boardMaterial.id, 18), category: "backsplash" as const, assignmentId: "material-assignment:backsplash" };
+    const args = { catalog: catalog(), instances: [], worktops: [], customFurniture: [furniture] as never, assignments: { schemaVersion: 2 as const, initialized: true, revision: 1, assignments: [general] },
+      scopes: [{ id: "addition:f", kind: "addition" as const, label: "Zástena", items: [{ id: "b", category: "backsplash" as const, label: "Board", description: "", quantity: 1, unit: "m2" as const, pieces: 1, layoutTarget: { kind: "custom-furniture-board" as const, furnitureId: "f", boardId: "b" } }] }],
+      rebuildModule: () => true, rebuildWorktop: () => {}, rebuildCustomFurniture: () => {} };
+    syncProjectMaterialAssignmentsToLayout(args, args.assignments, args.scopes);
+    expect(board).toMatchObject({ materialId: "own", thicknessMm: 25 });
+    furniture.params.backsplash.materialOverride = false; furniture.params.backsplash.thicknessOverride = false;
+    syncProjectMaterialAssignmentsToLayout(args, args.assignments, args.scopes);
+    expect(board).toMatchObject({ materialId: boardMaterial.id, thicknessMm: 18, backsplashSource: { automatic: { materialId: boardMaterial.id, thicknessMm: 18 } } });
+    expect(furniture.params.backsplash.materialId).toBe(boardMaterial.id);
+  });
   it("projects a scoped board material and thickness, then clears stale values when no assignment remains", () => {
     const activeBoard = catalog().materials.find((item) => item.materialType === "board" && item.isActive)!;
     const module = { id: "m1", params: { commercialSelections: { boardMaterials: { side: "stale" }, boardThicknesses: { side: 99 } } } };

@@ -1,3 +1,7 @@
+import { projectContribution, type ProjectContribution } from "./projectContribution";
+import { projectComponentAmount } from "../../core/project-materials/project-component-values";
+import { repairSupplierMaterialAssignment } from "../../core/project-materials/supplierMaterialPricingRepair";
+import { worktopPurchase } from "./worktopPurchase";
 import type { PricingUnit } from "../../core/catalog/catalog-types";
 import type { ProjectMaterialAssignment } from "../../core/project-materials/project-material-types";
 import { resolveEffectiveProjectMaterialAssignment } from "../../core/project-materials/project-material-assignment-resolution";
@@ -36,6 +40,8 @@ export type ProjectMarginWarning = {
 };
 
 export type ProjectMarginItemView = {
+  laborManaged?: boolean;
+  contribution?: ProjectContribution;
   targetId: string;
   scopeId: string;
   itemId: string;
@@ -54,6 +60,7 @@ export type ProjectMarginItemView = {
 };
 
 export type ProjectMarginGroupView = {
+  contribution?: ProjectContribution;
   category: ProjectMarginCategory;
   label: string;
   description: string;
@@ -68,6 +75,7 @@ export type ProjectMarginGroupView = {
 };
 
 export type ProjectMarginSummaryView = {
+  contribution?: ProjectContribution;
   baseCost: number;
   marginAmount: number;
   combinedMarginPercent: number;
@@ -82,6 +90,8 @@ export type ProjectMarginSheetMaterialView = ProjectMarginSheetMaterialPolicy & 
   areaM2: number;
   marginPerM2: number | null;
   unmeasuredBoardCount: number;
+  /** The displayed ratio uses known costs and known qualifying board area. */
+  preliminary?: boolean;
 };
 
 export type ProjectMarginsView = {
@@ -128,6 +138,7 @@ function percentageHundredths(value: number): number {
 }
 
 function itemScopeId(entry: ProjectPricingView): string {
+  if (entry.kind === "project") return "project";
   return entry.kind === "module" ? `module:${entry.instanceId}` : `addition:${entry.instanceId}`;
 }
 
@@ -138,6 +149,8 @@ function resourceLabel(item: PortableQuoteBomItem): string {
 type AssignedPriceResolution = {
   baseCost: number | null;
   resourceLabel: string;
+  quantity?: number;
+  unit?: PortableQuoteBomItem["pricingUnit"];
   warning?: string;
 };
 
@@ -146,23 +159,37 @@ function assignedPriceResolution(
   scopeId: string,
   category: ProjectMarginCategory,
   item: PortableQuoteBomItem,
-  targetCurrency: PriceCurrency
+  targetCurrency: PriceCurrency,
+  moduleQuantity: number
 ): AssignedPriceResolution | null {
   if (category === "labor") return null;
+  if (item.backsplashPurchase) return null;
   // A recipe is already one manufactured final material. Its layer snapshot must
   // not be replaced by the generic board assignment and counted twice.
-  if (typeof item.unitPriceOverride === "number" && Number.isFinite(item.unitPriceOverride)) return null;
-  const effective = resolveEffectiveProjectMaterialAssignment(assignments, scopeId, { id: item.id, category });
-  const assignment = effective.assignment;
-  if (!assignment) return null;
+  if (item.unitPriceOverrideSource !== "project" && typeof item.unitPriceOverride === "number" && Number.isFinite(item.unitPriceOverride)) return null;
+  const effective = resolveEffectiveProjectMaterialAssignment(assignments, scopeId, { id: item.id, category, variantKey: item.variantKey, edgeGroupId: item.edgeGroupId, edgeGroupExplicit: item.edgeGroupExplicit });
+  const assignment = effective.assignment ? repairSupplierMaterialAssignment(effective.assignment) : null;
+  if (!assignment) return item.edgeGroupId?.startsWith("material-assignment:edge-group:") ? { baseCost: null, resourceLabel: "Chýbajúca skupina olepenia" } : null;
   const snapshot = assignment.kind === "material"
     ? assignment.snapshots.material
     : assignment.snapshots.component;
+  if (assignment.kind === "component") {
+    const amount = projectComponentAmount(assignment, item.pricingQuantity, moduleQuantity, targetCurrency);
+    return { baseCost: amount.cost, quantity: amount.quantity, unit: amount.unit,
+      resourceLabel: snapshot?.definition.displayName || snapshot?.definition.name || (assignment.projectValues?.includedInPackage ? "Zahrnuté v balení" : "Nepriradená položka") };
+  }
   if (!snapshot) {
     return { baseCost: null, resourceLabel: "Nepriradená položka" };
   }
   const label = snapshot.definition.displayName || snapshot.definition.name || "Priradená položka";
-  const quantity = item.pricingQuantity;
+  let quantity = item.pricingQuantity;
+  if (assignment.kind === "material" && assignment.snapshots.material) {
+    const definition = assignment.snapshots.material.definition;
+    const purchase = worktopPurchase(item, definition);
+    if (purchase?.error) return { baseCost: null, resourceLabel: label, warning: purchase.error };
+    if (purchase) quantity = purchase.areaM2;
+    else if (category === "plinth" && definition.pricingUnit === "lm") quantity = (item.dimensionsMm?.length ?? NaN) * item.quantity / 1000;
+  }
   if (snapshot.unitPrice == null || !Number.isFinite(quantity) || quantity < 0) {
     return { baseCost: null, resourceLabel: label };
   }
@@ -175,7 +202,7 @@ function assignedPriceResolution(
   }
   return {
     baseCost: convertPriceCurrency(snapshot.unitPrice * quantity, snapshot.currency, targetCurrency),
-    resourceLabel: label
+    resourceLabel: label, quantity, unit: snapshot.definition.pricingUnit
   };
 }
 
@@ -354,7 +381,7 @@ export function buildProjectMarginsView(
         throw new Error(`Duplicate project margin target ${targetId} in the current BOM.`);
       }
       seenTargetIds.add(targetId);
-      const assignedPrice = assignedPriceResolution(materialAssignments, scopeId, category, item, currency);
+      const assignedPrice = assignedPriceResolution(materialAssignments, scopeId, category, item, currency, entry.result.quoteBom.moduleInstance.quantity);
       if (assignedPrice?.warning) {
         warnings.push({
           code: "unsupported_currency",
@@ -379,8 +406,8 @@ export function buildProjectMarginsView(
         label: itemLabel(item),
         scopeLabel: entry.label,
         resourceLabel: assignedPrice?.resourceLabel ?? resourceLabel(item),
-        quantity: Number.isFinite(item.pricingQuantity) ? item.pricingQuantity : 0,
-        unit: item.pricingUnit,
+        quantity: assignedPrice?.quantity ?? (Number.isFinite(item.pricingQuantity) ? item.pricingQuantity : 0),
+        unit: assignedPrice?.unit ?? item.pricingUnit,
         baseCost: baseCost ?? 0,
         missingPrice
       }));
@@ -401,14 +428,14 @@ export function buildProjectMarginsView(
           : preassembly?.source === "missing"
             ? "chýbajúca sadzba"
             : "pôvodný výpočet";
-    drafts.push(draftItem({
+    drafts.push({ ...draftItem({
       state,
       target: laborTarget,
       label: isConfiguredPreassembly ? `Predmontáž · ${preassemblySource}` : "Práca modulu",
       scopeLabel: entry.label,
       resourceLabel: "Práca",
-      quantity: 1,
-      unit: "custom",
+      quantity: entry.result.quoteBom.moduleInstance.quantity,
+      unit: "pcs",
       baseCost: bomBaseCost(
         entry.result.pricing.laborCostFixed,
         entry.result.pricing.priceInputs.currency,
@@ -416,7 +443,7 @@ export function buildProjectMarginsView(
       ) ?? 0,
       missingPrice: preassembly?.source === "missing" || false,
       ...(isConfiguredPreassembly ? { marginPercent: 0 } : {})
-    }));
+    }), laborManaged: entry.laborManaged });
   }
 
   const projectLaborTarget = { scopeId: "project", itemId: "additional-labor", category: "labor" } satisfies ProjectMarginTarget;
@@ -432,6 +459,7 @@ export function buildProjectMarginsView(
     quantity: 1,
     unit: "custom",
     baseCost: state.additionalLaborCost,
+    ...(state.additionalLaborFixed ? { marginPercent: 0 } : {}),
     missingPrice: false
   }));
 
@@ -450,7 +478,8 @@ export function buildProjectMarginsView(
   const items: ProjectMarginItemView[] = drafts.map(({ costCents, percentHundredths: _percent, marginCents, ...item }) => ({
     ...item,
     marginAmount: marginCents / 100,
-    finalPrice: (costCents + marginCents) / 100
+    finalPrice: (costCents + marginCents) / 100,
+    contribution: projectContribution(item.category === "labor" ? 0 : item.baseCost, (costCents + marginCents) / 100, item.category === "labor" ? (costCents + marginCents) / 100 : 0)
   }));
   const groups = ORDERED_CATEGORIES.map((category) => {
     const groupItems = items.filter((item) => item.category === category);
@@ -460,6 +489,7 @@ export function buildProjectMarginsView(
     return {
       category,
       ...metadata,
+      contribution: projectContribution(category === "labor" ? 0 : baseCents / 100, (baseCents + marginCents) / 100, category === "labor" ? (baseCents + marginCents) / 100 : 0),
       baseCost: baseCents / 100,
       marginPercent: state.groupMargins[category] ?? state.defaultMarginPercent,
       combinedMarginPercent: combinedPercent(baseCents, marginCents),
@@ -472,6 +502,8 @@ export function buildProjectMarginsView(
   });
   const baseCents = groups.reduce((total, group) => total + moneyCents(group.baseCost), 0);
   const marginCents = groups.reduce((total, group) => total + moneyCents(group.marginAmount), 0);
+  const laborGroup = groups.find(group => group.category === "labor");
+  const contribution = projectContribution((baseCents - moneyCents(laborGroup?.baseCost ?? 0)) / 100, (baseCents + marginCents) / 100, laborGroup?.finalPrice ?? 0);
   const groupOverrideCount = Object.keys(state.groupMargins).length;
   const missingPriceCount = groups.reduce((total, group) => total + group.missingPriceCount, 0);
   let sheetMaterial: ProjectMarginSheetMaterialView | undefined;
@@ -480,12 +512,12 @@ export function buildProjectMarginsView(
     if (!Number.isFinite(minimumThicknessMm) || minimumThicknessMm <= 0) throw new Error("Invalid sheet material margin policy.");
     const measurement = projectSheetMaterialArea(entries, minimumThicknessMm);
     // Assigned project prices can resolve missing catalog prices in the raw BOM.
-    // Use the effective priced rows above, while keeping failed input/build warnings blocking.
+    // A partial calculation remains useful, but must be visibly marked as such.
     const complete = measurement.unmeasuredBoardCount === 0 && missingPriceCount === 0
       && !options.warnings?.length
       && !warnings.some((warning) => warning.code === "unsupported_currency");
-    const rate = complete && measurement.areaM2 > 0 ? round(marginCents / 100 / measurement.areaM2) : null;
-    sheetMaterial = { ...measurement, minimumThicknessMm, marginPerM2: rate != null && Number.isFinite(rate) ? rate : null };
+    const rate = Number.isFinite(measurement.areaM2) && measurement.areaM2 > 0 ? round(contribution.contributionAmount / measurement.areaM2) : null;
+    sheetMaterial = { ...measurement, minimumThicknessMm, preliminary: !complete, marginPerM2: rate != null && Number.isFinite(rate) ? rate : null };
   }
 
   return {
@@ -495,6 +527,7 @@ export function buildProjectMarginsView(
     priceAuthority: "Nákupné ceny vychádzajú z materiálov a komponentov aktuálne priradených v projekte. Skupinové priradenie sa dedí do jednotlivých častí, kým ho neprepíše vlastné priradenie.",
     settings: structuredClone(state),
     summary: {
+      contribution,
       baseCost: baseCents / 100,
       marginAmount: marginCents / 100,
       combinedMarginPercent: combinedPercent(baseCents, marginCents),
@@ -539,6 +572,7 @@ export function applyProjectMarginSettingsOperation(
     next.itemOverrides = next.itemOverrides.filter((override) => override.category !== operation.category);
   } else if (operation.type === "set_additional_labor") {
     next.additionalLaborCost = round(operation.additionalLaborCost, 2);
+    next.additionalLaborFixed = true;
   } else if (operation.type === "set_manufacturing") {
     next.manufacturing = normalizeProjectManufacturingSettings(operation.manufacturing);
   } else {
