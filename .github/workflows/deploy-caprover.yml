@@ -18,7 +18,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'develop' }}
     env:
       NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
@@ -30,7 +30,9 @@ jobs:
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 60); do
+          # The full verify job can run for 45 minutes. Allow 50 minutes for
+          # the exact-SHA checks, leaving at least 25 minutes for deployment.
+          for attempt in $(seq 1 150); do
             checks="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${EXPECTED_SHA}/check-runs?per_page=100")"
             verify="$(jq -r --arg sha "$EXPECTED_SHA" '[.check_runs[] | select(.name == "verify" and .head_sha == $sha)] | last // empty | [.status, (.conclusion // "")] | @tsv' <<< "$checks")"
             codeql="$(jq -r --arg sha "$EXPECTED_SHA" '[.check_runs[] | select(.name == "CodeQL" and .head_sha == $sha)] | last // empty | [.status, (.conclusion // "")] | @tsv' <<< "$checks")"
@@ -47,7 +49,7 @@ jobs:
               echo "CodeQL failed for ${EXPECTED_SHA}: ${codeql}"
               exit 1
             fi
-            echo "Waiting for verify and CodeQL on ${EXPECTED_SHA} (attempt ${attempt}/60)."
+            echo "Waiting for verify and CodeQL on ${EXPECTED_SHA} (attempt ${attempt}/150)."
             sleep 20
           done
           echo "Timed out waiting for verify and CodeQL on ${EXPECTED_SHA}."
