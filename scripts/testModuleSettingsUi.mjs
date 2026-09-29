@@ -12,8 +12,12 @@ await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors = [], checks = [];
+const saveRequests = [];
 page.on('pageerror', error => errors.push(String(error)));
 page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+page.on('request', request => {
+  if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/save')) saveRequests.push(request.url());
+});
 const assert = (ok, message) => { if (!ok) throw new Error(message); checks.push(message); };
 const modal = () => page.locator('dialog[data-module-settings]');
 const field = key => modal().locator(`[data-parameter-key="${key}"] input`);
@@ -54,10 +58,12 @@ try {
   id = await page.evaluate(group => window.__kitchenDebug.snapshot(group).instances[0]?.id, group);
   assert(!!id, 'Module inserted through normal placement');
   await page.getByRole('button', { name: /^(Potvrdiť skupinu|Confirm group)$/ }).click();
-  await Promise.all([
+  const [initialSaveResponse] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/save') && response.request().method() === 'POST'),
     page.locator("button[data-quick-action='save']").click(),
   ]);
+  assert(initialSaveResponse.ok(), 'Initial project save completes');
+  const projectId = (await initialSaveResponse.json()).save.projectId;
   const initial = await module();
   await page.evaluate(box => window.__kitchenDebug.createWall({
     aMm: { x: box.max.x * 1000 + 300, z: box.min.z * 1000 - 100 },
@@ -183,12 +189,28 @@ try {
   // Closing the settings dialog can overlap a previously queued user save.
   // Start the explicit save only after its user-visible save lock is clear.
   await page.locator('body.project-save-blocking').waitFor({ state: 'hidden' });
-  const [savedResponse] = await Promise.all([
-    page.waitForResponse(response => response.url().endsWith('/save') && response.request().method() === 'POST'),
-    page.locator("button[data-quick-action='save']").click(),
-  ]);
-  assert(savedResponse.ok(), 'Changed module saves through the project workflow');
-  const persisted = (await savedResponse.json()).save;
+  const saveCompleted = page.evaluate(() => new Promise((resolve) => {
+    const body = document.body;
+    let observedLock = body.classList.contains('project-save-blocking');
+    const observer = new MutationObserver(() => {
+      if (body.classList.contains('project-save-blocking')) observedLock = true;
+      else if (observedLock) {
+        observer.disconnect();
+        window.clearTimeout(timeout);
+        resolve(true);
+      }
+    });
+    const timeout = window.setTimeout(() => {
+      observer.disconnect();
+      resolve(false);
+    }, 60_000);
+    observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+  }));
+  await page.locator("button[data-quick-action='save']").click();
+  assert(await saveCompleted, 'Changed module saves through the project workflow');
+  const persistedResponse = await page.context().request.get(new URL(`/api/projects/${encodeURIComponent(projectId)}/load`, baseUrl).toString());
+  assert(persistedResponse.ok(), 'Saved project can be loaded back from the server');
+  const persisted = (await persistedResponse.json()).save;
   const persistedModule = persisted.appState.layout.snapshot.instances.find(item => item.id === id);
   assert(persistedModule?.params.width === committedWidth, 'Committed settings persist in the server save');
   // A matching response may belong to an autosave that the explicit save is
@@ -226,6 +248,6 @@ try {
   console.log(`Module settings UI: ${checks.length} checks passed.`);
 } catch (error) {
   await page.screenshot({ path: `${out}/failure.png` });
-  await writeFile(`${out}/failure.json`, JSON.stringify({ error: String(error), checks, errors, body: await page.locator('body').innerText() }, null, 2));
+  await writeFile(`${out}/failure.json`, JSON.stringify({ error: String(error), checks, errors, saveRequests, body: await page.locator('body').innerText() }, null, 2));
   throw error;
 } finally { await browser.close(); }
