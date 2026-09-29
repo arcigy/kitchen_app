@@ -44,10 +44,44 @@ async function selectPreset(current, id, presetId) {
   await current.locator(`[data-parameter-preset-id="${presetId}"]`).click();
   await current.waitForFunction(({ id, presetId }) => window.__kitchenDebug.layoutSnapshot().instances.find(i => i.id === id)?.params.moduleLabor?.preset?.presetId === presetId, { id, presetId });
 }
+const projectIdsByPage = new WeakMap();
 async function save(current) {
-  const wait = current.waitForResponse(r => r.url().endsWith('/save') && r.request().method() === 'POST');
-  await current.locator('[data-quick-action="save"]').click(); const response = await wait;
-  if (!response.ok()) throw new Error(await response.text()); return (await response.json()).save;
+  await current.locator('body.project-save-blocking').waitFor({ state: 'hidden' });
+  const projectId = projectIdsByPage.get(current);
+  if (!projectId) {
+    const [response] = await Promise.all([
+      current.waitForResponse(r => r.url().endsWith('/save') && r.request().method() === 'POST', { timeout: 90_000 }),
+      current.locator('[data-quick-action="save"]').click(),
+    ]);
+    if (!response.ok()) throw new Error(await response.text());
+    const saved = (await response.json()).save;
+    projectIdsByPage.set(current, saved.projectId);
+    return saved;
+  }
+  const completed = current.evaluate(() => new Promise(resolve => {
+    const body = document.body;
+    let observedLock = body.classList.contains('project-save-blocking');
+    const observer = new MutationObserver(records => {
+      if (body.classList.contains('project-save-blocking') || records.some(record =>
+        (record.oldValue ?? '').split(/\s+/).includes('project-save-blocking')
+      )) observedLock = true;
+      if (observedLock && !body.classList.contains('project-save-blocking')) {
+        observer.disconnect();
+        window.clearTimeout(timeout);
+        resolve(true);
+      }
+    });
+    const timeout = window.setTimeout(() => {
+      observer.disconnect();
+      resolve(false);
+    }, 90_000);
+    observer.observe(body, { attributes: true, attributeOldValue: true, attributeFilter: ['class'] });
+  }));
+  await current.locator('[data-quick-action="save"]').click();
+  if (!await completed) throw new Error('Project save did not finish within 90 seconds.');
+  const response = await current.request.get(new URL(`/api/projects/${encodeURIComponent(projectId)}/load`, baseUrl).toString());
+  if (!response.ok()) throw new Error(await response.text());
+  return (await response.json()).save;
 }
 const labor = (data, id) => data.instances.find(i => i.id === id)?.params.moduleLabor;
 try {
