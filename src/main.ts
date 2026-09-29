@@ -13,6 +13,7 @@ import "./styles/chatbot.css";
 import "./styles/mobileEditor.css";
 import "./styles/userActivity.css";
 import "./styles/appearance.css";
+import "./styles/releaseNews.css";
 import { getThemeController } from "./ui/theme/themeController";
 import { renderKitchenAppShell } from "./ui/kitchenAppShell";
 import { createChatbotDock, renderChatbotOnly } from "./ui/chatbot/chatbotShell";
@@ -135,6 +136,11 @@ async function start(): Promise<void> {
   const clientProfile = await loadCurrentClientProfileForApp(clientContext.clientId);
   const { initDomI18n, normalizeLanguage, setCurrentLanguage } = await import("./i18n");
   setCurrentLanguage(normalizeLanguage(clientProfile.defaults.language));
+  const [{ getUiScaleController }, { createReleaseNewsController }] = await Promise.all([
+    import("./app/uiScaleController"),
+    import("./app/releaseNewsController")
+  ]);
+  createReleaseNewsController({ uiScale: getUiScaleController() });
   // Project manager and login-adjacent views render before the workspace shell;
   // install the same live DOM translator here so a language switch is immediate
   // on every application surface, not only after workspace launch.

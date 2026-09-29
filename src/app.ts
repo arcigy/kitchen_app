@@ -268,7 +268,7 @@ import { createClassicTopbarController } from "./app/classicTopbarController";
 import { mountMobileWorkspaceShell } from "./ui/mobileWorkspaceShell";
 import { createMobileCommandHudController } from "./app/mobileCommandHudController";
 import { createWorkspaceNavigationController } from "./app/workspaceNavigationController";
-import { createUiScaleController } from "./app/uiScaleController";
+import { getUiScaleController } from "./app/uiScaleController";
 import { createMeasureSelectionActions } from "./app/measureSelectionActions";
 import { createRoomWallDefinitions } from "./app/wallDefinitions";
 import { createDetailViewController } from "./app/detailViewController";
@@ -288,6 +288,7 @@ import { createPointerModuleDragState } from "./app/pointerModuleDrag";
 import { syncProjectMaterialAssignmentsToLayout } from "./app/projectMaterialLayoutSync";
 import { syncProjectMaterialAssignmentsToKitchenContexts } from "./app/projectMaterialKitchenContextSync";
 import { createProjectMaterialRuntimeCatalog } from "./app/projectMaterialRuntimeCatalog";
+import { connectProjectEdgeMaterials } from "./app/projectEdgeMaterials";
 import { createLayoutActionsController } from "./app/layoutActionsController";
 import { createWindowInstanceController } from "./app/windowInstanceController";
 import { createDoorInstanceController } from "./app/doorInstanceController";
@@ -2295,6 +2296,7 @@ export function startApp(initialArgs: AppArgs) {
     setUnderlayStatusEl: (el: HTMLDivElement) => { underlayStatusEl = el; },
     markUnderlaySelected: () => { selectedKind = "underlay"; },
     scheduleKitchenWorktopPreviewUpdate,
+    getManufacturingSettings: () => projectMarginSettings.manufacturing,
     mountModuleCommercialProperties: (host, instanceId) => moduleCommercialPropsController?.mount(host, instanceId),
     recordActivity: (label) => recentActivityController.record(label)
   });
@@ -2844,6 +2846,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   kitchenMode = createKitchenEditMode({
+    onBacksplash: (wallOnly) => customFurnitureMode?.backsplash.open(wallOnly),
     S,
     layoutRoot,
     viewerEl: args.viewerEl,
@@ -3069,6 +3072,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   customFurnitureMode = createCustomFurnitureController({
+    finishKitchenEditing: () => kitchenMode?.exitFinish(),
     S,
     catalog: clientCatalog,
     customFurniture,
@@ -3969,6 +3973,8 @@ export function startApp(initialArgs: AppArgs) {
   const materialWarningListEl = document.querySelector<HTMLElement>("[data-material-warning-list]")!;
   materialsPhaseController = createMaterialsPhaseController({
     container: document.getElementById("materialsPhase")!,
+    onPricingChanged: (view) => { projectMarginSettings = cloneJson(view.settings); },
+    onOpenModuleProperties: (id) => workspaceNavigationController.openModuleProperties(id),
     catalog: clientCatalog,
     displayCurrency: args.clientProfile?.defaults.currency,
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
@@ -3996,6 +4002,7 @@ export function startApp(initialArgs: AppArgs) {
       applyCommittedProjectMaterialAssignments(assignments);
     }
   });
+  connectProjectEdgeMaterials(S, (next) => helpers.restoreProjectMaterialAssignments?.(next));
   supplierBridgeController = createSupplierBridgeWebController({
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
     getProjectLabel: () => projectActions.getState().currentProject?.name ?? null,
@@ -4013,6 +4020,7 @@ export function startApp(initialArgs: AppArgs) {
     }
   });
   moduleCommercialPropsController = createModuleCommercialPropsController({
+    getMaterialAssignments: () => materialsPhaseController?.getSaveState() ?? S.projectMaterialAssignments,
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
     hasSavedProject: () => projectActions.getState().hasServerSnapshot !== false,
     getModuleScope: (instanceId) => buildProjectMaterialScopes({
@@ -4027,6 +4035,7 @@ export function startApp(initialArgs: AppArgs) {
       if (projectActions.getState().currentProject) await projectActions.save();
     },
     onMaterialsChanged: (view) => {
+      materialsPhaseController?.restoreSaveState(view.assignments);
       projectMaterialAssignments = cloneJson(view.assignments);
       S.projectMaterialAssignments = cloneJson(view.assignments);
       projectMaterialRuntimeCatalog.applyProjectAssignments(view.assignments);
@@ -4040,8 +4049,8 @@ export function startApp(initialArgs: AppArgs) {
       projectMarginSettings = cloneJson(view.settings);
     }
   });
-  const uiScaleController = createUiScaleController();
-  createWorkspaceNavigationController({
+  const uiScaleController = getUiScaleController();
+  const workspaceNavigationController = createWorkspaceNavigationController({
     root: document.getElementById("app") ?? document.body,
     S,
     catalog: clientCatalog,
