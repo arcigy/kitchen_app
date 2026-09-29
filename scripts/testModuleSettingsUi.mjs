@@ -144,14 +144,15 @@ try {
   await presetDialog().locator('button[type=submit]').click();
   await presetDialog().getByText('Preset save failed (test).', { exact: true }).waitFor();
   assert(await presetNameInput().inputValue() === presetName && await presetDialog().locator('textarea').inputValue() === 'Independent company preset', 'Failed preset creation preserves the completed form for retry');
-  const [createdResponse] = await Promise.all([
-    page.waitForResponse(response => response.url().endsWith('/parameter-presets') && response.request().method() === 'POST'),
-    presetDialog().locator('button[type=submit]').click(),
-  ]);
+  await presetDialog().locator('button[type=submit]').click();
+  await presetDialog().waitFor({ state: 'detached' });
+  const modulePackageId = String((await module()).params.modulePackageId);
+  const createdResponse = await page.context().request.get(new URL(`/api/modules/${encodeURIComponent(modulePackageId)}`, baseUrl).toString());
   assert(createdResponse.ok(), 'Advanced preset saves independently to the company');
-  const created = await createdResponse.json();
-  const presetId = created.preset.presetId;
-  const savedPreset = created.modulePackage.parameterPresets.presets.find(preset => preset.presetId === presetId);
+  const created = (await createdResponse.json()).module;
+  const savedPreset = created.parameterPresets.presets.find(preset => preset.label === presetName);
+  assert(!!savedPreset, 'Created preset is persisted in the company module package');
+  const presetId = savedPreset.presetId;
   assert(!Object.hasOwn(savedPreset.parameterValues, 'width') && !Object.hasOwn(savedPreset.parameterValues, 'frontMaterialId'), 'Preset stores configuration without dimensions or materials');
   assert(JSON.stringify((await module()).params) === JSON.stringify(saved.params), 'Preset creation does not mutate the project through shared references');
   await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
