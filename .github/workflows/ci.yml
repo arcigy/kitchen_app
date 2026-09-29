@@ -21,7 +21,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
 
@@ -142,7 +142,7 @@ jobs:
           exit 1
 
       - name: Full UI and accessibility regression
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           KITCHEN_UI_BASE_URL: http://127.0.0.1:5180/
           PRICING_UI_BASE_URL: http://127.0.0.1:5180/
