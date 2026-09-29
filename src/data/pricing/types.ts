@@ -1,6 +1,6 @@
 export type PricingBasis = "sheet_area" | "linear_length" | "piece" | "custom";
 
-export type PricingUnit = "m2" | "lm" | "pcs" | "custom";
+export type PricingUnit = "m2" | "lm" | "pcs" | "set" | "profile" | "custom";
 
 export type MaterialType = "board" | "edge";
 
@@ -32,6 +32,9 @@ export type ComponentType =
   | "handle"
   | "leg"
   | "plinth_clip"
+  | "hinge_plate"
+  | "leg_plate"
+  | "assembly_pack"
   | "fastener"
   | "hinge"
   | "push_system"
@@ -60,6 +63,9 @@ export type ComponentGeometryArchetype =
   | "handle_knob"
   | "leg_adjustable"
   | "plinth_clip"
+  | "hinge_plate"
+  | "leg_plate"
+  | "assembly_pack"
   | "fastener"
   | "hinge"
   | "push_system"
