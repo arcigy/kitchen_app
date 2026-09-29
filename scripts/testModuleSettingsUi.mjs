@@ -180,6 +180,9 @@ try {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole('button', { name: /^(Potvrdiť skupinu|Confirm group)$/ }).click();
   const committedWidth = width + 170;
+  // Closing the settings dialog can overlap a previously queued user save.
+  // Start the explicit save only after its user-visible save lock is clear.
+  await page.locator('body.project-save-blocking').waitFor({ state: 'hidden' });
   const [savedResponse] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/save') && response.request().method() === 'POST'),
     page.locator("button[data-quick-action='save']").click(),
