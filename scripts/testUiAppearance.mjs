@@ -180,6 +180,7 @@ try {
   }
   // Storage events synchronize another live page without a reload.
   const sibling = await context.newPage();
+  await sibling.addInitScript(() => window.localStorage.removeItem("arcigy.kitchen.autostartWorkspace"));
   await sibling.goto(baseUrl);
   await sibling.locator(".account-menu-trigger").waitFor();
   await theme(page, "dark");
