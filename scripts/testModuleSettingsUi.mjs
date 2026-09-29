@@ -192,9 +192,11 @@ try {
   const saveCompleted = page.evaluate(() => new Promise((resolve) => {
     const body = document.body;
     let observedLock = body.classList.contains('project-save-blocking');
-    const observer = new MutationObserver(() => {
-      if (body.classList.contains('project-save-blocking')) observedLock = true;
-      else if (observedLock) {
+    const observer = new MutationObserver(records => {
+      if (body.classList.contains('project-save-blocking') || records.some(record =>
+        (record.oldValue ?? '').split(/\s+/).includes('project-save-blocking')
+      )) observedLock = true;
+      if (observedLock && !body.classList.contains('project-save-blocking')) {
         observer.disconnect();
         window.clearTimeout(timeout);
         resolve(true);
@@ -204,7 +206,7 @@ try {
       observer.disconnect();
       resolve(false);
     }, 60_000);
-    observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(body, { attributes: true, attributeOldValue: true, attributeFilter: ['class'] });
   }));
   await page.locator("button[data-quick-action='save']").click();
   assert(await saveCompleted, 'Changed module saves through the project workflow');
