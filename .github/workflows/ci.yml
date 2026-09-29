@@ -71,7 +71,7 @@ jobs:
         timeout-minutes: 15
         run: |
           set +e
-          timeout --signal=TERM --kill-after=30s 12m npm run test --if-present
+          timeout --signal=TERM --kill-after=30s 12m npm run test --if-present -- --maxWorkers=2
           status=$?
           if [ "$status" -eq 124 ]; then
             echo "::error::Unit test suite exceeded its 12-minute limit."
