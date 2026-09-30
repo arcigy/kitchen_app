@@ -16,7 +16,7 @@ await page.route("**/api/release-news**", async (route) => {
     return;
   }
   await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ notices: [{
-    id: "2026-09-kitchen-pricing-and-production", date: "2026-09-29",
+    id: "2026-09-kitchen-pricing-and-production", date: "2026-09-30",
     title: { en: "More accurate production and pricing", cs: "Přesnější výroba a ceny", sk: "Presnejšia výroba a ceny" },
     summary: { en: "Summary", cs: "Shrnutí", sk: "Súhrn" },
     changes: [{ en: "Change", cs: "Změna", sk: "Zmena" }],
