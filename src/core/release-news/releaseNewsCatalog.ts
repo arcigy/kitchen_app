@@ -4,7 +4,7 @@ import type { ReleaseNotice } from "./releaseNewsTypes";
 export const RELEASE_NOTICES: readonly ReleaseNotice[] = [
   {
     id: "2026-09-kitchen-pricing-and-production",
-    date: "2026-09-29",
+    date: "2026-09-30",
     title: {
       sk: "Presnejšia výroba a ceny",
       cs: "Přesnější výroba a ceny",

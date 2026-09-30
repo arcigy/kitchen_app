@@ -1,6 +1,6 @@
 # Audit reportov #31–#50 a kandidáta vydania
 
-Stav k 29. 9. 2026. Kontrolované boli aktuálne Odoo záznamy a projektový kód.
+Stav k 30. 9. 2026. Kontrolované boli aktuálne Odoo záznamy a projektový kód.
 Prílohy obsahujú neúplný historický kontext: pôvodná verzia aplikácie ani celý
 historický katalóg cien nie sú k dispozícii. Preto sa dnešná implementácia
 neprezentuje ako presná reprodukcia historickej ponuky.
@@ -42,7 +42,9 @@ Lokálny kandidát z `origin/develop` prešiel finálnymi kontrolami:
 
 - `npm run typecheck`, `npm test -- --maxWorkers=2`, `npm run build`,
   `npm run test:pricing-contract` a `npm run security:dependencies`.
-- Unit suite: 433 súborov, 2 890 úspešných testov, 1 existujúci preskočený test.
+- Unit suite: 434 súborov, 2 897 úspešných testov, 1 existujúci preskočený test
+  po obmedzení paralelizmu na dva workery. Neobmedzený beh na lokálnom Macu
+  zaznamenal 5-sekundové timeouty pri záťaži; žiadne nesprávne výsledky.
 - `npm run test:ui-regression` na syntetickom používateľovi a file storage:
   úspešné novinky na domovskej obrazovke aj v pracovnom priestore, potvrdenie a
   opätovné otvorenie archívu, mobil/klávesnica, SK/CZ/EN, UI témy, projekty,
@@ -51,14 +53,22 @@ Lokálny kandidát z `origin/develop` prešiel finálnymi kontrolami:
 - `ARCIGY_RESTORE_DRILL_ISOLATED=true npm run test:db-restore-drill`: úspešná
   PostgreSQL 16 migrácia aj obnova, 7 migrácií, 30 tabuliek, 37 syntetických
   riadkov a overená tenant izolácia potvrdení noviniek.
-- Deployment workflow čaká pred nasadením na `verify` aj `CodeQL` pre presné SHA.
-  Obe workflow YAML sú syntakticky načítateľné; GitHub Actions ešte musí overiť
-  beh na PR.
+- PR #175, #176 a #177 sú v `develop`. Presné SHA `5e353acb` prešlo `verify`
+  a `CodeQL`; jeho development image `:144` obsahuje porovnané zdrojové súbory
+  noviniek, cenových výpočtov a migrácie. Development po aplikovaní migrácie
+  `dev.0007` vracia HTTP 200 na `/health` aj `/ready` s PostgreSQL storage.
+- Na izolovanom development účte prešlo prvé zobrazenie noviniek, potvrdenie,
+  potlačenie automatického zobrazenia na druhom zariadení, manuálne otvorenie
+  archívu, mobilná šírka a nula chýb konzoly. Ceny 100 → 130 → 260, nákupné
+  formáty dosiek a ostatné regresie prešli v jednotkových a lokálnych UI testoch.
+- Pred rotáciou poverení sa vytvorila šifrovaná off-host záloha celej databázy,
+  konfigurácií aplikácií a produkčného storage. Obnova celej databázy bola
+  overená v izolovanom PostgreSQL 16. Migrácia `prod.0007` bola nanečisto
+  aplikovaná dvakrát; existujúce riadky zostali zachované. Produkčná schéma
+  zatiaľ zostáva na `0006`.
 
-Nejde o dôkaz nasadenia ani produkčného overenia. Ďalšie kroky: vytvoriť tematické
-commity a PR do `develop`, počkať na povinné CI, nasadiť a overiť development,
-potom pripraviť release PR. Produkčný deploy čaká na schválenie po online teste,
-obnoviteľnú produkčnú zálohu a bezpečné vykonanie migrácie 0007 pred deployom;
-syntetický restore drill tieto produkčné predpoklady nenahrádza. Report #31
-zostáva `working`, kým oprava nebude overená na nasadenej verzii; #38 zostáva
-testovacou úlohou.
+Produkčné vydanie ešte nie je dokázané: čaká na finálny development deploy
+presného kandidáta, release PR do `main`, povinné CI/review, migráciu produkčnej
+schémy a smoke test na `app.arcigy.com`. Report #31 zostáva `working` do
+potvrdenia používateľskej čitateľnosti na nasadenej verzii; #38 je technický
+test bez produktovej opravy.
