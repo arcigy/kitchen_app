@@ -6,6 +6,7 @@ import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
 import { Client } from "pg";
+import { localDatabaseUrl } from "./devOnlinePostgresConfig";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_LOCAL_PORT = 55432;
@@ -102,14 +103,18 @@ async function main() {
 
   const databaseAppName = process.env.CAPROVER_DATABASE_APP ?? "kitchenapp-db";
   const tunnelAppName = process.env.CAPROVER_DATABASE_TUNNEL_APP ?? "kitchenapp-db-tunnel";
+  const runtimeAppName = process.env.CAPROVER_RUNTIME_APP ?? "kitchenapp";
   if (!APP_NAME_RE.test(databaseAppName)) throw new Error("CAPROVER_DATABASE_APP is invalid.");
   if (!APP_NAME_RE.test(tunnelAppName)) throw new Error("CAPROVER_DATABASE_TUNNEL_APP is invalid.");
+  if (!APP_NAME_RE.test(runtimeAppName)) throw new Error("CAPROVER_RUNTIME_APP is invalid.");
   const databaseApp = definitions.appDefinitions?.find((item) => item.appName === databaseAppName);
   const tunnelApp = definitions.appDefinitions?.find((item) => item.appName === tunnelAppName);
+  const runtimeApp = definitions.appDefinitions?.find((item) => item.appName === runtimeAppName);
   if (!databaseApp) throw new Error(`CapRover database app ${databaseAppName} was not found.`);
   if (!tunnelApp) throw new Error(`CapRover database tunnel app ${tunnelAppName} was not found.`);
-  const databaseEnv = envMap(databaseApp.envVars);
+  if (!runtimeApp) throw new Error(`CapRover runtime app ${runtimeAppName} was not found.`);
   const tunnelEnv = envMap(tunnelApp.envVars);
+  const runtimeEnv = envMap(runtimeApp.envVars);
   const sshHost = process.env.CAPROVER_SSH_HOST ?? rootDomain.match(IPV4_RE)?.[0];
   if (!sshHost) throw new Error("CAPROVER_SSH_HOST is required when the root domain does not contain an IP address.");
   const sshUser = process.env.CAPROVER_SSH_USER ?? "root";
@@ -179,9 +184,7 @@ async function main() {
   process.once("SIGINT", stopTunnel);
   process.once("SIGTERM", stopTunnel);
 
-  const username = requireValue(databaseEnv, "POSTGRES_USER");
-  const database = requireValue(databaseEnv, "POSTGRES_DB");
-  const databaseUrl = `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(requireValue(databaseEnv, "POSTGRES_PASSWORD"))}@127.0.0.1:${localPort}/${encodeURIComponent(database)}`;
+  const databaseUrl = localDatabaseUrl(requireValue(runtimeEnv, "DATABASE_URL"), databaseAppName, localPort);
   const verification = new Client({ connectionString: databaseUrl, connectionTimeoutMillis: 5_000, query_timeout: 5_000 });
   await verification.connect();
   await verification.query("SELECT 1");

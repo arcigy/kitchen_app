@@ -1,3 +1,6 @@
+import { worktopPurchase } from "../../layout/bom/worktopPurchase";
+import { runtimeEdgeGroup } from "../../core/edge-banding/edgeGroups";
+import { convertPriceCurrency, isPriceCurrency } from "../../core/pricing/currency";
 import type { ClientCatalog, ComponentDefinition, MaterialDefinition, PricingBasis, PricingUnit } from "../../core/catalog/catalog-types";
 import { createPricingCatalog } from "../../core/catalog/pricing-catalog";
 
@@ -26,6 +29,14 @@ export type PortablePricingLookup = {
 };
 
 export type PortableQuoteBomItem = {
+  backsplashCut?: { stockLengthMm?: number; stockWidthMm?: number; kerfMm: number; allowHalf: boolean; grain: "length" | "width" | "free" };
+  backsplashPurchase?: import("../../core/project-materials/backsplash-purchase-types").BacksplashPurchaseInfo;
+  explicitBoardMaterial?: boolean;
+  priceSnapshotKey?: string;
+  edgeGroupId?: string;
+  edgeGroupExplicit?: boolean;
+  worktopCutsMm?: Array<{ length: number; width: number }>;
+  purchasedStockPieces?: number;
   id: string;
   itemType: "board" | "edge_band" | "hardware" | "lighting";
   category: string;
@@ -64,6 +75,7 @@ export type PortableQuoteBomItem = {
   pricingQuantityBase?: number | null;
   /** Calculated manufactured material price. It bypasses catalog lookup without adding its layers twice. */
   unitPriceOverride?: number | null;
+  unitPriceOverrideSource?: "recipe" | "project";
   unitPrice?: number | null;
   itemCost?: number | null;
   itemCostFormula?: string;
@@ -119,7 +131,7 @@ export type PortableCommercialPricingPayload = {
     hardware: { pieces: number; cost: number };
   };
   priceInputs: {
-    currency: "EUR";
+    currency: import("../../core/pricing/currency").PriceCurrency;
     boardWasteMultiplier: number;
     laborCostFixed: number;
     marginPercent: number;
@@ -967,9 +979,27 @@ export function calculateCommercialPricingFromQuoteBom(args: {
     const lookupKey = nextItem.pricingLookup?.sourceCatalogId ?? nextItem.pricingLookup?.key ?? nextItem.catalogRef?.catalogId ?? null;
     const itemErrors = [...(nextItem.validationErrors ?? [])];
     const hasUnitPriceOverride = typeof nextItem.unitPriceOverride === "number" && Number.isFinite(nextItem.unitPriceOverride);
-    const unitPrice = hasUnitPriceOverride ? nextItem.unitPriceOverride! : lookupKey ? pricingCatalog.getUnitPriceForCatalogId(lookupKey) : null;
+    const edgeAssignment = nextItem.edgeGroupId ? runtimeEdgeGroup(args.catalog, nextItem.edgeGroupId) : undefined;
+    const edgeSnapshot = edgeAssignment?.snapshots.material;
+    const missingNamedEdgeGroup = !!nextItem.edgeGroupId && !edgeAssignment && !["material-assignment:edge_front","material-assignment:edge_other"].includes(nextItem.edgeGroupId) && !nextItem.edgeGroupId.startsWith("material-assignment:edge-legacy:");
+    const linearPlinth = nextItem.itemType === "board" && nextItem.materialGroup === "plinth" && nextItem.material?.pricingUnit === "lm";
+    if (linearPlinth) {
+      nextItem.pricingQuantity = (nextItem.dimensionsMm?.length ?? NaN) * nextItem.quantity / 1000;
+      nextItem.pricingUnit = "lm"; nextItem.pricingBasis = "linear_length";
+    }
+    const edgePrice = edgeSnapshot?.unitPrice != null && isPriceCurrency(edgeSnapshot.currency) && isPriceCurrency(args.catalog.priceList.currency) ? convertPriceCurrency(edgeSnapshot.unitPrice, edgeSnapshot.currency, args.catalog.priceList.currency) : null;
+    const purchase = nextItem.material ? worktopPurchase(nextItem, nextItem.material) : null;
+    if (purchase && !purchase.error) {
+      nextItem.pricingQuantity = purchase.areaM2; nextItem.purchasedStockPieces = purchase.pieces;
+      nextItem.metrics = { ...nextItem.metrics, billableAreaM2: purchase.areaM2 };
+      nextItem.notes = [...(nextItem.notes ?? []), `Nákup: ${purchase.pieces} ks formátu ${purchase.stockLengthMm} × ${purchase.stockWidthMm} mm; krok ${purchase.increment} ks.`];
+    }
+    const unitPrice = missingNamedEdgeGroup ? null : edgeAssignment ? edgePrice : hasUnitPriceOverride ? nextItem.unitPriceOverride! : lookupKey ? pricingCatalog.getUnitPriceForCatalogId(lookupKey) : null;
 
-    if (!lookupKey && !hasUnitPriceOverride) itemErrors.push(`Item ${nextItem.id} is missing pricing lookup.`);
+    if (!lookupKey && !hasUnitPriceOverride && !edgeAssignment) itemErrors.push(`Item ${nextItem.id} is missing pricing lookup.`);
+    if (purchase?.error) itemErrors.push(purchase.error);
+    if (nextItem.backsplashPurchase?.error) itemErrors.push(nextItem.backsplashPurchase.error);
+    if (missingNamedEdgeGroup) itemErrors.push(`Chýba skupina olepenia ${nextItem.edgeGroupId}.`);
     if (unitPrice === null) itemErrors.push(`Item ${nextItem.id} is missing unit price.`);
     if (!Number.isFinite(nextItem.pricingQuantity)) itemErrors.push(`Item ${nextItem.id} has invalid pricingQuantity.`);
     if (nextItem.itemType === "board" && !nextItem.dimensionsMm) itemErrors.push(`Board item ${nextItem.id} is missing dimensions.`);
@@ -983,16 +1013,17 @@ export function calculateCommercialPricingFromQuoteBom(args: {
       itemErrors.push(`Board item ${nextItem.id} has invalid dimensions.`);
     }
     if (
-      (nextItem.itemType === "board" && (nextItem.pricingBasis !== "sheet_area" || nextItem.pricingUnit !== "m2")) ||
+      (nextItem.itemType === "board" && !linearPlinth && (nextItem.pricingBasis !== "sheet_area" || nextItem.pricingUnit !== "m2")) ||
       (nextItem.itemType === "edge_band" && (nextItem.pricingBasis !== "linear_length" || nextItem.pricingUnit !== "lm")) ||
-      (nextItem.itemType === "hardware" && (nextItem.pricingBasis !== "piece" || nextItem.pricingUnit !== "pcs")) ||
+      (nextItem.itemType === "hardware" && !((nextItem.pricingBasis === "piece" && ["pcs", "set", "profile"].includes(nextItem.pricingUnit)) || (nextItem.pricingBasis === "linear_length" && nextItem.pricingUnit === "lm"))) ||
       (nextItem.itemType === "lighting" && (nextItem.pricingBasis !== "sheet_area" || nextItem.pricingUnit !== "m2"))
     ) {
       itemErrors.push(`Item ${nextItem.id} has inconsistent pricing basis or unit.`);
     }
 
+    if (edgeSnapshot) nextItem.material = { ...edgeSnapshot.definition, catalogId: edgeSnapshot.definition.id, assignmentSource: "project-edge-group" };
     nextItem.unitPrice = unitPrice;
-    nextItem.itemCost = unitPrice === null ? null : roundCurrency(nextItem.pricingQuantity * unitPrice);
+    nextItem.itemCost = unitPrice === null || purchase?.error ? null : roundCurrency(nextItem.pricingQuantity * unitPrice);
     if (nextItem.itemCost !== null && !Number.isFinite(nextItem.itemCost)) {
       itemErrors.push(`Item ${nextItem.id} has invalid item cost.`);
       nextItem.itemCost = null;
@@ -1011,20 +1042,22 @@ export function calculateCommercialPricingFromQuoteBom(args: {
   };
 
   for (const item of items) {
-    if (item.itemCost == null) continue;
+    // Missing prices make the quotation incomplete; they do not remove the
+    // physical material quantities from the totals.
+    const itemCost = item.itemCost ?? 0;
     if (item.pricingGroup === "boards") {
       groups.boards.areaM2 = roundPricingQuantity(groups.boards.areaM2 + (item.pricingQuantityBase ?? item.pricingQuantity));
-      groups.boards.pricedAreaM2 = roundPricingQuantity(groups.boards.pricedAreaM2 + item.pricingQuantity);
-      groups.boards.cost = roundCurrency(groups.boards.cost + item.itemCost);
+      groups.boards.pricedAreaM2 = roundPricingQuantity(groups.boards.pricedAreaM2 + (item.pricingUnit === "lm" ? item.metrics?.billableAreaM2 ?? 0 : item.pricingQuantity));
+      groups.boards.cost = roundCurrency(groups.boards.cost + itemCost);
       continue;
     }
     if (item.pricingGroup === "edge_bands") {
       groups.edge_bands.lengthLm = roundPricingQuantity(groups.edge_bands.lengthLm + item.pricingQuantity);
-      groups.edge_bands.cost = roundCurrency(groups.edge_bands.cost + item.itemCost);
+      groups.edge_bands.cost = roundCurrency(groups.edge_bands.cost + itemCost);
       continue;
     }
     groups.hardware.pieces = roundPricingQuantity(groups.hardware.pieces + item.pricingQuantity);
-    groups.hardware.cost = roundCurrency(groups.hardware.cost + item.itemCost);
+    groups.hardware.cost = roundCurrency(groups.hardware.cost + itemCost);
   }
 
   const materialCost = roundCurrency(groups.boards.cost + groups.edge_bands.cost + groups.hardware.cost);
@@ -1042,7 +1075,7 @@ export function calculateCommercialPricingFromQuoteBom(args: {
     items,
     groups,
     priceInputs: {
-      currency: "EUR",
+      currency: isPriceCurrency(args.catalog.priceList.currency) ? args.catalog.priceList.currency : "EUR",
       boardWasteMultiplier,
       laborCostFixed,
       marginPercent: 0

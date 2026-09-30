@@ -1,6 +1,9 @@
+import { t } from "../i18n";
+
 export type UiScale = "standard" | "large";
 
 const STORAGE_KEY = "arcigy.ui-scale.v1";
+let sharedController: ReturnType<typeof createUiScaleController> | null = null;
 
 function readStoredScale(storage: Storage | undefined): UiScale {
   try {
@@ -33,9 +36,13 @@ export function createUiScaleController(args: {
   const createControl = () => {
     const section = document.createElement("section");
     section.className = "workspace-settings-ui-scale";
-    section.innerHTML = "<strong>Veľkosť rozhrania</strong><p>Zväčší ovládacie prvky, formuláre a tabuľky. Rozmery modelu ani mierka výkresov sa nemenia.</p>";
+    const heading = document.createElement("strong");
+    heading.textContent = t("Interface size");
+    const description = document.createElement("p");
+    description.textContent = t("Enlarges controls, forms and tables. Model dimensions and drawing scale are unchanged.");
+    section.append(heading, description);
     const choices = document.createElement("div");
-    for (const option of [{ value: "standard", label: "Štandardná" }, { value: "large", label: "Zväčšená" }] as const) {
+    for (const option of [{ value: "standard", label: t("Standard") }, { value: "large", label: t("Large") }] as const) {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = option.label;
@@ -53,4 +60,9 @@ export function createUiScaleController(args: {
   };
 
   return { getScale: () => scale, setScale, createControl };
+}
+
+export function getUiScaleController(): ReturnType<typeof createUiScaleController> {
+  sharedController ??= createUiScaleController();
+  return sharedController;
 }

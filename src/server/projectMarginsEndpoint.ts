@@ -1,3 +1,4 @@
+import { createProjectMaterialRuntimeCatalog } from "../app/projectMaterialRuntimeCatalog";
 import type http from "node:http";
 import type { ClientCatalogRepository } from "../core/catalog/catalog-repository";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
@@ -27,6 +28,7 @@ import {
   type ProjectMarginSheetMaterialPolicy,
   type ProjectMarginsView
 } from "../layout/bom/projectMargins";
+import { applyBacksplashPurchases } from "../layout/bom/backsplashPurchase";
 import { buildProjectPricingViews, type ProjectPricingView } from "../layout/bom/projectPricing";
 import type { KitchenGroup, LayoutInstance } from "../layout/appState";
 import type { KitchenContext } from "../layout/kitchenContext";
@@ -138,26 +140,27 @@ function entriesFromSave(save: ProjectSaveFile, catalog: ClientCatalog): { entri
   for (const instance of inputs.instances) {
     try {
       const context = resolveProjectMarginKitchenContext(instance, inputs.kitchenContext, inputs.kitchenGroups);
-      entries.push(...buildProjectPricingViews([instance], [], [], context, catalog, [], manufacturing));
+      entries.push(...buildProjectPricingViews([instance], [], [], context, catalog, [], manufacturing, false));
     } catch (error) {
       warnings.push(`Modul ${instance.id}: cenu sa nepodarilo vypočítať (${error instanceof Error ? error.message : "neznáma chyba"}).`);
     }
   }
   for (const worktop of inputs.worktops) {
     try {
-      entries.push(...buildProjectPricingViews([], [worktop], [], inputs.kitchenContext, catalog, [], manufacturing));
+      entries.push(...buildProjectPricingViews([], [worktop], [], inputs.kitchenContext, catalog, [], manufacturing, false));
     } catch (error) {
       warnings.push(`Pracovná doska ${worktop.id}: cenu sa nepodarilo vypočítať (${error instanceof Error ? error.message : "neznáma chyba"}).`);
     }
   }
   for (const furniture of inputs.customFurniture) {
     try {
-      entries.push(...buildProjectPricingViews([], [], [furniture], inputs.kitchenContext, catalog, [], manufacturing));
+      entries.push(...buildProjectPricingViews([], [], [furniture], inputs.kitchenContext, catalog, [], manufacturing, false));
     } catch (error) {
       warnings.push(`Vlastný nábytok ${furniture.id}: cenu sa nepodarilo vypočítať (${error instanceof Error ? error.message : "neznáma chyba"}).`);
     }
   }
-  return { entries, warnings };
+  entries.push(...buildProjectPricingViews([], [], [], inputs.kitchenContext, catalog, [], manufacturing).filter(entry => entry.kind === "project"));
+  return { entries: applyBacksplashPurchases(entries, catalog), warnings };
 }
 
 export function resolveProjectMarginKitchenContext(
@@ -175,7 +178,9 @@ export function projectMarginsViewFromSave(
   currency: PriceCurrency = "EUR",
   sheetMaterialMargin?: ProjectMarginSheetMaterialPolicy
 ): ProjectMarginsView {
-  const { entries, warnings } = entriesFromSave(save, catalog);
+  const runtime = createProjectMaterialRuntimeCatalog(catalog);
+  runtime.applyProjectAssignments(save.appState.materialAssignments);
+  const { entries, warnings } = entriesFromSave(save, runtime.catalog);
   return buildProjectMarginsView(entries, normalizeProjectMarginSettingsState(save.appState.quoteSettings), {
     editable,
     warnings,

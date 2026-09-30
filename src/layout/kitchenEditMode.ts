@@ -289,6 +289,7 @@ async function lookupKitchenHandleByExactId(
 }
 
 type CreateKitchenEditModeArgs = {
+  onBacksplash?: (wallOnly: boolean) => void;
   S: AppState;
   layoutRoot: Group;
   viewerEl: HTMLElement;
@@ -3604,6 +3605,11 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   };
 
   const mountTopbar = (row: HTMLElement) => {
+    if (args.onBacksplash) {
+      const backsplash = args.tb.addGroup("Zástena", { row });
+      args.tb.toolButton(backsplash, { title: "Zástena · Celá kuchyňa", label: "Celá kuchyňa", iconSvg: args.icons.worktop, onClick: () => args.onBacksplash!(false) });
+      args.tb.toolButton(backsplash, { title: "Zástena · Vybrať stenu", label: "Vybrať stenu", iconSvg: args.icons.worktop, onClick: () => args.onBacksplash!(true) });
+    }
     const groupTools = args.tb.addGroup(t("Kitchen group"), { row });
     const runTopbarIntent = (intent: "accept" | "discard") => {
       const action = resolveKitchenEditTopbarAction({

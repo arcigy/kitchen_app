@@ -1,3 +1,4 @@
+import { localizedNumber } from "../supplierAdapterUtils";
 import type { SupplierPriceBasis } from "../../../../../src/core/supplier-bridge/supplier-bridge-types";
 import { supplierPortals } from "../../config";
 import { waitForStableElement } from "../../content/waitForStableElement";
@@ -57,15 +58,6 @@ function previewImageUrl(document: Document): string | null {
   return extractSupplierPreviewImage(document, "demos", origin, ['img.image-product', '[itemprop="image"]', '.box-detail__image img', '.box-detail__gallery img']);
 }
 
-function localizedNumber(raw: string | null): number | null {
-  if (!raw) return null;
-  const match = raw.replace(/\u00a0/g, " ").match(/-?\d[\d\s.]*[,.]\d+|-?\d+/);
-  if (!match) return null;
-  const compact = match[0].replace(/\s/g, "");
-  const normalized = compact.includes(",") ? compact.replace(/\./g, "").replace(",", ".") : compact;
-  const value = Number(normalized);
-  return Number.isFinite(value) ? value : null;
-}
 
 function currencyFrom(raw: string): string {
   if (/Kč/i.test(raw)) return "CZK";

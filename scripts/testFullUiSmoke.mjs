@@ -54,6 +54,28 @@ async function main() {
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => !!window.__kitchenDebug, null, { timeout: 30000 });
     await page.waitForSelector("button", { timeout: 30000 });
+    const releaseNews = page.getByRole("dialog");
+    await releaseNews.waitFor({ timeout: 10000 });
+    assert(
+      (await releaseNews.locator("h2").innerText()).length > 0,
+      "The authenticated workspace did not automatically show the current release notice"
+    );
+    await releaseNews.getByRole("button", { name: /rozumiem|got it/i }).click();
+    await releaseNews.waitFor({ state: "detached", timeout: 5000 });
+    const accountMenuTrigger = page.locator(".account-menu-root .account-menu-trigger").first();
+    await accountMenuTrigger.click();
+    await page.getByRole("menuitem", { name: /čo je nové|what's new/i }).click();
+    await releaseNews.waitFor({ timeout: 5000 });
+    assert(
+      (await releaseNews.locator(".release-news-date small").first().innerText()).length > 0,
+      "Manual release-news archive did not reopen after acknowledgement"
+    );
+    await page.keyboard.press("Escape");
+    await releaseNews.waitFor({ state: "detached", timeout: 5000 });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!window.__kitchenDebug, null, { timeout: 30000 });
+    await page.waitForTimeout(500);
+    assert(await releaseNews.count() === 0, "An acknowledged release notice reopened automatically after reload");
 
     const boot = await page.evaluate(() => ({
       title: document.title,
@@ -333,6 +355,7 @@ async function main() {
           baseUrl,
           checks: [
             "boot",
+            "release-news-first-open-acknowledgement-manual-archive-one-time-reload",
             "privacy-safe-browser-runtime-metrics",
             "debug-api",
             "create-kitchen-scenario",

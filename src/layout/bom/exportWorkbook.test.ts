@@ -1,0 +1,26 @@
+import { Blob as NodeBlob } from "node:buffer";
+import { afterEach, expect, it, vi } from "vitest";
+import * as XLSX from "xlsx";
+import { createDefaultProjectMarginSettingsState } from "../../core/project-margins/project-margin-types";
+import { buildProjectQuoteSummary } from "./projectQuote";
+import { exportProjectPricingWorkbook } from "./exportWorkbook";
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+it("exports full labor contribution in the summary currency while retaining legacy markup fields", async () => {
+  const state = createDefaultProjectMarginSettingsState();
+  state.initialized = true; state.additionalLaborFixed = true; state.additionalLaborCost = 700;
+  const summary = buildProjectQuoteSummary([], state, { currency: "CZK" });
+  let download: NodeBlob | undefined;
+  vi.stubGlobal("Blob", NodeBlob);
+  vi.stubGlobal("URL", { createObjectURL: (blob: NodeBlob) => { download = blob; return "blob:fixture"; }, revokeObjectURL: vi.fn() });
+  vi.stubGlobal("document", { createElement: () => ({ click: vi.fn(), href: "", download: "" }) });
+  vi.stubGlobal("window", { setTimeout: (callback: () => void) => callback() });
+  exportProjectPricingWorkbook([], summary, "CZK");
+  const workbook = XLSX.read(new Uint8Array(await download!.arrayBuffer()), { type: "array" });
+  const rows = XLSX.utils.sheet_to_json<(string | number)[]>(workbook.Sheets.Prehlad, { header: 1 });
+  const value = (label: string) => rows.find(row => row[0] === label)?.[1];
+  expect(value("Dodatocna praca projektu")).toBe(700);
+  expect(value("Nakupne naklady")).toBe(0);
+  expect(value("Prirazka")).toBe(0);
+  expect(value("Marza vratane celej prace")).toBe(700);
+  expect(value("Vysledok app BOM")).toBe(700);
+});

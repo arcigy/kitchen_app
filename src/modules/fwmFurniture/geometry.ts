@@ -1,3 +1,4 @@
+import { applyExplicitLegLayout } from "./legLayout";
 import * as THREE from "three";
 import { resolveTallStackLayout, resolveTallDoorFront } from "./tallStackLayout";
 import type { ClientCatalog, ComponentDefinition, ComponentGeometryDefinition, ComponentType } from "../../core/catalog/catalog-types";
@@ -1151,8 +1152,8 @@ function addAdjustableLegs(group: THREE.Group, params: FwmFurnitureParams, catal
     xPositions.splice(1, 0, -opts.width * 0.25);
     xPositions.splice(xPositions.length - 1, 0, opts.width * 0.25);
   }
-  const leftClosure = bool(params, "kitchenEndClosureLeft", false);
-  const rightClosure = bool(params, "kitchenEndClosureRight", false);
+  const leftClosure = bool(params, "plinthLeftEnabled", bool(params, "kitchenEndClosureLeft", false));
+  const rightClosure = bool(params, "plinthRightEnabled", bool(params, "kitchenEndClosureRight", false));
   const sideLegInset = Math.min(Math.max(1, opts.width / 2 - 1), opts.boardDepth + 30);
   if (leftClosure && xPositions.length > 0) xPositions[0] = -opts.width / 2 + sideLegInset;
   if (rightClosure && xPositions.length > 0) xPositions[xPositions.length - 1] = opts.width / 2 - sideLegInset;
@@ -1167,7 +1168,7 @@ function addAdjustableLegs(group: THREE.Group, params: FwmFurnitureParams, catal
       const leg = addCornerStyleLeg(group, legName, legHeight, { x, y: legHeight / 2, z }, legMaterial, ["legComponentId", "plinthHeight", "plinthSetbackMm", "depth"]);
       markComponent(leg, legComponent, "legComponentId");
       if (isFront) {
-        addCornerStylePlinthClipSet(group, opts.prefix, index, { x, z }, clipMaterial, clipComponent);
+        if (bool(params, "plinthFrontEnabled", true) || params.legCountTotal !== undefined) addCornerStylePlinthClipSet(group, opts.prefix, index, { x, z }, clipMaterial, clipComponent);
         frontIndex += 1;
       } else {
         rearIndex += 1;
@@ -1272,7 +1273,7 @@ function addCarcass(group: THREE.Group, params: FwmFurnitureParams, catalog: Cli
     const setback = num(params, "plinthSetbackMm", 60);
     const boardDepth = Math.max(8, Math.min(t, 24));
     const z = zOffset + depth / 2 - setback - boardDepth / 2;
-    addBox(group, `${prefix}plinth_front_board`, { width: Math.max(1, width), height: plinth, depth: boardDepth }, { x: 0, y: plinth / 2, z }, plinthMat, ["plinthHeight", "plinthSetbackMm", "plinthMaterialId"]);
+    if (bool(params, "plinthFrontEnabled", true)) addBox(group, `${prefix}plinth_front_board`, { width: Math.max(1, width), height: plinth, depth: boardDepth }, { x: 0, y: plinth / 2, z }, plinthMat, ["plinthHeight", "plinthSetbackMm", "plinthMaterialId"]);
     const sideReturnRearZ = -envelopeDepth / 2 - closureBackGapMm;
     const sideReturnFrontZ = zOffset + depth / 2 - setback;
     const sideReturnDepth = Math.max(1, sideReturnFrontZ - sideReturnRearZ);
@@ -1287,11 +1288,11 @@ function addCarcass(group: THREE.Group, params: FwmFurnitureParams, catalog: Cli
       "kitchenEndClosureRight",
       "kitchenEndClosureBackGapMm"
     ];
-    if (leftClosure) {
+    if (bool(params, "plinthLeftEnabled", leftClosure)) {
       const leftReturn = addBox(group, `${prefix}plinth_left_return`, { width: boardDepth, height: plinth, depth: sideReturnDepth }, { x: -width / 2 + boardDepth / 2, y: plinth / 2, z: sideReturnCenterZ }, plinthMat, sideReturnParamKeys);
       leftReturn.userData.sideRole = "LEFT";
     }
-    if (rightClosure) {
+    if (bool(params, "plinthRightEnabled", rightClosure)) {
       const rightReturn = addBox(group, `${prefix}plinth_right_return`, { width: boardDepth, height: plinth, depth: sideReturnDepth }, { x: width / 2 - boardDepth / 2, y: plinth / 2, z: sideReturnCenterZ }, plinthMat, sideReturnParamKeys);
       rightReturn.userData.sideRole = "RIGHT";
     }
@@ -3243,9 +3244,20 @@ function trimChamferedBoardsToKitchenAnchors(group: THREE.Group) {
     if (!(object instanceof THREE.Mesh) || !["corpus", "body", "carcass", "front", "back", "shelf", "drawer_bottom", "plinth"].includes(String(object.userData.materialGroup))) return;
     const position = object.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
     if (!position) return;
+    // A vertical closing board outside a reference plane must move inside it.
+    // Clamping both faces to that plane collapses an 18 mm board to zero.
+    const bounds = new THREE.Box3().setFromObject(object);
+    const thickness = num((group.userData.groundTruthBuildParams ?? {}) as Record<string, unknown>, "boardThickness", 18) * MM;
+    const moveInside = (low: number, high: number, min: number, max: number) =>
+      high - low <= thickness + 0.0001 && (high <= min + 0.00001 || low >= max - 0.00001)
+        ? Math.max(min - low, Math.min(0, max - high)) : 0;
+    const shiftX = moveInside(bounds.min.x, bounds.max.x, minX, maxX);
+    const shiftZ = moveInside(bounds.min.z, bounds.max.z, minZ, maxZ);
     for (let index = 0; index < position.count; index += 1) {
       point.fromBufferAttribute(position, index);
       object.localToWorld(point);
+      point.x += shiftX;
+      point.z += shiftZ;
       point.x = Math.min(maxX, Math.max(minX, point.x));
       point.z = Math.min(maxZ, Math.max(minZ, point.z));
       object.worldToLocal(point);
@@ -4465,7 +4477,9 @@ export function buildFwmFurniture(params: FwmFurnitureParams, catalog: ClientCat
   };
   const finish = () => {
     group.updateMatrixWorld(true);
-    return normalizeFwmMaterialMetadata(group);
+    normalizeFwmMaterialMetadata(group);
+    applyExplicitLegLayout(group, normalized);
+    return group;
   };
 
   if (spec.geometryKind === "bed") {

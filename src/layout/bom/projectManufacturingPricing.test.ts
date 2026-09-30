@@ -82,4 +82,96 @@ describe("project manufacturing pricing", () => {
     expect(next.pricing.pricingStatus).toBe("incomplete");
     expect(next.pricing.validationErrors.join(" ")).toMatch(/waste percentage|preassembly rate/);
   });
+
+  it("uses the half-stock worktop format without applying percentage waste a second time", () => {
+    const worktop = material({
+      ...boardDefinition,
+      id: "test.worktop.half-format",
+      pricingUnit: "m2",
+      pricingBasis: "sheet_area",
+      metadata: { supplierLengthMm: 4100, supplierWidthMm: 635, worktopPurchaseIncrement: 0.5 }
+    });
+    const worktopCatalog = structuredClone(catalog);
+    worktopCatalog.materials.push(worktop);
+    worktopCatalog.priceList.prices[worktop.catalogId] = 100;
+    const quoteBom: PortableQuoteBomPayload = {
+      schemaVersion: "module-quote-bom.v1",
+      moduleType: "worktop_test",
+      displayName: "Half-format worktop",
+      generatedAt: "2026-09-29T00:00:00.000Z",
+      moduleInstance: { quantity: 1, widthMm: 1850, heightMm: 38, depthMm: 600 },
+      items: [{
+        id: "worktop",
+        itemType: "board",
+        category: "worktop",
+        materialGroup: "worktop",
+        name: "Worktop",
+        description: "One 1850 mm cut",
+        pricingBasis: "sheet_area",
+        pricingUnit: "m2",
+        quantity: 1,
+        pricingQuantity: 1.11,
+        pricingQuantityBase: 1.11,
+        dimensionsMm: { length: 1850, width: 600, thickness: 38 },
+        worktopCutsMm: [{ length: 1850, width: 600 }],
+        metrics: { areaM2: 1.11 },
+        material: worktop,
+        catalogRef: { entityType: "material", catalogId: worktop.catalogId },
+        pricingLookup: { sourceCatalogId: worktop.catalogId }
+      }]
+    };
+    const source: BOMResult = {
+      moduleType: quoteBom.moduleType,
+      displayName: quoteBom.displayName,
+      quoteBom,
+      pricing: calculateCommercialPricingFromQuoteBom({ quoteBom, catalog: worktopCatalog, boardWasteMultiplier: 1, laborCostFixed: 0 }),
+      materialsSnapshot: null
+    };
+    const settings = createDefaultProjectManufacturingSettings();
+    settings.pricingMode = "configured";
+    settings.boardWastePercent = 30;
+
+    const next = applyProjectManufacturingPricing({ instanceId: "worktop-1", kind: "worktop", result: source, catalog: worktopCatalog, settings });
+    const priced = next.pricing.items[0]!;
+    expect(priced.purchasedStockPieces).toBe(0.5);
+    expect(priced.pricingQuantity).toBeCloseTo(1.30175, 6);
+    expect(priced.itemCost).toBeCloseTo(130.17, 2);
+    expect(priced.metrics?.wasteMultiplier).toBeUndefined();
+    expect(priced.notes?.some((note) => note.includes("Manufacturing waste"))).toBe(false);
+  });
+});
+
+
+describe("report 50 per-cabinet rates independent of waste", () => {
+  it("charges three cabinets once and preserves every legacy material line", () => {
+    const original = result(); original.quoteBom.moduleInstance.quantity = 3;
+    const moduleLabor = { schemaVersion: 1, inherited: { source: "preset", rate: { amount: 200, currency: original.pricing.priceInputs.currency } } };
+    const next = applyProjectManufacturingPricing({ instanceId: "cabinet", kind: "module", result: original, catalog, settings: createDefaultProjectManufacturingSettings(), moduleLabor });
+    expect(next.pricing.laborCostFixed).toBe(600);
+    expect(next.pricing.items).toEqual(original.pricing.items);
+    expect(next.quoteBom.items).toEqual(original.quoteBom.items);
+    expect(next.pricing.priceInputs.boardWasteMultiplier).toBe(original.pricing.priceInputs.boardWasteMultiplier);
+    expect(next.pricing.materialCost).toBe(original.pricing.materialCost);
+    expect(next.pricing.finalPrice).toBeCloseTo(original.pricing.materialCost + 600, 2);
+  });
+  it("accepts zero and reports missing inherited work as incomplete", () => {
+    const original = result();
+    const moduleLabor = { schemaVersion: 1, inherited: { source: "missing", rate: null }, override: { amount: 0, currency: "CZK" } };
+    const zero = applyProjectManufacturingPricing({ instanceId: "cabinet", kind: "module", result: original, catalog, moduleLabor });
+    expect(zero.pricing.laborCostFixed).toBe(0); expect(zero.pricing.preassembly?.source).toBe("instance");
+    const missing = applyProjectManufacturingPricing({ instanceId: "cabinet", kind: "module", result: original, catalog, moduleLabor: { schemaVersion: 1, inherited: moduleLabor.inherited } });
+    expect(missing.pricing.pricingStatus).toBe("incomplete");
+    expect(missing.pricing.validationErrors.join(" ")).toContain("preassembly rate");
+  });
+});
+
+it("preserves the historical configured entry total for an old project with multiple cabinets", () => {
+  const settings = createDefaultProjectManufacturingSettings();
+  settings.pricingMode = "configured"; settings.boardWastePercent = 0; settings.edgeWastePercent = 0;
+  settings.preassemblyByInstanceId.cabinet = 200;
+  const original = result(); original.quoteBom.moduleInstance.quantity = 3;
+  const old = applyProjectManufacturingPricing({ instanceId: "cabinet", kind: "module", result: original, catalog, settings });
+  expect(old.pricing.laborCostFixed).toBe(200);
+  const updated = applyProjectManufacturingPricing({ instanceId: "cabinet", kind: "module", result: original, catalog, settings, moduleLabor: { schemaVersion: 1, inherited: { source: "module", rate: { amount: 200, currency: original.pricing.priceInputs.currency } } } });
+  expect(updated.pricing.laborCostFixed).toBe(600);
 });

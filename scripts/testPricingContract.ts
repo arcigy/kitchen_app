@@ -39,12 +39,13 @@ function runCurrentModuleScenarios() {
     assert.ok(result.quoteBom.items.some(item => item.itemType === "board"), `${descriptor.type}: no board BOM`);
     assert.ok(result.pricing.groups.boards.cost > 0, `${descriptor.type}: no board cost`);
     const pending = result.quoteBom.items.filter(item => !item.pricingLookup?.sourceCatalogId && !item.pricingLookup?.key && !item.catalogRef?.catalogId);
-    assert.ok(pending.every(item => item.id.startsWith("runners-")), `${descriptor.type}: unexpected unassigned item`);
+    assert.ok(pending.every(item => item.id.startsWith("runners-")), `${descriptor.type}: unexpected unassigned item ${pending.map(item => `${item.id} (${item.name}; ${item.pricingLookup?.key ?? "no lookup key"})`).join(", ")}`);
     assert.equal(result.pricing.pricingStatus, pending.length ? "incomplete" : "ok");
-    // Runner variants intentionally need an explicit project assignment. Prove
-    // both the missing-price state and completion after supplying a test price.
+    // Runner variants intentionally need explicit project assignments. Prove
+    // the missing-price state and completion after supplying test-only rates.
     const assignedBom = structuredClone(result.quoteBom);
-    for (const item of assignedBom.items) if (item.id.startsWith("runners-")) item.unitPriceOverride = 2;
+    const pendingIds = new Set(pending.map((item) => item.id));
+    for (const item of assignedBom.items) if (pendingIds.has(item.id)) item.unitPriceOverride = 2;
     assert.equal(calculateCommercialPricingFromQuoteBom({ quoteBom: assignedBom, catalog: pricedCatalog }).pricingStatus, "ok");
     const wider = { ...params, width: Number(params.width) + 100 };
     const changed = descriptor.calculateBOM(wider, ctx, pricedCatalog);

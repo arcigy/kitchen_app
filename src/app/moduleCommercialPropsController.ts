@@ -1,3 +1,6 @@
+import { mergeEdgeGroupChanges } from "../core/edge-banding/edgeGroupTransaction";
+import { confirmedProjectEdgeGroups } from "./project/projectEdgeGroupBaseline";
+import type { ProjectMaterialAssignmentsState } from "../core/project-materials/project-material-types";
 import {
   collectProjectMaterialCopyCandidates,
   resolveProjectMaterialCopyCandidate,
@@ -42,6 +45,7 @@ export type ModuleCommercialPropsApi = {
 
 export type ModuleCommercialPropsControllerArgs = {
   getProjectId: () => string | null;
+  getMaterialAssignments?: () => ProjectMaterialAssignmentsState;
   hasSavedProject?: () => boolean;
   getModuleScope: (instanceId: string) => ProjectMaterialScope | null;
   ensureProjectSaved?: () => Promise<void>;
@@ -321,6 +325,7 @@ export function createModuleCommercialPropsController(
       state.error = null;
       state.notice = message;
       render();
+      const edgeBaseline=confirmedProjectEdgeGroups(projectId)??args.getMaterialAssignments?.();
       const [materialsResult, marginsResult] = await Promise.allSettled([
         api.loadMaterials(projectId, abort.signal),
         api.loadMargins(projectId, abort.signal)
@@ -329,9 +334,12 @@ export function createModuleCommercialPropsController(
       state.loading = false;
       const errors: string[] = [];
       if (materialsResult.status === "fulfilled") {
-        state.materials = materialsResult.value;
-        state.scope = moduleScope(state.materials, args.getModuleScope(instanceId), instanceId);
-        args.onMaterialsChanged?.(materialsResult.value);
+        try {
+          const local=args.getMaterialAssignments?.();
+          state.materials = local && edgeBaseline ? {...materialsResult.value,assignments:mergeEdgeGroupChanges(materialsResult.value.assignments,edgeBaseline,local)} : materialsResult.value;
+          state.scope = moduleScope(state.materials, args.getModuleScope(instanceId), instanceId);
+          args.onMaterialsChanged?.(state.materials);
+        } catch(error) { errors.push(errorMessage(error,"Materiály sa medzitým zmenili.")); }
       } else if (!isAbortError(materialsResult.reason)) {
         errors.push(errorMessage(materialsResult.reason, "Materiály sa nepodarilo načítať."));
       }

@@ -1,3 +1,4 @@
+import { applyProjectAssignedPricing } from "../layout/bom/projectAssignedPricing";
 import type { ClientCatalog, PricingUnit } from "../core/catalog/catalog-types";
 import type {
   MaterialAssignmentCategory,
@@ -21,9 +22,9 @@ function quantityFor(item: PortableQuoteBomItem, category: MaterialAssignmentCat
     const quantity = finite(item.metrics?.edgeLengthLm) ?? finite(item.pricingQuantityBase) ?? finite(item.pricingQuantity);
     return quantity == null ? null : { quantity, unit: "lm" };
   }
-  if (["handle", "hinge", "runner", "lift_up", "leg", "fastener", "other_component"].includes(category)) {
-    const quantity = finite(item.pricingQuantityBase) ?? finite(item.pricingQuantity) ?? pieces;
-    return { quantity, unit: "pcs" };
+  if (["handle", "hinge", "runner", "lift_up", "leg", "fastener", "hinge_plate", "leg_plate", "plinth_clip", "hanging_bracket", "shelf_support", "assembly_pack", "other_component"].includes(category)) {
+    const quantity = finite(item.pricingQuantity) ?? finite(item.pricingQuantityBase) ?? pieces;
+    return { quantity, unit: item.pricingUnit };
   }
   const area = finite(item.metrics?.areaM2) ?? finite(item.pricingQuantityBase)
     ?? areaFromDimensions(item, pieces);
@@ -58,6 +59,7 @@ function itemsFor(quoteBom: PortableQuoteBomPayload, scopeId: string): ProjectMa
         : undefined;
     return [{
       id: item.id,
+      ...(item.backsplashPurchase ? { backsplashPurchase: item.backsplashPurchase } : {}),
       category,
       ...(item.variantKey ? { variantKey: item.variantKey } : {}),
       label: category === "runner" ? "Zásuvkové výsuvy" : item.description || item.name || item.id,
@@ -67,6 +69,7 @@ function itemsFor(quoteBom: PortableQuoteBomPayload, scopeId: string): ProjectMa
       quantity: Math.round(amount.quantity * 10_000) / 10_000,
       unit: amount.unit,
       pieces: finite(item.quantity) ?? 1,
+      moduleQuantity: quoteBom.moduleInstance.quantity,
       ...(layoutTarget ? { layoutTarget } : {})
     } satisfies ProjectMaterialScopeItem];
   });
@@ -78,7 +81,7 @@ export function resolveProjectMaterialScopes(save: ProjectSaveFile, catalog: Cli
   for (const instance of inputs.instances) {
     const context = inputs.kitchenGroups.find((group) => group.id === instance.kitchenGroupId)?.ctx ?? inputs.kitchenContext;
     try {
-      const quoteBom = calculateModuleBOM(instance, context, catalog).quoteBom;
+      const quoteBom = applyProjectAssignedPricing(calculateModuleBOM(instance, context, catalog), `module:${instance.id}`, catalog).quoteBom;
       const scopeId = `module:${instance.id}`;
       scopes.push({ id: scopeId, kind: "module", label: quoteBom.displayName, items: itemsFor(quoteBom, scopeId) });
     } catch {
@@ -88,10 +91,10 @@ export function resolveProjectMaterialScopes(save: ProjectSaveFile, catalog: Cli
   const additions = buildProjectPricingViews([], [...inputs.worktops], [...inputs.customFurniture], inputs.kitchenContext, catalog);
   for (const addition of additions) {
     scopes.push({
-      id: `addition:${addition.instanceId}`,
-      kind: "addition",
+      id: addition.kind === "project" ? "project" : `addition:${addition.instanceId}`,
+      kind: addition.kind === "project" ? "project" : "addition",
       label: addition.label,
-      items: itemsFor(addition.result.quoteBom, `addition:${addition.instanceId}`)
+      items: itemsFor(addition.result.quoteBom, addition.kind === "project" ? "project" : `addition:${addition.instanceId}`)
     });
   }
   return scopes;

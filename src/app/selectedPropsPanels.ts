@@ -1,3 +1,7 @@
+import { legacyModuleLaborState } from "./moduleLaborLegacyState";
+import type { ProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
+import { adoptPresetLabor, readModuleLabor, sameLaborPreset } from "../core/project-manufacturing/module-labor";
+import { mountModuleHardwareControls } from "./moduleHardwareControls";
 import type { AppState } from "../layout/appState";
 import { describeFwmModuleHeight } from "../modules/fwmFurniture/heightPresentation";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
@@ -31,7 +35,7 @@ import { refreshSelectionHighlights } from "./selectionController";
 import { createButtonElement, createCheckboxElement, createFileInputElement, createInputElement, createMutedText, createRangeElement, createSelectElement } from "./propsPanelElements";
 import { createReplacementModuleParams, listCompatibleModuleTypeOptions } from "./moduleTypeReplacement";
 import { createModuleTypePicker } from "./moduleTypePicker";
-import { createModuleParameterPresetSaver } from "./moduleParameterPresetService";
+import { createModuleParameterPresetSaver, createModulePresetLaborApi } from "./moduleParameterPresetService";
 import { commitModuleSettingsToLayout } from "./moduleSettingsCommit";
 import { t } from "../i18n";
 import {
@@ -217,6 +221,7 @@ type ModulePropsContext = {
   rebuildInstance: (inst: LayoutInstance, opts?: RebuildInstanceOptions) => boolean;
   appendLinkedMeasureInputs: AppendLinkedMeasureInputs;
   renderModuleCatalogIconSvg?: (modulePackage: FurnQuoteModulePackage) => string;
+  getManufacturingSettings?: () => ProjectManufacturingSettings;
   mountModuleCommercialProperties?: (host: HTMLElement, instanceId: string) => void;
 };
 
@@ -255,7 +260,6 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
       for (const wall of walls) rebuildWall(wall);
       rebuildWallPlanMesh();
       commitHistory(S);
-      mountProps();
     };
 
     const endpointPoint = (wall: WallInstance, end: "a" | "b") => (end === "a" ? wall.params.aMm : wall.params.bMm);
@@ -1113,10 +1117,11 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
         try {
           const { openModuleSettings } = await import("./moduleSettingsController");
           openModuleSettings({
-            modulePackage, parameters: inst.params, clientCatalog: ctx.clientCatalog,
-            commit: (candidate, baseline) => commitModuleSettingsToLayout({
+            initialLaborState: () => legacyModuleLaborState(inst, S.kitchenCtx, ctx.clientCatalog, ctx.getManufacturingSettings?.()),
+            modulePackage, parameters: inst.params, clientCatalog: ctx.clientCatalog, materialAssignments: S.projectMaterialAssignments, getMaterialAssignments: () => S.projectMaterialAssignments,
+            commit: (candidate, baseline, groups, baselineGroups) => commitModuleSettingsToLayout({
               state: S, findInstance, rebuildInstance, commitHistory
-            }, inst.id, candidate, baseline),
+            }, inst.id, candidate, baseline, groups && baselineGroups ? { candidate: groups, baseline: baselineGroups } : undefined),
             onClose: mountProps
           });
         } catch {
@@ -1167,14 +1172,33 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
         onChange,
         textInputCommitMode: "explicit",
         commitBoundary: args.propertiesEl,
-        createParameterPreset: async ({ modulePackage: activePackage, parameters, name, note }) => {
-          const result = await createModuleParameterPresetSaver(ctx.clientCatalog)({ modulePackage: activePackage, parameters, name, note });
-          if (result) inst.params.packageHash = result.modulePackage.integrity.packageHash;
-          return result;
+        initialLaborState: () => legacyModuleLaborState(inst, S.kitchenCtx, ctx.clientCatalog, ctx.getManufacturingSettings?.()),
+        presetLaborApi: createModulePresetLaborApi(ctx.clientCatalog),
+        createParameterPreset: createModuleParameterPresetSaver(ctx.clientCatalog),
+        adoptPresetLaborForProject: (activePackage, presetId) => {
+          const preset = activePackage.parameterPresets?.presets.find(p => p.presetId === presetId);
+          if (!preset) return 0;
+          let count = 0;
+          for (const instance of S.instances) {
+            const state = readModuleLabor(instance.params.moduleLabor);
+            if (sameLaborPreset(state, activePackage.module.modulePackageId, presetId) && !state?.override) {
+              adoptPresetLabor(instance.params, activePackage, preset, ctx.clientCatalog);
+              count += 1;
+            }
+          }
+          if (count) { commitHistory(S); mountProps(); }
+          return count;
         }
       });
     }
 
+    mountModuleHardwareControls(s, ctx.clientCatalog, () => inst.params, (candidate, key) => {
+      const previous = structuredClone(inst.params); inst.params = candidate;
+      try {
+        if (onChange(previous, key)) return true;
+      } catch (error) { inst.params = previous; throw error; }
+      inst.params = previous; return false;
+    });
     appendLinkedMeasureInputs(s, { kind: "module", instanceId: inst.id });
 
     if (ctx.mountModuleCommercialProperties) {

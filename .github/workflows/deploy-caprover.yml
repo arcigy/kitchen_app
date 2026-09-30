@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  checks: read
 
 concurrency:
   group: deploy-${{ github.ref_name }}
@@ -17,12 +18,43 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'develop' }}
     env:
       NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
 
     steps:
+      - name: Require verify and CodeQL checks for this exact SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The full verify job can run for 45 minutes. Allow 50 minutes for
+          # the exact-SHA checks, leaving at least 25 minutes for deployment.
+          for attempt in $(seq 1 150); do
+            checks="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${EXPECTED_SHA}/check-runs?per_page=100")"
+            verify="$(jq -r --arg sha "$EXPECTED_SHA" '[.check_runs[] | select(.name == "verify" and .head_sha == $sha)] | last // empty | [.status, (.conclusion // "")] | @tsv' <<< "$checks")"
+            codeql="$(jq -r --arg sha "$EXPECTED_SHA" '[.check_runs[] | select(.name == "CodeQL" and .head_sha == $sha)] | last // empty | [.status, (.conclusion // "")] | @tsv' <<< "$checks")"
+
+            if [[ "$verify" == $'completed\tsuccess' && "$codeql" == $'completed\tsuccess' ]]; then
+              echo "verify and CodeQL succeeded for ${EXPECTED_SHA}."
+              exit 0
+            fi
+            if [[ "$verify" == completed$'\t'* && "$verify" != $'completed\tsuccess' ]]; then
+              echo "verify failed for ${EXPECTED_SHA}: ${verify}"
+              exit 1
+            fi
+            if [[ "$codeql" == completed$'\t'* && "$codeql" != $'completed\tsuccess' ]]; then
+              echo "CodeQL failed for ${EXPECTED_SHA}: ${codeql}"
+              exit 1
+            fi
+            echo "Waiting for verify and CodeQL on ${EXPECTED_SHA} (attempt ${attempt}/150)."
+            sleep 20
+          done
+          echo "Timed out waiting for verify and CodeQL on ${EXPECTED_SHA}."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -68,10 +100,10 @@ jobs:
       - name: Test
         # A duplicate deploy gate must never hold the protected develop
         # deployment indefinitely. The same full suite runs in CI with a
-        # 30-minute job limit; this shorter, explicit step bound leaves time
+        # 45-minute job limit; this shorter, explicit step bound leaves time
         # for a clear failure and preserves the CapRover deploy timeout.
         timeout-minutes: 15
-        run: npm test
+        run: npm test -- --maxWorkers=2
 
       - name: Production dependency policy
         run: npm run security:dependencies

@@ -1,3 +1,4 @@
+import { effectiveModuleLabor, moduleLaborAmount, readModuleLabor } from "../../core/project-manufacturing/module-labor";
 import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import {
   normalizeProjectManufacturingSettings,
@@ -5,6 +6,7 @@ import {
   type ProjectManufacturingSettings
 } from "../../core/project-manufacturing/project-manufacturing-types";
 import { calculateCommercialPricingFromQuoteBom, type PortableQuoteBomItem } from "../../modules/runtime/portableCommercial";
+import { worktopPurchase } from "./worktopPurchase";
 import type { BOMResult } from "./bomTypes";
 
 export type ProjectManufacturingPricingInput = {
@@ -14,6 +16,7 @@ export type ProjectManufacturingPricingInput = {
   catalog: ClientCatalog;
   settings?: ProjectManufacturingSettings | unknown;
   presetId?: string;
+  moduleLabor?: unknown;
 };
 
 function round(value: number, digits = 4): number {
@@ -46,6 +49,7 @@ function pricedItems(settings: ProjectManufacturingSettings, items: PortableQuot
   return items.map((item) => {
     const next = structuredClone(item);
     if (settings.pricingMode !== "configured" || (next.itemType !== "board" && next.itemType !== "edge_band")) return next;
+    if (next.itemType === "board" && next.materialGroup === "worktop" && next.material && worktopPurchase(next, next.material)) return next;
     const net = netQuantity(next);
     const percent = wastePercent(settings, next);
     next.pricingQuantityBase = round(net);
@@ -70,21 +74,32 @@ function pricedItems(settings: ProjectManufacturingSettings, items: PortableQuot
  */
 export function applyProjectManufacturingPricing(input: ProjectManufacturingPricingInput): BOMResult {
   const settings = normalizeProjectManufacturingSettings(input.settings);
-  if (settings.pricingMode === "legacy") return input.result;
+  const labor = input.kind === "module" ? readModuleLabor(input.moduleLabor) : undefined;
+  if (settings.pricingMode === "legacy" && !labor) return input.result;
   const quoteBom = structuredClone(input.result.quoteBom);
   quoteBom.items = pricedItems(settings, quoteBom.items);
 
-  const preassembly = input.kind === "module"
+  const stored = labor ? effectiveModuleLabor(labor) : undefined;
+  const resolved = input.kind === "module"
     ? resolvePreassemblyRate(settings, input.instanceId, quoteBom.moduleType, input.presetId)
     : { source: "legacy" as const, amount: 0 };
-  const missingPreassembly = input.kind === "module" && preassembly.amount === null;
-  const pricing = calculateCommercialPricingFromQuoteBom({
-    quoteBom,
-    catalog: input.catalog,
-    boardWasteMultiplier: 1,
-    laborCostFixed: preassembly.amount ?? 0,
-    preassembly
-  });
+  const quantity = quoteBom.moduleInstance.quantity;
+  const currency = input.result.pricing.priceInputs.currency;
+  const preassembly = stored && stored.source !== "legacy"
+    ? { source: stored.source, amount: stored.rate?.amount ?? null }
+    : resolved;
+  const missingPreassembly = input.kind === "module" && preassembly.source !== "legacy" && preassembly.amount === null;
+  const laborCostFixed = stored && stored.source !== "legacy"
+    ? stored.rate ? moduleLaborAmount(stored.rate, quantity, currency) : 0
+    : preassembly.source === "legacy" ? input.result.pricing.laborCostFixed
+      : preassembly.amount ?? 0; // Historical configured rates were stored per entry, not per cabinet.
+  // Editing labor in an old project must not reprice its material lines or waste.
+  const pricing = settings.pricingMode === "legacy"
+    ? { ...structuredClone(input.result.pricing), laborCostFixed, preassembly,
+        priceInputs: { ...input.result.pricing.priceInputs, laborCostFixed },
+        subtotalCost: round(input.result.pricing.materialCost + laborCostFixed, 2),
+        finalPrice: round(input.result.pricing.materialCost + laborCostFixed + input.result.pricing.marginAmount, 2) }
+    : calculateCommercialPricingFromQuoteBom({ quoteBom, catalog: input.catalog, boardWasteMultiplier: 1, laborCostFixed, preassembly });
   if (missingPreassembly) {
     pricing.validationErrors = [...pricing.validationErrors, `Module ${input.instanceId} is missing an explicit preassembly rate.`];
     pricing.pricingStatus = "incomplete";

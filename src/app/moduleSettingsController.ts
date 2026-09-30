@@ -1,3 +1,12 @@
+import type { ModuleLaborState } from "../core/project-manufacturing/module-labor";
+import { mountModuleHardwareControls } from "./moduleHardwareControls";
+import { mountModulePlinthControls } from "./modulePlinthControls";
+import { createEdgeBandingPanel } from "./edgeBandingPanel";
+import { modulePreviewEdges, type PreviewEdge } from "./edgeBandingPreview";
+import { edgeGroup, readEdgeBindings, orphanEdgeBindings } from "../core/edge-banding/edgeEntities";
+import { ensureEdgeGroups, edgeGroupColor } from "../core/edge-banding/edgeGroups";
+import type { ProjectMaterialAssignmentsState } from "../core/project-materials/project-material-types";
+import type { FwmFurnitureParams } from "../modules/fwmFurniture/types";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import { createResolvedModuleControls } from "../core/module-package/runtime/module-package-controls";
@@ -10,7 +19,7 @@ import { createModuleSettingsSession, replaceModuleSettings } from "./moduleSett
 import { prepareModuleSettings } from "./moduleSettingsValidation";
 import { ownModulePreviewResources } from "./moduleSettingsResources";
 import { createModuleSettingsViewport } from "./moduleSettingsViewport";
-import { createModuleParameterPresetSaver } from "./moduleParameterPresetService";
+import { createModuleParameterPresetSaver, createModulePresetLaborApi } from "./moduleParameterPresetService";
 import { t, translateParamLabel } from "../i18n";
 import "./moduleSettings.css";
 
@@ -18,7 +27,10 @@ export function openModuleSettings(args: {
   modulePackage: FurnQuoteModulePackage;
   parameters: ModuleParams;
   clientCatalog: ClientCatalog;
-  commit: (candidate: ModuleParams, baseline: ModuleParams) => ModuleParams;
+  initialLaborState?: () => ModuleLaborState;
+  materialAssignments?: ProjectMaterialAssignmentsState;
+  getMaterialAssignments?: () => ProjectMaterialAssignmentsState | undefined;
+  commit: (candidate: ModuleParams, baseline: ModuleParams, groups?: ProjectMaterialAssignmentsState, baselineGroups?: ProjectMaterialAssignmentsState) => ModuleParams;
   onClose: () => void;
 }) {
   const existing = document.querySelector<HTMLDialogElement>("dialog[data-module-settings]");
@@ -26,6 +38,10 @@ export function openModuleSettings(args: {
   const previousFocus = document.activeElement;
   const modulePackage = structuredClone(args.modulePackage);
   const draft = structuredClone(args.parameters);
+  let draftGroups = ensureEdgeGroups(args.materialAssignments, args.clientCatalog);
+  let previewEdges: PreviewEdge[] = [];
+  let edgeMode = false;
+  let edgePanel: ReturnType<typeof createEdgeBandingPanel> | undefined;
   const dialog = document.createElement("dialog");
   dialog.className = "module-settings";
   dialog.dataset.moduleSettings = "true";
@@ -48,7 +64,8 @@ export function openModuleSettings(args: {
   side.setAttribute("aria-label", t("Parameters"));
   const summary = document.createElement("p"); summary.className = "module-settings-height";
   const form = document.createElement("div"); form.className = "module-settings-fields";
-  side.append(summary, form); preview.append(tools, viewer); body.append(preview, side);
+  const edgeHost = document.createElement("div"); edgeHost.hidden = true;
+  side.append(summary, form, edgeHost); preview.append(tools, viewer); body.append(preview, side);
   const footer = document.createElement("footer"); footer.className = "module-settings-footer";
   const status = document.createElement("div"); status.setAttribute("role", "status"); status.className = "module-settings-status";
   const error = document.createElement("div"); error.setAttribute("role", "alert"); error.className = "module-settings-error";
@@ -58,6 +75,8 @@ export function openModuleSettings(args: {
   let closed = false;
   let previewDispose: (() => void) | undefined;
   let controls: ModuleControlsApi | undefined;
+  let hardwareControls: ReturnType<typeof mountModuleHardwareControls> | undefined;
+  let plinthControls: ReturnType<typeof mountModulePlinthControls> | undefined;
   let confirmation: HTMLDialogElement | null = null;
   let pendingForm = false;
   let dimensions: ModuleParameterDimension[] = [];
@@ -83,29 +102,35 @@ export function openModuleSettings(args: {
     const dispose = ownModulePreviewResources(model);
     try {
       const nextDimensions = resolveModuleParameterDimensions({ root: model, modulePackage, parameters });
+      previewEdges = modulePreviewEdges(model, parameters as FwmFurnitureParams);
       viewport.setModel(model, nextDimensions); dimensions = nextDimensions;
     } catch (failure) { dispose(); throw failure; }
     previewDispose?.(); previewDispose = dispose;
   };
-  const session = createModuleSettingsSession(draft, {
+  const session = createModuleSettingsSession({ parameters: structuredClone(draft), groups: draftGroups }, {
     prepare(candidate, sourceKey) {
-      const normalized = prepareModuleSettings(modulePackage, candidate, sourceKey);
+      const normalized = prepareModuleSettings(modulePackage, candidate.parameters, sourceKey);
       updatePreview(normalized);
-      return normalized;
+      return { parameters: normalized, groups: candidate.groups };
     },
     commit(candidate, baseline) {
-      const normalized = prepareModuleSettings(modulePackage, candidate);
+      const normalized = prepareModuleSettings(modulePackage, candidate.parameters);
       normalized.packageHash = modulePackage.integrity.packageHash;
-      return args.commit(normalized, baseline);
+      if (orphanEdgeBindings({ kind: "module", edges: previewEdges }, readEdgeBindings(normalized.edgeBandingOverrides)).length) throw new Error("Po zmene tvaru skontrolujte neplatné priradenia v režime Olepenie.");
+      const groupsChanged = JSON.stringify(candidate.groups) !== JSON.stringify(baseline.groups);
+      const accepted = args.commit(normalized, baseline.parameters, groupsChanged ? candidate.groups : undefined, groupsChanged ? baseline.groups : undefined);
+      return { parameters: accepted, groups: structuredClone(args.getMaterialAssignments?.() ?? candidate.groups) };
     }
   });
   const button = (host: HTMLElement, label: string, action: () => void) => {
     const element = document.createElement("button"); element.type = "button"; element.textContent = t(label);
     element.addEventListener("click", action); host.append(element); return element;
   };
+  const applyState = (next: ReturnType<typeof session.current>) => { replaceModuleSettings(draft, next.parameters); draftGroups = structuredClone(next.groups); };
   const sync = () => {
     pendingForm = false;
-    controls?.syncFromParams();
+    edgePanel?.refresh();
+    controls?.syncFromParams(); plinthControls?.sync(); hardwareControls?.sync();
     for (const dimension of dimensions) {
       if (!needsDisplayConversion(dimension)) continue;
       const row = [...form.querySelectorAll<HTMLElement>("[data-parameter-key]")].find((row) => row.dataset.parameterKey === dimension.parameterKey);
@@ -119,18 +144,40 @@ export function openModuleSettings(args: {
   const showError = (failure: unknown) => { error.textContent = failure instanceof Error ? t(failure.message) : t("The module could not be updated."); };
   const change = (candidate: ModuleParams, key?: string) => {
     try {
-      replaceModuleSettings(draft, session.change(candidate, key));
+      applyState(session.change({ parameters: candidate, groups: draftGroups }, key));
       error.textContent = ""; sync(); return true;
-    } catch (failure) { replaceModuleSettings(draft, session.current()); showError(failure); sync(); return false; }
+    } catch (failure) { applyState(session.current()); showError(failure); sync(); return false; }
   };
   const restore = (direction: "undo" | "redo") => {
-    const next = session[direction](); replaceModuleSettings(draft, next);
-    try { updatePreview(next); error.textContent = ""; } catch (failure) { showError(failure); }
+    const next = session[direction](); applyState(next);
+    try { updatePreview(next.parameters); error.textContent = ""; } catch (failure) { showError(failure); }
     sync();
   };
   button(tools, "Reset view", () => viewport.reset());
   const undo = button(tools, "Undo", () => restore("undo"));
   const redo = button(tools, "Redo", () => restore("redo"));
+  const edgeToggle = button(tools, "Olepenie", () => {
+    if (!viewport.commitEdit()) return;
+    edgeMode = !edgeMode; edgeHost.hidden = !edgeMode; form.hidden = edgeMode; summary.hidden = edgeMode;
+    edgeToggle.setAttribute("aria-pressed", String(edgeMode)); presets.hidden = edgeMode; presetHelp.hidden = edgeMode; edgePanel?.refresh();
+    if (!edgeMode) viewport.setEdges(null);
+  });
+  edgeToggle.setAttribute("aria-pressed", "false");
+  edgePanel = createEdgeBandingPanel(edgeHost, {
+    catalog: args.clientCatalog,
+    getState: () => ({ adapter: { kind: "module", edges: previewEdges }, bindings: readEdgeBindings(draft.edgeBandingOverrides), groups: draftGroups }),
+    change: (bindings, groups) => {
+      try { applyState(session.change({ parameters: { ...draft, edgeBandingOverrides: bindings }, groups })); error.textContent = ""; sync(); }
+      catch (failure) { showError(failure); }
+    },
+    onSelection: (selected, partId) => {
+      if (!edgeMode) return;
+      const bindings = readEdgeBindings(draft.edgeBandingOverrides);
+      viewport.setEdges({ edges: previewEdges.filter(e => !partId || e.partId === partId), selected,
+        color: edge => { const groupId = edgeGroup(edge, bindings); return groupId ? edgeGroupColor(groupId) : "#94a3b8"; },
+        onPick: (id, multiple) => edgePanel?.pick(id, multiple) });
+    }
+  });
   const close = () => {
     if (closed) return; closed = true;
     window.removeEventListener("beforeunload", guardUnload);
@@ -154,7 +201,7 @@ export function openModuleSettings(args: {
     }
     if (error.textContent) return;
     try {
-      replaceModuleSettings(draft, session.save()); updatePreview(draft); error.textContent = ""; sync();
+      applyState(session.save()); updatePreview(draft); error.textContent = ""; sync();
       if (andClose) close();
     } catch (failure) { showError(failure); confirmation?.close(); confirmation?.remove(); confirmation = null; }
   };
@@ -215,12 +262,16 @@ export function openModuleSettings(args: {
     clientCatalog: args.clientCatalog, getWorktopThicknessMm: () => Number(draft.worktopThicknessMm) || 0,
     textInputCommitMode: "explicit", commitBoundary: dialog, presetHost: presets, presetDialogHost: dialog, userParametersOnly: true,
     onChange: (_previous?: ModuleParams, key?: string) => change(draft, key),
+    initialLaborState: args.initialLaborState,
+    presetLaborApi: createModulePresetLaborApi(args.clientCatalog),
     createParameterPreset: async (input) => {
       const result = await savePreset(input);
       if (result) Object.assign(args.modulePackage, result.modulePackage);
       return result;
     }
   }); } catch (failure) { close(); throw failure; }
+  hardwareControls = mountModuleHardwareControls(form, args.clientCatalog, () => draft, change);
+  plinthControls = mountModulePlinthControls(form, () => draft, change);
   try { updatePreview(draft); } catch (failure) { showError(failure); }
   sync();
   return { dialog, close: requestClose };

@@ -8,6 +8,7 @@ import {
   createServerAuthSessionStore,
   createServerCatalogRepository,
   createServerModulePackageRepository,
+  createServerReleaseNewsRepository,
   createServerUserActivityRepository,
   createServerUserService
 } from "../src/server/serverRepositories";
@@ -39,6 +40,7 @@ const PROJECT_ROOT = process.cwd();
 const serverUserService = createServerUserService();
 const serverAuthSessionStore = createServerAuthSessionStore();
 const serverUserActivityRepository = createServerUserActivityRepository();
+const serverReleaseNewsRepository = createServerReleaseNewsRepository();
 const catalogLookupCache = new CatalogExactLookupCache();
 const DEMOS_PREVIEW_COLOR_CACHE_PATH = path.join(PROJECT_ROOT, "backend/materials/demos_preview_color_cache.json");
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -736,6 +738,7 @@ export function startWorkerServer() {
       clientModulePackagesResponseCache,
       catalogLookupCache,
       userActivityRepository: serverUserActivityRepository,
+      releaseNewsRepository: serverReleaseNewsRepository,
       createCatalogRepository: () => createServerCatalogRepository(PROJECT_ROOT),
       createModulePackageRepository: () => createServerModulePackageRepository(PROJECT_ROOT),
       handleCatalog,

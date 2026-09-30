@@ -1,3 +1,4 @@
+import { applyProjectAssignedPricing } from "./projectAssignedPricing";
 import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import type { MaterialAssignmentCategory, ProjectMaterialScope, ProjectMaterialScopeItem } from "../../core/project-materials/project-material-types";
 import type { KitchenContext } from "../kitchenContext";
@@ -13,6 +14,7 @@ export type MaterialUsageGroupId =
   | "corpus"
   | "front"
   | "worktop"
+  | "backsplash"
   | "plinth"
   | "back"
   | "drawer_bottom"
@@ -20,7 +22,7 @@ export type MaterialUsageGroupId =
   | "hardware"
   | "lighting";
 
-export type MaterialUsageUnit = "m2" | "lm" | "pcs";
+export type MaterialUsageUnit = "m2" | "lm" | "pcs" | "set" | "profile" | "custom";
 
 export type MaterialUsageItem = {
   catalogId: string | null;
@@ -83,9 +85,9 @@ function scopeItems(quoteBom: PortableQuoteBomPayload, scopeId: string): Project
     } else if (category === "edge_front" || category === "edge_other") {
       quantity = finiteNumber(item.metrics?.edgeLengthLm) ?? finiteNumber(item.pricingQuantityBase) ?? finiteNumber(item.pricingQuantity);
       unit = "lm";
-    } else if (["handle", "hinge", "runner", "lift_up", "leg", "fastener", "other_component"].includes(category)) {
-      quantity = finiteNumber(item.pricingQuantityBase) ?? finiteNumber(item.pricingQuantity) ?? pieces;
-      unit = "pcs";
+    } else if (["handle", "hinge", "runner", "lift_up", "leg", "fastener", "hinge_plate", "leg_plate", "plinth_clip", "hanging_bracket", "shelf_support", "assembly_pack", "other_component"].includes(category)) {
+      quantity = finiteNumber(item.pricingQuantity) ?? finiteNumber(item.pricingQuantityBase) ?? pieces;
+      unit = item.pricingUnit;
     } else {
       const length = finiteNumber(item.dimensionsMm?.length);
       const width = finiteNumber(item.dimensionsMm?.width);
@@ -105,21 +107,25 @@ function scopeItems(quoteBom: PortableQuoteBomPayload, scopeId: string): Project
         : undefined;
     return [{
       id: item.id,
+      ...(item.backsplashPurchase ? { backsplashPurchase: item.backsplashPurchase } : {}),
       category,
+      ...(item.edgeGroupId ? { edgeGroupId: item.edgeGroupId, edgeGroupExplicit: item.edgeGroupExplicit } : {}),
       ...(item.variantKey ? { variantKey: item.variantKey } : {}),
       label: category === "runner" ? "Zásuvkové výsuvy" : item.description || item.name || item.id,
-      description: runnerVariantLabel ?? (item.dimensionsMm
+      description: item.purchasedStockPieces != null ? `Nákup ${item.purchasedStockPieces} ks · čistá plocha ${item.metrics?.areaM2 ?? 0} m²` : runnerVariantLabel ?? (item.dimensionsMm
         ? `${Math.round(item.dimensionsMm.length)} × ${Math.round(item.dimensionsMm.width)} × ${Math.round(item.dimensionsMm.thickness)} mm`
         : item.component?.componentType ?? item.materialGroup ?? "Komponent"),
       quantity: Math.round(quantity * 10_000) / 10_000,
       unit,
       pieces,
+      moduleQuantity: quoteBom.moduleInstance.quantity,
       ...(layoutTarget ? { layoutTarget } : {})
     } satisfies ProjectMaterialScopeItem];
   });
 }
 
 function finiteNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
   const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) && number >= 0 ? number : null;
 }
@@ -129,7 +135,7 @@ export function buildProjectMaterialScopes(input: ProjectMaterialUsageInput): Pr
   for (const instance of input.instances) {
     const context = input.kitchenGroups.find((group) => group.id === instance.kitchenGroupId)?.ctx ?? input.kitchenContext;
     try {
-      const quoteBom = calculateModuleBOM(instance, context, input.catalog).quoteBom;
+      const quoteBom = applyProjectAssignedPricing(calculateModuleBOM(instance, context, input.catalog), `module:${instance.id}`, input.catalog).quoteBom;
       const scopeId = `module:${instance.id}`;
       scopes.push({ id: scopeId, kind: "module", label: quoteBom.displayName, items: scopeItems(quoteBom, scopeId) });
     } catch {
@@ -137,8 +143,8 @@ export function buildProjectMaterialScopes(input: ProjectMaterialUsageInput): Pr
     }
   }
   for (const addition of buildProjectPricingViews([], [...input.worktops], [...input.customFurniture], input.kitchenContext, input.catalog, [...(input.ledStripGroups ?? [])])) {
-    const scopeId = `addition:${addition.instanceId}`;
-    scopes.push({ id: scopeId, kind: "addition", label: addition.label, items: scopeItems(addition.result.quoteBom, scopeId) });
+    const scopeId = addition.kind === "project" ? "project" : `addition:${addition.instanceId}`;
+    scopes.push({ id: scopeId, kind: addition.kind === "project" ? "project" : "addition", label: addition.label, items: scopeItems(addition.result.quoteBom, scopeId) });
   }
   return scopes;
 }
@@ -148,6 +154,7 @@ type GroupConfig = Pick<MaterialUsageGroup, "id" | "label" | "unit" | "itemLabel
 const GROUPS: readonly GroupConfig[] = [
   { id: "corpus", label: "Korpus", unit: "m2", itemLabel: "doska", alwaysVisible: true },
   { id: "front", label: "Fronty", unit: "m2", itemLabel: "doska", alwaysVisible: true },
+  { id: "backsplash", label: "Zástena", unit: "m2", itemLabel: "dielec", alwaysVisible: false },
   { id: "worktop", label: "Pracovná doska", unit: "m2", itemLabel: "doska", alwaysVisible: true },
   { id: "plinth", label: "Sokel", unit: "lm", itemLabel: "doska", alwaysVisible: true },
   { id: "back", label: "Chrbát", unit: "m2", itemLabel: "doska", alwaysVisible: true },
@@ -168,7 +175,7 @@ export function buildProjectMaterialUsageSummary(input: ProjectMaterialUsageInpu
     try {
       quoteBoms.push({
         source: instance.id,
-        quoteBom: calculateModuleBOM(instance, context, input.catalog).quoteBom
+        quoteBom: applyProjectAssignedPricing(calculateModuleBOM(instance, context, input.catalog), `module:${instance.id}`, input.catalog).quoteBom
       });
     } catch (error) {
       warnings.push(`Modul ${instance.id}: materiály sa nepodarilo vypočítať (${errorMessage(error)}).`);
@@ -201,25 +208,29 @@ export function summarizeMaterialUsage(
 
   const groups = GROUPS.map((config) => {
     const items = [...(buckets.get(config.id)?.values() ?? [])].sort((left, right) => left.displayName.localeCompare(right.displayName));
+    const units = new Set(items.map(item => item.unit));
+    const unit = units.size > 1 ? "custom" : items[0]?.unit ?? config.unit;
     return {
       ...config,
-      quantity: round(items.reduce((total, item) => total + item.quantity, 0)),
+      unit,
+      quantity: unit === "custom" ? 0 : round(items.reduce((total, item) => total + item.quantity, 0)),
       pieces: round(items.reduce((total, item) => total + item.pieces, 0)),
       items
     } satisfies MaterialUsageGroup;
   });
 
-  const boardGroups = groups.filter((group) => group.unit === "m2" && group.id !== "lighting");
+  const boards = quoteBoms.flatMap(bom => bom.items.filter(item => item.itemType === "board"));
   const edgeGroup = groups.find((group) => group.id === "edge");
   const hardwareGroup = groups.find((group) => group.id === "hardware");
 
   return {
     groups,
     warnings: uniqueWarnings(warnings),
-    boardAreaM2: round(boardGroups.reduce((total, group) => total + group.quantity, 0)),
-    boardPieces: round(boardGroups.reduce((total, group) => total + group.pieces, 0)),
+    // Plinth rows are displayed in running metres but remain physical boards.
+    boardAreaM2: round(boards.reduce((total, item) => total + (usageQuantity(item, GROUP_BY_ID.get("corpus")!) ?? 0), 0)),
+    boardPieces: round(boards.reduce((total, item) => total + (positiveNumber(item.quantity) ?? 1), 0)),
     edgeLengthLm: round(edgeGroup?.quantity ?? 0),
-    hardwarePieces: round(hardwareGroup?.quantity ?? 0),
+    hardwarePieces: round(hardwareGroup?.items.filter(item => item.unit === "pcs").reduce((sum, item) => sum + item.quantity, 0) ?? 0),
     isEmpty: groups.every((group) => group.items.length === 0)
   };
 }
@@ -250,7 +261,7 @@ function addBomItem(
   const displayName = item.material?.displayName ?? item.component?.displayName ?? item.description ?? item.name ?? item.id;
   const detail = itemDetail(item, config.unit);
   const usageRole = usageRoleFor(item);
-  const key = `${catalogId ?? `missing:${item.variantKey ?? item.id}`}:${detail}:${usageRole}:${item.variantKey ?? "default"}`;
+  const key = `${catalogId ?? `missing:${item.variantKey ?? item.id}`}:${detail}:${usageRole}:${item.variantKey ?? "default"}:${item.pricingUnit}`;
   const groupBuckets = buckets.get(groupId) ?? new Map<string, MaterialUsageItem>();
   const existing = groupBuckets.get(key);
 
@@ -269,7 +280,7 @@ function addBomItem(
       ...(item.variantLabel ? { variantLabel: item.variantLabel } : {}),
       quantity,
       pieces,
-      unit: config.unit
+      unit: item.itemType === "hardware" ? item.pricingUnit : config.unit
     });
   }
   buckets.set(groupId, groupBuckets);
@@ -283,6 +294,7 @@ function materialUsageGroupFor(item: PortableQuoteBomItem): MaterialUsageGroupId
   const rawGroup = String(item.materialGroup ?? item.material?.boardFamily ?? "").trim().toLowerCase();
   if (["corpus", "carcass", "body", "shelf"].includes(rawGroup)) return "corpus";
   if (rawGroup === "front") return "front";
+  if (rawGroup === "backsplash") return "backsplash";
   if (rawGroup === "worktop") return "worktop";
   if (rawGroup === "plinth") return "plinth";
   if (rawGroup === "back") return "back";
@@ -306,13 +318,13 @@ function usageQuantity(item: PortableQuoteBomItem, group: GroupConfig): number |
     return length != null && width != null ? (length * width * pieces) / 1_000_000 : null;
   }
   if (unit === "lm") return positiveNumber(item.metrics?.edgeLengthLm) ?? positiveNumber(item.pricingQuantityBase) ?? positiveNumber(item.pricingQuantity);
-  return positiveNumber(item.pricingQuantityBase) ?? positiveNumber(item.pricingQuantity) ?? positiveNumber(item.quantity);
+  return positiveNumber(item.pricingQuantity) ?? positiveNumber(item.pricingQuantityBase) ?? positiveNumber(item.quantity);
 }
 
 function usageRoleFor(item: PortableQuoteBomItem): string {
   if (item.itemType === "lighting") return "lighting";
-  if (item.itemType === "hardware") return item.component?.componentType ?? item.materialGroup ?? item.category ?? "other_component";
-  if (item.itemType === "edge_band") return item.material?.edgeFamily ?? item.materialGroup ?? "other";
+  if (item.itemType === "hardware") return projectMaterialCategoryForBomItem(item) ?? "other_component";
+  if (item.itemType === "edge_band") return projectMaterialCategoryForBomItem(item) === "edge_front" ? "front" : "body";
   return item.materialGroup ?? item.material?.boardFamily ?? item.category;
 }
 
@@ -326,6 +338,7 @@ function itemDetail(item: PortableQuoteBomItem, unit: MaterialUsageUnit): string
 }
 
 function positiveNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
   const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) && number >= 0 ? number : null;
 }

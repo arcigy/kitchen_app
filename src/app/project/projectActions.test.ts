@@ -49,11 +49,13 @@ const appState = {
 function saveWithRevision(saveRevision: number): ProjectSaveFile {
   return {
     project,
+    projectId: project.projectId,
+    appState,
     integrity: {
       savedAt: "2026-01-01T00:00:00.000Z",
       saveRevision
     }
-  } as ProjectSaveFile;
+  } as unknown as ProjectSaveFile;
 }
 
 describe("project actions", () => {

@@ -40,7 +40,7 @@ describe("projectMaterialCategoryForBomItem", () => {
     }))).toBe("edge_other");
   });
 
-  it("keeps direct hardware types and folds mounting hardware into fasteners", () => {
+  it("keeps mounting hardware in its own category", () => {
     expect(projectMaterialCategoryForBomItem(item({
       itemType: "hardware",
       pricingBasis: "piece",
@@ -52,6 +52,6 @@ describe("projectMaterialCategoryForBomItem", () => {
       pricingBasis: "piece",
       pricingUnit: "pcs",
       component: { componentType: "plinth_clip" } as PortableQuoteBomItem["component"]
-    }))).toBe("fastener");
+    }))).toBe("plinth_clip");
   });
 });

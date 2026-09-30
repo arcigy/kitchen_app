@@ -1,3 +1,6 @@
+import { applyEdgeGroupChanges } from "../../core/edge-banding/edgeGroupTransaction";
+import { ProjectMaterialRevisionConflictError } from "../../core/project-materials/project-material-errors";
+import { confirmProjectEdgeGroups } from "./projectEdgeGroupBaseline";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import type { ProjectRecoveryEnvelopeV1 } from "./projectRecoveryTypes";
 
@@ -14,13 +17,15 @@ export function mergeRecoveryWithAuthoritativeServer(
   server: ProjectSaveFile,
   envelope: ProjectRecoveryEnvelopeV1
 ): ProjectSaveFile {
+  confirmProjectEdgeGroups(server.projectId,server.appState.materialAssignments);
+  const materials=envelope.edgeGroupChanges?.length ? applyEdgeGroupChanges(server.appState.materialAssignments,envelope.edgeGroupChanges) : server.appState.materialAssignments;
   return {
     ...server,
     appState: {
       ...envelope.appState,
       // These domains have their own revision-checked server owners. A generic
       // browser draft must never roll them back.
-      materialAssignments: server.appState.materialAssignments,
+      materialAssignments: materials,
       quoteSettings: server.appState.quoteSettings,
       pricingSettings: server.appState.pricingSettings
     }
@@ -46,5 +51,10 @@ export function decideProjectRecovery(args: {
   if (localTime <= serverTime) {
     return { kind: "server", save: args.server, archiveLocal: false };
   }
-  return { kind: "local", save: mergeRecoveryWithAuthoritativeServer(args.server, args.envelope), envelope: args.envelope };
+  try {
+    return { kind: "local", save: mergeRecoveryWithAuthoritativeServer(args.server, args.envelope), envelope: args.envelope };
+  } catch(error) {
+    if (error instanceof ProjectMaterialRevisionConflictError) return {kind:"server",save:args.server,archiveLocal:true};
+    throw error;
+  }
 }

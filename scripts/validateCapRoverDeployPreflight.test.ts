@@ -197,6 +197,27 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).not.toMatch(/uses:\s+github\/codeql-action\/[^@]+@v\d+/);
   });
 
+  it("allows full verification to finish before the exact-SHA deploy gate expires", async () => {
+    const [ciWorkflow, deployWorkflow] = await Promise.all([
+      readFile(path.join(process.cwd(), ".github", "workflows", "ci.yml"), "utf-8"),
+      readFile(path.join(process.cwd(), ".github", "workflows", "deploy-caprover.yml"), "utf-8")
+    ]);
+    const verifyJobMinutes = Number(ciWorkflow.match(/  verify:\n    runs-on: ubuntu-latest\n    timeout-minutes: (\d+)/)?.[1]);
+    const uiStepMinutes = Number(ciWorkflow.match(/- name: Full UI and accessibility regression\n        timeout-minutes: (\d+)/)?.[1]);
+    const deployJobMinutes = Number(deployWorkflow.match(/  deploy:\n    runs-on: ubuntu-latest\n    timeout-minutes: (\d+)/)?.[1]);
+    const deployTestStep = deployWorkflow.split("- name: Test\n")[1]?.split("\n      - name:")[0] ?? "";
+    const gate = deployWorkflow.split("name: Require verify and CodeQL checks for this exact SHA")[1]?.split("\n      - name:")[0] ?? "";
+    const gateAttempts = Number(gate.match(/for attempt in \$\(seq 1 (\d+)\); do/)?.[1]);
+    const gatePollSeconds = Number(gate.match(/^\s+sleep (\d+)$/m)?.[1]);
+    const gateMinutes = (gateAttempts * gatePollSeconds) / 60;
+
+    expect(uiStepMinutes).toBeGreaterThanOrEqual(20);
+    expect(verifyJobMinutes).toBeGreaterThan(uiStepMinutes);
+    expect(gateMinutes).toBeGreaterThan(verifyJobMinutes);
+    expect(deployJobMinutes).toBeGreaterThan(gateMinutes + 15);
+    expect(deployTestStep).toContain("run: npm test -- --maxWorkers=2");
+  });
+
   it("opens bounded reviewed dependency updates against develop", async () => {
     const config = await readFile(path.join(process.cwd(), ".github", "dependabot.yml"), "utf-8");
 

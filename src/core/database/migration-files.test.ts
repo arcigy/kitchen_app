@@ -53,5 +53,9 @@ describe("database migration files", () => {
     const usernameSql = await readFile(path.join(process.cwd(), "db", "migrations", "0006_case_insensitive_auth_username.sql"), "utf-8");
     expect(usernameSql).toContain("CREATE UNIQUE INDEX");
     expect(usernameSql).toContain("lower(username)");
+
+    const releaseNewsSql = await readFile(path.join(process.cwd(), "db", "migrations", "0007_release_news_acknowledgements.sql"), "utf-8");
+    expect(releaseNewsSql).toContain("PRIMARY KEY (client_id, user_id, notice_id)");
+    expect(releaseNewsSql).toContain("acknowledged_at timestamptz NOT NULL");
   });
 });

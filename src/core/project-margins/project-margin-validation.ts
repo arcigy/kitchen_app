@@ -27,6 +27,7 @@ const MATERIAL_CATEGORIES: readonly MaterialAssignmentCategory[] = [
   "runner",
   "lift_up",
   "leg",
+  "hinge_plate", "leg_plate", "plinth_clip", "hanging_bracket", "shelf_support", "assembly_pack", "backsplash",
   "fastener",
   "other_component",
   "lighting"
@@ -160,6 +161,7 @@ export function validateProjectMarginSettingsState(
     "calculationMode",
     "defaultMarginPercent",
     "additionalLaborCost",
+    "additionalLaborFixed",
     "groupMargins",
     "itemOverrides",
     "manufacturing",
@@ -184,6 +186,7 @@ export function validateProjectMarginSettingsState(
   ) {
     throw new Error(`${path}.additionalLaborCost must be between 0 and ${PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX}.`);
   }
+  if (value.additionalLaborFixed !== undefined && typeof value.additionalLaborFixed !== "boolean") throw new Error(`${path}.additionalLaborFixed must be a boolean.`);
   if (!isObject(value.groupMargins)) throw new Error(`${path}.groupMargins must be an object.`);
   for (const [category, marginPercent] of Object.entries(value.groupMargins)) {
     if (!isProjectMarginCategory(category)) throw new Error(`${path}.groupMargins contains unsupported category ${category}.`);

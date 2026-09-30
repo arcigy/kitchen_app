@@ -1,3 +1,9 @@
+import { setRuntimeProjectAssignments } from "../core/project-materials/runtimeProjectAssignments";
+import { resolveEffectiveProjectMaterialAssignment } from "../core/project-materials/project-material-assignment-resolution";
+import { openProjectComponentDialog, type ProjectComponentEdit } from "./projectComponentDialog";
+import { applyProjectComponentOperation, type ProjectComponentOperation } from "../core/project-materials/project-component-operations";
+import { updateProjectComponentValues } from "./projectMaterialsApi";
+import { repairSupplierMaterialPricing } from "../core/project-materials/supplierMaterialPricingRepair";
 import type { ClientCatalog, ComponentDefinition, MaterialDefinition } from "../core/catalog/catalog-types";
 import type { PriceCurrency } from "../core/pricing/currency";
 import {
@@ -40,6 +46,8 @@ import {
   type SupplierBridgePanelState
 } from "../ui/materialsPhasePanel";
 import { mountLoadingSkeleton } from "../ui/loadingSkeleton";
+import { createMarginsPhaseController, type MarginsPhaseControllerApi } from "./marginsPhaseController";
+import type { ProjectMarginsView } from "../layout/bom/projectMargins";
 
 export type MaterialsPhaseControllerApi = {
   loadProjectMaterials: (projectId: string, signal?: AbortSignal) => Promise<ProjectMaterialsView>;
@@ -55,6 +63,7 @@ export type MaterialsPhaseControllerApi = {
   ) => Promise<ProjectMaterialCatalogLookup | null>;
   copyProjectMaterialAssignment: typeof copyProjectMaterialAssignment;
   removeProjectMaterialAssignment: typeof removeProjectMaterialAssignment;
+  updateProjectComponentValues: typeof updateProjectComponentValues;
 };
 
 export type MaterialsPhaseControllerArgs = {
@@ -67,6 +76,9 @@ export type MaterialsPhaseControllerArgs = {
   onViewChanged?: (view: ProjectMaterialsView) => void;
   /** Fired only after a user/server mutation, never while merely loading legacy project state. */
   onAssignmentsCommitted?: (assignments: ProjectMaterialAssignmentsState) => void;
+  onPricingChanged?: (view: ProjectMarginsView) => void;
+  pricingApi?: Partial<Pick<MarginsPhaseControllerApi, "loadProjectMargins" | "setProjectManufacturing">>;
+  onOpenModuleProperties?: (instanceId: string) => Promise<void>;
   onOpenSupplier?: (supplierId: ProjectSupplierId) => Promise<void>;
   onCancelSupplierBridge?: () => Promise<void>;
   api?: Partial<MaterialsPhaseControllerApi>;
@@ -79,7 +91,7 @@ const DEFAULT_API: MaterialsPhaseControllerApi = {
   updateProjectMaterialAssignment,
   lookupCatalogItem: lookupProjectMaterialCatalogItem,
   copyProjectMaterialAssignment,
-  removeProjectMaterialAssignment
+  removeProjectMaterialAssignment, updateProjectComponentValues
 };
 
 export function createMaterialsPhaseController(args: MaterialsPhaseControllerArgs) {
@@ -92,6 +104,24 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
   let remoteLoaded = false;
   let active = false;
   let supplierBridgeState = { ...EMPTY_SUPPLIER_BRIDGE_PANEL_STATE };
+  const wasteHost = args.onPricingChanged ? document.createElement("div") : undefined;
+  const wasteController = wasteHost ? createMarginsPhaseController({
+    container: wasteHost,
+    presentation: "material-waste",
+    getProjectId: () => args.getProjectId?.() ?? null,
+    onViewChanged: args.onPricingChanged,
+    api: args.pricingApi
+  }) : null;
+  const openWasteControls = async () => {
+    if (!wasteController || !wasteHost || !active) return;
+    if (!args.getProjectId?.()) {
+      wasteHost.innerHTML = '<section class="material-waste"><h2>Prerezy</h2><p>Vytvorte alebo otvorte uložený projekt. Potom tu nastavíte prerez dosiek a hrán.</p></section>';
+      return;
+    }
+    // The shared owner renders a blocked error state if loading fails. Material
+    // assignment controls remain usable independently of pricing availability.
+    await wasteController.open().catch(() => undefined);
+  };
   const commitAborts = new Map<MaterialAssignmentCategory, AbortController>();
   const notifyViewChanged = () => args.onViewChanged?.(structuredClone(view));
   const notifyAssignmentsCommitted = () => args.onAssignmentsCommitted?.(structuredClone(assignments));
@@ -99,10 +129,16 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
   const ensurePanel = () => {
     if (panel) return panel;
     panel = mountProjectMaterialsPanel(args.container, view, {
+      wasteControls: wasteHost,
+      onEditComponent: editComponent,
+      onOpenModuleProperties: args.onOpenModuleProperties,
+      onAddComponent: addComponent,
+      onRemoveComponent: removeComponent,
       onCommitId: commitId,
       onOpenSupplier: args.onOpenSupplier,
       onCancelSupplierBridge: args.onCancelSupplierBridge,
       onSplitEdge: splitEdge,
+      onEditEdgeGroup: editEdgeGroup,
       onResetCategory: resetCategory,
       onCopyGeneralToScope: copyGeneralToScope,
       onRemoveScopeOverride: removeScopeOverride,
@@ -113,6 +149,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
   };
 
   const renderLocalView = () => {
+    setRuntimeProjectAssignments(args.catalog, assignments);
     view = withLiveScopes(createProjectMaterialsView(assignments, args.getQuantities(), args.catalog), args);
     panel?.update(view);
     notifyViewChanged();
@@ -193,6 +230,50 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     notifyAssignmentsCommitted();
     return { ok: true };
   };
+
+  async function editEdgeGroup(assignmentId?: string): Promise<void> {
+    const { openEdgeGroupDialog } = await import("./edgeGroupDialog");
+    const baseline = JSON.stringify(assignments);
+    const next = await openEdgeGroupDialog(assignments, args.catalog, assignmentId);
+    if (!next) return;
+    if (baseline !== JSON.stringify(assignments)) throw new Error("Materiály sa medzitým zmenili. Zopakujte úpravu skupiny.");
+    const projectId = args.getProjectId?.();
+    if (projectId) {
+      if (!remoteLoaded) throw new Error("Najprv obnovte materiály projektu.");
+      applyRemoteView(await api.updateProjectMaterialAssignment(projectId, { revision: assignments.revision, assignment: next }), now());
+    } else {
+      if (assignments.assignments.some(a => a.assignmentId === next.assignmentId)) assignments = replaceAssignment(assignments, next, now());
+      else assignments = { ...assignments, revision: assignments.revision + 1, assignments: [...assignments.assignments, next], updatedAt: now() };
+      renderLocalView(); notifyAssignmentsCommitted();
+    }
+  }
+
+  async function commitComponent(operation: ProjectComponentOperation): Promise<void> {
+    const projectId = args.getProjectId?.();
+    if (projectId) {
+      if (!remoteLoaded) throw new Error("Najprv obnovte materiály projektu.");
+      applyRemoteView(await api.updateProjectComponentValues(projectId, assignments.revision, operation), now());
+    } else {
+      assignments = applyProjectComponentOperation(assignments, operation, view.scopes ?? [], args.catalog, now());
+      renderLocalView(); notifyAssignmentsCommitted();
+    }
+  }
+  async function editComponent(request: ProjectComponentEdit): Promise<void> {
+    const target = request.target;
+    const item = target ? view.scopes?.find(scope => scope.id === target.scopeId)?.items.find(item => item.id === target.itemId) : undefined;
+    const assignment = target && item ? resolveEffectiveProjectMaterialAssignment(assignments.assignments, target.scopeId, item).assignment
+      : assignments.assignments.find(item => item.assignmentId === (request.assignmentId ?? target?.itemId));
+    await openProjectComponentDialog({ catalog: args.catalog, currency: args.displayCurrency ?? "EUR", assignment, target, item, commit: commitComponent });
+  }
+  async function addComponent(scopeId: string): Promise<void> {
+    await openProjectComponentDialog({ catalog: args.catalog, currency: args.displayCurrency ?? "EUR", addScopeId: scopeId, commit: commitComponent });
+  }
+  async function removeComponent(assignmentId: string): Promise<void> {
+    if (!assignments.assignments.some(item => item.assignmentId === assignmentId && item.extraComponent)) return;
+    const projectId = args.getProjectId?.();
+    if (projectId) applyRemoteView(await api.removeProjectMaterialAssignment(projectId, { revision: assignments.revision, assignmentId }), now());
+    else { assignments = { ...assignments, revision: assignments.revision + 1, assignments: assignments.assignments.filter(item => item.assignmentId !== assignmentId) }; renderLocalView(); notifyAssignmentsCommitted(); }
+  }
 
   async function splitEdge(category: "edge_front" | "edge_other"): Promise<void> {
     const matches = assignments.assignments.filter((assignment) => assignment.category === category && assignment.assignmentId.startsWith(`material-assignment:${category}`));
@@ -323,6 +404,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
         const activePanel = ensurePanel();
         activePanel.setInputsDisabled(false);
         activePanel.setGlobalError(null);
+        await openWasteControls();
         return view;
       }
 
@@ -356,10 +438,12 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       } finally {
         if (loadAbort === abort) loadAbort = null;
       }
+      if (remoteLoaded) await openWasteControls();
       return view;
     },
     async close(): Promise<void> {
       await panel?.flushPending();
+      await wasteController?.close();
       active = false;
       remoteLoaded = false;
       abortRequests();
@@ -367,6 +451,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       panel = null;
     },
     destroy(): void {
+      wasteController?.destroy();
       active = false;
       remoteLoaded = false;
       abortRequests();
@@ -493,7 +578,7 @@ function replaceAssignment(
     ...state,
     initialized: true,
     revision: state.revision + 1,
-    assignments: state.assignments.map((current) => current.category === assignment.category ? assignment : current),
+    assignments: state.assignments.map((current) => current.assignmentId === assignment.assignmentId ? assignment : current),
     updatedAt
   };
 }
@@ -503,7 +588,7 @@ function initialAssignments(
   catalog: ClientCatalog,
   now: string
 ): ProjectMaterialAssignmentsState {
-  return structuredClone(state?.initialized ? state : createDefaultProjectMaterialAssignments(catalog, now));
+  return repairSupplierMaterialPricing(structuredClone(state?.initialized ? state : createDefaultProjectMaterialAssignments(catalog, now)));
 }
 
 function viewFromRemote(

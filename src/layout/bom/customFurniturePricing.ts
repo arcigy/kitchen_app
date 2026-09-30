@@ -1,6 +1,10 @@
+import { customBoardNetAreaMm2 } from "../customBoardProfile";
+import { customBoardEdges } from "../customFurnitureEdges";
+import { edgeGroup, readEdgeBindings, orphanEdgeBindings } from "../../core/edge-banding/edgeEntities";
 import type { ClientCatalog, MaterialDefinition } from "../../core/catalog/catalog-types";
 import { recipeThicknessMm, type ManufacturingRecipeSnapshot } from "../../core/project-manufacturing/project-manufacturing-types";
 import { createPricingCatalog } from "../../core/catalog/pricing-catalog";
+import { convertPriceCurrency, isPriceCurrency } from "../../core/pricing/currency";
 import {
   calculateCommercialPricingFromQuoteBom,
   type PortableMaterialRef,
@@ -31,7 +35,7 @@ function resolveMaterial(catalog: ClientCatalog, materialId: string, materialTyp
   const pricingCatalog = createPricingCatalog(catalog);
   const direct = pricingCatalog.getMaterialDefinitionById(materialId);
   if (direct?.materialType === materialType) return direct;
-  return catalog.materials.find((material) => material.materialType === materialType && material.isActive) ?? null;
+  return materialId ? null : catalog.materials.find((material) => material.materialType === materialType && material.isActive) ?? null;
 }
 
 function recipeUnitPrice(catalog: ClientCatalog, recipe: ManufacturingRecipeSnapshot, areaM2: number, perimeterLm: number): number | null {
@@ -57,20 +61,26 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
   for (const board of furniture.params.boards) {
     const profile = sanitizeCustomFurnitureProfile(board.profile);
     if (profile.length < 3) continue;
-    const boardMaterial = resolveMaterial(catalog, board.materialId, "board");
+    const stored = board.backsplashSource?.materialSnapshot ?? furniture.params.backsplash?.materialSnapshot;
+    const snapshot = stored?.definition.id === board.materialId ? stored : undefined;
+    const boardMaterial = snapshot?.definition ?? resolveMaterial(catalog, board.materialId, "board");
     const boardPortable = toPortableMaterial(boardMaterial);
     const bounds = polygonBoundsMm(profile);
-    const areaM2 = round(polygonAreaMm2(profile) / 1_000_000);
+    const areaM2 = round(customBoardNetAreaMm2(board) / 1_000_000);
     const perimeterLm = round(profile.reduce((sum, _point, index) => sum + polygonEdgeLengthMm(profile, index), 0) / 1000);
     const recipe = board.recipeSnapshot;
     const recipePrice = recipe ? recipeUnitPrice(catalog, recipe, areaM2, perimeterLm) : null;
     const materialSlotId = `board:${board.id}`;
+    const orphanEdges = orphanEdgeBindings({ kind: "custom-board", edges: customBoardEdges(board) }, readEdgeBindings(board.edgeBandingOverrides));
     if (boardPortable) materials[materialSlotId] = boardPortable;
 
     items.push({
       id: `custom-board-${furniture.id}-${board.id}`,
       itemType: "board",
-      category: board.kind === "worktop" ? "worktop" : "custom_furniture_board",
+      ...(furniture.params.backsplash ? { backsplashCut: { stockLengthMm: furniture.params.backsplash.stockLengthMm, stockWidthMm: furniture.params.backsplash.stockWidthMm, kerfMm: furniture.params.backsplash.kerfMm, allowHalf: furniture.params.backsplash.allowHalf, grain: furniture.params.backsplash.grain },
+        explicitBoardMaterial: furniture.params.backsplash.materialOverride || (board.backsplashSource?.overrides.includes("materialId") ?? !!board.materialId) } : {}),
+      ...(orphanEdges.length ? { validationErrors: [`${board.name}: ${orphanEdges.length} neplatných priradení olepenia po zmene tvaru.`] } : {}),
+      category: furniture.params.groupKind === "backsplash" ? "backsplash" : board.kind === "worktop" ? "worktop" : "custom_furniture_board",
       name: recipe?.name ?? board.name,
       description: recipe ? `${recipe.name} (${board.name})` : `${board.name} (${board.kind})`,
       pricingBasis: "sheet_area",
@@ -89,9 +99,9 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
         wasteMultiplier: 1
       },
       materialSlotId,
-      materialGroup: board.kind === "worktop" ? "worktop" : boardMaterial?.boardFamily ?? "body",
+      materialGroup: furniture.params.groupKind === "backsplash" ? "backsplash" : board.kind === "worktop" ? "worktop" : boardMaterial?.boardFamily ?? "body",
       material: boardPortable,
-      catalogRef: !recipe && boardPortable
+      catalogRef: !recipe && !snapshot && boardPortable
         ? {
             entityType: "material",
             catalogId: boardPortable.catalogId,
@@ -101,7 +111,7 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
             pricingUnit: "m2"
           }
         : null,
-      pricingLookup: !recipe && boardPortable
+      pricingLookup: !recipe && !snapshot && boardPortable
         ? {
             key: boardPortable.catalogId,
             sourceCatalogId: boardPortable.catalogId,
@@ -110,6 +120,9 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
           }
         : null,
       ...(recipe ? { unitPriceOverride: recipePrice } : {}),
+      ...(!recipe && snapshot ? { unitPriceOverrideSource: "project" as const, priceSnapshotKey: JSON.stringify(snapshot),
+        unitPriceOverride: snapshot.unitPrice !== null && isPriceCurrency(snapshot.currency) && isPriceCurrency(catalog.priceList.currency)
+          ? convertPriceCurrency(snapshot.unitPrice, snapshot.currency, catalog.priceList.currency) : null } : {}),
       sourcePartIds: [board.id],
       notes: [
         `Area: ${areaM2} m2`,
@@ -119,15 +132,21 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
       pricingGroup: "boards"
     });
 
-    for (const edgeBand of board.edgeBanding) {
-      const edgeMaterial = resolveMaterial(catalog, edgeBand.materialId, "edge");
+    for (const physical of customBoardEdges(board)) {
+      const groupId = edgeGroup(physical, readEdgeBindings(board.edgeBandingOverrides));
+      if (!groupId) continue;
+      const explicit = Object.hasOwn(board.edgeBandingOverrides ?? {}, physical.id);
+      const edgeBand = { edgeIndex: physical.profileEdgeIndexes[0] ?? 0 };
+      const edgeMaterial = !explicit && physical.legacyMaterialId ? resolveMaterial(catalog, physical.legacyMaterialId, "edge") : null;
       const edgePortable = toPortableMaterial(edgeMaterial);
-      const edgeLengthLm = round(polygonEdgeLengthMm(profile, edgeBand.edgeIndex) / 1000);
-      const edgeSlotId = `edge:${board.id}:${edgeBand.edgeIndex}`;
+      const edgeLengthLm = round(physical.lengthMm / 1000);
+      const edgeKey = physical.profileEdgeIndexes.length === 1 ? String(edgeBand.edgeIndex) : physical.id;
+      const edgeSlotId = `edge:${board.id}:${edgeKey}`;
       if (edgePortable) materials[edgeSlotId] = edgePortable;
       items.push({
-        id: `custom-edge-${furniture.id}-${board.id}-${edgeBand.edgeIndex}`,
+        id: `custom-edge-${furniture.id}-${board.id}-${edgeKey}`,
         itemType: "edge_band",
+        edgeGroupId: groupId,
         category: "custom_furniture_edge",
         name: `${board.name} edge ${edgeBand.edgeIndex + 1}`,
         description: `${board.name} edge band ${edgeBand.edgeIndex + 1}`,

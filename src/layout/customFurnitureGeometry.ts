@@ -1,4 +1,7 @@
 import * as THREE from "three";
+import polygonClipping from "polygon-clipping";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { customBoardProfilePolygons } from "./customBoardProfile";
 import type {
   CustomFurnitureBoardJustification,
   CustomFurnitureBoardParams,
@@ -88,9 +91,9 @@ export function polygonBoundsMm(points: CustomFurnitureProfilePoint[]) {
   return { minX, maxX, minY, maxY, widthMm: maxX - minX, heightMm: maxY - minY };
 }
 
-function triangulateProfile(profile: CustomFurnitureProfilePoint[]) {
+function triangulateProfile(profile: CustomFurnitureProfilePoint[], holes: CustomFurnitureProfilePoint[][] = []) {
   const vertices = profile.map((point) => new THREE.Vector2(point.x / 1000, point.y / 1000));
-  return THREE.ShapeUtils.triangulateShape(vertices, []);
+  return THREE.ShapeUtils.triangulateShape(vertices, holes.map(ring => ring.map(p => new THREE.Vector2(p.x / 1000, p.y / 1000))));
 }
 
 function justificationOffsets(thicknessM: number, justification: CustomFurnitureBoardJustification): [number, number] {
@@ -99,25 +102,31 @@ function justificationOffsets(thicknessM: number, justification: CustomFurniture
   return [-thicknessM / 2, thicknessM / 2];
 }
 
-function makePrismGeometry(pointsA: THREE.Vector3[], pointsB: THREE.Vector3[], profile: CustomFurnitureProfilePoint[]) {
+function makePrismGeometry(pointsA: THREE.Vector3[], pointsB: THREE.Vector3[], profile: CustomFurnitureProfilePoint[], holes: CustomFurnitureProfilePoint[][] = []) {
+  const count = pointsA.length;
   const vertices: number[] = [];
   const indices: number[] = [];
   for (const point of pointsA) vertices.push(point.x, point.y, point.z);
   for (const point of pointsB) vertices.push(point.x, point.y, point.z);
 
-  const triangles = triangulateProfile(profile);
+  const triangles = triangulateProfile(profile, holes);
   for (const tri of triangles) {
     indices.push(tri[2]!, tri[1]!, tri[0]!);
-    indices.push(profile.length + tri[0]!, profile.length + tri[1]!, profile.length + tri[2]!);
+    indices.push(count + tri[0]!, count + tri[1]!, count + tri[2]!);
   }
 
-  for (let index = 0; index < profile.length; index += 1) {
-    const next = (index + 1) % profile.length;
+  let ringOffset = 0;
+  for (const ring of [profile, ...holes]) {
+  for (let i = 0; i < ring.length; i += 1) {
+    const index = ringOffset + i;
+    const next = ringOffset + (i + 1) % ring.length;
     const a0 = index;
     const a1 = next;
-    const b0 = profile.length + index;
-    const b1 = profile.length + next;
+    const b0 = count + index;
+    const b1 = count + next;
     indices.push(a0, a1, b1, a0, b1, b0);
+  }
+  ringOffset += ring.length;
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -249,16 +258,60 @@ function makeVerticalPathOutlineGeometry(
 }
 
 export function makeCustomFurnitureBoardGeometry(board: CustomFurnitureBoardParams): THREE.BufferGeometry {
-  const profile = sanitizeCustomFurnitureProfile(board.profile);
+  if (board.cutouts?.length) {
+    const polygons = customBoardProfilePolygons(board);
+    const parts = board.workplane.type === "vertical" && board.workplane.pathMm?.length
+      ? makeCutVerticalPathParts(board, polygons)
+      : polygons.map(rings => makeBoardPrism(board, rings[0]!, rings.slice(1)));
+    if (!parts.length) return new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([], 3)).setIndex([]);
+    const geometry = mergeGeometries(parts)!;
+    parts.forEach(part => part.dispose());
+    return geometry;
+  }
+  return makeBoardPrism(board, sanitizeCustomFurnitureProfile(board.profile));
+}
+
+/** Split in unfolded coordinates before mapping to a path, so faces cannot bridge a bend or fill a hole. */
+function makeCutVerticalPathParts(board: CustomFurnitureBoardParams, polygons: CustomFurnitureProfilePoint[][][]): THREE.BufferGeometry[] {
+  if (board.workplane.type !== "vertical") return [];
+  const path = sanitizeCustomFurniturePlanPolygon(board.workplane.pathMm ?? []);
+  const thicknessM = Math.max(1, board.recipeSnapshot ? recipeThicknessMm(board.recipeSnapshot) : board.thicknessMm) / 1000;
+  const frames = verticalPathFrames(path, 0, 0, thicknessM, board.justification, board.workplane.mirrored);
+  const bounds = polygonBoundsMm(board.profile);
+  const parts: THREE.BufferGeometry[] = [];
+  let startMm = 0;
+  for (let index = 0; index < path.length - 1; index++) {
+    const a = path[index]!, b = path[index + 1]!;
+    const lengthMm = Math.hypot(b.x - a.x, b.z - a.z);
+    if (lengthMm < 1) continue;
+    const endMm = startMm + lengthMm;
+    const strip: [number, number][] = [[startMm, bounds.minY], [endMm, bounds.minY], [endMm, bounds.maxY], [startMm, bounds.maxY]];
+    for (const polygon of polygons) {
+      const clipped = polygonClipping.intersection(polygon.map(ring => ring.map(p => [p.x, p.y] as [number, number])), [strip]);
+      for (const result of clipped) {
+        const rings = result.map(ring => ring.slice(0, -1).map(([x, y]) => ({ x, y })));
+        const vertices = rings.flat();
+        const map = (point: CustomFurnitureProfilePoint, side: "leftBottom" | "rightBottom") =>
+          frames[index]![side].clone().lerp(frames[index + 1]![side], (point.x - startMm) / lengthMm).setY(point.y / 1000);
+        parts.push(makePrismGeometry(vertices.map(p => map(p, "leftBottom")), vertices.map(p => map(p, "rightBottom")), rings[0]!, rings.slice(1)));
+      }
+    }
+    startMm = endMm;
+  }
+  return parts;
+}
+function makeBoardPrism(board: CustomFurnitureBoardParams, outer: CustomFurnitureProfilePoint[], holes: CustomFurnitureProfilePoint[][] = []): THREE.BufferGeometry {
+  const profile = outer;
+  const vertices = [...outer, ...holes.flat()];
   if (profile.length < 3) return new THREE.BoxGeometry(0.001, 0.001, 0.001);
   const thicknessM = Math.max(1, board.recipeSnapshot ? recipeThicknessMm(board.recipeSnapshot) : board.thicknessMm) / 1000;
   const [offsetA, offsetB] = justificationOffsets(thicknessM, board.justification);
 
   if (board.workplane.type === "horizontal") {
     const y = board.workplane.elevationMm / 1000;
-    const pointsA = profile.map((point) => new THREE.Vector3(point.x / 1000, y + offsetA, point.y / 1000));
-    const pointsB = profile.map((point) => new THREE.Vector3(point.x / 1000, y + offsetB, point.y / 1000));
-    return makePrismGeometry(pointsA, pointsB, profile);
+    const pointsA = vertices.map((point) => new THREE.Vector3(point.x / 1000, y + offsetA, point.y / 1000));
+    const pointsB = vertices.map((point) => new THREE.Vector3(point.x / 1000, y + offsetB, point.y / 1000));
+    return makePrismGeometry(pointsA, pointsB, profile, holes);
   }
 
   if (board.workplane.pathMm && board.workplane.pathMm.length >= 2) {
@@ -273,18 +326,18 @@ export function makeCustomFurnitureBoardGeometry(board: CustomFurnitureBoardPara
   if (dir.lengthSq() < 1e-9) return new THREE.BoxGeometry(0.001, 0.001, 0.001);
   dir.normalize();
   const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(board.workplane.mirrored ? -1 : 1);
-  const pointsA = profile.map((point) =>
+  const pointsA = vertices.map((point) =>
     a.clone().addScaledVector(dir, point.x / 1000).addScaledVector(side, offsetA).setY(point.y / 1000)
   );
-  const pointsB = profile.map((point) =>
+  const pointsB = vertices.map((point) =>
     a.clone().addScaledVector(dir, point.x / 1000).addScaledVector(side, offsetB).setY(point.y / 1000)
   );
-  return makePrismGeometry(pointsA, pointsB, profile);
+  return makePrismGeometry(pointsA, pointsB, profile, holes);
 }
 
 export function makeCustomFurnitureBoardOutlineGeometry(board: CustomFurnitureBoardParams, fallbackGeometry: THREE.BufferGeometry): THREE.BufferGeometry {
   const profile = sanitizeCustomFurnitureProfile(board.profile);
-  if (board.workplane.type === "vertical" && board.workplane.pathMm && board.workplane.pathMm.length >= 2 && profile.length >= 3) {
+  if (!board.cutouts?.length && board.workplane.type === "vertical" && board.workplane.pathMm && board.workplane.pathMm.length >= 2 && profile.length >= 3) {
     const bounds = polygonBoundsMm(profile);
     return makeVerticalPathOutlineGeometry(
       board.workplane.pathMm,

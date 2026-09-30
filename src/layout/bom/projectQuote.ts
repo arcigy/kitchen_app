@@ -1,3 +1,5 @@
+import { convertPriceCurrency, type PriceCurrency } from "../../core/pricing/currency";
+import { projectContribution, type ProjectContribution } from "./projectContribution";
 import type { ProjectPricingView } from "./projectPricing";
 import {
   isProjectMarginSettingsState,
@@ -20,11 +22,14 @@ export type CatalogAggregateRow = {
 export type ProjectQuoteSettings = {
   additionalLaborCost: number;
   marginPercent: number;
+  additionalLaborFixed?: boolean;
 };
 
 export type ProjectQuoteSettingsInput = Partial<ProjectQuoteSettings> | ProjectMarginSettingsState | null | undefined;
 
 export type ProjectQuoteSummary = {
+  currency?: PriceCurrency;
+  contribution?: ProjectContribution;
   settings: ProjectQuoteSettings;
   boardsCost: number;
   edgesCost: number;
@@ -66,30 +71,36 @@ function asFiniteNumber(value: unknown, fallback: number) {
 export function sanitizeProjectQuoteSettings(settings?: Partial<ProjectQuoteSettings> | null): ProjectQuoteSettings {
   return {
     additionalLaborCost: round(Math.max(0, asFiniteNumber(settings?.additionalLaborCost, DEFAULT_PROJECT_QUOTE_SETTINGS.additionalLaborCost))),
-    marginPercent: round(Math.max(0, asFiniteNumber(settings?.marginPercent, DEFAULT_PROJECT_QUOTE_SETTINGS.marginPercent)), 2)
+    marginPercent: round(Math.max(0, asFiniteNumber(settings?.marginPercent, DEFAULT_PROJECT_QUOTE_SETTINGS.marginPercent)), 2),
+    ...(typeof settings?.additionalLaborFixed === "boolean" ? { additionalLaborFixed: settings.additionalLaborFixed } : {})
   };
 }
 
 export function buildProjectQuoteSummary(
   entries: ProjectPricingView[],
-  settings?: ProjectQuoteSettingsInput
+  settings?: ProjectQuoteSettingsInput,
+  options: { currency?: PriceCurrency; settingsCurrency?: PriceCurrency } = {}
 ): ProjectQuoteSummary {
   const normalized = isProjectMarginSettingsState(settings)
     ? {
         additionalLaborCost: settings.additionalLaborCost,
-        marginPercent: settings.defaultMarginPercent
+        marginPercent: settings.defaultMarginPercent,
+        ...(typeof settings.additionalLaborFixed === "boolean" ? { additionalLaborFixed: settings.additionalLaborFixed } : {})
       }
     : sanitizeProjectQuoteSettings(settings);
   const marginState = isProjectMarginSettingsState(settings)
     ? normalizeProjectMarginSettingsState(settings)
     : normalizeProjectMarginSettingsState(normalized);
-  const marginView = buildProjectMarginsView(entries, marginState);
-  const boardsCost = round(entries.reduce((sum, entry) => sum + entry.result.pricing.groups.boards.cost, 0));
-  const edgesCost = round(entries.reduce((sum, entry) => sum + entry.result.pricing.groups.edge_bands.cost, 0));
-  const hardwareCost = round(entries.reduce((sum, entry) => sum + entry.result.pricing.groups.hardware.cost, 0));
+  const currency = options.currency ?? "EUR";
+  const additionalLaborCost = round(convertPriceCurrency(normalized.additionalLaborCost, options.settingsCurrency ?? currency, currency));
+  marginState.additionalLaborCost = additionalLaborCost;
+  const marginView = buildProjectMarginsView(entries, marginState, { currency });
+  const money = (entry: ProjectPricingView, value: number) => convertPriceCurrency(value, entry.result.pricing.priceInputs.currency, currency);
+  const boardsCost = round(entries.reduce((sum, entry) => sum + money(entry, entry.result.pricing.groups.boards.cost), 0));
+  const edgesCost = round(entries.reduce((sum, entry) => sum + money(entry, entry.result.pricing.groups.edge_bands.cost), 0));
+  const hardwareCost = round(entries.reduce((sum, entry) => sum + money(entry, entry.result.pricing.groups.hardware.cost), 0));
   const materialCost = round(boardsCost + edgesCost + hardwareCost);
-  const moduleLaborCost = round(entries.reduce((sum, entry) => sum + entry.result.pricing.laborCostFixed, 0));
-  const additionalLaborCost = round(normalized.additionalLaborCost);
+  const moduleLaborCost = round(entries.reduce((sum, entry) => sum + money(entry, entry.result.pricing.laborCostFixed), 0));
   const laborCostTotal = round(moduleLaborCost + additionalLaborCost);
   const subtotalBeforeMargin = round(materialCost + laborCostTotal);
   const marginPercent = marginView.summary.combinedMarginPercent;
@@ -98,6 +109,7 @@ export function buildProjectQuoteSummary(
 
   return {
     settings: normalized,
+    currency,
     boardsCost,
     edgesCost,
     hardwareCost,
@@ -110,6 +122,7 @@ export function buildProjectQuoteSummary(
     marginAmount,
     finalPrice,
     marginView,
+    contribution: marginView.summary.contribution,
     formulas: {
       boardPricing: "pricedAreaM2 = netAreaM2 * wasteMultiplier",
       materialCost: "boards + edge bands + hardware",
@@ -131,7 +144,7 @@ export function aggregateProjectBoards(entries: ProjectPricingView[]): CatalogAg
         {
           catalogId: item.material.catalogId,
           displayName: item.material.displayName,
-          unitPrice: item.unitPrice,
+          unitPrice: convertPriceCurrency(item.unitPrice, entry.result.pricing.priceInputs.currency, "EUR"),
           quantity: 0,
           pricedQuantity: 0,
           cost: 0,
@@ -140,7 +153,7 @@ export function aggregateProjectBoards(entries: ProjectPricingView[]): CatalogAg
         };
       existing.quantity += item.pricingQuantityBase ?? item.metrics?.areaM2 ?? item.pricingQuantity;
       existing.pricedQuantity = (existing.pricedQuantity ?? 0) + item.pricingQuantity;
-      existing.cost += item.itemCost;
+      existing.cost += convertPriceCurrency(item.itemCost, entry.result.pricing.priceInputs.currency, "EUR");
       buckets.set(existing.catalogId, existing);
     }
   }
@@ -157,14 +170,14 @@ export function aggregateProjectEdges(entries: ProjectPricingView[]): CatalogAgg
         {
           catalogId: item.material.catalogId,
           displayName: item.material.displayName,
-          unitPrice: item.unitPrice,
+          unitPrice: convertPriceCurrency(item.unitPrice, entry.result.pricing.priceInputs.currency, "EUR"),
           quantity: 0,
           cost: 0,
           unit: "lm",
           group: item.material.family ?? item.materialGroup
         };
       existing.quantity += item.pricingQuantity;
-      existing.cost += item.itemCost;
+      existing.cost += convertPriceCurrency(item.itemCost, entry.result.pricing.priceInputs.currency, "EUR");
       buckets.set(existing.catalogId, existing);
     }
   }
@@ -173,25 +186,22 @@ export function aggregateProjectEdges(entries: ProjectPricingView[]): CatalogAgg
 
 export function aggregateProjectComponents(entries: ProjectPricingView[]): CatalogAggregateRow[] {
   const buckets = new Map<string, CatalogAggregateRow>();
-  for (const entry of entries) {
-    for (const item of entry.result.pricing.items) {
-      const component = item.component;
-      if (item.pricingGroup !== "hardware" || !component?.catalogId || item.unitPrice == null || item.itemCost == null) continue;
-      const existing =
-        buckets.get(component.catalogId) ??
-        {
-          catalogId: component.catalogId,
-          displayName: component.displayName,
-          unitPrice: item.unitPrice,
-          quantity: 0,
-          cost: 0,
-          unit: "ks",
-          group: component.componentType
-        };
-      existing.quantity += item.pricingQuantity;
-      existing.cost += item.itemCost;
-      buckets.set(component.catalogId, existing);
-    }
+  for (const entry of entries) for (const item of entry.result.pricing.items) {
+    if (item.pricingGroup !== "hardware" || item.unitPrice == null || item.itemCost == null) continue;
+    const component = item.component;
+    const catalogId = component?.catalogId ?? item.id;
+    const key = JSON.stringify([catalogId, item.variantKey, item.pricingUnit, item.unitPrice]);
+    const existing = buckets.get(key) ?? { catalogId, displayName: component?.displayName ?? item.name,
+      unitPrice: convertPriceCurrency(item.unitPrice, entry.result.pricing.priceInputs.currency, "EUR"), quantity: 0, cost: 0, unit: item.pricingUnit === "pcs" ? "ks" : item.pricingUnit,
+      group: component?.componentType ?? "other_component" };
+    existing.quantity += item.pricingQuantity;
+    existing.cost += convertPriceCurrency(item.itemCost, entry.result.pricing.priceInputs.currency, "EUR");
+    buckets.set(key, existing);
   }
   return [...buckets.values()].sort((left, right) => left.displayName.localeCompare(right.displayName));
+}
+
+/** Financial contribution, distinct from the legacy markup export fields. */
+export function quoteContribution(summary: ProjectQuoteSummary): ProjectContribution {
+  return summary.contribution ?? projectContribution(summary.materialCost, summary.finalPrice, summary.laborCostTotal);
 }

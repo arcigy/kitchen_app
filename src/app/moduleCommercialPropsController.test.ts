@@ -6,6 +6,7 @@ import { createDefaultProjectMarginSettingsState, projectMarginTargetId } from "
 import type { ProjectMaterialAssignment, ProjectMaterialScope, ProjectMaterialsView } from "../core/project-materials/project-material-types";
 import type { ProjectMarginsView } from "../layout/bom/projectMargins";
 import { createModuleCommercialPropsController } from "./moduleCommercialPropsController";
+import { confirmProjectEdgeGroups } from "./project/projectEdgeGroupBaseline";
 
 const scope: ProjectMaterialScope = {
   id: "module:module-1",
@@ -103,6 +104,39 @@ afterEach(() => {
 });
 
 describe("module commercial properties controller", () => {
+  it("retains a group created while an older materials response is in flight", async () => {
+    const projectId = "pending-edge-group-project";
+    const remote = materialsView([assignment("oak", "Dub")]);
+    let local = structuredClone(remote.assignments);
+    confirmProjectEdgeGroups(projectId, remote.assignments);
+    let resolveMaterials!: (value: ProjectMaterialsView) => void;
+    const pending = new Promise<ProjectMaterialsView>(resolve => { resolveMaterials = resolve; });
+    const onMaterialsChanged = vi.fn();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const controller = createModuleCommercialPropsController({
+      getProjectId: () => projectId,
+      getMaterialAssignments: () => local,
+      getModuleScope: () => scope,
+      onMaterialsChanged,
+      api: { loadMaterials: () => pending, loadMargins: async () => marginsView() }
+    });
+    controller.mount(host, "module-1");
+    const group: ProjectMaterialAssignment = {
+      ...assignment("edge", "Akcent", "material-assignment:edge-accent"),
+      category: "edge_other", materialId: undefined, thicknessMm: undefined,
+      snapshots: {}, customValues: { edgeGroupName: "Akcent" }
+    };
+    local = { ...local, assignments: [...local.assignments, group] };
+    resolveMaterials(remote);
+    await controller.flushPending();
+    expect(onMaterialsChanged).toHaveBeenCalledWith(expect.objectContaining({
+      assignments: expect.objectContaining({ assignments: [remote.assignments.assignments[0], group] })
+    }));
+    expect(remote.assignments.assignments).toHaveLength(1);
+    controller.destroy();
+  });
+
   it("does not request commercial data before the first project snapshot and loads it after saving", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);

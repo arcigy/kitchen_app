@@ -1,5 +1,5 @@
 import type { ProjectMaterialAssignment } from "../core/project-materials/project-material-types";
-import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
+import type { ClientCatalog, MaterialDefinition, ComponentType } from "../core/catalog/catalog-types";
 import { isMaterialAllowedForCategory } from "../core/project-materials/project-material-business";
 import type { SupplierSyncItem } from "../core/supplier-bridge/supplier-bridge-types";
 import { validateProjectMaterialAssignmentsState } from "../core/project-materials/project-material-validation";
@@ -10,8 +10,9 @@ import type { SupplierPriceBasis } from "../core/supplier-bridge/supplier-bridge
 import { createServerProjectRepository } from "./projectRepository";
 import { createServerCatalogRepository } from "./serverRepositories";
 
-function supplierComponentType(category: ProjectMaterialAssignment["category"]): "runner" | "handle" | "hinge" | "lift_up" | "leg" | "fastener" | "lighting" {
+function supplierComponentType(category: ProjectMaterialAssignment["category"]): ComponentType {
   if (category === "runner" || category === "handle" || category === "hinge" || category === "lift_up" || category === "leg" || category === "lighting") return category;
+  if (["hinge_plate", "leg_plate", "plinth_clip", "hanging_bracket", "shelf_support", "assembly_pack"].includes(category)) return category as ComponentType;
   return "fastener";
 }
 
@@ -106,8 +107,8 @@ function supplierMaterialResolution(
     decor: input.mapping?.decorCode ?? input.candidate.normalizedProduct.decorCode ?? base?.decor ?? "",
     color: capturedColor ?? catalogColor ?? base?.color ?? "",
     finish: input.mapping?.surfaceCode ?? input.candidate.normalizedProduct.surfaceCode ?? base?.finish ?? "",
-    pricingBasis: edge || current.category === "plinth" ? "linear_length" : "sheet_area",
-    pricingUnit: edge || current.category === "plinth" ? "lm" : "m2",
+    pricingBasis: edge ? "linear_length" : "sheet_area",
+    pricingUnit: edge ? "lm" : "m2",
     availableThicknessesMm: [defaultThicknessMm],
     defaultThicknessMm,
     isActive: true,
@@ -117,6 +118,7 @@ function supplierMaterialResolution(
     supplierSource: { supplier: supplierId, supplierProductId: supplierProductCode },
     metadata: {
       ...record(base?.metadata),
+      ...(current.category === "worktop" ? { worktopPurchaseIncrement: 0.5 } : {}),
       supplierProductCode,
       supplierSurfaceCode: input.mapping?.surfaceCode ?? input.candidate.normalizedProduct.surfaceCode,
       supplierProductType: input.mapping?.productType ?? input.candidate.normalizedProduct.productType,

@@ -24,6 +24,16 @@ describe("effective project material assignment", () => {
     });
   });
 
+  it("preserves legacy per-part edge choices until the user explicitly assigns a shared group", () => {
+    const state=createDefaultProjectMaterialAssignments(catalog(),NOW);
+    const group=state.assignments.find(a=>a.category==="edge_other")!;
+    const item={id:"side-panels-edge",category:"edge_other" as const,edgeGroupId:group.assignmentId};
+    const override={...structuredClone(group),assignmentId:projectMaterialScopeAssignmentId("module:base-1",item),materialId:"legacy-specific-edge"};
+    state.assignments.push(override);
+    expect(resolveEffectiveProjectMaterialAssignment(state.assignments,"module:base-1",item).assignment).toBe(override);
+    expect(resolveEffectiveProjectMaterialAssignment(state.assignments,"module:base-1",{...item,edgeGroupExplicit:true}).assignment).toBe(group);
+  });
+
   it("keeps an individual module override while other parts continue following later global changes", () => {
     const state = createDefaultProjectMaterialAssignments(catalog(), NOW);
     const originalGeneral = state.assignments.find((assignment) => assignment.category === "corpus")!;

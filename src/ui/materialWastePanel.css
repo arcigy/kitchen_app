@@ -1,0 +1,19 @@
+.material-waste { margin: 14px 0; padding: 18px 20px; border: 1px solid #dbe3ee; border-radius: 14px; background: #fff; color: #243247; }
+.material-waste h2 { margin: 0 0 5px; font-size: 16px; }
+.material-waste p { margin: 6px 0; font-size: 12px; line-height: 1.5; }
+.material-waste__intro p, .material-waste__hint { color: #52637a; }
+.material-waste__fields { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 14px 0; }
+.material-waste__fields > label { display: grid; gap: 6px; flex: 1 1 170px; max-width: 280px; font-size: 13px; font-weight: 600; }
+.material-waste__input { display: flex; align-items: center; gap: 8px; }
+.material-waste__input input { width: 100%; min-width: 0; box-sizing: border-box; padding: 9px 10px; border: 1px solid #bdc9da; border-radius: 8px; font: inherit; }
+.material-waste__fields button { min-height: 38px; padding: 9px 16px; border: 0; border-radius: 8px; background: #2558c9; color: white; font: inherit; font-size: 13px; cursor: pointer; }
+.material-waste__enabled { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.material-waste .material-waste__enabled input[type="checkbox"] { flex: 0 0 16px; width: 16px; height: 16px; margin: 0; }
+.material-waste input:focus-visible, .material-waste button:focus-visible, .material-waste summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.material-waste input[aria-invalid="true"] { border-color: #b91c1c; }
+.material-waste [role="alert"] { color: #b91c1c; }
+.material-waste [role="status"]:empty { display: none; }
+.material-waste button:disabled { opacity: .55; cursor: default; }
+.material-waste details { margin-top: 9px; font-size: 12px; }
+.material-waste summary { cursor: pointer; color: #2558c9; }
+@media (max-width: 620px) { .material-waste { padding: 14px; } .material-waste__fields > label { max-width: none; } }

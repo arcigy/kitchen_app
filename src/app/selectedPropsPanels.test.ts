@@ -213,6 +213,10 @@ describe("selected props panels", () => {
     const walls = [makeWall("wall-1", 100, 2500), makeWall("wall-2", 200, 2800)];
     const ctx = {
       props,
+      applyWallEdits: (edits: Array<{id:string;params:WallInstance["params"]}>) => {
+        for (const edit of edits) { const target = walls.find(w => w.id === edit.id)!; target.params = edit.params; ctx.rebuildWall(target); }
+        ctx.rebuildWallPlanMesh(); return true;
+      },
       selectedWallIds: new Set(["wall-1", "wall-2"]),
       walls,
       wallJoinTolMm: 1,
@@ -269,6 +273,9 @@ describe("selected props panels", () => {
     const wall = makeWall("wall-1", 100, 2500);
     const ctx = {
       props,
+      applyWallEdits: (edits: Array<{id:string;params:WallInstance["params"]}>) => {
+        wall.params = edits[0]!.params; ctx.rebuildWall(wall); ctx.rebuildWallPlanMesh(); return true;
+      },
       selectedWallIds: new Set(["wall-1"]),
       walls: [wall],
       wallJoinTolMm: 1,
