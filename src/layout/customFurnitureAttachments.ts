@@ -154,6 +154,7 @@ export function duplicateAttachedCustomFurnitureParams(
     next.boards = next.boards.map((board, index) => ({
       ...board,
       id: `${board.id}-copy-${index + 1}`,
+      ...(board.edgeBandingOverrides ? { edgeBandingOverrides: Object.fromEntries(Object.entries(board.edgeBandingOverrides).map(([id, group]) => [id.startsWith(`${board.id}:`) ? `${board.id}-copy-${index + 1}${id.slice(board.id.length)}` : id, group])) } : {}),
       cabinetAttachment: board.cabinetAttachment ? { ...board.cabinetAttachment, cabinetId: targetCabinetId } : undefined
     }));
     next.name = `${next.name} copy`;

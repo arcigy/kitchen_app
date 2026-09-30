@@ -27,6 +27,10 @@ function resolveComponentGeometryId(
     return args.id.includes(".heavy") ? "geo.plinth_clip.heavy" : "geo.plinth_clip.standard";
   }
 
+  if (componentType === "hinge_plate") return "geo.hinge_plate.generic";
+  if (componentType === "leg_plate") return "geo.leg_plate.generic";
+  if (componentType === "assembly_pack") return "geo.assembly_pack.generic";
+
   if (componentType === "fastener") {
     if (args.id.includes("confirmat")) return "geo.fastener.confirmat";
     if (args.id.includes("euro_screw")) return "geo.fastener.euro_screw";
@@ -79,6 +83,8 @@ function createComponentPreview(componentType: ComponentType, color: string): Ma
     "handle",
     "leg",
     "plinth_clip",
+    "hinge_plate",
+    "leg_plate",
     "fastener",
     "hinge",
     "hanging_bracket",
@@ -762,6 +768,42 @@ export const componentDefinitions: ComponentDefinition[] = [
     nominalLengthMm: 500,
     recommendedUse: "Optional lighting accessory for premium drawer interiors and display modules.",
     tags: ["lighting", "led", "drawer", "500", "optional"]
+  }),
+  defineComponent("hinge_plate", {
+    id: "cmp.hinge_plate.generic",
+    name: "Hinge Mounting Plate",
+    displayName: "Hinge Mounting Plate (unspecified)",
+    brand: "Unspecified",
+    series: "Unspecified",
+    variant: "Unspecified",
+    color: "Galvanized",
+    defaultQuantity: 1,
+    recommendedUse: "Generic catalog identity; company-specific supplier and price are required.",
+    tags: ["hinge-plate", "mounting-plate", "company-price-required"]
+  }),
+  defineComponent("leg_plate", {
+    id: "cmp.leg_plate.generic",
+    name: "Leg Mounting Plate",
+    displayName: "Leg Mounting Plate (unspecified)",
+    brand: "Unspecified",
+    series: "Unspecified",
+    variant: "Unspecified",
+    color: "Galvanized",
+    defaultQuantity: 1,
+    recommendedUse: "Generic catalog identity; company-specific supplier and price are required.",
+    tags: ["leg-plate", "mounting-plate", "company-price-required"]
+  }),
+  defineComponent("assembly_pack", {
+    id: "cmp.assembly_pack.generic",
+    name: "Assembly Pack",
+    displayName: "Assembly Pack (unspecified)",
+    brand: "Unspecified",
+    series: "Unspecified",
+    variant: "Unspecified",
+    color: "Unspecified",
+    defaultQuantity: 1,
+    recommendedUse: "Generic catalog identity; pack contents and company-specific price are required.",
+    tags: ["assembly-pack", "company-price-required"]
   })
 ];
 

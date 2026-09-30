@@ -1,3 +1,4 @@
+import { parseEdgeGroupChanges } from "../../core/edge-banding/edgeGroupTransaction";
 import { validateProjectAppState } from "../../core/project-save/project-app-state-validation";
 import type { ProjectMetadata } from "../../core/project/project-types";
 import {
@@ -115,6 +116,7 @@ function trimEnvelopeForStorage(source: ProjectRecoveryEnvelopeV1): ProjectRecov
 function validateEnvelope(envelope: ProjectRecoveryEnvelopeV1): void {
   if (!isProjectRecoveryEnvelopeV1(envelope)) throw new Error("Project recovery draft has an unsupported schema.");
   validateProjectAppState(envelope.appState);
+  if (envelope.edgeGroupChanges !== undefined) parseEdgeGroupChanges(envelope.edgeGroupChanges);
   if (envelope.workspace.kind === "project" && !envelope.workspace.project) {
     throw new Error("Project recovery draft is missing project metadata.");
   }

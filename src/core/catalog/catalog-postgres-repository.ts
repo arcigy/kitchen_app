@@ -8,6 +8,7 @@ import {
 } from "./catalog-repository";
 import type { ClientCatalog } from "./catalog-types";
 import { validateClientCatalog } from "./catalog-validation";
+import { ensureRequiredFwmHardware } from "./required-fwm-hardware";
 import { invalidateCatalogExactLookupCaches } from "./catalog-exact-lookup";
 
 type CatalogRow = {
@@ -86,7 +87,11 @@ export function createPostgresClientCatalogRepository(args: {
 
   const ensureCatalogExists = async (ctx: ClientContext): Promise<ClientCatalog> => {
     const existing = await readCatalog(ctx);
-    if (existing) return existing;
+    if (existing) {
+      const repaired = ensureRequiredFwmHardware(existing);
+      if (repaired !== existing) await writeCatalog(ctx, repaired);
+      return repaired;
+    }
     const catalog = seed.getCatalogForClient(ctx.clientId);
     await writeCatalog(ctx, catalog);
     return catalog;

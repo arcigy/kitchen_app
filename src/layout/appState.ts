@@ -54,6 +54,41 @@ export type WindowInstance = {
   outline: THREE.Line;
 };
 
+export type DoorParams = {
+  wall: WallId;
+  wallId?: string | null;
+  widthMm: number;
+  heightMm: number;
+  centerMm: number;
+  frameWidthMm: number;
+  offsetFromInteriorMm: number;
+  panelThicknessMm: number;
+  swingDirection: DoorSwingDirection;
+  swingSide: DoorSwingSide;
+  swingAngleDeg: number;
+  handleType: OpeningHandleType;
+  handleOffsetMm: number;
+  handleHeightMm: number;
+  materialId: string;
+};
+
+export type DoorInstance = {
+  id: string;
+  params: DoorParams;
+  root: THREE.Group;
+  frame: THREE.Group;
+  plan: THREE.Group;
+  selection: THREE.Group;
+  pick: THREE.Mesh;
+  outline: THREE.Line;
+};
+
+export type WallOpeningSnapshot = {
+  windows: Array<{ id: string; params: WindowParams }>;
+  doors: Array<{ id: string; params: DoorParams }>;
+  counters: { windowCounter: number; doorCounter: number };
+};
+
 export type ColumnShape = "square" | "rectangular" | "round";
 export type ColumnJustifyX = "left" | "center" | "right";
 export type ColumnJustifyY = "up" | "center" | "down";
@@ -82,6 +117,8 @@ export type ColumnInstance = {
 };
 
 export type LayoutSnapshot = {
+  /** History-only; project files keep openings in layout.windows / layout.doors. */
+  openings?: WallOpeningSnapshot;
   /** Optional for projects/history created before kitchen context snapshots. */
   kitchen?: { context: KitchenContext; groups: KitchenGroup[] };
   /** Optional so snapshots created before project material assignments remain readable. */
@@ -309,6 +346,7 @@ export interface AppState {
   customFurnitureCounter: number;
   ledStripGroups: LedStripGroup[];
   ledStripCounter: number;
+  openingHistory?: { capture: () => WallOpeningSnapshot; restore: (state: WallOpeningSnapshot) => void };
   wardrobeHistory: { getSaveState: () => WardrobeEditSaveState | null } | null;
   projectMaterialAssignments: ProjectMaterialAssignmentsState;
 

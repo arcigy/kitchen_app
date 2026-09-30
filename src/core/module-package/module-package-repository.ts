@@ -1,10 +1,11 @@
+import { withModulePackageWriteLock, ModulePackageRevisionConflictError } from "./module-package-write-lock";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ClientContext } from "../client/client-context";
 import { resolveClientModulePackagePath, resolveClientModulePackagesPath } from "../storage/storage-path-resolver";
 import { sanitizeStorageFileName, sanitizeStorageId } from "../storage/storage-types";
-import { packModulePackage } from "./module-file-codec";
+import { packModulePackage, unpackModulePackage } from "./module-file-codec";
 import type { FurnQuoteModulePackagePayload, ModulePackageStoredMeta } from "./module-file-types";
 import type { FurnQuoteModulePackage } from "./module-package-types";
 import { computeModulePackageHash } from "./module-package-file";
@@ -24,6 +25,7 @@ export type ModulePackageRepositoryRevision = {
 };
 
 export type SaveModulePackageOptions = {
+  expectedPackageHash?: string;
   source?: ModulePackageStoredMeta["source"];
   originalModuleFile?: string;
   payload?: FurnQuoteModulePackagePayload;
@@ -52,6 +54,12 @@ export function createFileModulePackageRepository(projectRoot: string): ModulePa
       const validated = validateFurnQuoteModulePackage(modulePackage);
       const modulePackageId = validated.module.modulePackageId;
       const targetDir = packageDir(projectRoot, ctx, modulePackageId);
+      await mkdir(path.dirname(targetDir), { recursive: true });
+      return withModulePackageWriteLock(targetDir, async () => {
+      if (options.expectedPackageHash !== undefined) {
+        const current = await readJson<FurnQuoteModulePackage>(path.join(targetDir, PACKAGE_FILE_NAME));
+        if (!current || computeModulePackageHash(current) !== options.expectedPackageHash) throw new ModulePackageRevisionConflictError();
+      }
       const hash = computeModulePackageHash(validated);
       const persisted: FurnQuoteModulePackage = {
         ...validated,
@@ -61,7 +69,10 @@ export function createFileModulePackageRepository(projectRoot: string): ModulePa
         }
       };
       await mkdir(path.join(targetDir, "assets"), { recursive: true });
-      const payload: FurnQuoteModulePackagePayload = options.payload ?? {
+      const retainedPayload = options.expectedPackageHash && !options.payload && persisted.assets.files.length > 0
+        ? unpackModulePackage(await readFile(path.join(targetDir, MODULE_FILE_NAME), "utf-8"))
+        : undefined;
+      const payload: FurnQuoteModulePackagePayload = options.payload ?? retainedPayload ?? {
         payloadType: "furnquote-module-package",
         payloadVersion: 1,
         exportedAt: new Date().toISOString(),
@@ -93,6 +104,7 @@ export function createFileModulePackageRepository(projectRoot: string): ModulePa
         "utf-8"
       );
       return persisted;
+      });
     },
     async getPackage(ctx, modulePackageId) {
       return readJson<FurnQuoteModulePackage>(path.join(packageDir(projectRoot, ctx, modulePackageId), PACKAGE_FILE_NAME));
@@ -101,7 +113,7 @@ export function createFileModulePackageRepository(projectRoot: string): ModulePa
       const root = resolveClientModulePackagesPath(projectRoot, ctx);
       let entries: string[];
       try {
-        entries = await readdir(root);
+        entries = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name);
       } catch (error: unknown) {
         if ((error as { code?: string }).code === "ENOENT") return [];
         throw error;
@@ -117,7 +129,7 @@ export function createFileModulePackageRepository(projectRoot: string): ModulePa
       const root = resolveClientModulePackagesPath(projectRoot, ctx);
       let entries: string[];
       try {
-        entries = await readdir(root);
+        entries = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name);
       } catch (error: unknown) {
         if ((error as { code?: string }).code === "ENOENT") {
           return { count: 0, updatedAt: null, storageRevision: createHash("sha256").update("").digest("hex") };

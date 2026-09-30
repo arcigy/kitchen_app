@@ -1,3 +1,4 @@
+import { quoteContribution } from "../layout/bom/projectQuote";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState";
 import type { CustomFurnitureInstance } from "../layout/customFurnitureTypes";
@@ -243,8 +244,8 @@ export function mountBomDevPanel(
     const boards = aggregateProjectBoards(entries);
     const edges = aggregateProjectEdges(entries);
     const components = aggregateProjectComponents(entries);
-    const summary = buildProjectQuoteSummary(entries, settings);
-    const payload = buildProjectPricingPayload(entries, settings);
+    const summary = buildProjectQuoteSummary(entries, settings, { settingsCurrency: projectMarginsManaged ? options.displayCurrency ?? "EUR" : "EUR" });
+    const payload = buildProjectPricingPayload(entries, settings, { settingsCurrency: projectMarginsManaged ? options.displayCurrency ?? "EUR" : "EUR" });
 
     const toolbar = document.createElement("div");
     toolbar.className = "bom-dev__hero";
@@ -333,7 +334,7 @@ export function mountBomDevPanel(
       settingsGrid.className = "bom-dev__settings-grid";
       settingsGrid.appendChild(
         buildNumberInput("Dodatocna praca projektu", legacySettings.additionalLaborCost, (value) => {
-          settings = sanitizeProjectQuoteSettings({ ...legacySettings, additionalLaborCost: value });
+          settings = sanitizeProjectQuoteSettings({ ...legacySettings, additionalLaborCost: value, additionalLaborFixed: true });
           render();
         }, displayCurrency)
       );
@@ -357,7 +358,7 @@ export function mountBomDevPanel(
       ["Material", formatCurrency(summary.materialCost, displayCurrency), "default" as const],
       ["Praca moduly", formatCurrency(summary.moduleLaborCost, displayCurrency), "default" as const],
       ["Praca projekt", formatCurrency(summary.additionalLaborCost, displayCurrency), "default" as const],
-      ["Marza", `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount, displayCurrency)}`, "default" as const],
+      ["Marza", `${(quoteContribution(summary).contributionPercent == null ? "—" : formatNumber(quoteContribution(summary).contributionPercent!, 2))} % / ${formatCurrency(quoteContribution(summary).contributionAmount, displayCurrency)}`, "default" as const],
       ["Vysledok Create Sheet", formatCurrency(summary.finalPrice, displayCurrency), "accent" as const]
     ];
     for (const [label, value, tone] of cards) {
@@ -385,7 +386,7 @@ export function mountBomDevPanel(
         ["Margin formula", summary.formulas.marginAmount],
         ["Final formula", summary.formulas.finalPrice],
         ["Additional project labor", formatCurrency(summary.additionalLaborCost, displayCurrency)],
-        ["Margin percent", `${formatNumber(summary.marginPercent, 2)} %`]
+        ["Margin percent", `${(quoteContribution(summary).contributionPercent == null ? "—" : formatNumber(quoteContribution(summary).contributionPercent!, 2))} %`]
       ])
     );
     container.appendChild(inputs);

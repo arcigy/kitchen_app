@@ -6,6 +6,7 @@ import { requireClientContextFromCookie } from "../core/client/session-cookie";
 import type { UserService } from "../core/auth/user-service";
 import type { AuthSessionStore } from "../core/auth/auth-session-store";
 import type { UserActivityRepository } from "../core/user-activity/user-activity-types";
+import type { ReleaseNewsRepository } from "../core/release-news/releaseNewsRepository";
 import { createStorageService, readScopedStorageFile } from "../core/storage/storageService";
 import { createServerProjectRepository } from "./projectRepository";
 import {
@@ -13,6 +14,7 @@ import {
   createServerCatalogRepository,
   createServerModulePackageRepository,
   createServerUserActivityRepository,
+  createServerReleaseNewsRepository,
   createServerUserService
 } from "./serverRepositories";
 import { runBlenderExport } from "./blender/runBlenderExport";
@@ -39,6 +41,7 @@ type WorkerServerDependencies = {
   projectRoot?: string;
   requestBudget?: HttpRequestBudget;
   userActivityRepository?: UserActivityRepository;
+  releaseNewsRepository?: ReleaseNewsRepository;
 };
 
 const readJsonBody = readJsonRequestBody;
@@ -534,6 +537,7 @@ export function startWorkerServer(
   const clientJourneyMetrics = createClientJourneyMetrics();
   const requestBudget = dependencies.requestBudget ?? createHttpRequestBudget();
   const userActivityRepository = dependencies.userActivityRepository ?? createServerUserActivityRepository();
+  const releaseNewsRepository = dependencies.releaseNewsRepository ?? createServerReleaseNewsRepository();
   const stopUserActivityReconciliation = startUserActivityReconciliation(userActivityRepository);
   const getClientContext = (cookieHeader: string | string[] | undefined) =>
     getValidatedClientContext(cookieHeader, userService, authSessionStore);
@@ -559,6 +563,7 @@ export function startWorkerServer(
       clientModulePackagesResponseCache,
       catalogLookupCache,
       userActivityRepository,
+      releaseNewsRepository,
       createCatalogRepository: () => createServerCatalogRepository(projectRoot),
       createModulePackageRepository: () => createServerModulePackageRepository(projectRoot),
       handleCatalog: (request, response) => handleCatalog(request, response, userService, authSessionStore, projectRoot),

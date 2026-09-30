@@ -115,6 +115,10 @@ try {
   await customCard().locator('[data-preview-state="ready"]').waitFor({ timeout: 30000 });
   const targetPreview = await customCard().locator('img').getAttribute('src');
   await customCard().click();
+  await page.waitForFunction(({ group, id }) => {
+    const params = window.__kitchenDebug.snapshot(group).instances.find(item => item.id === id)?.params;
+    return params?.drawerCount === 2 && params?.hasDoors === false;
+  }, { group, id }, { timeout: 5000 });
   const targetAfter = await module();
   assert(targetAfter.params.drawerCount === 2 && targetAfter.params.width === targetBefore.params.width, 'Preset applies to another cabinet while retaining its width');
   assert(targetAfter.params.hasDoors === false, 'Preset applies disabled doors to another cabinet');

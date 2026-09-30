@@ -41,6 +41,7 @@ export const PROJECT_SAVE_SERIALIZERS: ProjectStateSerializer[] = [
   serializer("moduleDimensions", true, "covered"),
   serializer("materialSelections", true, "covered"),
   serializer("projectMaterialAssignments", true, "covered"),
+  serializer("edgeBandingGroupsAndBindings", true, "covered"),
   serializer("componentSelections", true, "covered"),
   serializer("pricingSettings", true, "covered"),
   serializer("quoteSettings", true, "covered"),

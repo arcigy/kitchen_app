@@ -1,3 +1,4 @@
+import type { LaborRate, ModuleLaborState } from "../core/project-manufacturing/module-labor";
 import type { Group } from "three";
 import type { ModuleParams, ModuleType } from "../model/cabinetTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
@@ -27,11 +28,18 @@ export type ModuleControlsArgs = {
   presetHost?: HTMLElement;
   presetDialogHost?: HTMLElement;
   userParametersOnly?: boolean;
+  initialLaborState?: () => ModuleLaborState;
+  presetLaborApi?: {
+    load: (modulePackageId: string) => Promise<FurnQuoteModulePackage>;
+    save: (modulePackage: FurnQuoteModulePackage, presetId: string, laborRate: LaborRate | null) => Promise<FurnQuoteModulePackage>;
+  };
+  adoptPresetLaborForProject?: (modulePackage: FurnQuoteModulePackage, presetId: string) => number;
   createParameterPreset?: (args: {
     modulePackage: FurnQuoteModulePackage;
     parameters: Record<string, unknown>;
     name: string;
     note: string;
+    laborRate?: LaborRate | null;
   }) => Promise<{ modulePackage: FurnQuoteModulePackage; presetId: string } | null>;
 };
 

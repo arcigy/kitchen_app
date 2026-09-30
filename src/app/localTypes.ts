@@ -11,6 +11,8 @@ export type {
   ColumnJustifyY,
   ColumnParams,
   ColumnShape,
+  DoorInstance,
+  DoorParams,
   DoorSwingDirection,
   DoorSwingSide,
   FloorBoundaryPoint,
@@ -33,35 +35,6 @@ export type {
   WindowInstance,
   WindowParams
 } from "../layout/appState";
-
-export type DoorParams = {
-  wall: WallId;
-  wallId?: string | null;
-  widthMm: number;
-  heightMm: number;
-  centerMm: number;
-  frameWidthMm: number;
-  offsetFromInteriorMm: number;
-  panelThicknessMm: number;
-  swingDirection: DoorSwingDirection;
-  swingSide: DoorSwingSide;
-  swingAngleDeg: number;
-  handleType: OpeningHandleType;
-  handleOffsetMm: number;
-  handleHeightMm: number;
-  materialId: string;
-};
-
-export type DoorInstance = {
-  id: string;
-  params: DoorParams;
-  root: THREE.Group;
-  frame: THREE.Group;
-  plan: THREE.Group;
-  selection: THREE.Group;
-  pick: THREE.Mesh;
-  outline: THREE.Line;
-};
 
 export type AlignTargetKind = "wall" | "module" | "worktop";
 export type AlignLineRole = "center" | "exterior" | "interior" | "back" | "front" | "edge" | "endA" | "endB";

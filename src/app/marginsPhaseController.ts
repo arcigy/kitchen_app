@@ -25,6 +25,8 @@ import {
   type ProjectMarginsPanelHandle
 } from "../ui/marginsPhasePanel";
 import { mountLoadingSkeleton } from "../ui/loadingSkeleton";
+import { mountMaterialWastePanel, type ProjectWasteRates } from "../ui/materialWastePanel";
+import { normalizeProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
 
 export type MarginsPhaseControllerApi = {
   loadProjectMargins: (projectId: string, signal?: AbortSignal) => Promise<ProjectMarginsView>;
@@ -67,6 +69,7 @@ export type MarginsPhaseControllerApi = {
 
 export type MarginsPhaseControllerArgs = {
   container: HTMLElement;
+  presentation?: "margins" | "material-waste";
   footerContainer?: HTMLElement;
   getProjectId: () => string | null;
   onViewChanged?: (view: ProjectMarginsView) => void;
@@ -107,6 +110,10 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
 
   const ensurePanel = (initialView: ProjectMarginsView) => {
     if (panel) return panel;
+    if (args.presentation === "material-waste") {
+      panel = mountMaterialWastePanel(args.container, initialView, commitWaste);
+      return panel;
+    }
     panel = mountProjectMarginsPanel(args.container, initialView, {
       onCommitDefault: commitDefault,
       onCommitAdditionalLabor: commitAdditionalLabor,
@@ -222,6 +229,13 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
     }, signal));
   }
 
+  function commitWaste(rates: ProjectWasteRates): Promise<ProjectMarginCommitResult> {
+    return runMutation((projectId, currentView, signal) => api.setProjectManufacturing(projectId, {
+      revision: currentView.revision,
+      manufacturing: { ...normalizeProjectManufacturingSettings(currentView.settings.manufacturing), ...rates }
+    }, signal));
+  }
+
   function commitItem(request: ProjectMarginItemCommitRequest): Promise<ProjectMarginCommitResult> {
     return runMutation((projectId, currentView, signal) => {
       const target = findTarget(currentView, request.itemId);
@@ -261,7 +275,7 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
       panel = null;
       const loading = mountLoadingSkeleton(args.container, {
         variant: "phase",
-        label: "Načítavam marže projektu"
+        label: args.presentation === "material-waste" ? "Načítavam prerezy projektu" : "Načítavam marže projektu"
       });
       const footerLoading = args.footerContainer
         ? mountLoadingSkeleton(args.footerContainer, { variant: "phase", label: "Načítavam súhrn marží" })

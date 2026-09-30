@@ -4,6 +4,8 @@ import { logoutClient } from "../../app/logoutClient";
 import { actionIconMarkup } from "../actionIcons";
 import { bindIconTooltip } from "../iconTooltips";
 import { createThemePicker } from "../theme/themePicker";
+import { openAccountSettingsFromAccount, openReleaseNewsFromAccount } from "../../app/releaseNewsController";
+import { t } from "../../i18n";
 
 type AccountMenuArgs = {
   mount: HTMLElement;
@@ -26,6 +28,7 @@ type AccountMenuItemArgs = {
 const icons = {
   theme: actionIconMarkup("theme"),
   settings: actionIconMarkup("settings"),
+  news: actionIconMarkup("schedules"),
   desktop: actionIconMarkup("desktop"),
   community: actionIconMarkup("community"),
   add: actionIconMarkup("addAccount"),
@@ -85,7 +88,8 @@ export function createAccountMenu(args: AccountMenuArgs): void {
   items.className = "account-menu-items";
   items.append(
     createThemePicker(),
-    menuItem({ label: "Settings", icon: icons.settings }),
+    menuItem({ label: t("Settings"), icon: icons.settings, onClick: openAccountSettingsFromAccount }),
+    menuItem({ label: t("What's new?"), icon: icons.news, onClick: openReleaseNewsFromAccount }),
     menuItem({ label: "Get desktop app", icon: icons.desktop }),
     sectionBreak(),
     menuItem({ label: "Create a community profile", sublabel: email, icon: icons.community }),

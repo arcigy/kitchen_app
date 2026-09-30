@@ -4,11 +4,11 @@ import type { ModuleControlsArgs } from "../modules/registry";
 
 /** Catalog write only: saving a preset never mutates a placed module. */
 export function createModuleParameterPresetSaver(catalog: ClientCatalog): NonNullable<ModuleControlsArgs["createParameterPreset"]> {
-  return async ({ modulePackage, parameters, name, note }) => {
+  return async ({ modulePackage, parameters, name, note, laborRate }) => {
     const response = await fetch(`/api/modules/${encodeURIComponent(modulePackage.module.modulePackageId)}/parameter-presets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, note, parameters })
+      body: JSON.stringify({ name, note, parameters, laborRate, expectedPackageHash: modulePackage.integrity.packageHash })
     });
     const payload = await response.json().catch(() => null) as {
       ok?: boolean; error?: string; modulePackage?: FurnQuoteModulePackage;
@@ -25,5 +25,29 @@ export function createModuleParameterPresetSaver(catalog: ClientCatalog): NonNul
       else catalog.modules.push(updated);
     }
     return { modulePackage: payload.modulePackage, presetId: payload.preset.presetId };
+  };
+}
+
+export function createModulePresetLaborApi(catalog: ClientCatalog): NonNullable<ModuleControlsArgs["presetLaborApi"]> {
+  return {
+    async load(modulePackageId) {
+      const response = await fetch(`/api/modules/${encodeURIComponent(modulePackageId)}`);
+      const payload = await response.json() as { ok?: boolean; module?: FurnQuoteModulePackage; error?: string };
+      if (!response.ok || !payload.ok || !payload.module) throw new Error(payload.error || "Preset nie je dostupný.");
+      return payload.module;
+    },
+    async save(modulePackage, presetId, laborRate) {
+      const response = await fetch(`/api/modules/${encodeURIComponent(modulePackage.module.modulePackageId)}/parameter-presets/${encodeURIComponent(presetId)}/labor`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ laborRate, expectedPackageHash: modulePackage.integrity.packageHash })
+      });
+      const payload = await response.json() as { ok?: boolean; modulePackage?: FurnQuoteModulePackage; catalogModule?: ClientCatalog["modules"][number]; error?: string };
+      if (!response.ok || !payload.ok || !payload.modulePackage) throw new Error(payload.error || "Sadzbu presetu sa nepodarilo uložiť.");
+      if (payload.catalogModule) {
+        const index = catalog.modules.findIndex(item => item.modulePackageId === payload.catalogModule!.modulePackageId);
+        if (index >= 0) catalog.modules[index] = payload.catalogModule;
+      }
+      return payload.modulePackage;
+    }
   };
 }

@@ -60,6 +60,15 @@ describe("Démos exact-ID read-only adapter", () => {
     expect(extracted.result!.pricing.normalizedPrice!.amount).toBeCloseTo(50 / 5.796, 6);
   });
 
+  it.each(["2 099 Kč", "2\u00a0099 Kč", "2\u202f099 Kč"])("captures an integer thousands price without truncating it: %s", price => {
+    document.body.innerHTML = `<h1 class="box-detail__top__title">Pracovní deska 4100/635/38</h1>
+      <strong class="box-detail__top__code__value">WT-TEST</strong><div class="box-detail-add__prices"><span class="js-online-partner-price-without-vat">${price}</span></div>
+      <dl><dt>Jednotka (MJ)</dt><dd>ks</dd></dl><table class="table-params"><tr><td>Formát materiálu (mm)</td><td>4100 x 635</td></tr><tr><td>Tloušťka materiálu (mm)</td><td>38</td></tr></table>`;
+    const result = demosExactIdAdapter.extractExactProduct(document, { requestedProductId: "WT-TEST", expectedProductType: "worktop", expectedManufacturer: null, expectedThicknessMm: 38 });
+    expect(result.result?.pricing.customerPrice?.amount).toBe(2099);
+    expect(result.result?.pricing.normalizedPrice?.amount).toBeCloseTo(2099 / 2.6035, 8);
+  });
+
   it("keeps a Démos product image hosted on the Slovak image CDN for backend colour extraction", () => {
     document.body.innerHTML = `
       <h1 class="box-detail__top__title">DTD Červená 2800/2070/18</h1>

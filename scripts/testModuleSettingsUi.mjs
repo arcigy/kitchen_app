@@ -12,8 +12,20 @@ await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors = [], checks = [];
+const saveRequests = [];
+const presetTraffic = [];
 page.on('pageerror', error => errors.push(String(error)));
 page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+page.on('request', request => {
+  if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/save')) saveRequests.push(request.url());
+  if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/parameter-presets')) presetTraffic.push({ event: 'request', url: request.url() });
+});
+page.on('response', response => {
+  if (new URL(response.url()).pathname.endsWith('/parameter-presets')) presetTraffic.push({ event: 'response', status: response.status() });
+});
+page.on('requestfailed', request => {
+  if (new URL(request.url()).pathname.endsWith('/parameter-presets')) presetTraffic.push({ event: 'failed', error: request.failure()?.errorText ?? 'unknown' });
+});
 const assert = (ok, message) => { if (!ok) throw new Error(message); checks.push(message); };
 const modal = () => page.locator('dialog[data-module-settings]');
 const field = key => modal().locator(`[data-parameter-key="${key}"] input`);
@@ -54,10 +66,12 @@ try {
   id = await page.evaluate(group => window.__kitchenDebug.snapshot(group).instances[0]?.id, group);
   assert(!!id, 'Module inserted through normal placement');
   await page.getByRole('button', { name: /^(Potvrdiť skupinu|Confirm group)$/ }).click();
-  await Promise.all([
+  const [initialSaveResponse] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/save') && response.request().method() === 'POST'),
     page.locator("button[data-quick-action='save']").click(),
   ]);
+  assert(initialSaveResponse.ok(), 'Initial project save completes');
+  const projectId = (await initialSaveResponse.json()).save.projectId;
   const initial = await module();
   await page.evaluate(box => window.__kitchenDebug.createWall({
     aMm: { x: box.max.x * 1000 + 300, z: box.min.z * 1000 - 100 },
@@ -97,7 +111,9 @@ try {
   await editField('width', width + 150);
   await modal().locator('[data-module-parameter-preset-trigger]').click();
   await modal().locator('[data-parameter-preset-id="drawers_2_top_shallow"]').click();
-  assert(Number(await field('drawerCount').inputValue()) === 2, 'Preset changes the draft');
+  await page.waitForFunction(() => document.querySelector('[data-module-settings] [data-parameter-key="drawerCount"] input')?.value === '2', null, { timeout: 5000 });
+  const presetDrawerCount = Number(await field('drawerCount').inputValue());
+  assert(presetDrawerCount === 2, `Preset changes the draft (drawerCount=${presetDrawerCount})`);
   assert(Number(await field('width').inputValue()) === width + 150, 'Preset preserves draft dimensions');
   assert(JSON.stringify((await module()).params) === JSON.stringify(initial.params), 'Preset leaves project unchanged');
   const frontBefore = Number(await field('drawer1FrontHeightMm').inputValue());
@@ -129,25 +145,33 @@ try {
   const presetName = `QA advanced ${Date.now()}`;
   await modal().locator('.module-parameter-preset-create').click();
   const presetDialog = () => page.locator('[data-preset-dialog]');
-  await presetDialog().locator('input').fill(presetName);
+  const presetNameInput = () => presetDialog().getByRole('textbox', { name: 'Názov', exact: true });
+  await presetNameInput().fill(presetName);
   await presetDialog().locator('textarea').fill('Independent company preset');
   await page.route('**/parameter-presets', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Preset save failed (test).' }) }), { times: 1 });
   await presetDialog().locator('button[type=submit]').click();
   await presetDialog().getByText('Preset save failed (test).', { exact: true }).waitFor();
-  assert(await presetDialog().locator('input').inputValue() === presetName && await presetDialog().locator('textarea').inputValue() === 'Independent company preset', 'Failed preset creation preserves the completed form for retry');
-  const [createdResponse] = await Promise.all([
-    page.waitForResponse(response => response.url().endsWith('/parameter-presets') && response.request().method() === 'POST'),
+  assert(await presetNameInput().inputValue() === presetName && await presetDialog().locator('textarea').inputValue() === 'Independent company preset', 'Failed preset creation preserves the completed form for retry');
+  await page.unroute('**/parameter-presets');
+  const [presetResponse] = await Promise.all([
+    page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/parameter-presets') && response.request().method() === 'POST', { timeout: 90_000 }),
     presetDialog().locator('button[type=submit]').click(),
   ]);
+  assert(presetResponse.ok(), `Advanced preset POST succeeds (HTTP ${presetResponse.status()})`);
+  await presetDialog().waitFor({ state: 'detached', timeout: 10_000 });
+  const modulePackageId = String((await module()).params.modulePackageId);
+  const createdResponse = await page.context().request.get(new URL(`/api/modules/${encodeURIComponent(modulePackageId)}`, baseUrl).toString());
   assert(createdResponse.ok(), 'Advanced preset saves independently to the company');
-  const created = await createdResponse.json();
-  const presetId = created.preset.presetId;
-  const savedPreset = created.modulePackage.parameterPresets.presets.find(preset => preset.presetId === presetId);
+  const created = (await createdResponse.json()).module;
+  const savedPreset = created.parameterPresets.presets.find(preset => preset.label === presetName);
+  assert(!!savedPreset, 'Created preset is persisted in the company module package');
+  const presetId = savedPreset.presetId;
   assert(!Object.hasOwn(savedPreset.parameterValues, 'width') && !Object.hasOwn(savedPreset.parameterValues, 'frontMaterialId'), 'Preset stores configuration without dimensions or materials');
   assert(JSON.stringify((await module()).params) === JSON.stringify(saved.params), 'Preset creation does not mutate the project through shared references');
   await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
   await open(); await modal().locator('[data-module-parameter-preset-trigger]').click();
   await modal().locator(`[data-parameter-preset-id="${presetId}"]`).click();
+  await page.waitForFunction(() => document.querySelector('[data-module-settings] [data-parameter-key="drawerCount"] input')?.value === '3', null, { timeout: 5000 });
   assert(Number(await field('drawerCount').inputValue()) === 3, 'New preset survives discarded module edits');
   assert(Number(await field('width').inputValue()) === saved.params.width, 'Saved preset preserves target dimensions');
   await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
@@ -176,16 +200,33 @@ try {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.getByRole('button', { name: /^(Potvrdiť skupinu|Confirm group)$/ }).click();
   const committedWidth = width + 170;
-  const [savedResponse] = await Promise.all([
-    page.waitForResponse(response =>
-      response.url().endsWith('/save')
-      && response.request().method() === 'POST'
-      && response.request().postData()?.includes(`"width":${committedWidth}`)
-    ),
-    page.locator("button[data-quick-action='save']").click(),
-  ]);
-  assert(savedResponse.ok(), 'Changed module saves through the project workflow');
-  const persisted = (await savedResponse.json()).save;
+  // Closing the settings dialog can overlap a previously queued user save.
+  // Start the explicit save only after its user-visible save lock is clear.
+  await page.locator('body.project-save-blocking').waitFor({ state: 'hidden' });
+  const saveCompleted = page.evaluate(() => new Promise((resolve) => {
+    const body = document.body;
+    let observedLock = body.classList.contains('project-save-blocking');
+    const observer = new MutationObserver(records => {
+      if (body.classList.contains('project-save-blocking') || records.some(record =>
+        (record.oldValue ?? '').split(/\s+/).includes('project-save-blocking')
+      )) observedLock = true;
+      if (observedLock && !body.classList.contains('project-save-blocking')) {
+        observer.disconnect();
+        window.clearTimeout(timeout);
+        resolve(true);
+      }
+    });
+    const timeout = window.setTimeout(() => {
+      observer.disconnect();
+      resolve(false);
+    }, 60_000);
+    observer.observe(body, { attributes: true, attributeOldValue: true, attributeFilter: ['class'] });
+  }));
+  await page.locator("button[data-quick-action='save']").click();
+  assert(await saveCompleted, 'Changed module saves through the project workflow');
+  const persistedResponse = await page.context().request.get(new URL(`/api/projects/${encodeURIComponent(projectId)}/load`, baseUrl).toString());
+  assert(persistedResponse.ok(), 'Saved project can be loaded back from the server');
+  const persisted = (await persistedResponse.json()).save;
   const persistedModule = persisted.appState.layout.snapshot.instances.find(item => item.id === id);
   assert(persistedModule?.params.width === committedWidth, 'Committed settings persist in the server save');
   // A matching response may belong to an autosave that the explicit save is
@@ -215,6 +256,7 @@ try {
   }, { group, id, expectedWidth: importedModule.params.width });
   await open(); await modal().locator('[data-module-parameter-preset-trigger]').click();
   await modal().locator(`[data-parameter-preset-id="${presetId}"]`).click();
+  await page.waitForFunction(() => document.querySelector('[data-module-settings] [data-parameter-key="drawerCount"] input')?.value === '3', null, { timeout: 5000 });
   assert(Number(await field('width').inputValue()) === width + 170 && await field('frontMaterialId').inputValue() === importedModule.params.frontMaterialId, 'Company preset is available in another project and preserves dimensions and materials');
   await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
   assert(errors.length === 0, 'Browser console and page errors are zero');
@@ -222,6 +264,8 @@ try {
   console.log(`Module settings UI: ${checks.length} checks passed.`);
 } catch (error) {
   await page.screenshot({ path: `${out}/failure.png` });
-  await writeFile(`${out}/failure.json`, JSON.stringify({ error: String(error), checks, errors, body: await page.locator('body').innerText() }, null, 2));
+  const presetDialogText = await page.locator('[data-preset-dialog]').innerText().catch(() => null);
+  console.error(JSON.stringify({ presetDialogText, presetTraffic }));
+  await writeFile(`${out}/failure.json`, JSON.stringify({ error: String(error), checks, errors, saveRequests, presetTraffic, presetDialogText, body: await page.locator('body').innerText() }, null, 2));
   throw error;
 } finally { await browser.close(); }

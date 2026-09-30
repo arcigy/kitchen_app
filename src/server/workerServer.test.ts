@@ -2033,14 +2033,14 @@ describe("multi-client worker isolation", () => {
       const otherId = await create(otherCookie);
       const view = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, { cookie: delfiCookie });
       expect(view.body).toHaveProperty("view.summary.sheetMaterial", {
-        minimumThicknessMm: 16, areaM2: 0, marginPerM2: null, unmeasuredBoardCount: 0
+        minimumThicknessMm: 16, areaM2: 0, marginPerM2: null, unmeasuredBoardCount: 0, preliminary: false
       });
       const updated = await requestWorker(controller!.port, `/api/projects/${projectId}/margins`, {
         method: "PUT", cookie: delfiCookie,
         body: { revision: 0, operation: { type: "set_additional_labor", additionalLaborCost: 200 } }
       });
       expect(updated.status).toBe(200);
-      expect(updated.body).toMatchObject({ view: { summary: { marginAmount: 40, sheetMaterial: { areaM2: 0, marginPerM2: null } } } });
+      expect(updated.body).toMatchObject({ view: { summary: { marginAmount: 0, sheetMaterial: { areaM2: 0, marginPerM2: null } } } });
       const saved = await requestWorker(controller!.port, `/api/projects/${projectId}/load`, { cookie: delfiCookie });
       expect(saved.body).toHaveProperty("save.appState.quoteSettings.additionalLaborCost", 200);
       expect(JSON.stringify(saved.body)).not.toContain("sheetMaterial");

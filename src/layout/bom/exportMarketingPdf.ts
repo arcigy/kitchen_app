@@ -1,3 +1,4 @@
+import { quoteContribution } from "./projectQuote";
 import { PDFDocument } from "pdf-lib";
 import {
   convertPriceCurrency,
@@ -29,12 +30,12 @@ function formatNumber(value: number, digits = 3) {
   return new Intl.NumberFormat(localeForLanguage(getCurrentLanguage()), { maximumFractionDigits: digits }).format(value);
 }
 
-function formatCurrency(value: number, currency: PriceCurrency) {
+function formatCurrency(value: number, currency: PriceCurrency, sourceCurrency: PriceCurrency = "EUR") {
   return new Intl.NumberFormat(localeForLanguage(getCurrentLanguage()), {
     style: "currency",
     currency,
     maximumFractionDigits: 2
-  }).format(convertPriceCurrency(value, "EUR", currency));
+  }).format(convertPriceCurrency(value, sourceCurrency, currency));
 }
 
 function message(key: string, values: Record<string, string | number> = {}) {
@@ -173,10 +174,10 @@ function drawSummaryCards(pages: RenderPage[], summary: ProjectQuoteSummary, cur
   const cardWidth = (CONTENT_WIDTH - 20) / 2;
   const cardHeight = 96;
   const cards: Array<[string, string]> = [
-    [t("Material"), formatCurrency(summary.materialCost, currency)],
-    [t("Total labor"), formatCurrency(summary.laborCostTotal, currency)],
-    [t("Combined margin"), `${formatNumber(summary.marginPercent, 2)} % / ${formatCurrency(summary.marginAmount, currency)}`],
-    [t("Final quoted price"), formatCurrency(summary.finalPrice, currency)]
+    [t("Material"), formatCurrency(summary.materialCost, currency, summary.currency ?? "EUR")],
+    [t("Total labor"), formatCurrency(summary.laborCostTotal, currency, summary.currency ?? "EUR")],
+    [t("Combined margin"), `${(quoteContribution(summary).contributionPercent == null ? "—" : formatNumber(quoteContribution(summary).contributionPercent!, 2))} % / ${formatCurrency(quoteContribution(summary).contributionAmount, currency, summary.currency ?? "EUR")}`],
+    [t("Final quoted price"), formatCurrency(summary.finalPrice, currency, summary.currency ?? "EUR")]
   ];
 
   cards.forEach(([label, value], index) => {
@@ -339,14 +340,14 @@ export async function exportMarketingOfferPdf(
 
   drawSectionTitle(pages, t("Pricing summary"));
   drawKeyValueList(pages, [
-    [t("Boards"), formatCurrency(summary.boardsCost, currency)],
-    [t("Edge banding"), formatCurrency(summary.edgesCost, currency)],
-    [t("Components"), formatCurrency(summary.hardwareCost, currency)],
-    [t("Module labor"), formatCurrency(summary.moduleLaborCost, currency)],
-    [t("Additional project labor"), formatCurrency(summary.additionalLaborCost, currency)],
-    [t("Subtotal before margin"), formatCurrency(summary.subtotalBeforeMargin, currency)],
-    [t("Combined margin"), `${formatNumber(summary.marginPercent, 2)} %`],
-    [t("Final quoted price"), formatCurrency(summary.finalPrice, currency)]
+    [t("Boards"), formatCurrency(summary.boardsCost, currency, summary.currency ?? "EUR")],
+    [t("Edge banding"), formatCurrency(summary.edgesCost, currency, summary.currency ?? "EUR")],
+    [t("Components"), formatCurrency(summary.hardwareCost, currency, summary.currency ?? "EUR")],
+    [t("Module labor"), formatCurrency(summary.moduleLaborCost, currency, summary.currency ?? "EUR")],
+    [t("Additional project labor"), formatCurrency(summary.additionalLaborCost, currency, summary.currency ?? "EUR")],
+    [t("Subtotal before margin"), formatCurrency(summary.subtotalBeforeMargin, currency, summary.currency ?? "EUR")],
+    [t("Combined margin"), `${(quoteContribution(summary).contributionPercent == null ? "—" : formatNumber(quoteContribution(summary).contributionPercent!, 2))} %`],
+    [t("Final quoted price"), formatCurrency(summary.finalPrice, currency, summary.currency ?? "EUR")]
   ]);
 
   drawAggregateBullets(
@@ -375,11 +376,11 @@ export async function exportMarketingOfferPdf(
     [t("Module"), t("Boards"), t("Edges"), t("Components"), t("Labor"), t("Total")],
     entries.map((entry) => [
       entry.label,
-      formatCurrency(entry.result.pricing.groups.boards.cost, currency),
-      formatCurrency(entry.result.pricing.groups.edge_bands.cost, currency),
-      formatCurrency(entry.result.pricing.groups.hardware.cost, currency),
-      formatCurrency(entry.result.pricing.laborCostFixed, currency),
-      formatCurrency(entry.result.pricing.finalPrice, currency)
+      formatCurrency(entry.result.pricing.groups.boards.cost, currency, entry.result.pricing.priceInputs.currency),
+      formatCurrency(entry.result.pricing.groups.edge_bands.cost, currency, entry.result.pricing.priceInputs.currency),
+      formatCurrency(entry.result.pricing.groups.hardware.cost, currency, entry.result.pricing.priceInputs.currency),
+      formatCurrency(entry.result.pricing.laborCostFixed, currency, entry.result.pricing.priceInputs.currency),
+      formatCurrency(entry.result.pricing.finalPrice, currency, entry.result.pricing.priceInputs.currency)
     ]),
     [340, 150, 150, 150, 130, 160]
   );

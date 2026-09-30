@@ -57,7 +57,7 @@ export function createModuleFilePayload(args: {
 }
 
 export function createModuleFileEnvelope(payload: FurnQuoteModulePackagePayload): FurnQuoteModuleFileEnvelope {
-  const payloadBytes = Buffer.from(canonicalJson(payload), "utf-8");
+  const payloadBytes = Buffer.from(canonicalJson(JSON.parse(JSON.stringify(payload))), "utf-8");
   const compressed = gzipSync(payloadBytes);
   const payloadHash = sha256Hex(compressed);
   return {

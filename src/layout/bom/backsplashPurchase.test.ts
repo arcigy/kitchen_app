@@ -1,0 +1,53 @@
+import type { ClientCatalog } from "../../core/catalog/catalog-types";
+import {describe,it,expect} from "vitest";
+import {createSystemCatalogSeed} from "../../core/catalog/catalog-bootstrap";
+import {createProjectMaterialRuntimeCatalog} from "../../app/projectMaterialRuntimeCatalog";
+import {createDefaultProjectMarginSettingsState} from "../../core/project-margins/project-margin-types";
+import {createEmptyProjectMaterialAssignmentsState,type ProjectMaterialAssignment} from "../../core/project-materials/project-material-types";
+import {buildProjectPricingViews} from "./projectPricing";
+import {buildProjectMarginsView} from "./projectMargins";
+import {applyBacksplashPurchases} from "./backsplashPurchase";
+import {generateBacksplash} from "../backsplash/generator";
+import type {BacksplashInput} from "../backsplash/generator";
+import type {CustomFurnitureInstance,CustomFurnitureParams} from "../customFurnitureTypes";
+import {makeDefaultKitchenContext} from "../kitchenContext";
+import {validateBacksplashFurniture} from "../../core/project-save/backsplash-validation";
+import {captureBacksplashMaterialSnapshots} from "../backsplash/materialSnapshots";
+import {buildProjectMaterialScopes,buildProjectMaterialUsageSummary} from "./materialUsageSummary";
+function fixture(){
+ const base:ClientCatalog={clientId:"fixture",...createSystemCatalogSeed()};base.priceList.currency="EUR";
+ const material=structuredClone(base.materials.find(m=>m.materialType==="board")!);material.id="backsplash:fixture";material.metadata={...material.metadata,supplierLengthMm:2800,supplierWidthMm:1300};base.materials.push(material);base.priceList.prices[material.id]=100;
+ const input:BacksplashInput={kitchenId:"k",fallbackTopMm:1500,walls:[{id:"w",params:{aMm:{x:0,z:0},bMm:{x:1200,z:0},heightMm:2600,thicknessMm:100,justification:"interior",exteriorSign:-1,materialId:"wall"}}],worktops:[{id:"wt",surfaceMm:900,polygons:[[{x:0,z:0},{x:1200,z:0},{x:1200,z:600},{x:0,z:600}]]}],cabinets:[{id:"c",role:"base",footprint:[{x:0,z:0},{x:1200,z:0},{x:1200,z:600},{x:0,z:600}],bottomMm:0,wallIds:["w"]}],openings:[]};
+ const params:CustomFurnitureParams={name:"Zástena",groupKind:"backsplash",boundary:[],boards:[],baseConstraint:"absolute",baseOffsetMm:0,topConstraint:"absolute",topOffsetMm:1500,backsplash:{kitchenId:"k",wallIds:["w"],materialId:material.id,thicknessMm:18,offsetMm:0,kerfMm:3,allowHalf:true,grain:"length",maxLengthMm:2800,joints:{},suppressedKeys:[],orphanedWallIds:[]}};
+ params.boards=generateBacksplash(input,params.backsplash!);
+ const groups=[{id:"a",params:structuredClone(params)},{id:"b",params:structuredClone(params)}] as CustomFurnitureInstance[];
+ const context=makeDefaultKitchenContext(base);
+ return{base,material,groups,context,input};
+}
+describe("shared backsplash purchase authority",()=>{
+ it("retains the editor-selected material and stock price after catalogue removal and JSON restore",()=>{
+   const {base,material,groups,context}=fixture();groups[0]!.params.backsplash!.materialOverride=true;
+   captureBacksplashMaterialSnapshots(groups[0]!.params,base);groups[1]!.params=JSON.parse(JSON.stringify(groups[0]!.params));
+   base.materials=base.materials.filter(item=>item.id!==material.id);delete base.priceList.prices[material.id];
+   for(const group of groups)expect(()=>validateBacksplashFurniture(group.params as unknown as Record<string,unknown>)).not.toThrow();
+   const entries=buildProjectPricingViews([],[],groups,context,base);
+   expect(entries.flatMap(entry=>entry.result.pricing.items).reduce((sum,item)=>sum+(item.itemCost??0),0)).toBe(182);
+   expect(entries[0]!.result.pricing.items[0]!.backsplashPurchase).toMatchObject({purchasedPieces:.5,cost:182});
+   groups[0]!.params.boards[0]!.backsplashSource!.materialSnapshot!.unitPrice=-1;
+   expect(()=>validateBacksplashFurniture(groups[0]!.params as unknown as Record<string,unknown>)).toThrow();
+ });
+ it("shares half a format across groups and charges it once, without applying sheet waste twice",()=>{const{base,groups,context}=fixture();const entries=buildProjectPricingViews([],[],groups,context,base);const boards=entries.flatMap(e=>e.result.pricing.items).filter(i=>i.itemType==="board");expect(boards.reduce((s,i)=>s+(i.itemCost??0),0)).toBe(182);expect(boards.reduce((s,i)=>s+(i.purchasedStockPieces??0),0)).toBe(.5);expect(boards[0]!.backsplashPurchase).toMatchObject({netAreaM2:1.44,purchasedAreaM2:1.82,purchasedPieces:.5,cost:182});expect(boards[0]!.backsplashPurchase!.sheets[0]!.placements).toHaveLength(2);
+ const settings=createDefaultProjectMarginSettingsState();settings.groupMargins.backsplash=100;const margins=buildProjectMarginsView(entries,settings,{currency:"EUR"});expect(margins.groups.find(g=>g.category==="backsplash")).toMatchObject({baseCost:182,finalPrice:364,missingPriceCount:0});
+ const separately=groups.flatMap(g=>buildProjectPricingViews([],[],[g],context,base));expect(applyBacksplashPurchases(separately,base).map(e=>e.result.pricing.items)).toEqual(entries.map(e=>e.result.pricing.items));
+ const usage={instances:[],worktops:[],customFurniture:groups,kitchenContext:context,kitchenGroups:[],catalog:base};expect(buildProjectMaterialUsageSummary(usage).groups.find(g=>g.id==="backsplash")?.quantity).toBe(1.44);expect(buildProjectMaterialScopes(usage).flatMap(s=>s.items).filter(i=>i.category==="backsplash").every(i=>i.backsplashPurchase?.purchasedPieces===.5)).toBe(true);
+ });
+ it("keeps the blank purchase when a real opening reduces net area",()=>{const{base,groups,context}=fixture();groups[0]!.params.boards[0]!.cutouts=[{id:"hole",profile:[{x:100,y:1000},{x:600,y:1000},{x:600,y:1300},{x:100,y:1300}]}];const entries=buildProjectPricingViews([],[],groups,context,base);expect(entries[0]!.result.pricing.items[0]!.backsplashPurchase).toMatchObject({cost:182,netAreaM2:1.29});});
+ it("separates different saved price snapshots for the same supplier material",()=>{const{base,material,groups,context}=fixture();const runtime=createProjectMaterialRuntimeCatalog(base),state=createEmptyProjectMaterialAssignmentsState();state.initialized=true;
+ const assignment:ProjectMaterialAssignment={assignmentId:"material-assignment:backsplash",category:"backsplash",kind:"material",materialId:material.id,source:"user",customValues:{},updatedAt:"2026-09-24T00:00:00.000Z",snapshots:{material:{definition:material,unitPrice:100,currency:"EUR",capturedAt:"2026-09-24T00:00:00.000Z",priceListId:null}}};
+ const own=structuredClone(assignment);own.assignmentId=`material-assignment:addition:b:backsplash:custom-board-b-${groups[1]!.params.boards[0]!.id}`;own.snapshots.material!.unitPrice=200;state.assignments=[assignment,own];runtime.applyProjectAssignments(state);
+ const entries=buildProjectPricingViews([],[],groups,context,runtime.catalog);expect(entries.flatMap(e=>e.result.pricing.items).map(i=>i.itemCost)).toEqual([182,364]);
+ const margin=buildProjectMarginsView(entries,createDefaultProjectMarginSettingsState(),{currency:"EUR",materialAssignments:state.assignments});expect(margin.groups.find(g=>g.category==="backsplash")?.baseCost).toBe(546);
+ });
+ it.each(["missing","oversize"])("marks %s stock incomplete without inventing a purchase price",kind=>{const{base,material,groups,context}=fixture();if(kind==="missing")delete material.metadata!.supplierLengthMm;else material.metadata!.supplierLengthMm=1000;const entries=buildProjectPricingViews([],[],groups,context,base);expect(entries.every(e=>e.result.pricing.pricingStatus==="incomplete")).toBe(true);expect(entries[0]!.result.pricing.items[0]!.backsplashPurchase!.error).toBeTruthy();});
+ it("roundtrips geometry, sources and manual settings and rejects malformed new fields",()=>{const{groups}=fixture();const params=JSON.parse(JSON.stringify(groups[0]!.params));expect(()=>validateBacksplashFurniture(params)).not.toThrow();params.backsplash.kerfMm=-1;expect(()=>validateBacksplashFurniture(params)).toThrow();params.backsplash.kerfMm=3;params.boards[0].cutouts=[{id:"bad",profile:[{x:NaN,y:0},{x:10,y:10},{x:0,y:10}]}];expect(()=>validateBacksplashFurniture(params)).toThrow();});
+});

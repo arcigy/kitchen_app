@@ -1,3 +1,5 @@
+import { createProjectMaterialRuntimeCatalog } from "../app/projectMaterialRuntimeCatalog";
+import { applyProjectComponentOperation, type ProjectComponentOperation } from "../core/project-materials/project-component-operations";
 import type http from "node:http";
 import { clientSessionHeaderFromRequest } from "./requestAuthentication";
 import type { ClientCatalog, ComponentDefinition, MaterialDefinition } from "../core/catalog/catalog-types";
@@ -177,6 +179,9 @@ function authoritativeAssignment(
 
   if (definition.kind === "material") {
     const requestedId = requested.materialId?.trim() ?? "";
+    if (!requestedId && (requested.category === "edge_front" || requested.category === "edge_other")) {
+      return { assignmentId:requested.assignmentId, category:requested.category, kind:"material", source:"user", customValues:structuredClone(requested.customValues), snapshots:{}, updatedAt:now, ...(requested.variantKey?{variantKey:requested.variantKey}:{}) };
+    }
     if (!requestedId) throw new ProjectMaterialUpdateError("Material ID is required.", 422);
     const material = catalog.materials.find((item) => item.id === requestedId);
     if (!material) throw new ProjectMaterialUpdateError(`Material ${requestedId} does not exist.`, 422);
@@ -362,7 +367,7 @@ export function removeScopedProjectMaterialAssignmentState(
   if (!assignmentId || !assignment) {
     throw new ProjectMaterialUpdateError("Material assignment was not found in this project.", 422, "MATERIAL_ASSIGNMENT_NOT_FOUND");
   }
-  if (!isScopedProjectMaterialAssignment(assignment)) {
+  if (!isScopedProjectMaterialAssignment(assignment) && !assignment.extraComponent) {
     throw new ProjectMaterialUpdateError("Only a module or addition override can be removed.", 422, "GENERAL_MATERIAL_ASSIGNMENT_REQUIRED");
   }
   const state: ProjectMaterialAssignmentsState = {
@@ -389,8 +394,12 @@ export async function handleProjectMaterialsApi(
     return true;
   }
   const projectRepository = createServerProjectRepository({ projectRoot: deps.projectRoot });
-  const catalog = await createServerCatalogRepository(deps.projectRoot).ensureCatalogExists(ctx);
+  const baseCatalog = await createServerCatalogRepository(deps.projectRoot).ensureCatalogExists(ctx);
+  const runtime = createProjectMaterialRuntimeCatalog(baseCatalog);
+  const catalog = runtime.catalog;
   const { save, state: current } = await loadNormalizedProjectState(ctx, route.projectId, projectRepository, catalog);
+
+  runtime.applyProjectAssignments(current);
 
   if (req.method === "GET" && route.action === "materials") {
     deps.sendJson(res, 200, { ok: true, view: projectMaterialsView(save, current, catalog) });
@@ -428,11 +437,13 @@ export async function handleProjectMaterialsApi(
       && (operation as Record<string, unknown>).type === "remove_assignment"
       ? operation as Record<string, unknown>
       : null;
-    if (!copyOperation && !removeOperation && (!assignment || typeof assignment !== "object" || Array.isArray(assignment))) {
+    const componentOperation = operation && typeof operation === "object" && !Array.isArray(operation)
+      && ["set_component_values", "add_component"].includes(String((operation as Record<string, unknown>).type)) ? operation as ProjectComponentOperation : null;
+    if (!componentOperation && !copyOperation && !removeOperation && (!assignment || typeof assignment !== "object" || Array.isArray(assignment))) {
       deps.sendJson(res, 400, { ok: false, code: "INVALID_MATERIAL_REQUEST", error: "assignment, copy_assignment, or remove_assignment operation is required." });
       return true;
     }
-    if (!copyOperation && !removeOperation) {
+    if (!componentOperation && !copyOperation && !removeOperation) {
       const structuralCandidate: ProjectMaterialAssignmentsState = {
         schemaVersion: PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION,
         initialized: true,
@@ -448,7 +459,13 @@ export async function handleProjectMaterialsApi(
     }
     try {
       const now = new Date().toISOString();
-      const result = copyOperation
+      if (componentOperation && revision !== current.revision) throw new ProjectMaterialUpdateError("Material assignments changed in another session. Reload and try again.", 409);
+      let componentState: ProjectMaterialAssignmentsState | null = null;
+      if (componentOperation) {
+        try { componentState = applyProjectComponentOperation(current, componentOperation, resolveProjectMaterialScopes(save, catalog), catalog, now); }
+        catch (error) { throw new ProjectMaterialUpdateError(error instanceof Error ? error.message : "Neplatný komponent.", 422); }
+      }
+      const result = componentState ? { state: componentState, changed: true } : copyOperation
         ? copiedState(current, save, catalog, copyOperation, revision, now)
         : removeOperation
           ? removeScopedProjectMaterialAssignmentState(current, removeOperation, revision, now)
@@ -464,6 +481,7 @@ export async function handleProjectMaterialsApi(
         current.revision,
         result.state
       );
+      runtime.applyProjectAssignments(saved.appState.materialAssignments);
       deps.sendJson(res, 200, {
         ok: true,
         view: projectMaterialsView(saved, saved.appState.materialAssignments, catalog)

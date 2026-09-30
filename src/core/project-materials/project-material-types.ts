@@ -1,3 +1,4 @@
+import type { ProjectComponentValues } from "./project-component-values";
 import type { ComponentDefinition, MaterialDefinition, PriceList, PricingUnit } from "../catalog/catalog-types";
 
 export const PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION = 2 as const;
@@ -16,6 +17,13 @@ export type MaterialAssignmentCategory =
   | "runner"
   | "lift_up"
   | "leg"
+  | "hinge_plate"
+  | "leg_plate"
+  | "plinth_clip"
+  | "hanging_bracket"
+  | "shelf_support"
+  | "assembly_pack"
+  | "backsplash"
   | "fastener"
   | "other_component"
   | "lighting";
@@ -33,6 +41,9 @@ export type CatalogItemSnapshot<TDefinition extends MaterialDefinition | Compone
 };
 
 export type ProjectMaterialAssignment = {
+  projectValues?: ProjectComponentValues;
+  /** Additional hardware demand, scoped to the project or one cabinet instance. */
+  extraComponent?: { scopeId: string; label: string };
   assignmentId: string;
   category: MaterialAssignmentCategory;
   kind: "material" | "component";
@@ -88,7 +99,7 @@ export type ProjectMaterialPriceSource = {
   lastSynchronizedAt: string | null;
 };
 
-export type ProjectMaterialScopeKind = "module" | "addition";
+export type ProjectMaterialScopeKind = "module" | "addition" | "project";
 
 /**
  * Stable domain target for a material demand.  It deliberately describes
@@ -101,6 +112,9 @@ export type ProjectMaterialLayoutTarget =
   | { kind: "custom-furniture-board"; furnitureId: string; boardId: string };
 
 export type ProjectMaterialScopeItem = {
+  backsplashPurchase?: import("./backsplash-purchase-types").BacksplashPurchaseInfo;
+  edgeGroupId?: string;
+  edgeGroupExplicit?: boolean;
   id: string;
   category: MaterialAssignmentCategory;
   variantKey?: string;
@@ -109,6 +123,7 @@ export type ProjectMaterialScopeItem = {
   quantity: number;
   unit: PricingUnit;
   pieces: number;
+  moduleQuantity?: number;
   /** Absent for hardware, edges and legacy/unknown BOM items. */
   layoutTarget?: ProjectMaterialLayoutTarget;
 };

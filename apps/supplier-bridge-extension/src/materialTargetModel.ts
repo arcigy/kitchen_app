@@ -38,6 +38,8 @@ export const materialCategoryLabels: Record<ProjectMaterialAssignment["category"
   corpus: "Korpus", front: "Fronty", worktop: "Pracovná doska", plinth: "Sokel", back: "Chrbát",
   drawer_bottom: "Dná zásuviek", edge_front: "Hrany frontov", edge_other: "Hrany korpusu",
   handle: "Úchytky", hinge: "Pánty", runner: "Zásuvkové výsuvy", lift_up: "Výklopy",
+  backsplash: "Zástena", hinge_plate: "Podložky pántov", leg_plate: "Podložky nôh", plinth_clip: "Soklové klipy",
+  hanging_bracket: "Závesné kovanie", shelf_support: "Policové podpery", assembly_pack: "Montážny balíček",
   leg: "Nožičky", fastener: "Spojovací materiál", lighting: "Osvetlenie", other_component: "Ostatné komponenty"
 };
 

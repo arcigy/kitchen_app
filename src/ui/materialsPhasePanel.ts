@@ -1,3 +1,8 @@
+import { renderBacksplashPurchases } from "./backsplashPurchaseView";
+import { getMaterialAssignmentCategoryDefinition } from "../core/project-materials/project-material-business";
+import type { ProjectComponentEdit } from "../app/projectComponentDialog";
+import { projectComponentAmount } from "../core/project-materials/project-component-values";
+import { edgeGroupName, edgeGroupColor } from "../core/edge-banding/edgeGroups";
 import { MATERIAL_ASSIGNMENT_CATEGORIES } from "../core/project-materials/project-material-business";
 import {
   generalProjectMaterialAssignment,
@@ -36,9 +41,15 @@ export type ProjectMaterialIdCommitResult = {
 };
 
 export type ProjectMaterialsPanelActions = {
+  onOpenModuleProperties?: (instanceId: string) => Promise<void>;
+  onEditComponent?: (request: ProjectComponentEdit) => Promise<void>;
+  onAddComponent?: (scopeId: string) => Promise<void>;
+  onRemoveComponent?: (assignmentId: string) => Promise<void>;
+  wasteControls?: HTMLElement;
   onCommitId: (request: ProjectMaterialIdCommitRequest) => Promise<ProjectMaterialIdCommitResult>;
   onOpenSupplier?: (supplierId: ProjectSupplierId) => Promise<void>;
   onCancelSupplierBridge?: () => Promise<void>;
+  onEditEdgeGroup?: (assignmentId?: string) => Promise<void>;
   onSplitEdge?: (category: "edge_front" | "edge_other") => Promise<void>;
   onResetCategory?: (category: MaterialAssignmentCategory) => Promise<void>;
   onCopyGeneralToScope?: (scopeId: string, itemId: string, category: MaterialAssignmentCategory) => Promise<void>;
@@ -111,6 +122,7 @@ export function mountProjectMaterialsPanel(
   const pendingCommits = new Set<Promise<void>>();
   const render = () => {
     if (destroyed) return;
+    const focusedWasteInput = actions.wasteControls?.contains(document.activeElement) ? document.activeElement as HTMLElement : null;
     container.innerHTML = renderInteractiveProjectMaterialsPanel(currentView, {
       loadingMessage,
       globalError,
@@ -120,6 +132,10 @@ export function mountProjectMaterialsPanel(
       selectedScopeId,
       displayCurrency: actions.displayCurrency
     });
+    if (actions.wasteControls) {
+      container.querySelector("[data-material-waste-slot]")?.appendChild(actions.wasteControls);
+      focusedWasteInput?.focus({ preventScroll: true });
+    }
   };
   const focusCategoryCard = (category: MaterialAssignmentCategory) => {
     const group = container.querySelector<HTMLElement>(`[data-material-assignment-category="${category}"]`);
@@ -240,6 +256,25 @@ export function mountProjectMaterialsPanel(
   };
 
   const onClick = (event: MouseEvent) => {
+    const moduleButton = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-open-module-hardware]") : null;
+    if (moduleButton) { void actions.onOpenModuleProperties?.(moduleButton.dataset.openModuleHardware!); return; }
+    const componentButton = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-edit-component],[data-add-component],[data-remove-component]") : null;
+    if (componentButton) {
+      let pending: Promise<void> | undefined;
+      if (componentButton.hasAttribute("data-add-component")) pending = actions.onAddComponent?.(componentButton.dataset.addComponent!);
+      else if (componentButton.hasAttribute("data-remove-component")) pending = actions.onRemoveComponent?.(componentButton.dataset.removeComponent!);
+      else {
+        const scope = componentButton.closest<HTMLElement>("[data-material-scope-item]");
+        pending = actions.onEditComponent?.(scope ? { target: { scopeId: scope.dataset.materialScopeId!, itemId: scope.dataset.materialScopeItem!, category: scope.dataset.materialScopeCategory as MaterialAssignmentCategory } } : { assignmentId: componentButton.dataset.editComponent });
+      }
+      if (pending) { const tracked = pending.catch(error => { globalError = errorMessage(error); render(); }); pendingCommits.add(tracked); void tracked.finally(() => pendingCommits.delete(tracked)); }
+      return;
+    }
+    const groupButton = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-edit-edge-group]") : null;
+    if (groupButton && actions.onEditEdgeGroup) {
+      const pending = actions.onEditEdgeGroup(groupButton.dataset.editEdgeGroup || undefined).catch(error => { globalError = errorMessage(error); render(); });
+      pendingCommits.add(pending); void pending.finally(() => pendingCommits.delete(pending)); return;
+    }
     const splitEdge = event.target instanceof Element
       ? event.target.closest<HTMLElement>("[data-material-edge-split]")?.dataset.materialEdgeSplit
       : null;
@@ -391,10 +426,13 @@ function renderInteractiveProjectMaterialsPanel(
         ${metric("Priradené", `${assignedCount} / ${visibleCategories.length}`)}
       </div>
     </header>
+    <div data-material-waste-slot></div>
     ${renderSupplierBridge(state.supplierBridge ?? EMPTY_SUPPLIER_BRIDGE_PANEL_STATE)}
     ${state.loadingMessage ? `<p class="materials-phase__status" role="status">${escapeHtml(state.loadingMessage)}</p>` : ""}
     ${state.globalError ? `<p class="materials-phase__status materials-phase__status--error" role="alert">${escapeHtml(state.globalError)}</p>` : ""}
     ${renderSettingsTabs(state.activeSettingsTab ?? "general")}
+    <button type="button" data-add-component="project">Pridať komponent projektu</button>
+    ${renderProjectExtras(view, displayCurrency)}
     ${state.activeSettingsTab === "modules"
       ? renderScopeSettings(view, "module", state.selectedScopeId, displayCurrency)
       : state.activeSettingsTab === "additions"
@@ -424,6 +462,7 @@ function renderScopeSettings(
   return `<section class="materials-scope-settings" aria-label="${escapeHtml(selected.label)}" data-material-scope-id="${escapeHtml(selected.id)}">
     <header><div><span>${kind === "module" ? "MODULE" : "ADDITION"}</span><h2>${escapeHtml(selected.label)}</h2><p>Dosky a komponenty dedia materiál z General settings.</p></div>
     <label>Vybrať ${kind === "module" ? "modul" : "addition"}<select data-material-scope-select="true">${scopes.map((scope) => `<option value="${escapeHtml(scope.id)}" ${scope.id === selected.id ? "selected" : ""}>${escapeHtml(scope.label)}</option>`).join("")}</select></label></header>
+    <button type="button" data-add-component="${escapeHtml(selected.id)}">Pridať komponent skrinky</button>
     <div class="materials-scope-groups">${categories.map((category) => `<section class="materials-scope-group"><h3>${escapeHtml(categoryLabel(category))}</h3>${category === "runner" ? "<p>Výsuvy sú rozdelené podľa výšky čela a hrúbky korpusu.</p>" : ""}${selected.items.filter((item) => item.category === category).map((item) => {
       const effective = resolveEffectiveProjectMaterialAssignment(view.assignments.assignments, selected.id, item);
       return renderScopeItem(selected.id, item, effective.assignment, effective.source, displayCurrency);
@@ -442,7 +481,19 @@ function renderScopeItem(
   const snapshot = assignmentSnapshot(assignment);
   const sourceLabel = source === "override" ? "Vlastné priradenie" : source === "general" ? "Zdedené z General settings" : "Nepriradené";
   const product = supplier ? `${escapeHtml(snapshot?.definition.displayName ?? "Produkt")} · ${escapeHtml(supplier.productCode)}` : snapshot?.definition.displayName ? escapeHtml(snapshot.definition.displayName) : "Nepriradené";
-  return `<article class="materials-scope-item" data-material-scope-id="${escapeHtml(scopeId)}" data-material-scope-item="${escapeHtml(item.id)}" data-material-scope-category="${escapeHtml(item.category)}" data-material-assignment-source="${source ?? "none"}"><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.description)} · ${formatQuantity(item.quantity, item.unit)}</small></div><div class="materials-scope-item__assignment"><small>${product} · ${sourceLabel}</small><strong>${snapshot ? formatUnitPrice(snapshot.unitPrice ?? null, snapshot.currency ?? "EUR", snapshot.definition.pricingUnit, displayCurrency) : "Nepriradené"}</strong></div></article>`;
+  const component = getMaterialAssignmentCategoryDefinition(item.category).kind === "component";
+  const amount = component && assignment ? projectComponentAmount(assignment, item.quantity, item.moduleQuantity ?? 1, displayCurrency) : null;
+  const shownPrice = amount ? formatUnitPrice(amount.unitPrice, displayCurrency, amount.unit, displayCurrency) : snapshot ? formatUnitPrice(snapshot.unitPrice ?? null, snapshot.currency ?? "EUR", snapshot.definition.pricingUnit, displayCurrency) : "Nepriradené";
+  return `<article class="materials-scope-item" data-material-scope-id="${escapeHtml(scopeId)}" data-material-scope-item="${escapeHtml(item.id)}" data-material-scope-category="${escapeHtml(item.category)}" data-material-assignment-source="${source ?? "none"}"><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.description)} · ${formatQuantity(amount?.quantity ?? item.quantity, amount?.unit ?? item.unit)}</small></div><div class="materials-scope-item__assignment"><small>${product} · ${sourceLabel}${assignment?.projectValues ? " · Vlastná hodnota" : ""}${assignment?.projectValues?.includedInPackage ? " · Zahrnuté v balení" : ""}</small><strong>${shownPrice}</strong></div>${component ? `<button type="button" data-edit-component="">Upraviť cenu a množstvo</button>` : ""}${["leg", "plinth_clip"].includes(item.category) && scopeId.startsWith("module:") ? `<button type="button" data-open-module-hardware="${escapeHtml(scopeId.slice(7))}">Nastaviť nohy a klipy modulu</button>` : ""}${assignment?.extraComponent ? `<button type="button" data-remove-component="${escapeHtml(assignment.assignmentId)}">Odobrať</button>` : ""}</article>`;
+}
+
+function renderProjectExtras(view: ProjectMaterialsView, currency: PriceCurrency): string {
+  const extras = view.assignments.assignments.filter(item => item.extraComponent?.scopeId === "project");
+  if (!extras.length) return "";
+  return `<section aria-label="Samostatné komponenty"><h2>Samostatné komponenty</h2>${extras.map(assignment => renderScopeItem("project", {
+    id: assignment.assignmentId, category: "other_component", label: assignment.extraComponent!.label, description: "Samostatná položka projektu",
+    quantity: assignment.projectValues?.quantity ?? 1, unit: assignment.projectValues?.unit ?? "pcs", pieces: 1, moduleQuantity: 1
+  }, assignment, "override", currency)).join("")}</section>`;
 }
 
 function renderSupplierBridge(state: SupplierBridgePanelState): string {
@@ -473,9 +524,8 @@ function renderAssignmentGroup(
           <div class="materials-group__quantity"><strong>${formatQuantity(quantity.quantity, quantity.unit)}</strong>${quantity.pieces ? `<small>${formatNumber(quantity.pieces)} dosiek / ks</small>` : ""}</div>
         </header>
         ${categoryAssignments.map((current, index) => renderAssignmentSelection(definition, current, view, index, displayCurrency)).join("")}
-        ${(definition.category === "edge_front" || definition.category === "edge_other") && categoryAssignments.length < 2
-          ? `<button type="button" class="materials-edge-split" data-material-edge-split="${definition.category}">Split · pridať druhé ohranenie</button>`
-          : ""}
+        ${definition.category === "backsplash" ? renderBacksplashPurchases(view.scopes ?? []) : ""}
+        ${definition.category === "edge_front" || definition.category === "edge_other" ? `<button type="button" data-edit-edge-group="">Nová skupina olepenia</button>` : ""}
       </div>
     </article>
   `;
@@ -491,8 +541,9 @@ function renderAssignmentSelection(
   const snapshot = assignmentSnapshot(assignment);
   const supplier = supplierAssignmentDetails(assignment);
   const thickness = assignment?.kind === "material" ? assignment.thicknessMm ?? assignment.snapshots.material?.definition.defaultThicknessMm : undefined;
-  const productName = supplier ? snapshot?.definition.displayName ?? "Zachytený produkt" : "Produkt zatiaľ nevybraný";
-  const price = supplier ? formatUnitPrice(snapshot?.unitPrice ?? null, snapshot?.currency ?? view.priceSource.currency, snapshot?.definition.pricingUnit, displayCurrency) : "—";
+  const productName = snapshot?.definition.displayName ?? "Produkt zatiaľ nevybraný";
+  const componentAmount = assignment?.kind === "component" ? projectComponentAmount(assignment, 1, 1, displayCurrency) : null;
+  const price = componentAmount ? formatUnitPrice(componentAmount.unitPrice, displayCurrency, componentAmount.unit, displayCurrency) : snapshot ? formatUnitPrice(snapshot?.unitPrice ?? null, snapshot?.currency ?? view.priceSource.currency, snapshot?.definition.pricingUnit, displayCurrency) : "—";
   const bridge = assignment?.customValues.supplierBridge;
   const bridgeValues = bridge && typeof bridge === "object" && !Array.isArray(bridge) ? bridge as Record<string, unknown> : {};
   const edgeWidth = typeof bridgeValues.edgeWidthMm === "number" ? bridgeValues.edgeWidthMm : null;
@@ -504,12 +555,16 @@ function renderAssignmentSelection(
   const runnerVariantQuantity = definition.category === "runner" && assignment?.variantKey
     ? quantityForVariant(view, definition.category, assignment.variantKey)
     : null;
-  return `<div class="materials-group__selection ${supplier ? "materials-group__selection--assigned" : ""}" data-material-assignment-id="${escapeHtml(assignment?.assignmentId ?? "")}">
-    <div>${runnerVariantLabel ? `<small>${escapeHtml(runnerVariantLabel)}</small>` : index > 0 ? `<small>Ohranenie ${index + 1}</small>` : ""}<strong>${escapeHtml(productName)}</strong><small>${supplier ? `${escapeHtml(supplier.label)} · ${escapeHtml(supplier.productCode)}` : "Vyberte produkt na stránke dodávateľa"}</small></div>
+  const isEdge = assignment && (assignment.category === "edge_front" || assignment.category === "edge_other");
+  const groupLength = isEdge ? (view.scopes ?? []).flatMap(scope => scope.items).filter(item => item.edgeGroupId === assignment.assignmentId || (!item.edgeGroupId && item.category === assignment.category && assignment.assignmentId === `material-assignment:${item.category}`)).reduce((sum, item) => sum + item.quantity, 0) : 0;
+  const groupHeader = isEdge ? `<div style="border-left:4px solid ${edgeGroupColor(assignment.assignmentId)};padding:4px 0 4px 8px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px"><strong>${escapeHtml(edgeGroupName(assignment))}</strong><small>${formatQuantity(groupLength,"lm")}</small><button type="button" data-edit-edge-group="${escapeHtml(assignment.assignmentId)}">Upraviť skupinu</button></div>` : "";
+  return `${groupHeader}<div class="materials-group__selection ${supplier ? "materials-group__selection--assigned" : ""}" data-material-assignment-id="${escapeHtml(assignment?.assignmentId ?? "")}">
+    <div>${runnerVariantLabel ? `<small>${escapeHtml(runnerVariantLabel)}</small>` : index > 0 ? `<small>Ohranenie ${index + 1}</small>` : ""}<strong>${escapeHtml(productName)}</strong><small>${supplier ? `${escapeHtml(supplier.label)} · ${escapeHtml(supplier.productCode)}` : snapshot ? "Materiál projektu" : "Vyberte produkt na stránke dodávateľa"}</small></div>
     ${definition.kind === "material" ? `<span><small>Hrúbka</small><strong>${thickness == null ? "—" : `${formatNumber(thickness)} mm`}</strong></span>` : ""}
     ${edgeVariant}
     ${runnerVariantQuantity ? `<span><small>Počet</small><strong>${formatQuantity(runnerVariantQuantity.quantity, runnerVariantQuantity.unit)}</strong></span>` : ""}
-    <span><small>Cena</small><strong>${escapeHtml(price)}</strong></span>
+    <span><small>Cena${assignment?.projectValues ? " · Vlastná hodnota" : ""}</small><strong>${escapeHtml(price)}</strong></span>
+    ${definition.kind === "component" && assignment ? `<button type="button" data-edit-component="${escapeHtml(assignment.assignmentId)}">Upraviť projektovú cenu</button>` : ""}
   </div>`;
 }
 
@@ -621,7 +676,8 @@ function quantityFor(view: ProjectMaterialsView, category: MaterialAssignmentCat
 }
 
 function formatQuantity(value: number, unit: string): string {
-  const suffix = unit === "m2" ? "m²" : unit === "lm" ? "bm" : unit === "pcs" ? "ks" : unit;
+  if (unit === "custom") return "Rôzne jednotky · pozri položky";
+  const suffix = unit === "m2" ? "m²" : unit === "lm" ? "bm" : unit === "pcs" ? "ks" : unit === "set" ? "sada" : unit === "profile" ? "profil" : unit;
   return `${formatNumber(value)} ${escapeHtml(suffix)}`.trim();
 }
 
@@ -632,7 +688,7 @@ function formatUnitPrice(
   displayCurrency?: PriceCurrency
 ): string {
   if (value == null) return "Cena nezadaná";
-  const suffix = unit === "m2" ? "m²" : unit === "lm" ? "bm" : unit === "pcs" ? "ks" : unit ?? "jedn.";
+  const suffix = unit === "m2" ? "m²" : unit === "lm" ? "bm" : unit === "pcs" ? "ks" : unit === "set" ? "sada" : unit === "profile" ? "profil" : unit ?? "jedn.";
   const targetCurrency = displayCurrency ?? (isPriceCurrency(currency) ? currency : null);
   if (!targetCurrency || !isPriceCurrency(currency)) return `${formatNumber(value)} ${currency} / ${suffix}`;
   return `${formatNumber(convertPriceCurrency(value, currency, targetCurrency))} ${targetCurrency} / ${suffix}`;
@@ -665,7 +721,7 @@ function renderLegacyProjectMaterialsPanel(summary: ProjectMaterialUsageSummary)
         ${metric("Dosky", `${formatNumber(summary.boardPieces)} ks`)}
         ${metric("Plocha dosiek", `${formatNumber(summary.boardAreaM2)} m²`)}
         ${metric("Hrany", `${formatNumber(summary.edgeLengthLm)} bm`)}
-        ${metric("Kovanie", `${formatNumber(summary.hardwarePieces)} ks`)}
+        ${metric("Kovanie", formatQuantity(summary.groups.find(group => group.id === "hardware")?.quantity ?? 0, summary.groups.find(group => group.id === "hardware")?.unit ?? "pcs"))}
       </div>
     </header>
     <p class="materials-phase__notice">Množstvá vychádzajú z kusovníka projektu a obnovia sa pri ďalšom otvorení Materiálov.</p>
@@ -699,7 +755,7 @@ function renderLegacyGroup(group: MaterialUsageGroup): string {
 }
 
 function renderLegacyGroupItem(group: MaterialUsageGroup, item: MaterialUsageGroup["items"][number]): string {
-  const quantity = formatQuantity(item.quantity, group.unit);
+  const quantity = formatQuantity(item.quantity, item.unit);
   return `
     <div class="materials-group__row">
       <span class="materials-group__swatch" aria-hidden="true"></span>

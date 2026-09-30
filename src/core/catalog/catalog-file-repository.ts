@@ -17,6 +17,7 @@ import {
   type ClientCatalogRepository
 } from "./catalog-repository";
 import { validateClientCatalog } from "./catalog-validation";
+import { ensureRequiredFwmHardware } from "./required-fwm-hardware";
 import { invalidateCatalogExactLookupCaches } from "./catalog-exact-lookup";
 import { createSystemCatalogLegacyDefaults } from "./catalog-bootstrap";
 
@@ -153,7 +154,7 @@ export function createFileClientCatalogRepository(projectRoot: string): ClientCa
   const ensureCatalogExists = (ctx: ClientContext): Promise<ClientCatalog> => withCatalogAccess(projectRoot, ctx, async () => {
     const existing = await readCatalog(ctx);
     if (existing) {
-      const repaired = ensureCurrentSystemCatalogData(existing);
+      const repaired = ensureRequiredFwmHardware(ensureCurrentSystemCatalogData(existing));
       if (repaired !== existing) await writeCatalog(ctx, repaired);
       return repaired;
     }

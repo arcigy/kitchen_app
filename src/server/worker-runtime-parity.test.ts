@@ -19,6 +19,8 @@ describe("runtime and injectable worker parity", () => {
       expect(source).toContain("checkReadiness: checkDatabaseReadiness");
       expect(source).toContain("handleApplicationRequest: (req, res, url)");
       expect(source).toContain("createServerAuthSessionStore");
+      expect(source).toContain("createServerReleaseNewsRepository");
+      expect(source).toContain("releaseNewsRepository");
       expect(source).toContain("sessionLookup:");
       expect(source).toContain(".isActive(session)");
       expect(source).not.toContain("registerRequestObservability(req, res)");

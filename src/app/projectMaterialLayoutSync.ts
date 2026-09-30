@@ -115,6 +115,27 @@ export function syncProjectMaterialAssignmentsToLayout(
       const itemFurniture = furniture.get(target.furnitureId);
       const board = itemFurniture?.params.boards.find((candidate) => candidate.id === target.boardId);
       if (!itemFurniture || !board || !projection) continue;
+      if (itemFurniture.params.backsplash) {
+        const source = itemFurniture.params.backsplash;
+        const auto = board.backsplashSource;
+        const general = effective.source !== "override";
+        const keepMaterial = general && (source.materialOverride || auto?.overrides.includes("materialId"));
+        const keepThickness = general && (source.thicknessOverride || auto?.overrides.includes("thicknessMm"));
+        if (!keepMaterial && projection.materialId) {
+          if (board.materialId !== projection.materialId) changedFurniture.add(itemFurniture);
+          board.materialId = projection.materialId;
+          if (auto) auto.materialSnapshot = effective.assignment?.snapshots.material ? structuredClone(effective.assignment.snapshots.material) : undefined;
+          if (general) { source.materialId = projection.materialId; source.materialSnapshot = auto?.materialSnapshot; if (auto) auto.automatic.materialId = projection.materialId; }
+          else if (auto && !auto.overrides.includes("materialId")) auto.overrides.push("materialId");
+        }
+        if (!keepThickness) {
+          if (board.thicknessMm !== projection.thicknessMm) changedFurniture.add(itemFurniture);
+          board.thicknessMm = projection.thicknessMm;
+          if (general) { source.thicknessMm = projection.thicknessMm; if (auto) auto.automatic.thicknessMm = projection.thicknessMm; }
+          else if (auto && !auto.overrides.includes("thicknessMm")) auto.overrides.push("thicknessMm");
+        }
+        continue;
+      }
       if ((projection.materialId && board.materialId !== projection.materialId) || board.thicknessMm !== projection.thicknessMm) {
         if (projection.materialId) board.materialId = projection.materialId;
         board.thicknessMm = projection.thicknessMm;

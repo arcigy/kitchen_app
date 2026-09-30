@@ -1,3 +1,5 @@
+import { validateLaborRate, type LaborRate } from "../project-manufacturing/module-labor";
+import { ModulePackageRevisionConflictError } from "./module-package-write-lock";
 import type { ClientContext } from "../client/client-context";
 import type { ClientCatalogRepository } from "../catalog/catalog-repository";
 import type { ModulePackageRepository } from "./module-package-repository";
@@ -143,37 +145,7 @@ export function createModulePackageService(args: {
     return { modulePackage: persisted, catalogModule };
   };
 
-  const createParameterPreset = async (input: {
-    modulePackageId: string;
-    name: string;
-    note: string;
-    parameters: Record<string, unknown>;
-  }) => {
-    const name = input.name.trim();
-    const note = input.note.trim();
-    if (!name) throw new Error("Preset name is required.");
-    if (!note) throw new Error("Preset note is required.");
-    const current = await args.packageRepository.getPackage(args.context, input.modulePackageId);
-    if (!current) throw new Error("Module package not found.");
-    const { freeParameterKeys, preset } = buildParameterPreset({
-      modulePackage: current,
-      parameters: input.parameters,
-      name,
-      note
-    });
-    const nextPackage: FurnQuoteModulePackage = {
-      ...current,
-      parameterPresets: {
-        freeParameterKeys,
-        presets: [...(current.parameterPresets?.presets ?? []), preset]
-      },
-      integrity: {
-        ...current.integrity,
-        updatedAt: new Date().toISOString(),
-        packageHash: undefined
-      }
-    };
-    const persisted = await args.packageRepository.savePackage(args.context, nextPackage, { source: "dev-json" });
+  async function updateCatalog(persisted: FurnQuoteModulePackage) {
     const catalog = await args.catalogRepository.ensureCatalogExists(args.context);
     const catalogModules = catalog.modules.map(normalizeCatalogModuleIdentity);
     const packageHash = computeModulePackageHash(persisted);
@@ -203,12 +175,71 @@ export function createModulePackageService(args: {
         updatedAt: new Date().toISOString()
       }
     });
+    return catalogModule;
+  }
+
+  const updatePresetLabor = async (input: { modulePackageId: string; presetId: string; expectedPackageHash: string; laborRate: LaborRate | null }) => {
+    if (args.context.role === "viewer") throw new Error("Viewer role cannot edit presets.");
+    if (!input.expectedPackageHash?.trim()) throw new Error("Preset revision is required.");
+    if (input.laborRate !== null) validateLaborRate(input.laborRate);
+    const current = await args.packageRepository.getPackage(args.context, input.modulePackageId);
+    if (!current) throw new Error("Module package not found.");
+    if (computeModulePackageHash(current) !== input.expectedPackageHash) throw new ModulePackageRevisionConflictError();
+    const next = structuredClone(current);
+    const preset = next.parameterPresets?.presets.find(item => item.presetId === input.presetId);
+    if (!preset) throw new Error("Preset not found.");
+    preset.laborRate = input.laborRate ? structuredClone(input.laborRate) : null;
+    next.integrity = { ...next.integrity, updatedAt: new Date().toISOString(), packageHash: undefined };
+    const persisted = await args.packageRepository.savePackage(args.context, next, { source: "dev-json", expectedPackageHash: input.expectedPackageHash });
+    const catalogModule = await updateCatalog(persisted);
+    return { modulePackage: persisted, preset, catalogModule };
+  };
+
+  const createParameterPreset = async (input: {
+    modulePackageId: string;
+    name: string;
+    note: string;
+    parameters: Record<string, unknown>;
+    laborRate?: LaborRate | null;
+    expectedPackageHash?: string;
+  }) => {
+    if (args.context.role === "viewer") throw new Error("Viewer role cannot create presets.");
+    if (input.laborRate != null) validateLaborRate(input.laborRate);
+    const name = input.name.trim();
+    const note = input.note.trim();
+    if (!name) throw new Error("Preset name is required.");
+    if (!note) throw new Error("Preset note is required.");
+    const current = await args.packageRepository.getPackage(args.context, input.modulePackageId);
+    if (!current) throw new Error("Module package not found.");
+    const { freeParameterKeys, preset } = buildParameterPreset({
+      modulePackage: current,
+      parameters: input.parameters,
+      name,
+      note
+    });
+    if (input.expectedPackageHash && computeModulePackageHash(current) !== input.expectedPackageHash) throw new ModulePackageRevisionConflictError();
+    if (input.laborRate !== undefined) preset.laborRate = input.laborRate ? structuredClone(input.laborRate) : null;
+    const nextPackage: FurnQuoteModulePackage = {
+      ...current,
+      parameterPresets: {
+        freeParameterKeys,
+        presets: [...(current.parameterPresets?.presets ?? []), preset]
+      },
+      integrity: {
+        ...current.integrity,
+        updatedAt: new Date().toISOString(),
+        packageHash: undefined
+      }
+    };
+    const persisted = await args.packageRepository.savePackage(args.context, nextPackage, { source: "dev-json", expectedPackageHash: computeModulePackageHash(current) });
+    const catalogModule = await updateCatalog(persisted);
     return { modulePackage: persisted, preset, catalogModule };
   };
 
   return {
     importPackage,
     createParameterPreset,
+    updatePresetLabor,
     listPackages: () => args.packageRepository.listPackages(args.context),
     getPackage: (modulePackageId: string) => args.packageRepository.getPackage(args.context, modulePackageId)
   };

@@ -313,6 +313,33 @@ export const componentGeometryDefinitions: ComponentGeometryDefinition[] = [
     archetype: "lighting_profile",
     sourceGeometry: "catalog_demo",
     dimensionsMm: { lengthMm: 500, widthMm: 10, heightMm: 6, depthMm: 10 }
+  },
+  {
+    id: "geo.hinge_plate.generic",
+    displayName: "Unspecified Hinge Plate Geometry",
+    componentType: "hinge_plate",
+    archetype: "hinge_plate",
+    sourceGeometry: "catalog_demo",
+    dimensionsMm: {},
+    notes: ["Supplier-specific dimensions are intentionally not assumed."]
+  },
+  {
+    id: "geo.leg_plate.generic",
+    displayName: "Unspecified Leg Plate Geometry",
+    componentType: "leg_plate",
+    archetype: "leg_plate",
+    sourceGeometry: "catalog_demo",
+    dimensionsMm: {},
+    notes: ["Supplier-specific dimensions are intentionally not assumed."]
+  },
+  {
+    id: "geo.assembly_pack.generic",
+    displayName: "Unspecified Assembly Pack Geometry",
+    componentType: "assembly_pack",
+    archetype: "assembly_pack",
+    sourceGeometry: "catalog_demo",
+    dimensionsMm: {},
+    notes: ["Pack contents and dimensions are supplier-specific and not assumed."]
   }
 ];
 

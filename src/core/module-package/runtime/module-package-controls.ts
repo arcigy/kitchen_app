@@ -1,3 +1,6 @@
+import { createLaborRateInput, mountModuleLaborControls } from "./moduleLaborControls";
+import { catalogLaborCurrency, effectiveModuleLabor, readModuleLabor, type LaborRate } from "../../project-manufacturing/module-labor";
+import type { PriceCurrency } from "../../pricing/currency";
 import type { ClientCatalog } from "../../catalog/catalog-types";
 import type { FurnQuoteModulePackage, ModuleParameterDefinition, ModuleUiDefinition } from "../module-package-types";
 import type { ModuleControlsApi, ModuleControlsArgs } from "../../../modules/registry";
@@ -122,15 +125,24 @@ function withParameterPresetControl(
   row.style.gap = "8px";
   row.style.marginTop = "8px";
 
+  const laborControls = mountModuleLaborControls(row, modulePackage, params, args);
+  const presetError = document.createElement("p"); presetError.setAttribute("role", "status");
   const presetPicker = createModuleParameterPresetPicker({
     modulePackage,
     parameters: params,
     clientCatalog: args.clientCatalog,
     selectedPresetId: resolveMatchingModuleParameterPresetId(modulePackage, params),
     onSelect: (presetId) => {
-      Object.assign(params, applyModuleParameterPreset({ modulePackage, parameters: params, presetId }));
-      args.onChange();
-      api.syncFromParams();
+      void (async () => {
+        presetError.textContent = "";
+        const activePackage = args.presetLaborApi ? await args.presetLaborApi.load(modulePackage.module.modulePackageId) : modulePackage;
+        if (!activePackage.parameterPresets?.presets.some(p => p.presetId === presetId)) throw new Error("Preset už nie je dostupný.");
+        const previous = structuredClone(params);
+        if (!params.moduleLabor && args.initialLaborState) params.moduleLabor = args.initialLaborState();
+        Object.assign(params, applyModuleParameterPreset({ modulePackage: activePackage, parameters: params, presetId, catalog: args.clientCatalog }));
+        if (args.onChange() === false) { Object.assign(params, previous); if (!previous.moduleLabor) delete params.moduleLabor; }
+        api.syncFromParams(); laborControls.refresh();
+      })().catch(error => { presetError.textContent = error instanceof Error ? error.message : "Preset sa nepodarilo použiť."; });
     }
   });
 
@@ -144,12 +156,15 @@ function withParameterPresetControl(
     if (!args.createParameterPreset) return;
     openCreatePresetDialog({
       host: args.presetDialogHost,
-      onSave: async ({ name, note }) => {
+      currency: catalogLaborCurrency(args.clientCatalog),
+      laborRate: readModuleLabor(params.moduleLabor) ? effectiveModuleLabor(readModuleLabor(params.moduleLabor)!).rate : null,
+      onSave: async ({ name, note, laborRate }) => {
         const result = await args.createParameterPreset?.({
           modulePackage,
           parameters: createPackageParameterSnapshot(modulePackage, params),
           name,
-          note
+          note,
+          laborRate
         });
         if (!result) return;
         Object.assign(modulePackage, result.modulePackage);
@@ -158,13 +173,14 @@ function withParameterPresetControl(
     });
   });
 
-  row.append(presetPicker.element, createButton);
+  row.prepend(presetPicker.element, createButton, presetError);
   (args.presetHost ?? container).prepend(row);
 
   return {
     syncFromParams: () => {
       api.syncFromParams();
       presetPicker.refresh(resolveMatchingModuleParameterPresetId(modulePackage, params));
+      laborControls.refresh();
     },
     isAutoFitEnabled: () => api.isAutoFitEnabled(),
     highlightParamKeys: (keys) => api.highlightParamKeys(keys),
@@ -172,7 +188,7 @@ function withParameterPresetControl(
   };
 }
 
-function openCreatePresetDialog(args: { host?: HTMLElement; onSave: (values: { name: string; note: string }) => Promise<void> }) {
+function openCreatePresetDialog(args: { host?: HTMLElement; currency: PriceCurrency; laborRate: LaborRate | null; onSave: (values: { name: string; note: string; laborRate: LaborRate | null }) => Promise<void> }) {
   const backdrop = document.createElement("div");
   backdrop.style.position = "fixed";
   backdrop.style.inset = "0";
@@ -229,7 +245,9 @@ function openCreatePresetDialog(args: { host?: HTMLElement; onSave: (values: { n
   save.textContent = t("Save");
   actions.append(cancel, save);
 
-  panel.append(title, name, note, error, actions);
+  const labor = createLaborRateInput("Práca za jeden modul", args.laborRate, args.currency);
+  labor.input.dataset.createPresetLabor = "true";
+  panel.append(title, name, note, labor.host, error, actions);
   backdrop.appendChild(panel);
   const previousFocus = document.activeElement;
   (args.host ?? document.body).appendChild(backdrop);
@@ -240,7 +258,7 @@ function openCreatePresetDialog(args: { host?: HTMLElement; onSave: (values: { n
     event.stopPropagation();
     if (event.key === "Escape") { event.preventDefault(); if (!save.disabled) close(); }
     if (event.key === "Tab") {
-      const items = [name, note, cancel, save].filter((item) => !item.disabled);
+      const items = [name, note, labor.input, labor.currency, cancel, save].filter((item) => !item.disabled);
       const index = items.indexOf(document.activeElement as typeof name);
       if (event.shiftKey && index <= 0) { event.preventDefault(); items.at(-1)?.focus(); }
       else if (!event.shiftKey && index === items.length - 1) { event.preventDefault(); items[0]?.focus(); }
@@ -264,7 +282,7 @@ function openCreatePresetDialog(args: { host?: HTMLElement; onSave: (values: { n
     cancel.disabled = true;
     error.textContent = "";
     try {
-      await args.onSave(values);
+      await args.onSave({ ...values, laborRate: labor.read() });
       close();
     } catch (saveError) {
       save.disabled = false;

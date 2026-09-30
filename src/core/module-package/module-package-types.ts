@@ -1,3 +1,4 @@
+import type { LaborRate } from "../project-manufacturing/module-labor";
 export const MODULE_PACKAGE_FORMAT = "furnquote-module" as const;
 export const CURRENT_MODULE_PACKAGE_VERSION = 1;
 
@@ -434,6 +435,8 @@ export type ModuleParameterPresetRatioParameter = {
 };
 
 export type ModuleParameterPreset = {
+  /** Company rate per cabinet; absent/null inherits the module type. */
+  laborRate?: LaborRate | null;
   presetId: string;
   label: string;
   description?: string;
