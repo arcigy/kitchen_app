@@ -65,4 +65,41 @@ describe("release news dialog", () => {
     expect(document.querySelector(".workspace-settings-ui-scale")).not.toBeNull();
     controller.dispose();
   });
+
+  it("orders multiple releases by date and prompts only for the newest unread release", async () => {
+    setCurrentLanguage("sk");
+    const newer = RELEASE_NOTICES[0];
+    const older = {
+      ...newer,
+      id: "2026-08-kitchen-archive-test",
+      date: "2026-08-01",
+      title: { ...newer.title, sk: "Staršie oznámenie" }
+    };
+    const acknowledgedNoticeIds = [older.id];
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => input === "/api/release-news"
+      ? new Response(JSON.stringify({ notices: [older, newer], acknowledgedNoticeIds }), { status: 200 })
+      : new Response(JSON.stringify({ acknowledgement: { noticeId: newer.id } }), { status: 200 }));
+    const create = () => createReleaseNewsController({ fetcher: fetcher as typeof fetch, uiScale: { createControl: createScaleControl } });
+
+    const controller = create();
+    await vi.waitFor(() => expect(document.querySelector("h2")?.textContent).toBe(newer.title.sk));
+    const dates = [...document.querySelectorAll<HTMLButtonElement>(".release-news-date")];
+    expect(dates.map((button) => button.querySelector("time")?.dateTime)).toEqual([newer.date, older.date]);
+    dates[1]?.click();
+    expect(document.querySelector("h2")?.textContent).toBe(older.title.sk);
+    document.querySelector('[role="dialog"]')?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    document.dispatchEvent(new Event("arcigy:open-release-news"));
+    await vi.waitFor(() => expect(document.querySelector("h2")?.textContent).toBe(newer.title.sk));
+    document.querySelector<HTMLButtonElement>(".release-news-acknowledge")?.click();
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect(fetcher).toHaveBeenCalledWith(`/api/release-news/${newer.id}/acknowledgement`, expect.objectContaining({ method: "PUT" }));
+    controller.dispose();
+
+    const afterReload = create();
+    await vi.waitFor(() => expect(fetcher.mock.calls.filter(([input]) => input === "/api/release-news")).toHaveLength(2));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    afterReload.dispose();
+  });
 });
