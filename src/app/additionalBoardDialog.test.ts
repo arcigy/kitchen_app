@@ -19,8 +19,8 @@ describe("additional board manufacturing", () => {
     const material = catalog.materials.find(item => item.materialType === "board" && item.boardFamily === "body")!;
     const edge = structuredClone(material); edge.id = "qa-edge"; edge.materialType = "edge"; edge.pricingBasis = "linear_length"; edge.pricingUnit = "lm"; edge.edgeFamily = "body"; delete edge.boardFamily; catalog.materials.push(edge);
     catalog.priceList.prices[material.id] = 20; catalog.priceList.prices[edge.id] = 2;
-    const params = additionalBoardParams({ name: "QA cover", lengthMm: 600, widthMm: 400, thicknessMm: 18, elevationMm: 800, orientation, materialId: material.id, edgeMaterialId: edge.id, edges: [true, false, true, false] });
-    const restored = JSON.parse(JSON.stringify(params)); expect(() => validateBacksplashFurniture(restored)).not.toThrow();
+    const params = additionalBoardParams({ name: "QA cover", lengthMm: 600, widthMm: 400, thicknessMm: 18.1, elevationMm: 800, orientation, materialId: material.id, edgeMaterialId: edge.id, edges: [true, false, true, false] });
+    const restored = JSON.parse(JSON.stringify(params)); expect(restored.boards[0].thicknessMm).toBe(18.1); expect(() => validateBacksplashFurniture(restored)).not.toThrow();
     const furniture: CustomFurnitureInstance = { id: "qa-board", params: restored, root: new THREE.Group(), boundaryLine: new THREE.Line(), boardsRoot: new THREE.Group(), boardObjects: [] };
     const runtime = createProjectMaterialRuntimeCatalog(catalog), assignments = createDefaultProjectMaterialAssignments(catalog, "2026-10-02T00:00:00Z");
     assignments.assignments.find(item => item.category === "corpus")!.snapshots.material!.unitPrice = 500;
@@ -30,6 +30,7 @@ describe("additional board manufacturing", () => {
     const context = makeDefaultKitchenContext(runtime.catalog);
     const entries = buildProjectPricingViews([], [], [furniture], context, runtime.catalog);
     const board = entries[0]!.result.pricing.items.find(item => item.itemType === "board")!;
+    // The factory accepts fractional input; existing editor and BOM normalization use whole millimetres.
     expect(board.dimensionsMm).toEqual({ length: 600, width: 400, thickness: 18 }); expect(board.metrics?.areaM2).toBe(.24);
     const edgeLength = entries[0]!.result.pricing.items.filter(item => item.itemType === "edge_band").reduce((sum,item)=>sum+item.pricingQuantity,0);
     expect(edgeLength).toBe(1.2);

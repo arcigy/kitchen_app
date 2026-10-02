@@ -24,7 +24,7 @@ export function openAdditionalBoardDialog(catalog: ClientCatalog, commit: (param
     const form=document.createElement("form"); form.style.cssText="display:grid;gap:10px";
     const title=document.createElement("h2");title.id="additional-board-title";title.textContent="Pridať doskový dielec";dialog.setAttribute("aria-labelledby",title.id);form.append(title);
     const row=(label:string,input:HTMLElement)=>{const el=document.createElement("label");el.style.cssText="display:grid;gap:4px";el.textContent=label;input.setAttribute("aria-label",label);el.append(input);form.append(el);return input;};
-    const number=(label:string,value:number,min:number)=>{const input=document.createElement("input");input.type="number";input.required=true;input.min=String(min);input.max="20000";input.step="1";input.value=String(value);row(label,input);return input;};
+    const number=(label:string,value:number,min:number)=>{const input=document.createElement("input");input.type="number";input.required=true;input.min=String(min);input.max="20000";input.step="any";input.value=String(value);row(label,input);return input;};
     const name=document.createElement("input");name.required=true;name.value="Doplnkový dielec";row("Názov dielca",name);
     const orientation=document.createElement("select");orientation.add(new Option("Vodorovná doska","horizontal"));orientation.add(new Option("Zvislá doska","vertical"));row("Orientácia",orientation);
     const length=number("Dĺžka (mm)",600,1),width=number("Šírka / výška dielca (mm)",400,1),thickness=number("Hrúbka (mm)",18,1),elevation=number("Výška spodnej hrany nad podlahou (mm)",0,-20000);
