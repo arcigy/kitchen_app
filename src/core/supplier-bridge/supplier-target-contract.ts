@@ -1,8 +1,9 @@
 import type { MaterialAssignmentCategory } from "../project-materials/project-material-types";
 import type { SupplierExpectedProductType } from "./supplier-bridge-types";
+import { getMaterialAssignmentCategoryDefinition } from "../project-materials/project-material-business";
 
 const BOARD_CATEGORIES = new Set<MaterialAssignmentCategory>([
-  "corpus", "front", "worktop", "plinth", "back", "drawer_bottom"
+  "corpus", "front", "worktop", "plinth", "back", "drawer_bottom", "backsplash"
 ]);
 
 const GENERIC_HARDWARE_TYPES = new Set(["hardware", "component", "other", "unknown"]);
@@ -26,7 +27,7 @@ export function supplierExpectedProductTypeForMaterialCategory(category: Materia
   if (category === "leg") return "leg";
   if (category === "fastener") return "fastener";
   if (category === "lighting") return "lighting";
-  if (category === "other_component") return "component";
+  if (getMaterialAssignmentCategoryDefinition(category).kind === "component") return "component";
   return "board";
 }
 

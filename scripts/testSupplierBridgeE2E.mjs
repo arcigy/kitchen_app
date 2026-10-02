@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { access, cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -148,16 +148,21 @@ async function main() {
     })
   }));
   await app.addInitScript(() => localStorage.removeItem("arcigy.kitchen.autostartWorkspace"));
-  const warmUrl = new URL(appUrl);
-  warmUrl.searchParams.set("workspace", "1");
-  await app.goto(warmUrl.toString(), { waitUntil: "commit", timeout: 120_000 });
-  try { await app.waitForFunction(() => Boolean(window.__kitchenDebug), undefined, { timeout: 120_000 }); }
-  catch { await app.reload({ waitUntil: "domcontentloaded" }); await app.waitForFunction(() => Boolean(window.__kitchenDebug), undefined, { timeout: 120_000 }); }
-  result.consoleErrors.length = 0;
-  await app.evaluate(() => localStorage.removeItem("arcigy.kitchen.autostartWorkspace"));
-  await app.goto(appUrl, { waitUntil: "domcontentloaded" });
-  await app.locator("[data-project-manager-new]").waitFor({ timeout: 30_000 });
-  await app.locator("[data-project-manager-new]").click();
+  await app.goto(appUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
+  await app.locator("[data-project-manager-form]").waitFor({ state: "attached", timeout: 30_000 });
+  const newsResponse = await context.request.get(new URL("/api/release-news", appUrl).toString());
+  assert(newsResponse.ok(), "release notice state loaded");
+  const news = await newsResponse.json();
+  if (news.notices.some((notice) => !news.acknowledgedNoticeIds.includes(notice.id))) {
+    const notice = app.locator(".release-news-dialog");
+    await notice.waitFor({ timeout: 15_000 });
+    await notice.getByRole("button", { name: /rozumiem|got it/i }).click();
+    await notice.waitFor({ state: "detached", timeout: 5_000 });
+    assert(true, "first-open release notice acknowledged through the UI");
+  }
+  if (!await app.locator("[data-project-manager-form]").isVisible()) {
+    await app.locator("[data-project-manager-new]").click();
+  }
   const name = `Supplier Bridge E2E ${Date.now()}`;
   await app.locator('input[name="name"]').fill(name);
   await app.locator('input[name="address"]').fill("Simulator 1");
@@ -297,6 +302,11 @@ try {
 } catch (error) {
   result.error = error instanceof Error ? error.message : String(error);
   if (error && typeof error === "object" && "details" in error) result.details = error.details;
+  await mkdir(".tmp/supplier-bridge-e2e", { recursive: true });
+  for (const [index, page] of (context?.pages() ?? []).entries()) {
+    await page.screenshot({ path: `.tmp/supplier-bridge-e2e/failure-${index}.png` }).catch(() => undefined);
+    await writeFile(`.tmp/supplier-bridge-e2e/failure-${index}.txt`, `${page.url()}\n${await page.locator("body").innerText().catch(() => "")}`);
+  }
   process.exitCode = 1;
 } finally {
   if (projectId && context) await context.request.delete(new URL(`/api/projects/${projectId}`, appUrl).toString()).catch(() => undefined);

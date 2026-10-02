@@ -123,6 +123,8 @@ export function parseProjectMarginSettingsOperation(value: unknown): ProjectMarg
         type: "set_additional_labor",
         additionalLaborCost: finiteNumber(body.additionalLaborCost, "operation.additionalLaborCost")
       };
+    case "set_construction_labor":
+      return { type: "set_construction_labor", percent: finiteNumber(body.percent, "operation.percent") };
     case "set_manufacturing":
       return { type: "set_manufacturing", manufacturing: normalizeProjectManufacturingSettings(body.manufacturing) };
     default:

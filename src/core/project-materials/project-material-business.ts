@@ -358,13 +358,18 @@ export function getMaterialAssignmentCategoryDefinition(category: MaterialAssign
   return definition;
 }
 
-export function isMaterialAllowedForCategory(material: MaterialDefinition, category: MaterialAssignmentCategory): boolean {
+export function isMaterialAllowedForCategory(material: MaterialDefinition, category: MaterialAssignmentCategory, reuseBoard = false): boolean {
   const definition = getMaterialAssignmentCategoryDefinition(category);
   if (
     definition.kind !== "material" ||
     material.materialType !== definition.materialType ||
     (material.pricingUnit !== definition.quantityUnit && !(category === "plinth" && material.pricingUnit === "m2"))
   ) return false;
+  // Board families choose initial defaults. An explicitly reused sheet board
+  // can serve another cabinet part without changing the product's identity.
+  const cabinetBoardFamilies: readonly BoardFamily[] = ["body", "shelf", "front", "back", "drawer_bottom", "drawer_box"];
+  if (reuseBoard && ["corpus", "front", "back", "drawer_bottom"].includes(category)
+    && material.boardFamily && cabinetBoardFamilies.includes(material.boardFamily)) return true;
   return !definition.boardFamilies?.length || (!!material.boardFamily && definition.boardFamilies.includes(material.boardFamily));
 }
 
@@ -604,7 +609,7 @@ function validateMaterialAssignment(
       definition.category,
       assignment.assignmentId
     ));
-  } else if (!isMaterialAllowedForCategory(material, definition.category)) {
+  } else if (!isMaterialAllowedForCategory(material, definition.category, true)) {
     warnings.push(warning(
       `material-category:${assignment.assignmentId}`,
       "error",

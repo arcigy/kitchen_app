@@ -1,4 +1,5 @@
 import { applyProjectAssignedPricing } from "./projectAssignedPricing";
+import { worktopPurchase } from "./worktopPurchase";
 import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import type { MaterialAssignmentCategory, ProjectMaterialScope, ProjectMaterialScopeItem } from "../../core/project-materials/project-material-types";
 import type { KitchenContext } from "../kitchenContext";
@@ -71,7 +72,7 @@ function scopeCategory(item: PortableQuoteBomItem): MaterialAssignmentCategory |
   return projectMaterialCategoryForBomItem(item);
 }
 
-function scopeItems(quoteBom: PortableQuoteBomPayload, scopeId: string): ProjectMaterialScopeItem[] {
+function scopeItems(quoteBom: PortableQuoteBomPayload, scopeId: string, currency: string): ProjectMaterialScopeItem[] {
   return quoteBom.items.flatMap((item) => {
     const category = scopeCategory(item);
     if (!category) return [];
@@ -96,6 +97,7 @@ function scopeItems(quoteBom: PortableQuoteBomPayload, scopeId: string): Project
       unit = "m2";
     }
     if (quantity == null) return [];
+    const purchase = item.material ? worktopPurchase(item, item.material) : null;
     const runnerVariantLabel = category === "runner" ? item.variantLabel : undefined;
     const moduleId = scopeId.startsWith("module:") ? scopeId.slice("module:".length) : null;
     const additionId = scopeId.startsWith("addition:") ? scopeId.slice("addition:".length) : null;
@@ -107,6 +109,7 @@ function scopeItems(quoteBom: PortableQuoteBomPayload, scopeId: string): Project
         : undefined;
     return [{
       id: item.id,
+      ...(purchase ? { worktopPurchase: { ...purchase, materialLabel: item.material?.displayName ?? "Pracovná doska", netAreaM2: quantity, cost: item.itemCost ?? null, currency } } : {}),
       ...(item.backsplashPurchase ? { backsplashPurchase: item.backsplashPurchase } : {}),
       category,
       ...(item.edgeGroupId ? { edgeGroupId: item.edgeGroupId, edgeGroupExplicit: item.edgeGroupExplicit } : {}),
@@ -137,14 +140,14 @@ export function buildProjectMaterialScopes(input: ProjectMaterialUsageInput): Pr
     try {
       const quoteBom = applyProjectAssignedPricing(calculateModuleBOM(instance, context, input.catalog), `module:${instance.id}`, input.catalog).quoteBom;
       const scopeId = `module:${instance.id}`;
-      scopes.push({ id: scopeId, kind: "module", label: quoteBom.displayName, items: scopeItems(quoteBom, scopeId) });
+      scopes.push({ id: scopeId, kind: "module", label: quoteBom.displayName, items: scopeItems(quoteBom, scopeId, input.catalog.priceList.currency) });
     } catch {
       // The summary warning path reports malformed modules without hiding valid module scopes.
     }
   }
   for (const addition of buildProjectPricingViews([], [...input.worktops], [...input.customFurniture], input.kitchenContext, input.catalog, [...(input.ledStripGroups ?? [])])) {
     const scopeId = addition.kind === "project" ? "project" : `addition:${addition.instanceId}`;
-    scopes.push({ id: scopeId, kind: addition.kind === "project" ? "project" : "addition", label: addition.label, items: scopeItems(addition.result.quoteBom, scopeId) });
+    scopes.push({ id: scopeId, kind: addition.kind === "project" ? "project" : "addition", label: addition.label, items: scopeItems({ ...addition.result.quoteBom, items: addition.result.pricing.items }, scopeId, input.catalog.priceList.currency) });
   }
   return scopes;
 }

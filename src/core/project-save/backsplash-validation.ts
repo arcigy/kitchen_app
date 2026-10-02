@@ -22,6 +22,7 @@ export function validateBacksplashFurniture(params:Record<string,unknown>){
   }
   for(const value of Array.isArray(params.boards)?params.boards:[]){
     if(!object(value))continue;cutouts(value.cutouts);
+    if(value.materialOverride!==undefined&&typeof value.materialOverride!=="boolean")fail();
     if(value.backsplashSource!==undefined){
       const s=value.backsplashSource;if(!object(s)||!params.backsplash)fail();const source=s as Record<string,unknown>;
       validateSnapshot(source.materialSnapshot,value.materialId as string,"material","board.backsplashSource.materialSnapshot");

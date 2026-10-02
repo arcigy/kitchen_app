@@ -10,17 +10,19 @@ export type ProjectComponentValues = {
   currency?: PriceCurrency;
   unit?: ProjectComponentUnit;
   includedInPackage?: boolean;
+  excludeFromConstructionLabor?: boolean;
 };
 
 export function validateProjectComponentValues(value: unknown): asserts value is ProjectComponentValues {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Neplatné projektové hodnoty komponentu.");
   const record = value as Record<string, unknown>;
-  for (const key of Object.keys(record)) if (!["quantity", "unitPrice", "currency", "unit", "includedInPackage"].includes(key)) throw new Error(`Neznáma hodnota komponentu: ${key}.`);
+  for (const key of Object.keys(record)) if (!["quantity", "unitPrice", "currency", "unit", "includedInPackage", "excludeFromConstructionLabor"].includes(key)) throw new Error(`Neznáma hodnota komponentu: ${key}.`);
   for (const key of ["quantity", "unitPrice"]) if (record[key] !== undefined && (typeof record[key] !== "number" || !Number.isFinite(record[key]) || record[key] < 0)) throw new Error("Množstvo a cena musia byť nezáporné konečné čísla.");
   if (record.currency !== undefined && !isPriceCurrency(record.currency)) throw new Error("Nepodporovaná mena.");
   if (record.unitPrice !== undefined && !isPriceCurrency(record.currency)) throw new Error("Vlastná cena vyžaduje menu.");
   if (record.unit !== undefined && !["pcs", "set", "lm", "profile"].includes(String(record.unit))) throw new Error("Nepodporovaná jednotka komponentu.");
   if (record.includedInPackage !== undefined && typeof record.includedInPackage !== "boolean") throw new Error("Neplatný údaj o zahrnutí v balení.");
+  if (record.excludeFromConstructionLabor !== undefined && typeof record.excludeFromConstructionLabor !== "boolean") throw new Error("Neplatný údaj o konštrukčnej práci.");
   if (typeof record.quantity === "number" && record.unit && record.unit !== "lm" && !Number.isSafeInteger(record.quantity)) throw new Error("Kusy, sady a celé profily vyžadujú celé množstvo.");
 }
 

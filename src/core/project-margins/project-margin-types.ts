@@ -28,6 +28,8 @@ export type ProjectMarginSettingsState = {
   additionalLaborCost: number;
   /** New edits are billed as a final fixed amount; absent preserves historical markup. */
   additionalLaborFixed?: boolean;
+  /** Final construction fee as a percentage of selling price before project labor, excluding appliances. */
+  constructionLaborPercent?: number;
   groupMargins: Partial<Record<ProjectMarginCategory, number>>;
   itemOverrides: ProjectMarginItemOverride[];
   manufacturing: ProjectManufacturingSettings;
@@ -93,6 +95,7 @@ export function normalizeProjectMarginSettingsState(value: unknown): ProjectMarg
       10_000_000
     ),
     ...(typeof legacy.additionalLaborFixed === "boolean" ? { additionalLaborFixed: legacy.additionalLaborFixed } : {}),
+    ...(typeof legacy.constructionLaborPercent === "number" ? { constructionLaborPercent: legacy.constructionLaborPercent } : {}),
     manufacturing: normalizeProjectManufacturingSettings(legacy.manufacturing)
   };
 }

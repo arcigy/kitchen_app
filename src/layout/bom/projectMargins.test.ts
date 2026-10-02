@@ -499,3 +499,29 @@ describe("fixed additional work and currency parity", () => {
     expect(quote.contribution?.contributionAmount).toBe(28.93);
   });
 });
+
+
+describe("construction labor", () => {
+  it("uses selling price excluding appliances and project labor, and charges the fee once without markup", () => {
+    const state = { ...createDefaultProjectMarginSettingsState(), defaultMarginPercent: 100, additionalLaborCost: 75, additionalLaborFixed: true, constructionLaborPercent: 10 };
+    const board = pricedItem({ id: "board", cost: 100 });
+    const appliance = { ...pricedItem({ id: "appliance", cost: 500, itemType: "hardware" }), category: "appliance" };
+    const entries = [entry({ instanceId: "m1", items: [board, appliance], labor: 25 })];
+    const view = buildProjectMarginsView(entries, state);
+    expect(view.constructionLabor).toEqual({ percent: 10, baseAmount: 250, amount: 25, preliminary: false });
+    expect(view.summary.finalPrice).toBe(1350);
+    expect(view.groups.find(group => group.category === "labor")?.items.find(item => item.itemId === "construction-labor")).toMatchObject({ baseCost: 25, marginAmount: 0, finalPrice: 25 });
+    expect(buildProjectQuoteSummary(entries, state).constructionLaborCost).toBe(25);
+    expect(buildProjectQuoteSummary(entries, state).laborCostTotal).toBe(125);
+    const persisted = applyProjectMarginSettingsOperation(createDefaultProjectMarginSettingsState(), { type: "set_construction_labor", percent: 10 }, new Set());
+    expect(buildProjectMarginsView(entries, JSON.parse(JSON.stringify(persisted))).constructionLabor?.percent).toBe(10);
+    expect(() => applyProjectMarginSettingsOperation(state, { type: "set_construction_labor", percent: -1 }, new Set())).toThrow();
+  });
+  it("honors explicit appliance exclusions and marks a partial basis when prices are missing", () => {
+    const state = { ...createDefaultProjectMarginSettingsState(), constructionLaborPercent: 10 };
+    const assignment: ProjectMaterialAssignment = { assignmentId: "material-assignment:extra:oven", category: "other_component", kind: "component", extraComponent: { scopeId: "project", label: "Oven" }, projectValues: { unitPrice: 500, currency: "EUR", excludeFromConstructionLabor: true }, snapshots: {}, customValues: {}, source: "user", updatedAt: "2026-10-02T00:00:00Z" };
+    const project = { ...entry({ instanceId: "extras", items: [pricedItem({ id: assignment.assignmentId, cost: 500, itemType: "hardware" })] }), kind: "project" as const };
+    const view = buildProjectMarginsView([entry({ instanceId: "m1", items: [pricedItem({ id: "board", cost: 100 }), pricedItem({ id: "missing", cost: null })] }), project], state, { materialAssignments: [assignment] });
+    expect(view.constructionLabor).toMatchObject({ baseAmount: 120, amount: 12, preliminary: true });
+  });
+});

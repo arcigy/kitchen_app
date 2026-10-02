@@ -1,4 +1,7 @@
 import { setRuntimeProjectAssignments } from "../core/project-materials/runtimeProjectAssignments";
+import { createMaterialAssignmentEditor } from "./materialAssignmentEditor";
+import { applyMaterialAssignmentChanges } from "../core/project-materials/project-material-edits";
+import { showToast } from "../ui/toast";
 import { resolveEffectiveProjectMaterialAssignment } from "../core/project-materials/project-material-assignment-resolution";
 import { openProjectComponentDialog, type ProjectComponentEdit } from "./projectComponentDialog";
 import { applyProjectComponentOperation, type ProjectComponentOperation } from "../core/project-materials/project-component-operations";
@@ -67,6 +70,8 @@ export type MaterialsPhaseControllerApi = {
 };
 
 export type MaterialsPhaseControllerArgs = {
+  onAddBoard?: (draw: boolean) => Promise<void>;
+  onCreateBacksplash?: () => Promise<void>;
   container: HTMLElement;
   catalog: ClientCatalog;
   getProjectId?: () => string | null;
@@ -125,11 +130,33 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
   const commitAborts = new Map<MaterialAssignmentCategory, AbortController>();
   const notifyViewChanged = () => args.onViewChanged?.(structuredClone(view));
   const notifyAssignmentsCommitted = () => args.onAssignmentsCommitted?.(structuredClone(assignments));
+  let materialEditGeneration = 0;
+  const materialEditor = createMaterialAssignmentEditor({
+    getView: () => view,
+    now,
+    notify: (message, tone) => showToast(message, tone, "top"),
+    commit: async (changes) => {
+      const generation = materialEditGeneration;
+      const projectId = args.getProjectId?.() ?? null;
+      if (projectId) {
+        if (!remoteLoaded) throw new Error("Serverové priradenia nie sú načítané. Obnovte Materiály.");
+        const nextView = await api.updateProjectComponentValues(projectId, assignments.revision, { type: "edit_assignments", changes });
+        if (generation !== materialEditGeneration || projectId !== args.getProjectId?.()) return;
+        applyRemoteView(nextView, now());
+      } else {
+        assignments = applyMaterialAssignmentChanges(assignments, changes, assignments.revision, now());
+        renderLocalView(); notifyAssignmentsCommitted();
+      }
+    }
+  });
 
   const ensurePanel = () => {
     if (panel) return panel;
     panel = mountProjectMaterialsPanel(args.container, view, {
       wasteControls: wasteHost,
+      onMaterialCommand: materialEditor.execute,
+      onAddBoard: args.onAddBoard,
+      onCreateBacksplash: args.onCreateBacksplash,
       onEditComponent: editComponent,
       onOpenModuleProperties: args.onOpenModuleProperties,
       onAddComponent: addComponent,
@@ -451,6 +478,8 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       panel = null;
     },
     destroy(): void {
+      materialEditGeneration += 1;
+      materialEditor.reset();
       wasteController?.destroy();
       active = false;
       remoteLoaded = false;
@@ -475,6 +504,8 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       return structuredClone(assignments);
     },
     restoreSaveState(state: ProjectMaterialAssignmentsState | null | undefined): ProjectMaterialsView {
+      materialEditGeneration += 1;
+      materialEditor.reset();
       assignments = initialAssignments(state, args.catalog, now());
       remoteLoaded = false;
       renderLocalView();

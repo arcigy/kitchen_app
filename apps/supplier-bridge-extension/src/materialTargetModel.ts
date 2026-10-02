@@ -88,7 +88,7 @@ function assignmentLabel(assignment: ProjectMaterialAssignment): string {
 }
 
 function assignmentThickness(category: ProjectMaterialAssignment["category"], assignment: ProjectMaterialAssignment | undefined): number | null {
-  if (!["corpus", "front", "worktop", "plinth", "back", "drawer_bottom"].includes(category)) return null;
+  if (!["corpus", "front", "worktop", "plinth", "back", "drawer_bottom", "backsplash"].includes(category)) return null;
   return assignment?.thicknessMm ?? assignment?.snapshots.material?.definition.defaultThicknessMm ?? null;
 }
 

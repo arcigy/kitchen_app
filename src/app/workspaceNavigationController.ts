@@ -373,7 +373,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   });
 
   const openModuleProperties = async (id: string) => { await handleNav("design"); args.selectModuleById?.(id); };
-  return { openModuleProperties, closeOverlay, openSheets, openSchedules, openMaterials, openMargins, leaveMaterialsPhase, leaveMarginsPhase };
+  return { openDesign: () => handleNav("design"), openModuleProperties, closeOverlay, openSheets, openSchedules, openMaterials, openMargins, leaveMaterialsPhase, leaveMarginsPhase };
 }
 
 function escapeHtml(value: string): string {
