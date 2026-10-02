@@ -95,6 +95,7 @@ export type ProjectMarginSheetMaterialView = ProjectMarginSheetMaterialPolicy & 
 };
 
 export type ProjectMarginsView = {
+  constructionLabor?: { percent: number; baseAmount: number; amount: number; preliminary: boolean };
   revision: number;
   editable: boolean;
   currency: PriceCurrency;
@@ -112,6 +113,7 @@ export type ProjectMarginSettingsOperation =
   | { type: "reset_group"; category: ProjectMarginCategory }
   | { type: "reset_item"; target: ProjectMarginTarget }
   | { type: "set_additional_labor"; additionalLaborCost: number }
+  | { type: "set_construction_labor"; percent: number }
   | { type: "set_manufacturing"; manufacturing: ProjectManufacturingSettings };
 
 type DraftMarginItem = Omit<ProjectMarginItemView, "marginAmount" | "finalPrice"> & {
@@ -168,6 +170,7 @@ function assignedPriceResolution(
   // not be replaced by the generic board assignment and counted twice.
   if (item.unitPriceOverrideSource !== "project" && typeof item.unitPriceOverride === "number" && Number.isFinite(item.unitPriceOverride)) return null;
   const effective = resolveEffectiveProjectMaterialAssignment(assignments, scopeId, { id: item.id, category, variantKey: item.variantKey, edgeGroupId: item.edgeGroupId, edgeGroupExplicit: item.edgeGroupExplicit });
+  if (item.explicitBoardMaterial && effective.source !== "override") return null;
   const assignment = effective.assignment ? repairSupplierMaterialAssignment(effective.assignment) : null;
   if (!assignment) return item.edgeGroupId?.startsWith("material-assignment:edge-group:") ? { baseCost: null, resourceLabel: "Chýbajúca skupina olepenia" } : null;
   const snapshot = assignment.kind === "material"
@@ -355,6 +358,7 @@ export function buildProjectMarginsView(
   }));
   const drafts: DraftMarginItem[] = [];
   const seenTargetIds = new Set<string>();
+  const constructionExcluded = new Set<string>();
   const currency = options.currency ?? "EUR";
   const materialAssignments = options.materialAssignments ?? [];
 
@@ -381,6 +385,9 @@ export function buildProjectMarginsView(
         throw new Error(`Duplicate project margin target ${targetId} in the current BOM.`);
       }
       seenTargetIds.add(targetId);
+      const effectiveAssignment = resolveEffectiveProjectMaterialAssignment(materialAssignments, scopeId, { ...item, category }).assignment;
+      const productType = item.component?.metadata?.supplierProductType ?? item.component?.metadata?.productType;
+      if (item.excludeFromConstructionLabor || effectiveAssignment?.projectValues?.excludeFromConstructionLabor || productType === "appliance" || item.category === "appliance" || item.component?.tags.includes("appliance")) constructionExcluded.add(targetId);
       const assignedPrice = assignedPriceResolution(materialAssignments, scopeId, category, item, currency, entry.result.quoteBom.moduleInstance.quantity);
       if (assignedPrice?.warning) {
         warnings.push({
@@ -464,6 +471,15 @@ export function buildProjectMarginsView(
   }));
 
   allocateMarginCents(drafts);
+  const constructionBaseCents = drafts.filter(item => !constructionExcluded.has(item.targetId) && !(item.scopeId === "project" && item.category === "labor"))
+    .reduce((sum, item) => sum + item.costCents + item.marginCents, 0);
+  const constructionPercent = state.constructionLaborPercent ?? 0;
+  const constructionAmount = Math.round(constructionBaseCents * constructionPercent / 100) / 100;
+  if (constructionPercent > 0) {
+    drafts.push(draftItem({ state, target: { scopeId: "project", itemId: "construction-labor", category: "labor" },
+      label: `Konštrukčná práca · ${constructionPercent} %`, scopeLabel: "Projekt", resourceLabel: "Práca", quantity: 1, unit: "custom",
+      baseCost: constructionAmount, marginPercent: 0, missingPrice: false }));
+  }
   const activeTargetIds = new Set(drafts.map((item) => item.targetId));
   for (const override of state.itemOverrides) {
     if (!activeTargetIds.has(override.targetId)) {
@@ -526,6 +542,7 @@ export function buildProjectMarginsView(
     currency,
     priceAuthority: "Nákupné ceny vychádzajú z materiálov a komponentov aktuálne priradených v projekte. Skupinové priradenie sa dedí do jednotlivých častí, kým ho neprepíše vlastné priradenie.",
     settings: structuredClone(state),
+    constructionLabor: { percent: constructionPercent, baseAmount: constructionBaseCents / 100, amount: constructionAmount, preliminary: drafts.some(item => item.missingPrice) },
     summary: {
       contribution,
       baseCost: baseCents / 100,
@@ -573,6 +590,8 @@ export function applyProjectMarginSettingsOperation(
   } else if (operation.type === "set_additional_labor") {
     next.additionalLaborCost = round(operation.additionalLaborCost, 2);
     next.additionalLaborFixed = true;
+  } else if (operation.type === "set_construction_labor") {
+    next.constructionLaborPercent = normalizedPercent(operation.percent);
   } else if (operation.type === "set_manufacturing") {
     next.manufacturing = normalizeProjectManufacturingSettings(operation.manufacturing);
   } else {

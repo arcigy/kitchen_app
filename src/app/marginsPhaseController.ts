@@ -10,6 +10,7 @@ import {
   resetProjectMarginGroup,
   resetProjectMarginItem,
   setProjectAdditionalLabor,
+  setProjectConstructionLabor,
   setProjectManufacturing,
   updateProjectMarginDefault,
   updateProjectMarginItem
@@ -29,6 +30,7 @@ import { mountMaterialWastePanel, type ProjectWasteRates } from "../ui/materialW
 import { normalizeProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
 
 export type MarginsPhaseControllerApi = {
+  setProjectConstructionLabor: typeof setProjectConstructionLabor;
   loadProjectMargins: (projectId: string, signal?: AbortSignal) => Promise<ProjectMarginsView>;
   updateProjectMarginDefault: (
     projectId: string,
@@ -68,6 +70,7 @@ export type MarginsPhaseControllerApi = {
 };
 
 export type MarginsPhaseControllerArgs = {
+  onCreateBacksplash?: () => Promise<void>;
   container: HTMLElement;
   presentation?: "margins" | "material-waste";
   footerContainer?: HTMLElement;
@@ -77,6 +80,7 @@ export type MarginsPhaseControllerArgs = {
 };
 
 const DEFAULT_API: MarginsPhaseControllerApi = {
+  setProjectConstructionLabor,
   loadProjectMargins,
   updateProjectMarginDefault,
   setProjectAdditionalLabor,
@@ -117,6 +121,8 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
     panel = mountProjectMarginsPanel(args.container, initialView, {
       onCommitDefault: commitDefault,
       onCommitAdditionalLabor: commitAdditionalLabor,
+      onCreateBacksplash: args.onCreateBacksplash,
+      onCommitConstructionLabor: (percent) => runMutation((projectId, currentView, signal) => api.setProjectConstructionLabor(projectId, { revision: currentView.revision, percent }, signal)),
       onCommitManufacturing: commitManufacturing,
       onApplyGroup: commitGroup,
       onResetGroup: resetGroup,

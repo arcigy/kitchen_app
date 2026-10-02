@@ -9,7 +9,7 @@ import { makeDefaultFwmFurnitureParams, normalizeFwmFurnitureParams } from "../.
 import { applyProjectAssignedPricing } from "./projectAssignedPricing";
 import { buildProjectMarginsView } from "./projectMargins";
 
-function fixture(copies = 1, unitPrice: number | null = 859.54) {
+function fixture(copies = 1, unitPrice: number | null = 859.54, heights = "264,264,264") {
   const base = { clientId: "runner-test", ...createSystemCatalogSeed() };
   const definition = { ...base.components.find(component => component.componentType === "runner")!, id: "supplier-runner:fixture:variant", name: "Runner set", displayName: "Runner set" };
   const assignment: ProjectMaterialAssignment = {
@@ -23,7 +23,7 @@ function fixture(copies = 1, unitPrice: number | null = 859.54) {
   runtime.applyProjectAssignments({ schemaVersion: 2, initialized: true, revision: 1, assignments: [assignment] });
   // 900 carcass envelope - 100 legs - 4 outer gaps - 4 inter-front gaps = 3 × 264.
   const params = { ...makeDefaultFwmFurnitureParams("fwm_catalog_base_drawers"), height: 938, heightCarcass: 900,
-    worktopThicknessMm: 38, plinthHeight: 100, frontGap: 2, boardThickness: 18, drawerCount: 3, quantity: copies };
+    worktopThicknessMm: 38, plinthHeight: 100, frontGap: 2, boardThickness: 18, drawerCount: 3, drawerFrontHeightsMm: heights, drawer1FrontHeightMm: Number(heights.split(",")[0]), drawer2FrontHeightMm: Number(heights.split(",")[1]), drawer3FrontHeightMm: Number(heights.split(",")[2]), quantity: copies };
   const raw = calculateFwmFurnitureBOM(params, makeDefaultKitchenContext(base), runtime.catalog);
   const settings = createDefaultProjectMarginSettingsState(); settings.groupMargins.runner = 150;
   const price = (assignments = [assignment]) => {
@@ -46,6 +46,15 @@ describe("project runner price authority", () => {
     expect(runner.validationErrors).toEqual([]);
     expect(runner.itemCost).toBeGreaterThan(0);
     expect(base.components.some(component => component.id === assignment.componentId)).toBe(false);
+  });
+
+  it("keeps the priced runner subtotal when other front heights have no product", () => {
+    const { assignment, price } = fixture(1, 859.54, "180,264,348");
+    const { result, group } = price([assignment]);
+    expect(group).toMatchObject({ baseCost: 859.54, finalPrice: 2148.85, missingPriceCount: 2 });
+    expect(group.items).toHaveLength(3);
+    expect(group.items.filter(item => !item.missingPrice)).toHaveLength(1);
+    expect(result.pricing.items.filter(item => item.category === "runner" && item.itemCost != null)).toHaveLength(1);
   });
 
   it("keeps explicit zero prices and refuses another front-height variant", () => {

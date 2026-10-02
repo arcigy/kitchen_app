@@ -23,6 +23,7 @@ export type ProjectQuoteSettings = {
   additionalLaborCost: number;
   marginPercent: number;
   additionalLaborFixed?: boolean;
+  constructionLaborPercent?: number;
 };
 
 export type ProjectQuoteSettingsInput = Partial<ProjectQuoteSettings> | ProjectMarginSettingsState | null | undefined;
@@ -38,6 +39,7 @@ export type ProjectQuoteSummary = {
   moduleLaborCost: number;
   additionalLaborCost: number;
   laborCostTotal: number;
+  constructionLaborCost?: number;
   subtotalBeforeMargin: number;
   marginPercent: number;
   marginAmount: number;
@@ -72,7 +74,8 @@ export function sanitizeProjectQuoteSettings(settings?: Partial<ProjectQuoteSett
   return {
     additionalLaborCost: round(Math.max(0, asFiniteNumber(settings?.additionalLaborCost, DEFAULT_PROJECT_QUOTE_SETTINGS.additionalLaborCost))),
     marginPercent: round(Math.max(0, asFiniteNumber(settings?.marginPercent, DEFAULT_PROJECT_QUOTE_SETTINGS.marginPercent)), 2),
-    ...(typeof settings?.additionalLaborFixed === "boolean" ? { additionalLaborFixed: settings.additionalLaborFixed } : {})
+    ...(typeof settings?.additionalLaborFixed === "boolean" ? { additionalLaborFixed: settings.additionalLaborFixed } : {}),
+    ...(settings?.constructionLaborPercent !== undefined ? { constructionLaborPercent: settings.constructionLaborPercent } : {})
   };
 }
 
@@ -85,7 +88,8 @@ export function buildProjectQuoteSummary(
     ? {
         additionalLaborCost: settings.additionalLaborCost,
         marginPercent: settings.defaultMarginPercent,
-        ...(typeof settings.additionalLaborFixed === "boolean" ? { additionalLaborFixed: settings.additionalLaborFixed } : {})
+        ...(typeof settings.additionalLaborFixed === "boolean" ? { additionalLaborFixed: settings.additionalLaborFixed } : {}),
+        ...(settings.constructionLaborPercent !== undefined ? { constructionLaborPercent: settings.constructionLaborPercent } : {})
       }
     : sanitizeProjectQuoteSettings(settings);
   const marginState = isProjectMarginSettingsState(settings)
@@ -101,7 +105,8 @@ export function buildProjectQuoteSummary(
   const hardwareCost = round(entries.reduce((sum, entry) => sum + money(entry, entry.result.pricing.groups.hardware.cost), 0));
   const materialCost = round(boardsCost + edgesCost + hardwareCost);
   const moduleLaborCost = round(entries.reduce((sum, entry) => sum + money(entry, entry.result.pricing.laborCostFixed), 0));
-  const laborCostTotal = round(moduleLaborCost + additionalLaborCost);
+  const constructionLaborCost = marginView.constructionLabor?.amount ?? 0;
+  const laborCostTotal = round(moduleLaborCost + additionalLaborCost + constructionLaborCost);
   const subtotalBeforeMargin = round(materialCost + laborCostTotal);
   const marginPercent = marginView.summary.combinedMarginPercent;
   const marginAmount = marginView.summary.marginAmount;
@@ -117,6 +122,7 @@ export function buildProjectQuoteSummary(
     moduleLaborCost,
     additionalLaborCost,
     laborCostTotal,
+    ...(constructionLaborCost > 0 ? { constructionLaborCost } : {}),
     subtotalBeforeMargin,
     marginPercent,
     marginAmount,

@@ -50,6 +50,8 @@ export function openProjectComponentDialog(args: {
     row(`Vlastná jednotková nákupná cena (${args.currency})`, price);
     const included = document.createElement("input"); included.type = "checkbox"; included.checked = old?.includedInPackage === true;
     row("Zahrnuté v balení – neúčtovať druhýkrát", included);
+    const appliance = document.createElement("input"); appliance.type = "checkbox"; appliance.checked = old?.excludeFromConstructionLabor === true;
+    row("Spotrebič – nezahrnúť do základu konštrukčnej práce", appliance);
     const error = document.createElement("p"); error.setAttribute("role", "alert"); form.append(error);
     const actions = document.createElement("div"); actions.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
     const button = (text: string, type: "button" | "submit" = "button") => { const node = document.createElement("button"); node.type = type; node.textContent = text; actions.append(node); return node; };
@@ -75,6 +77,7 @@ export function openProjectComponentDialog(args: {
         if (editableQuantity && quantity.value.trim()) values.quantity = Number(quantity.value);
         if (price.value.trim()) { values.unitPrice = Number(price.value); values.currency = args.currency; }
         if (included.checked) values.includedInPackage = true;
+        if (appliance.checked) values.excludeFromConstructionLabor = true;
         validateProjectComponentValues(values);
         void commit(args.addScopeId ? { type: "add_component", id: crypto.randomUUID(), scopeId: args.addScopeId,
           label: label.value, componentId: catalogSelect.value || undefined, values }

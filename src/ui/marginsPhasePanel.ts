@@ -48,6 +48,8 @@ export type ProjectMarginManufacturingCommitRequest = {
 };
 
 export type ProjectMarginsPanelActions = {
+  onCreateBacksplash?: () => Promise<void>;
+  onCommitConstructionLabor?: (percent: number) => Promise<ProjectMarginCommitResult>;
   onCommitDefault: (request: ProjectMarginDefaultCommitRequest) => Promise<ProjectMarginCommitResult>;
   onCommitAdditionalLabor: (request: ProjectMarginLaborCommitRequest) => Promise<ProjectMarginCommitResult>;
   onCommitManufacturing?: (request: ProjectMarginManufacturingCommitRequest) => Promise<ProjectMarginCommitResult>;
@@ -118,11 +120,9 @@ export function mountProjectMarginsPanel(
     if (footerContainer) {
       footerContainer.replaceChildren();
       const summary = container.querySelector<HTMLElement>("[data-margin-summary]");
-      const controls = container.querySelector<HTMLElement>(".margins-project-controls");
       const footer = document.createElement("div");
       footer.className = "margins-footer";
       if (summary) footer.appendChild(summary);
-      if (controls) footer.appendChild(controls);
       footerContainer.appendChild(footer);
     }
     container.scrollTop = scrollTop;
@@ -220,6 +220,17 @@ export function mountProjectMarginsPanel(
 
   const onClick = (event: MouseEvent) => {
     const element = event.target instanceof Element ? event.target : null;
+    if (element?.closest("[data-margin-create-backsplash]") && !inputsDisabled && !loadingMessage) {
+      void actions.onCreateBacksplash?.().catch(error => { globalError = errorMessage(error, "Zástenu sa nepodarilo otvoriť."); render(); }); return;
+    }
+    if (element?.closest("[data-margin-construction-save]")) {
+      const input = queryPanel<HTMLInputElement>("[data-margin-construction-input]");
+      if (!input || !actions.onCommitConstructionLabor) return;
+      const percent = finiteInputValue(input, PROJECT_MARGIN_PERCENT_MAX);
+      if (percent == null) { globalError = "Konštrukčná práca vyžaduje platné percento."; render(); return; }
+      runCommit("construction", () => actions.onCommitConstructionLabor!(percent), input);
+      return;
+    }
 
     const settingsTab = element?.closest<HTMLElement>("[data-margin-settings-tab]")?.dataset.marginSettingsTab;
     if (isMarginSettingsTab(settingsTab)) {
@@ -325,7 +336,7 @@ export function mountProjectMarginsPanel(
 
   const onKeyDown = (event: KeyboardEvent) => {
     const input = event.target as HTMLInputElement | null;
-    if (!input?.matches("[data-margin-default-input], [data-margin-additional-labor-input], [data-margin-group-input], [data-margin-item-input]")) return;
+    if (!input?.matches("[data-margin-default-input], [data-margin-additional-labor-input], [data-margin-construction-input], [data-margin-group-input], [data-margin-item-input]")) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -338,6 +349,8 @@ export function mountProjectMarginsPanel(
     event.preventDefault();
     if (input.dataset.marginDefaultInput !== undefined) {
       queryPanel<HTMLButtonElement>("[data-margin-default-save]")?.click();
+    } else if (input.dataset.marginConstructionInput !== undefined) {
+      queryPanel<HTMLButtonElement>("[data-margin-construction-save]")?.click();
     } else if (input.dataset.marginAdditionalLaborInput !== undefined) {
       queryPanel<HTMLButtonElement>("[data-margin-additional-labor-save]")?.click();
     } else if (input.dataset.marginGroupInput) {
@@ -463,6 +476,8 @@ function renderProjectControls(
   const laborBusy = busyKeys.has("labor");
   const defaultDisabled = disabled || defaultBusy;
   const laborDisabled = disabled || laborBusy;
+  const constructionBusy = busyKeys.has("construction");
+  const constructionDisabled = disabled || constructionBusy;
   const manufacturingBusy = busyKeys.has("manufacturing");
   const manufacturingDisabled = disabled || manufacturingBusy;
   const manufacturing = normalizeProjectManufacturingSettings(view.settings.manufacturing);
@@ -474,6 +489,11 @@ function renderProjectControls(
     <div class="margins-project-control">
       <label for="margin-additional-labor-input"><strong>Dodatočná práca</strong><small>Účtovaná suma navyše za celý projekt, bez ďalšej prirážky.</small></label>
       <div class="margins-project-control__editor"><div><input id="margin-additional-labor-input" type="number" min="0" max="${PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(view.settings.additionalLaborCost)}" data-committed-value="${numberInputValue(view.settings.additionalLaborCost)}" data-margin-additional-labor-input ${laborDisabled ? "disabled" : ""} /><span aria-hidden="true">${escapeHtml(view.currency)}</span></div><button type="button" data-margin-additional-labor-save ${laborDisabled ? "disabled" : ""}>${laborBusy ? "Ukladám…" : "Uložiť"}</button></div>
+    </div>
+    <div class="margins-project-control">
+      <label for="margin-construction-input"><strong>Konštrukčná práca</strong><small>Percento z predajnej ceny kuchyne bez spotrebičov, pred dodatočnou a konštrukčnou prácou. Spotrebiče označte pri úprave komponentu.</small></label>
+      <div class="margins-project-control__editor"><div><input id="margin-construction-input" type="number" min="0" max="${PROJECT_MARGIN_PERCENT_MAX}" step="0.01" value="${numberInputValue(view.settings.constructionLaborPercent ?? 0)}" data-committed-value="${numberInputValue(view.settings.constructionLaborPercent ?? 0)}" data-margin-construction-input ${constructionDisabled ? "disabled" : ""} /><span>%</span></div><button type="button" data-margin-construction-save ${constructionDisabled ? "disabled" : ""}>${constructionBusy ? "Ukladám…" : "Uložiť"}</button></div>
+      ${view.constructionLabor ? `<small>${view.constructionLabor.preliminary ? "Predbežný základ" : "Základ"}: ${formatCurrency(view.constructionLabor.baseAmount, view.currency)} · konštrukčná práca: ${formatCurrency(view.constructionLabor.amount, view.currency)}</small>` : ""}
     </div>
     <div class="margins-project-control" data-manufacturing-settings>
       <label><strong>Výrobný cenník projektu</strong><small>Prerez sa aplikuje presne raz na čisté množstvo. Predmontáž sa účtuje bez ďalšej prirážky; celá suma patrí do marže.</small></label>
@@ -584,14 +604,16 @@ function renderGroup(
     : group.overrideCount > 0
       ? `${formatNumber(group.overrideCount, 0)} vlastné · efektívne ${formatPercent(effectivePercent)}`
       : "Skupinová marža";
+  const incompletePrice = group.missingPriceCount > 0 ? `<span class="material-price-warning" role="img" aria-label="Neúplná cena" title="Suma obsahuje iba ocenené položky. ${formatNumber(group.missingPriceCount, 0)} položiek nemá cenu.">!</span>` : "";
   return `<article class="materials-group margins-general-group materials-group--${escapeHtml(groupId)}${group.missingPriceCount > 0 ? " margins-general-group--warning" : ""}" data-margin-group="${escapeHtml(groupId)}">
     <div class="materials-group__icon" aria-hidden="true">${marginCategoryIcon(group.category)}</div>
     <div class="materials-group__body">
-      <header><div><h2>${escapeHtml(group.label)}</h2><p>${escapeHtml(group.description)}</p>${group.category === "labor" ? "<small>Celá účtovaná práca patrí do marže pred mzdami a réžiou. Percento nižšie je ďalšia prirážka k sadzbe, nie celá marža.</small>" : ""}</div><div class="materials-group__quantity"><strong>${formatCurrency(group.baseCost, view.currency)}</strong><small>${formatNumber(group.items.length, 0)} položiek</small></div></header>
+      ${group.category === "backsplash" && group.items.length === 0 ? `<p>Zástena nemá vytvorené dielce, preto ešte nemá účtovanú cenu.</p><button type="button" data-margin-create-backsplash ${disabled ? "disabled" : ""}>Vytvoriť zástenu</button>` : ""}
+      <header><div><h2>${escapeHtml(group.label)}</h2><p>${escapeHtml(group.description)}</p>${group.category === "labor" ? "<small>Celá účtovaná práca patrí do marže pred mzdami a réžiou. Percento nižšie je ďalšia prirážka k sadzbe, nie celá marža.</small>" : ""}</div><div class="materials-group__quantity"><strong>${formatCurrency(group.baseCost, view.currency)} ${incompletePrice}</strong><small>${formatNumber(group.items.length, 0)} položiek</small></div></header>
       <div class="materials-group__selection margins-general-group__summary">
         <div><small>Stav</small><strong><span class="margin-source margin-source--${group.missingPriceCount > 0 ? "missing" : group.overrideCount > 0 ? "override" : "group"}">${escapeHtml(stateLabel)}</span></strong></div>
         <span><small>Suma marže</small><strong>${formatCurrency(group.contribution?.contributionAmount ?? group.marginAmount, view.currency)}</strong></span>
-        <span><small>Predajná cena</small><strong>${formatCurrency(group.finalPrice, view.currency)}</strong></span>
+        <span><small>Predajná cena</small><strong>${formatCurrency(group.finalPrice, view.currency)} ${incompletePrice}</strong></span>
       </div>
       <div class="margins-group-control margins-general-group__control"><label class="sr-only" for="${inputId}">${group.category === "labor" ? "Prirážka k sadzbe práce" : "Skupinová marža"} ${escapeHtml(group.label)}</label><div><input id="${inputId}" type="number" min="0" max="${PROJECT_MARGIN_PERCENT_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(group.marginPercent)}" data-committed-value="${numberInputValue(group.marginPercent)}" data-margin-group-input="${escapeHtml(groupId)}" ${groupDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><div class="margins-group-control__actions"><button type="button" data-margin-group-apply-all="${escapeHtml(groupId)}" ${groupDisabled ? "disabled" : ""}>${busy ? "Ukladám…" : "Použiť na celú skupinu"}</button><button type="button" class="margins-group-reset" data-margin-group-reset="${escapeHtml(groupId)}" ${groupDisabled || !hasGroupOrItemOverride ? "disabled" : ""}>Obnoviť základnú</button></div>${group.overrideCount > 0 ? `<small>Prepíše aj ${formatNumber(group.overrideCount, 0)} vlastné marže.</small>` : ""}</div>
     </div>
