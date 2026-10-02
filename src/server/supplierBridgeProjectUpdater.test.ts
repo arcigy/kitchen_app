@@ -15,6 +15,16 @@ describe("supplier bridge project updater", () => {
     mapping: null
   });
 
+  it.each(["hinge_plate", "leg_plate", "plinth_clip", "hanging_bracket", "shelf_support", "assembly_pack"] as const)("retains the supplier price and accessory type for %s", category => {
+    const input = supplierInput("runner");
+    input.item = { ...input.item, assignmentCategory: category, materialAssignmentId: `material-assignment:${category}`, expectedProductType: "component" };
+    input.candidate.normalizedProduct.productType = "hardware";
+    input.priceObservation = { id: "price", syncItemId: input.item.id, candidateId: input.candidate.id, tenantId: "tenant-a", supplierId: "demos", supplierAccountId: null, supplierProductCode: input.candidate.supplierProductCode, amount: 4.5, currency: "CZK", priceBasis: "piece", vatMode: "excluded", minimumQuantity: null, packageQuantity: null, rawPriceText: "4.5 CZK", rawUnitText: "ks", normalizedAmount: 4.5, normalizedPriceBasis: "piece", normalizationCalculation: null, normalizationConfidence: 1, observedAt: input.candidate.observedAt };
+    const current: ProjectMaterialAssignment = { assignmentId: input.item.materialAssignmentId!, category, kind: "component", customValues: {}, snapshots: {}, source: "user", updatedAt: input.candidate.observedAt };
+    const updated = updatedSupplierAssignment(current, input, input.candidate.observedAt);
+    expect(updated.snapshots.component).toMatchObject({ unitPrice: 4.5, currency: "CZK", definition: { componentType: category, pricingUnit: "pcs" } });
+  });
+
   it("creates a typed supplier component when a runner has no catalog default", () => {
     const current = {
       assignmentId: "material-assignment:runner",
