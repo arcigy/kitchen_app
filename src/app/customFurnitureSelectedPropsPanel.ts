@@ -159,6 +159,7 @@ export function mountCustomFurnitureBoardProps(args: {
   }
   args.props.row(section, "Material", materialSelect(args.catalog, board.materialId, "board", (next) => {
     board.materialId = next;
+    board.materialOverride = true;
     args.rebuildFurniture(furniture);
     args.commitHistory();
   }));

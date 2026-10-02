@@ -248,6 +248,18 @@ describe("project margins phase panel", () => {
     expect(additionHtml).not.toContain(`data-margin-item-id="${first.targetId}"`);
   });
 
+  it("shows the known subtotal and an exclamation mark for partially assigned runner heights", () => {
+    const priced = marginItem({ category: "runner", baseCost: 100, marginAmount: 30, finalPrice: 130, missingPrice: false });
+    const missing = marginItem({ category: "runner", itemId: "runner-unassigned", baseCost: 0, marginAmount: 0, finalPrice: 0, missingPrice: true });
+    const view = marginsView({ groups: [marginGroup(priced, { category: "runner", items: [priced, missing], missingPriceCount: 1 })] });
+    const host = document.createElement("div"); host.innerHTML = renderProjectMarginsPanel(view);
+    const group = host.querySelector('[data-margin-group="runner"]')!;
+    expect(group.textContent).toContain("100,00");
+    expect(group.textContent).toContain("130,00");
+    expect(group.querySelectorAll('[aria-label="Neúplná cena"]')).toHaveLength(2);
+    expect(group.querySelector('[aria-label="Neúplná cena"]')?.textContent).toBe("!");
+  });
+
   it("shows missing-price state and disables every edit control for read-only users", () => {
     const missing = marginItem({ baseCost: 0, marginAmount: 0, finalPrice: 0, missingPrice: true });
     const view = marginsView({
@@ -284,19 +296,19 @@ describe("project margins phase panel", () => {
     handle.setInputsDisabled(false);
 
     expect(host.querySelector("[data-margin-summary]")).toBeNull();
-    expect(host.querySelector(".margins-project-controls")).toBeNull();
+    expect(host.querySelector(".margins-project-controls")).not.toBeNull();
     expect(footer.querySelector("[data-margin-summary]")?.textContent).toContain("Kč");
-    expect(footer.querySelector(".margins-project-controls")).not.toBeNull();
+    expect(footer.querySelector(".margins-project-controls")).toBeNull();
 
-    const defaultInput = footer.querySelector<HTMLInputElement>("[data-margin-default-input]")!;
+    const defaultInput = host.querySelector<HTMLInputElement>("[data-margin-default-input]")!;
     defaultInput.value = "22.5";
     defaultInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await handle.flushPending();
     expect(actions.onCommitDefault).toHaveBeenCalledWith({ marginPercent: 22.5, committedValue: 20 });
 
-    const laborInput = footer.querySelector<HTMLInputElement>("[data-margin-additional-labor-input]")!;
+    const laborInput = host.querySelector<HTMLInputElement>("[data-margin-additional-labor-input]")!;
     laborInput.value = "125.75";
-    footer.querySelector<HTMLButtonElement>("[data-margin-additional-labor-save]")!.click();
+    host.querySelector<HTMLButtonElement>("[data-margin-additional-labor-save]")!.click();
     await handle.flushPending();
     expect(actions.onCommitAdditionalLabor).toHaveBeenCalledWith({ additionalLaborCost: 125.75, committedValue: 0 });
 

@@ -65,6 +65,7 @@ try {
   assert(initial.startsWith('data:image/png'), 'Preset uses a rendered geometry image');
   await page.screenshot({ path: `${out}/options-before.png` });
   await card().click();
+  await page.waitForFunction(({ group, id }) => window.__kitchenDebug.snapshot(group).instances.find(item => item.id === id)?.params.drawerCount === 2, { group, id });
   assert((await module()).params.drawerCount === 2, 'Selecting a preset applies its configuration');
   await trigger().scrollIntoViewIfNeeded();
   await trigger().locator('[data-preview-state="ready"]').waitFor({ timeout: 30000 });

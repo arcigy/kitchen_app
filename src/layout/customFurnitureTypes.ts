@@ -67,6 +67,7 @@ export type BacksplashGroupSource = {
   suppressedKeys: string[]; orphanedWallIds: string[]; detached?: boolean;
 };
 export type CustomFurnitureBoardParams = {
+  materialOverride?: boolean;
   cutouts?: CustomBoardCutout[];
   backsplashSource?: BacksplashBoardSource;
   edgeBandingOverrides?: import("../core/edge-banding/edgeEntities").EdgeBindingMap;

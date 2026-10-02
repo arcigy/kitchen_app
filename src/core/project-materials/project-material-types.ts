@@ -112,6 +112,7 @@ export type ProjectMaterialLayoutTarget =
   | { kind: "custom-furniture-board"; furnitureId: string; boardId: string };
 
 export type ProjectMaterialScopeItem = {
+  worktopPurchase?: { materialLabel: string; netAreaM2: number; pieces: number; areaM2: number; stockLengthMm: number; stockWidthMm: number; cost: number | null; currency: string; error?: string };
   backsplashPurchase?: import("./backsplash-purchase-types").BacksplashPurchaseInfo;
   edgeGroupId?: string;
   edgeGroupExplicit?: boolean;

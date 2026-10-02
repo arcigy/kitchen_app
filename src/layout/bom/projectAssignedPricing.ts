@@ -24,6 +24,7 @@ export function applyProjectAssignedPricing(result: BOMResult, scopeId: string, 
     if (item.explicitBoardMaterial && resolution.source !== "override") continue;
     if (item.backsplashCut && !assignment?.snapshots.material) continue;
     if (!assignment) continue;
+    item.excludeFromConstructionLabor = assignment.projectValues?.excludeFromConstructionLabor === true;
     changed = true;
     const snapshot = assignment.kind === "material" ? assignment.snapshots.material : assignment.snapshots.component;
     item.unitPriceOverrideSource = "project";

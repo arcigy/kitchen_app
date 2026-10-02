@@ -77,6 +77,7 @@ export function createCustomFurnitureQuoteBom(furniture: CustomFurnitureInstance
     items.push({
       id: `custom-board-${furniture.id}-${board.id}`,
       itemType: "board",
+      ...(board.materialOverride ? { explicitBoardMaterial: true } : {}),
       ...(furniture.params.backsplash ? { backsplashCut: { stockLengthMm: furniture.params.backsplash.stockLengthMm, stockWidthMm: furniture.params.backsplash.stockWidthMm, kerfMm: furniture.params.backsplash.kerfMm, allowHalf: furniture.params.backsplash.allowHalf, grain: furniture.params.backsplash.grain },
         explicitBoardMaterial: furniture.params.backsplash.materialOverride || (board.backsplashSource?.overrides.includes("materialId") ?? !!board.materialId) } : {}),
       ...(orphanEdges.length ? { validationErrors: [`${board.name}: ${orphanEdges.length} neplatných priradení olepenia po zmene tvaru.`] } : {}),

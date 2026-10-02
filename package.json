@@ -58,7 +58,7 @@
     "test:action-icons": "node scripts/testActionIcons.mjs",
     "test:release-news-ui": "node scripts/testReleaseNewsUi.mjs",
     "test:release-news-home-ui": "node scripts/testReleaseNewsHomeUi.mjs",
-    "test:ui-regression": "npm run test:action-icons && npm run test:release-news-ui && npm run test:release-news-home-ui && npm run test:ui-smoke && npm run test:context-menu-ui && npm run test:accessibility && npm run test:ui-appearance && npm run test:i18n-ui && npm run test:kitchen-context-live && npm run test:upper-details-ui && npm run test:module-direct-drag-ui && npm run test:module-doors-ui && npm run test:module-presets-ui && npm run test:kitchen-module-edge-cases && npm run test:pricing-ui && npm run test:module-properties && npm run test:portable-material-live && npm run test:material-proof && npm run test:project-save-load && npm run test:project-roundtrip-full && npm run test:project-recovery-ui && npm run test:feedback-42-49-ui && npm run test:feedback-50-ui",
+    "test:ui-regression": "npm run test:action-icons && npm run test:release-news-ui && npm run test:release-news-home-ui && npm run test:ui-smoke && npm run test:context-menu-ui && npm run test:accessibility && npm run test:ui-appearance && npm run test:i18n-ui && npm run test:kitchen-context-live && npm run test:upper-details-ui && npm run test:module-direct-drag-ui && npm run test:module-doors-ui && npm run test:module-presets-ui && npm run test:kitchen-module-edge-cases && npm run test:pricing-ui && npm run test:module-properties && npm run test:portable-material-live && npm run test:material-proof && npm run test:project-save-load && npm run test:project-roundtrip-full && npm run test:project-recovery-ui && npm run test:feedback-42-49-ui && npm run test:feedback-50-ui && npm run test:materials-feedback-ui",
     "test:i18n-ui": "node scripts/testI18nUi.mjs",
     "worker:dev": "tsx scripts/worker.ts",
     "dev:supplier-simulator": "vite apps/supplier-simulator --config apps/supplier-simulator/vite.config.ts",
@@ -80,7 +80,8 @@
     "db:set-client-currency": "tsx scripts/setClientCurrency.ts",
     "odoo:feedback:setup": "tsx scripts/setupOdooFeedbackProject.ts --apply",
     "odoo:user-activity:sync": "tsx scripts/userActivityOdooSync.ts",
-    "test:feedback-50-ui": "node scripts/testFeedback50Ui.mjs"
+    "test:feedback-50-ui": "node scripts/testFeedback50Ui.mjs",
+    "test:materials-feedback-ui": "node scripts/testMaterialsFeedbackUi.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",

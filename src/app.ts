@@ -3972,6 +3972,8 @@ export function startApp(initialArgs: AppArgs) {
   };
   const materialWarningListEl = document.querySelector<HTMLElement>("[data-material-warning-list]")!;
   materialsPhaseController = createMaterialsPhaseController({
+    onAddBoard: async (draw) => { await workspaceNavigationController.openDesign(); if (draw) customFurnitureMode?.drawAdditionalBoard(); else await customFurnitureMode?.addAdditionalBoard(); },
+    onCreateBacksplash: async () => { await workspaceNavigationController.openDesign(); customFurnitureMode?.backsplash.open(); },
     container: document.getElementById("materialsPhase")!,
     onPricingChanged: (view) => { projectMarginSettings = cloneJson(view.settings); },
     onOpenModuleProperties: (id) => workspaceNavigationController.openModuleProperties(id),
@@ -4012,6 +4014,7 @@ export function startApp(initialArgs: AppArgs) {
     }
   });
   marginsPhaseController = createMarginsPhaseController({
+    onCreateBacksplash: async () => { await workspaceNavigationController.openDesign(); customFurnitureMode?.backsplash.open(); },
     container: document.getElementById("marginsPhase")!,
     footerContainer: document.querySelector<HTMLElement>("[data-margin-footer]")!,
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,

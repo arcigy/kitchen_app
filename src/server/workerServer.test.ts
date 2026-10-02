@@ -1,4 +1,6 @@
 import sharp from "sharp";
+import { copyMaterialToTarget, clearMaterialAssignment } from "../core/project-materials/project-material-edits";
+import { validateProjectMaterialAssignmentsState } from "../core/project-materials/project-material-validation";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import type http from "node:http";
 import { AddressInfo } from "node:net";
@@ -1387,6 +1389,48 @@ describe("multi-client worker isolation", () => {
       cookie: makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" })
     });
     expect([403, 404]).toContain(crossTenant.status);
+  }, 30_000);
+
+  it("persists material clipboard transactions, rejects stale writes, and roundtrips the pasted snapshot through fqp", async () => {
+    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const created = await requestWorker(controller!.port, "/api/projects", { method: "POST", cookie, body: { name: "Material Clipboard", address: "Test", contactName: "QA" } });
+    const project = created.body;
+    if (!project || typeof project !== "object" || !("project" in project) || !project.project || typeof project.project !== "object" || !("projectId" in project.project) || typeof project.project.projectId !== "string") throw new Error("Missing created project");
+    const projectId = project.project.projectId;
+    const save = await requestWorker(controller!.port, `/api/projects/${projectId}/save`, { method: "POST", cookie, body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} } } });
+    expect(save.status).toBe(200);
+    const stateFrom = (body: unknown) => {
+      if (!body || typeof body !== "object" || !("view" in body) || !body.view || typeof body.view !== "object" || !("assignments" in body.view)) throw new Error("Missing materials view");
+      const state = body.view.assignments; validateProjectMaterialAssignmentsState(state); return state;
+    };
+    const initial = stateFrom((await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { cookie })).body);
+    const source = initial.assignments.find(a => a.category === "corpus")!;
+    const before = initial.assignments.find(a => a.category === "drawer_bottom")!;
+    const after = copyMaterialToTarget(source, before, new Date().toISOString());
+    const edit = (revision: number, old: typeof before, next: typeof after) => requestWorker(controller!.port, `/api/projects/${projectId}/materials`, {
+      method: "PUT", cookie, body: { revision, operation: { type: "edit_assignments", changes: [{ assignmentId: before.assignmentId, before: old, after: next }] } }
+    });
+    const pasted = await edit(initial.revision, before, after); expect(pasted.status).toBe(200);
+    const saved = stateFrom(pasted.body);
+    expect(saved.assignments.find(a => a.assignmentId === before.assignmentId)?.snapshots).toEqual(source.snapshots);
+    expect((await edit(initial.revision, before, after)).status).toBe(409);
+    const cut = clearMaterialAssignment(after, new Date().toISOString());
+    const cutResponse = await edit(saved.revision, after, cut); expect(cutResponse.status).toBe(200);
+    const cleared = stateFrom(cutResponse.body);
+    expect(cleared.assignments.find(a => a.assignmentId === before.assignmentId)?.materialId).toBeUndefined();
+    const undoResponse = await edit(cleared.revision, cut, after); expect(undoResponse.status).toBe(200);
+    const restored = stateFrom((await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, { cookie })).body);
+    expect(restored.assignments.find(a => a.assignmentId === before.assignmentId)?.snapshots).toEqual(source.snapshots);
+    const worktop = initial.assignments.find(a => a.category === "worktop")!;
+    const wrong = { ...after, materialId: worktop.materialId, snapshots: worktop.snapshots };
+    const rejected = await edit(restored.revision, after, wrong); expect(rejected.status).toBe(422);
+    const download = await requestWorker(controller!.port, `/api/projects/${projectId}/download`, { cookie }); expect(download.status).toBe(200);
+    const imported = await requestWorker(controller!.port, "/api/projects/import", { method: "POST", cookie, body: { envelope: download.text } });
+    expect(imported.status).toBe(200);
+    const result = imported.body;
+    if (!result || typeof result !== "object" || !("save" in result) || !result.save || typeof result.save !== "object" || !("projectId" in result.save)) throw new Error("Missing imported project");
+    const importedState = stateFrom((await requestWorker(controller!.port, `/api/projects/${result.save.projectId}/materials`, { cookie })).body);
+    expect(importedState.assignments.find(a => a.category === "drawer_bottom")?.snapshots).toEqual(source.snapshots);
   }, 30_000);
 
   it("copies the complete current-project material snapshot only to a live module BOM target", async () => {

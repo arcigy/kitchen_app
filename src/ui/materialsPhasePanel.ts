@@ -1,4 +1,6 @@
-import { renderBacksplashPurchases } from "./backsplashPurchaseView";
+import { renderBacksplashPurchases, renderWorktopPurchases } from "./backsplashPurchaseView";
+import type { MaterialEditCommand } from "../app/materialAssignmentEditor";
+import type { MaterialEditTarget } from "../core/project-materials/project-material-edits";
 import { getMaterialAssignmentCategoryDefinition } from "../core/project-materials/project-material-business";
 import type { ProjectComponentEdit } from "../app/projectComponentDialog";
 import { projectComponentAmount } from "../core/project-materials/project-component-values";
@@ -41,6 +43,9 @@ export type ProjectMaterialIdCommitResult = {
 };
 
 export type ProjectMaterialsPanelActions = {
+  onAddBoard?: (draw: boolean) => Promise<void>;
+  onCreateBacksplash?: () => Promise<void>;
+  onMaterialCommand?: (command: MaterialEditCommand, target: MaterialEditTarget | null) => Promise<void>;
   onOpenModuleProperties?: (instanceId: string) => Promise<void>;
   onEditComponent?: (request: ProjectComponentEdit) => Promise<void>;
   onAddComponent?: (scopeId: string) => Promise<void>;
@@ -118,10 +123,25 @@ export function mountProjectMaterialsPanel(
   let activeSettingsTab: "general" | "modules" | "additions" = "general";
   let selectedScopeId: string | null = null;
   let destroyed = false;
+  let selectedMaterialKey: string | null = null;
+  const selectableRow = (target: EventTarget | null) => typeof Element !== "undefined" && target instanceof Element ? target.closest<HTMLElement>("[data-material-edit-key]") : null;
+  const selectedRow = () => [...container.querySelectorAll<HTMLElement>("[data-material-edit-key]")].find(row => row.dataset.materialEditKey === selectedMaterialKey);
+  const highlightSelection = () => {
+    if (!actions.onMaterialCommand) return;
+    for (const row of container.querySelectorAll<HTMLElement>("[data-material-edit-key]")) row.classList.toggle("materials-assignment--selected", row.dataset.materialEditKey === selectedMaterialKey);
+  };
+  const editTarget = (row: HTMLElement): MaterialEditTarget | null => {
+    if (row.dataset.materialAssignmentId) return { kind: "assignment", assignmentId: row.dataset.materialAssignmentId };
+    const item = row.closest<HTMLElement>("[data-material-scope-item]");
+    const category = MATERIAL_ASSIGNMENT_CATEGORIES.find(definition => definition.category === item?.dataset.materialScopeCategory)?.category;
+    return item?.dataset.materialScopeId && item.dataset.materialScopeItem && category
+      ? { kind: "scope", scopeId: item.dataset.materialScopeId, itemId: item.dataset.materialScopeItem, category } : null;
+  };
   const commitSequence = new WeakMap<HTMLInputElement, number>();
   const pendingCommits = new Set<Promise<void>>();
   const render = () => {
     if (destroyed) return;
+    const restoreMaterialFocus = typeof document !== "undefined" && selectableRow(document.activeElement)?.dataset.materialEditKey === selectedMaterialKey;
     const focusedWasteInput = actions.wasteControls?.contains(document.activeElement) ? document.activeElement as HTMLElement : null;
     container.innerHTML = renderInteractiveProjectMaterialsPanel(currentView, {
       loadingMessage,
@@ -136,6 +156,8 @@ export function mountProjectMaterialsPanel(
       container.querySelector("[data-material-waste-slot]")?.appendChild(actions.wasteControls);
       focusedWasteInput?.focus({ preventScroll: true });
     }
+    highlightSelection();
+    if (restoreMaterialFocus) selectedRow()?.focus({ preventScroll: true });
   };
   const focusCategoryCard = (category: MaterialAssignmentCategory) => {
     const group = container.querySelector<HTMLElement>(`[data-material-assignment-category="${category}"]`);
@@ -239,6 +261,27 @@ export function mountProjectMaterialsPanel(
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
+    if (actions.onMaterialCommand && event.target instanceof Element && !event.target.closest("input,textarea,select,[contenteditable='true'],[role='dialog']")) {
+      const row = selectableRow(event.target) ?? selectedRow();
+      const key = event.key.toLowerCase();
+      const modifier = event.ctrlKey || event.metaKey;
+      const command: MaterialEditCommand | null = modifier && !event.altKey
+        ? key === "c" ? "copy" : key === "x" ? "cut" : key === "v" ? "paste" : key === "z" ? event.shiftKey ? "redo" : "undo" : key === "y" ? "redo" : null
+        : key === "delete" || key === "backspace" ? "delete" : null;
+      if (row && command) {
+        event.preventDefault(); event.stopPropagation();
+        if (inputsDisabled || loadingMessage) return;
+        const target = editTarget(row);
+        if ((command === "copy" || command === "cut") && navigator.clipboard) {
+          const text = row.querySelector("[data-material-product-name]")?.textContent ?? "";
+          if (text) void navigator.clipboard.writeText(text).catch(() => undefined);
+        }
+        const pending = actions.onMaterialCommand(command, target);
+        pendingCommits.add(pending); void pending.finally(() => pendingCommits.delete(pending));
+        return;
+      }
+      if (row && key === "escape") { event.preventDefault(); event.stopPropagation(); selectedMaterialKey = null; highlightSelection(); return; }
+    }
     const target = event.target as HTMLInputElement | null;
     if (target?.dataset.materialAssignmentInput !== "true") return;
     if (event.key === "Enter") {
@@ -256,6 +299,16 @@ export function mountProjectMaterialsPanel(
   };
 
   const onClick = (event: MouseEvent) => {
+    const row = selectableRow(event.target);
+    selectedMaterialKey = row?.dataset.materialEditKey ?? null;
+    highlightSelection();
+    if (row && !(event.target instanceof Element && event.target.closest("button,input,select"))) row.focus({ preventScroll: true });
+    const layoutAction = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-add-board],[data-create-backsplash]") : null;
+    if (layoutAction && !inputsDisabled && !loadingMessage) {
+      const pending = layoutAction.hasAttribute("data-create-backsplash") ? actions.onCreateBacksplash?.() : actions.onAddBoard?.(layoutAction.dataset.addBoard === "draw");
+      void pending?.catch(error => { globalError = errorMessage(error); render(); });
+      return;
+    }
     const moduleButton = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-open-module-hardware]") : null;
     if (moduleButton) { void actions.onOpenModuleProperties?.(moduleButton.dataset.openModuleHardware!); return; }
     const componentButton = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-edit-component],[data-add-component],[data-remove-component]") : null;
@@ -311,6 +364,12 @@ export function mountProjectMaterialsPanel(
   container.addEventListener("focusout", onFocusOut);
   container.addEventListener("keydown", onKeyDown);
   container.addEventListener("click", onClick);
+  const onFocusIn = (event: FocusEvent) => {
+    const row = selectableRow(event.target);
+    selectedMaterialKey = row?.dataset.materialEditKey ?? null;
+    highlightSelection();
+  };
+  container.addEventListener("focusin", onFocusIn);
   const onChange = (event: Event) => {
     const select = event.target as HTMLSelectElement | null;
     if (select?.dataset.supplierPicker === "true") {
@@ -361,6 +420,7 @@ export function mountProjectMaterialsPanel(
       container.removeEventListener("keydown", onKeyDown);
       container.removeEventListener("click", onClick);
       container.removeEventListener("change", onChange);
+      container.removeEventListener("focusin", onFocusIn);
     }
   };
 }
@@ -420,7 +480,7 @@ function renderInteractiveProjectMaterialsPanel(
     <header class="materials-phase__header materials-phase__header--compact">
       <div>
         <h1>Materiály</h1>
-        <p>Materiály a ceny priraďte z otvoreného detailu produktu.</p>
+        <p>Vyberte priradenie kliknutím. Ctrl/⌘ + C kopíruje, V vloží, X vystrihne, Z vráti zmenu. Delete vymaže priradenie.</p>
       </div>
       <div class="materials-phase__metrics" aria-label="Súhrn priradení">
         ${metric("Priradené", `${assignedCount} / ${visibleCategories.length}`)}
@@ -431,7 +491,7 @@ function renderInteractiveProjectMaterialsPanel(
     ${state.loadingMessage ? `<p class="materials-phase__status" role="status">${escapeHtml(state.loadingMessage)}</p>` : ""}
     ${state.globalError ? `<p class="materials-phase__status materials-phase__status--error" role="alert">${escapeHtml(state.globalError)}</p>` : ""}
     ${renderSettingsTabs(state.activeSettingsTab ?? "general")}
-    <button type="button" data-add-component="project">Pridať komponent projektu</button>
+    <div class="materials-add-actions"><button type="button" data-add-component="project">Pridať komponent projektu</button> <button type="button" data-add-board="dimensions">Pridať doskový dielec</button> <button type="button" data-add-board="draw">Nakresliť dielec</button> <button type="button" data-create-backsplash>Vytvoriť / upraviť zástenu</button></div>
     ${renderProjectExtras(view, displayCurrency)}
     ${state.activeSettingsTab === "modules"
       ? renderScopeSettings(view, "module", state.selectedScopeId, displayCurrency)
@@ -484,7 +544,7 @@ function renderScopeItem(
   const component = getMaterialAssignmentCategoryDefinition(item.category).kind === "component";
   const amount = component && assignment ? projectComponentAmount(assignment, item.quantity, item.moduleQuantity ?? 1, displayCurrency) : null;
   const shownPrice = amount ? formatUnitPrice(amount.unitPrice, displayCurrency, amount.unit, displayCurrency) : snapshot ? formatUnitPrice(snapshot.unitPrice ?? null, snapshot.currency ?? "EUR", snapshot.definition.pricingUnit, displayCurrency) : "Nepriradené";
-  return `<article class="materials-scope-item" data-material-scope-id="${escapeHtml(scopeId)}" data-material-scope-item="${escapeHtml(item.id)}" data-material-scope-category="${escapeHtml(item.category)}" data-material-assignment-source="${source ?? "none"}"><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.description)} · ${formatQuantity(amount?.quantity ?? item.quantity, amount?.unit ?? item.unit)}</small></div><div class="materials-scope-item__assignment"><small>${product} · ${sourceLabel}${assignment?.projectValues ? " · Vlastná hodnota" : ""}${assignment?.projectValues?.includedInPackage ? " · Zahrnuté v balení" : ""}</small><strong>${shownPrice}</strong></div>${component ? `<button type="button" data-edit-component="">Upraviť cenu a množstvo</button>` : ""}${["leg", "plinth_clip"].includes(item.category) && scopeId.startsWith("module:") ? `<button type="button" data-open-module-hardware="${escapeHtml(scopeId.slice(7))}">Nastaviť nohy a klipy modulu</button>` : ""}${assignment?.extraComponent ? `<button type="button" data-remove-component="${escapeHtml(assignment.assignmentId)}">Odobrať</button>` : ""}</article>`;
+  return `<article class="materials-scope-item" data-material-scope-id="${escapeHtml(scopeId)}" data-material-scope-item="${escapeHtml(item.id)}" data-material-scope-category="${escapeHtml(item.category)}" data-material-assignment-source="${source ?? "none"}"><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.description)} · ${formatQuantity(amount?.quantity ?? item.quantity, amount?.unit ?? item.unit)}</small></div><div class="materials-scope-item__assignment" tabindex="0" role="group" aria-label="Priradenie materiálu ${escapeHtml(item.label)}" data-material-edit-key="${escapeHtml(JSON.stringify([scopeId, item.id, item.category]))}" ${assignment?.extraComponent ? `data-material-assignment-id="${escapeHtml(assignment.assignmentId)}"` : ""}><small><span data-material-product-name>${product}</span> · ${sourceLabel}${assignment?.projectValues ? " · Vlastná hodnota" : ""}${assignment?.projectValues?.includedInPackage ? " · Zahrnuté v balení" : ""}</small><strong>${shownPrice}</strong></div>${component ? `<button type="button" data-edit-component="">Upraviť cenu a množstvo</button>` : ""}${["leg", "plinth_clip"].includes(item.category) && scopeId.startsWith("module:") ? `<button type="button" data-open-module-hardware="${escapeHtml(scopeId.slice(7))}">Nastaviť nohy a klipy modulu</button>` : ""}${assignment?.extraComponent ? `<button type="button" data-remove-component="${escapeHtml(assignment.assignmentId)}">Odobrať</button>` : ""}</article>`;
 }
 
 function renderProjectExtras(view: ProjectMaterialsView, currency: PriceCurrency): string {
@@ -525,6 +585,8 @@ function renderAssignmentGroup(
         </header>
         ${categoryAssignments.map((current, index) => renderAssignmentSelection(definition, current, view, index, displayCurrency)).join("")}
         ${definition.category === "backsplash" ? renderBacksplashPurchases(view.scopes ?? []) : ""}
+        ${definition.category === "backsplash" && quantity.quantity === 0 ? `<p>Zástena nemá vytvorené dielce. Priradený materiál sa začne účtovať po vytvorení zásteny.</p><button type="button" data-create-backsplash>Vytvoriť zástenu</button>` : ""}
+        ${definition.category === "worktop" ? renderWorktopPurchases(view.scopes ?? []) : ""}
         ${definition.category === "edge_front" || definition.category === "edge_other" ? `<button type="button" data-edit-edge-group="">Nová skupina olepenia</button>` : ""}
       </div>
     </article>
@@ -558,8 +620,8 @@ function renderAssignmentSelection(
   const isEdge = assignment && (assignment.category === "edge_front" || assignment.category === "edge_other");
   const groupLength = isEdge ? (view.scopes ?? []).flatMap(scope => scope.items).filter(item => item.edgeGroupId === assignment.assignmentId || (!item.edgeGroupId && item.category === assignment.category && assignment.assignmentId === `material-assignment:${item.category}`)).reduce((sum, item) => sum + item.quantity, 0) : 0;
   const groupHeader = isEdge ? `<div style="border-left:4px solid ${edgeGroupColor(assignment.assignmentId)};padding:4px 0 4px 8px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px"><strong>${escapeHtml(edgeGroupName(assignment))}</strong><small>${formatQuantity(groupLength,"lm")}</small><button type="button" data-edit-edge-group="${escapeHtml(assignment.assignmentId)}">Upraviť skupinu</button></div>` : "";
-  return `${groupHeader}<div class="materials-group__selection ${supplier ? "materials-group__selection--assigned" : ""}" data-material-assignment-id="${escapeHtml(assignment?.assignmentId ?? "")}">
-    <div>${runnerVariantLabel ? `<small>${escapeHtml(runnerVariantLabel)}</small>` : index > 0 ? `<small>Ohranenie ${index + 1}</small>` : ""}<strong>${escapeHtml(productName)}</strong><small>${supplier ? `${escapeHtml(supplier.label)} · ${escapeHtml(supplier.productCode)}` : snapshot ? "Materiál projektu" : "Vyberte produkt na stránke dodávateľa"}</small></div>
+  return `${groupHeader}<div class="materials-group__selection ${supplier ? "materials-group__selection--assigned" : ""}" data-material-assignment-id="${escapeHtml(assignment?.assignmentId ?? "")}" data-material-edit-key="${escapeHtml(assignment?.assignmentId ?? "")}" tabindex="0" role="group" aria-label="Priradenie materiálu ${escapeHtml(runnerVariantLabel ?? definition.label)}">
+    <div>${runnerVariantLabel ? `<small>${escapeHtml(runnerVariantLabel)}</small>` : index > 0 ? `<small>Ohranenie ${index + 1}</small>` : ""}<strong data-material-product-name>${escapeHtml(productName)}</strong><small>${supplier ? `${escapeHtml(supplier.label)} · ${escapeHtml(supplier.productCode)}` : snapshot ? "Materiál projektu" : "Vyberte produkt na stránke dodávateľa"}</small></div>
     ${definition.kind === "material" ? `<span><small>Hrúbka</small><strong>${thickness == null ? "—" : `${formatNumber(thickness)} mm`}</strong></span>` : ""}
     ${edgeVariant}
     ${runnerVariantQuantity ? `<span><small>Počet</small><strong>${formatQuantity(runnerVariantQuantity.quantity, runnerVariantQuantity.unit)}</strong></span>` : ""}

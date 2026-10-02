@@ -1,4 +1,5 @@
 import type { ProjectComponentOperation } from "../core/project-materials/project-component-operations";
+import type { MaterialEditOperation } from "../core/project-materials/project-material-edits";
 import { confirmProjectEdgeGroups } from "./project/projectEdgeGroupBaseline";
 import type { ComponentDefinition, MaterialDefinition } from "../core/catalog/catalog-types";
 import {
@@ -185,7 +186,7 @@ export async function lookupProjectMaterialCatalogItem(
   return component ? { kind: "component", definition: component, unitPrice } : null;
 }
 
-export async function updateProjectComponentValues(projectId: string, revision: number, operation: ProjectComponentOperation): Promise<ProjectMaterialsView> {
+export async function updateProjectComponentValues(projectId: string, revision: number, operation: ProjectComponentOperation | MaterialEditOperation): Promise<ProjectMaterialsView> {
   const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/materials`, {
     method: "PUT", credentials: "include", headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify({ revision, operation })

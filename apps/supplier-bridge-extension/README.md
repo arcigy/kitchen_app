@@ -57,6 +57,11 @@ Supplier visibility is deliberately tenant-scoped. To prevent accidental cross-c
 
 ## Verification
 
+Supplier Bridge 0.3.18 adds the current accessory and backsplash categories to
+the shared session validator and keeps accessory targets separate from boards.
+Update and regression details are in
+[`docs/material-editing-feedback-51-55.md`](../../docs/material-editing-feedback-51-55.md).
+
 Material-image sources, colour processing, version 0.3.17 update instructions,
 failure behaviour and manual checks are documented in
 [`docs/supplier-bridge-material-colors.md`](../../docs/supplier-bridge-material-colors.md).
