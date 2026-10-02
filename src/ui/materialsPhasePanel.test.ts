@@ -137,10 +137,10 @@ describe("materials phase panel", () => {
 
     expect(html).toContain('data-material-scope-item="panel-general"');
     expect(html).toContain('data-material-assignment-source="general"');
-    expect(html).toContain("Globálny korpus · GLOBAL-100 · Zdedené z General settings");
+    expect(html).toContain("Globálny korpus · GLOBAL-100</span> · Zdedené z General settings");
     expect(html).toContain('data-material-scope-item="panel-override"');
     expect(html).toContain('data-material-assignment-source="override"');
-    expect(html).toContain("Vlastný korpus · OWN-200 · Vlastné priradenie");
+    expect(html).toContain("Vlastný korpus · OWN-200</span> · Vlastné priradenie");
     expect(html).toContain("241,93 CZK / m²");
   });
 
