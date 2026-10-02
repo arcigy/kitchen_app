@@ -195,6 +195,10 @@ export function setProjectAdditionalLabor(
   }, signal);
 }
 
+export function setProjectConstructionLabor(projectId: string, request: { revision: number; percent: number }, signal?: AbortSignal): Promise<ProjectMarginsView> {
+  return updateProjectMargins(projectId, { revision: request.revision, operation: { type: "set_construction_labor", percent: request.percent } }, signal);
+}
+
 export function setProjectManufacturing(
   projectId: string,
   request: SetProjectManufacturingRequest,

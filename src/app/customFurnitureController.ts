@@ -1,4 +1,5 @@
 import { createBacksplashController } from "./backsplashController";
+import { openAdditionalBoardDialog } from "./additionalBoardDialog";
 import { customBoardBandedIndexes } from "../layout/customFurnitureEdges";
 import * as THREE from "three";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
@@ -322,6 +323,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
   let drawOffsetDirection = 1;
   let draftBoardThicknessMm = 18;
   let draftBoardMaterialId = firstMaterial(args.catalog, "board", args.catalog.kitchenDefaults.carcassMaterialId);
+  let standaloneDraftId: string | null = null;
   let draftBoardJustification: CustomFurnitureBoardJustification = "center";
   let draftBoardBaseConstraint: CustomFurnitureConstraint = "furnitureBase";
   let draftBoardBaseOffsetMm = 0;
@@ -1671,6 +1673,11 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
 
   const addBoard = (furniture: CustomFurnitureInstance, board: CustomFurnitureBoardParams, opts?: { skipHistory?: boolean }) => {
     furniture.params.boards.push(cloneJson(board));
+    if (standaloneDraftId === furniture.id) {
+      standaloneDraftId = null;
+      furniture.params.name = "Doplnkové dielce";
+      furniture.params.boundary = board.profile.map(point => ({ x: point.x, z: point.y }));
+    }
     selectedFurnitureId = furniture.id;
     selectedBoardId = board.id;
     rebuildFurniture(furniture);
@@ -1792,6 +1799,30 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
     if (!findActiveFurniture()) return args.setStatus("Create or select custom furniture first.");
     activateTool("horizontalBoard");
   };
+  const discardEmptyStandaloneDraft = () => {
+    const furniture = args.customFurniture.find(item => item.id === standaloneDraftId && item.params.boards.length === 0);
+    standaloneDraftId = null;
+    if (!furniture) return;
+    args.customFurniture.splice(args.customFurniture.indexOf(furniture), 1);
+    args.layoutRoot.remove(furniture.root); disposeObject3D(furniture.root);
+    editorFurnitureId = null; selectedFurnitureId = null; selectedBoardId = null;
+  };
+  const drawAdditionalBoard = () => {
+    discardEmptyStandaloneDraft();
+    args.finishKitchenEditing?.();
+    const furniture = createCustomFurniture(makeDefaultParams([{x:0,z:0},{x:600,z:0},{x:600,z:400},{x:0,z:400}]), { skipHistory: true });
+    standaloneDraftId = furniture.id;
+    enterFurnitureEditor(furniture.id);
+    startHorizontalBoard();
+    boundaryDrawTool = "rectangle";
+    buildCustomFurnitureTopbar();
+    args.setStatus("Nakreslite doskový dielec a potvrďte Accept. Materiál a hrany upravíte vo vlastnostiach dielca.");
+  };
+  const addAdditionalBoard = () => openAdditionalBoardDialog(args.catalog, async params => {
+    discardEmptyStandaloneDraft(); args.finishKitchenEditing?.();
+    const furniture = createCustomFurniture(params, { skipHistory: true });
+    args.commitHistory(); enterFurnitureEditor(furniture.id, params.boards[0]?.id ?? null);
+  });
   const loadVerticalBoardSketchFromFurniture = (furniture: CustomFurnitureInstance) => {
     verticalBoardSketchSourceBoards = furniture.params.boards.filter((board) => board.workplane.type === "vertical").map((board) => cloneJson(board));
     draftPickedVerticalBoardSegments = verticalBoardSketchSourceBoards
@@ -1893,8 +1924,9 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
         kind: "horizontal",
         workplane: { type: "horizontal", elevationMm: getFurnitureBaseMm(furniture.params) },
         profile,
-        thicknessMm: 18,
-        materialId: firstMaterial(args.catalog, "board", args.catalog.kitchenDefaults.carcassMaterialId),
+        thicknessMm: draftBoardThicknessMm,
+        materialId: draftBoardMaterialId,
+        materialOverride: true,
         baseConstraint: "furnitureBase",
         baseOffsetMm: 0,
         topConstraint: "furnitureTop",
@@ -1936,6 +1968,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
   };
 
   const cancelTool = () => {
+    discardEmptyStandaloneDraft();
     activeTool = null;
     boundaryEditActive = false;
     boundaryEditFurnitureId = null;
@@ -3112,6 +3145,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
   window.addEventListener("keydown", handleKeyDown, true);
 
   const restoreCustomFurnitureFromSnapshot = (items: CustomFurnitureSnapshotItem[], nextCounter?: number) => {
+    standaloneDraftId = null;
     restoreEditorIsolation();
     clearBoundaryDraft();
     clearDraft();
@@ -3136,7 +3170,7 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
 
   const getSaveItems = (): CustomFurnitureSnapshotItem[] => {
     backsplash.sync();
-    return args.customFurniture.map((item) => ({ id: item.id, params: cloneJson(item.params) }));
+    return args.customFurniture.filter(item => item.id !== standaloneDraftId).map((item) => ({ id: item.id, params: cloneJson(item.params) }));
   };
 
   const duplicateAttachedToCabinet = (sourceId: string, targetId: string, translationMm: { x: number; z: number }) => {
@@ -3178,6 +3212,8 @@ export function createCustomFurnitureController(args: CreateCustomFurnitureContr
 
   return {
     backsplash,
+    addAdditionalBoard,
+    drawAdditionalBoard,
     enterFurnitureEditor,
     addBoard,
     buildCustomFurnitureTopbar,

@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 import { installAuthSession } from "./uiAuthSession.mjs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 
 const baseUrl = process.env.KITCHEN_UI_BASE_URL ?? process.env.PRICING_UI_BASE_URL ?? "http://127.0.0.1:5180/";
 // Local fixture servers can opt their synthetic tenant into Delfi's server policy.
@@ -89,10 +89,11 @@ async function verifyMarginPerSquareMeter(browser) {
     const initial = await openMargins();
     await assertMetric(initial);
     const mutate = async (selector, value, button) => {
-      const response = page.waitForResponse(response => /\/margins$/.test(new URL(response.url()).pathname) && response.request().method() === "PUT");
       await page.locator(selector).fill(String(value));
-      await page.locator(button).click();
-      const result = await response;
+      const [result] = await Promise.all([
+        page.waitForResponse(response => /\/margins$/.test(new URL(response.url()).pathname) && response.request().method() === "PUT"),
+        page.locator(button).click()
+      ]);
       assert(result.ok(), "Margin edit is saved through the existing API");
       const view = (await result.json()).view;
       if (expectSheetMargin) await page.waitForFunction(value => {
@@ -127,6 +128,11 @@ async function verifyMarginPerSquareMeter(browser) {
     await page.screenshot({ path: `.tmp/margin-per-m2-ui/${screenshotPrefix}-compact.png` });
     assert(errors.length === 0, `Margin journey console errors: ${errors.join("; ")}`);
     return { checks: checks.length, consoleErrors: errors };
+  } catch (error) {
+    await mkdir(".tmp/margin-per-m2-ui", { recursive: true });
+    await page.screenshot({ path: ".tmp/margin-per-m2-ui/failure.png" });
+    await writeFile(".tmp/margin-per-m2-ui/failure.txt", `${error.stack}\n${await page.locator("body").innerText()}\n${JSON.stringify(errors)}`);
+    throw error;
   } finally { await page.close(); }
 }
 

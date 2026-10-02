@@ -4600,7 +4600,7 @@ textarea {
 .margins-project-control {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(190px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 14px;
   padding: 10px 12px;
@@ -11831,3 +11831,19 @@ textarea {
   display: none;
   pointer-events: none;
 }
+
+/* Material assignments own shortcuts while their row has focus. */
+[data-material-edit-key] { cursor: pointer; user-select: text; }
+[data-material-edit-key]:focus-visible, .materials-assignment--selected {
+  outline: 2px solid var(--accent, #3b82f6); outline-offset: 2px; border-radius: 8px;
+  background: rgba(59, 130, 246, 0.08);
+}
+.app-toast--top { top: 24px; left: 50%; right: auto; bottom: auto; transform: translateX(-50%); animation: appToastTopIn 180ms ease-out; }
+.material-price-warning {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  margin-left: 4px; border: 1px solid currentColor; border-radius: 50%; color: #b45309; font-weight: 800;
+}
+
+.app-toast--top.app-toast-out { animation: appToastTopOut 180ms ease-in forwards; }
+@keyframes appToastTopIn { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes appToastTopOut { to { opacity: 0; transform: translate(-50%, -8px); } }

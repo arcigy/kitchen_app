@@ -40,6 +40,9 @@ export function mountCustomFurnitureActiveToolProps(args: {
 
   if (args.activeTool === "verticalBoard") {
     mountVerticalBoardDraftRows(args, section);
+  } else if (args.activeTool === "horizontalBoard") {
+    args.props.row(section, "Material", materialSelect(args.catalog, args.verticalBoardDraft.materialId, "board", materialId => args.onVerticalBoardDraftChange({ materialId })));
+    args.props.row(section, "Thickness", numberInput(args.verticalBoardDraft.thicknessMm, thicknessMm => { if (thicknessMm > 0) args.onVerticalBoardDraftChange({ thicknessMm }); }));
   }
 
   appendMutedText(

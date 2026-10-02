@@ -1,4 +1,5 @@
 import { createProjectMaterialRuntimeCatalog } from "../app/projectMaterialRuntimeCatalog";
+import { applyMaterialAssignmentChanges, parseMaterialEditOperation } from "../core/project-materials/project-material-edits";
 import { applyProjectComponentOperation, type ProjectComponentOperation } from "../core/project-materials/project-component-operations";
 import type http from "node:http";
 import { clientSessionHeaderFromRequest } from "./requestAuthentication";
@@ -14,7 +15,7 @@ import {
   normalizeAutoProjectMaterialAssignments
 } from "../core/project-materials/project-material-business";
 import { copyProjectMaterialAssignmentToScope } from "../core/project-materials/project-material-copy";
-import { isScopedProjectMaterialAssignment } from "../core/project-materials/project-material-assignment-resolution";
+import { isScopedProjectMaterialAssignment, projectMaterialScopeAssignmentId } from "../core/project-materials/project-material-assignment-resolution";
 import type {
   CatalogItemSnapshot,
   MaterialAssignmentCategory,
@@ -429,6 +430,7 @@ export async function handleProjectMaterialsApi(
     const assignment = body.assignment;
     const operation = body.operation;
     const revision = body.revision;
+    const editOperation = operation && typeof operation === "object" && "type" in operation && operation.type === "edit_assignments" ? operation : null;
     const copyOperation = operation && typeof operation === "object" && !Array.isArray(operation)
       && (operation as Record<string, unknown>).type === "copy_assignment"
       ? operation as Record<string, unknown>
@@ -439,11 +441,11 @@ export async function handleProjectMaterialsApi(
       : null;
     const componentOperation = operation && typeof operation === "object" && !Array.isArray(operation)
       && ["set_component_values", "add_component"].includes(String((operation as Record<string, unknown>).type)) ? operation as ProjectComponentOperation : null;
-    if (!componentOperation && !copyOperation && !removeOperation && (!assignment || typeof assignment !== "object" || Array.isArray(assignment))) {
+    if (!editOperation && !componentOperation && !copyOperation && !removeOperation && (!assignment || typeof assignment !== "object" || Array.isArray(assignment))) {
       deps.sendJson(res, 400, { ok: false, code: "INVALID_MATERIAL_REQUEST", error: "assignment, copy_assignment, or remove_assignment operation is required." });
       return true;
     }
-    if (!componentOperation && !copyOperation && !removeOperation) {
+    if (!editOperation && !componentOperation && !copyOperation && !removeOperation) {
       const structuralCandidate: ProjectMaterialAssignmentsState = {
         schemaVersion: PROJECT_MATERIAL_ASSIGNMENTS_SCHEMA_VERSION,
         initialized: true,
@@ -459,13 +461,31 @@ export async function handleProjectMaterialsApi(
     }
     try {
       const now = new Date().toISOString();
+      let editedState: ProjectMaterialAssignmentsState | null = null;
+      if (editOperation) {
+        if (revision !== current.revision) throw new ProjectMaterialUpdateError("Material assignments changed in another session. Reload and try again.", 409);
+        try {
+          const parsed = parseMaterialEditOperation(editOperation);
+          const allowedTargets = new Map(current.assignments.map(item => [item.assignmentId, { category: item.category, variantKey: item.variantKey }]));
+          for (const scope of resolveProjectMaterialScopes(save, catalog)) {
+            for (const item of scope.items) allowedTargets.set(projectMaterialScopeAssignmentId(scope.id, item), { category: item.category, variantKey: item.variantKey });
+          }
+          for (const change of parsed.changes) {
+            const target = allowedTargets.get(change.assignmentId);
+            if (!target) throw new Error("Vybraná položka už neexistuje.");
+            if (change.after && (target.category !== change.after.category || target.variantKey !== change.after.variantKey)) throw new Error("Neplatná kategória alebo variant cieľa.");
+            if (!change.after && change.before && !isScopedProjectMaterialAssignment(change.before)) throw new Error("Vymažte priradenie, nie kategóriu materiálu.");
+          }
+          editedState = applyMaterialAssignmentChanges(current, parsed.changes, current.revision, now);
+        } catch (error) { throw new ProjectMaterialUpdateError(error instanceof Error ? error.message : "Neplatná zmena materiálu.", 422); }
+      }
       if (componentOperation && revision !== current.revision) throw new ProjectMaterialUpdateError("Material assignments changed in another session. Reload and try again.", 409);
       let componentState: ProjectMaterialAssignmentsState | null = null;
       if (componentOperation) {
         try { componentState = applyProjectComponentOperation(current, componentOperation, resolveProjectMaterialScopes(save, catalog), catalog, now); }
         catch (error) { throw new ProjectMaterialUpdateError(error instanceof Error ? error.message : "Neplatný komponent.", 422); }
       }
-      const result = componentState ? { state: componentState, changed: true } : copyOperation
+      const result = editedState ? { state: editedState, changed: true } : componentState ? { state: componentState, changed: true } : copyOperation
         ? copiedState(current, save, catalog, copyOperation, revision, now)
         : removeOperation
           ? removeScopedProjectMaterialAssignmentState(current, removeOperation, revision, now)

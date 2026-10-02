@@ -7,6 +7,7 @@ import {
   type SupplierSyncSessionView
 } from "./supplier-bridge-types";
 import { validateNormalizedSupplierProduct } from "./supplier-bridge-validation";
+import { MATERIAL_ASSIGNMENT_CATEGORIES } from "../project-materials/project-material-business";
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -15,10 +16,7 @@ function record(value: unknown): Record<string, unknown> | null {
 function boundedString(value: unknown): value is string { return typeof value === "string" && value.length <= 8_192; }
 function nullableString(value: unknown): value is string | null { return value === null || boundedString(value); }
 function finite(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
-const assignmentCategories = new Set([
-  "corpus", "front", "worktop", "plinth", "back", "drawer_bottom", "edge_front", "edge_other",
-  "handle", "hinge", "runner", "lift_up", "leg", "fastener", "other_component", "lighting"
-]);
+const assignmentCategories = new Set<string>(MATERIAL_ASSIGNMENT_CATEGORIES.map(definition => definition.category));
 
 function parseSession(value: unknown): SupplierSyncSession | null {
   const input = record(value);

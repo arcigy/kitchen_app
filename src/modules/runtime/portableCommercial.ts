@@ -29,6 +29,7 @@ export type PortablePricingLookup = {
 };
 
 export type PortableQuoteBomItem = {
+  excludeFromConstructionLabor?: boolean;
   backsplashCut?: { stockLengthMm?: number; stockWidthMm?: number; kerfMm: number; allowHalf: boolean; grain: "length" | "width" | "free" };
   backsplashPurchase?: import("../../core/project-materials/backsplash-purchase-types").BacksplashPurchaseInfo;
   explicitBoardMaterial?: boolean;
