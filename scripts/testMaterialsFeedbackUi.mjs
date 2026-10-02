@@ -112,11 +112,12 @@ try {
   assert((await assignment('drawer_bottom')).materialId === source.materialId, 'Delete and Ctrl+Z persist a reversible change');
   await page.locator('[data-add-board="dimensions"]').click(); await page.getByRole('dialog', { name: 'Pridať doskový dielec', exact: true }).waitFor();
   await page.getByLabel('Názov dielca', { exact: true }).fill('QA cover panel');
+  await page.getByLabel('Hrúbka (mm)', { exact: true }).fill('18.1');
   await page.getByLabel('Dĺžka (mm)', { exact: true }).fill('720'); await page.getByLabel('Šírka / výška dielca (mm)', { exact: true }).fill('360');
   await page.locator('body.project-secondary-writer').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Pridať dielec', exact: true }).click(); await page.getByRole('dialog', { name: 'Pridať doskový dielec', exact: true }).waitFor({ state: 'detached' });
   const board = (await snapshot(page)).customFurniture.find(item => item.params.name === 'QA cover panel');
-  assert(board?.params.boards[0].profile[2].x === 720 && board.params.boards[0].profile[2].y === 360, 'Dimensions create a real editable board without a boundary drawing step');
+  assert(board?.params.boards[0].profile[2].x === 720 && board.params.boards[0].profile[2].y === 360 && board.params.boards[0].thicknessMm === 18, 'Decimal supplier thickness is accepted and uses the existing whole-millimetre board normalization');
   await page.getByRole('button', { name: 'Close Custom Furniture Editor', exact: true }).click();
   await save(page); await page.locator('[data-workspace-nav="margins"]').click();
   await page.locator('[data-margin-construction-input]').fill('10');

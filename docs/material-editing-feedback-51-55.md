@@ -14,7 +14,10 @@
 - Reports 51–52 use the existing custom furniture entities, renderer, drawing tools,
   BOM and editor history. A dimensional board or accepted rectangle becomes a real
   board with an explicit product and independently editable edges. An abandoned
-  empty sketch never enters the save projection.
+  empty sketch never enters the save projection. The dimension form accepts fractional
+  millimetres (including supplier thickness 18.1 mm). The existing editor normalizes
+  thickness to whole millimetres when constructing the board; BOM display keeps
+  its existing whole-millimetre dimensions.
 - Report 53 explains the existing purchase calculation. Materials shows net worktop
   area separately from whole or half stock area and its cost. A backsplash with no
   geometry explains why it has no billed amount and offers the existing creation
