@@ -218,14 +218,16 @@ try {
   delete currentPackage.integrity.packageHash;
   const removingPreset = await page.request.post(new URL('/api/modules/import', baseUrl).toString(), { data: { package: currentPackage } });
   if (!removingPreset.ok()) throw new Error(await removingPreset.text());
+  const retainedPackage = (await removingPreset.json()).modulePackage;
+  assert(retainedPackage.parameterPresets.presets.some(preset => preset.presetId === presetId), 'Reimporting a package without its company preset retains the saved preset');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForFunction(id => !!window.__kitchenDebug?.layoutSnapshot().instances.find(instance => instance.id === id), a.id);
   await page.evaluate(id => window.__kitchenDebug.selectModule(id), a.id);
   await page.locator('[data-module-labor] details').evaluate(element => element.open = true);
-  await page.getByText('Preset už nie je v knižnici. Uložená sadzba skrinky zostáva zachovaná.', { exact: true }).waitFor();
-  assert(isDeepStrictEqual(labor(await snapshot(page), a.id), labor(beforeDuplicate, a.id)), 'Removing a company preset leaves the saved cabinet identity, rate and override valid');
+  assert(await page.getByText('Preset už nie je v knižnici. Uložená sadzba skrinky zostáva zachovaná.', { exact: true }).count() === 0, 'Retained presets remain available after reimport and reload');
+  assert(isDeepStrictEqual(labor(await snapshot(page), a.id), labor(beforeDuplicate, a.id)), 'Reimporting a company package preserves the saved cabinet identity, rate and override');
   const afterRemoval = (await (await page.request.get(new URL(`/api/projects/${savedWithDuplicate.projectId}/margins`, baseUrl).toString())).json()).view;
-  assert(afterRemoval.groups.find(group => group.category === 'labor').items.find(item => item.scopeId === `module:${a.id}`).baseCost === 420, 'Server retains the quote after its company preset is removed');
+  assert(afterRemoval.groups.find(group => group.category === 'labor').items.find(item => item.scopeId === `module:${a.id}`).baseCost === 420, 'Server retains the quote after its company package is reimported');
 
   assert(errors.length === 0, `Console errors: ${errors.join('; ')}`);
   await writeFile(`${output}/result.json`, JSON.stringify({ checks, errors }, null, 2));
