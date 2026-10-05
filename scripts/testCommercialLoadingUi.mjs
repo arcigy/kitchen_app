@@ -135,8 +135,8 @@ try {
     const panel = document.getElementById('marginsPhase');
     const button = document.querySelector('[data-workspace-nav="design"]');
     if (!panel || panel.hidden || !button) throw new Error('Pending margin navigation fixture is not visible');
-    button.addEventListener('click', () => {
-      performance.mark('qa-margin-navigation-click');
+    button.addEventListener('click', event => {
+      performance.mark('qa-margin-navigation-click', { startTime: event.timeStamp });
       const observer = new MutationObserver(() => {
         if (!panel.hidden) return;
         performance.mark('qa-margin-navigation-hidden');
