@@ -71,3 +71,7 @@ Kontrola pravidelných záloh našla pripravené GitHub secrets pre Backblaze a 
 Po doplnení katalógovej opravy prešiel celý unit suite s limitom štyroch workerov: 441 súborov, 2 979 úspešných testov a jeden existujúci preskočený. Prvý lokálny beh súbežne s buildom prekročil predvolené päťsekundové limity siedmich testov; išlo o timeouty, bez nezhody hodnôt. Obmedzený celý beh prešiel bez zvýšenia timeoutov alebo vynechania testov. Typecheck, lint, build a secret scan prešli. Lokálny browser načítal 23 kategórií záťažového projektu so 100 skrinkami a 30 dielcami, s nulovými aktuálnymi chybami konzoly.
 
 Celá UI regresia po doplnení transakčného zápisu prešla na čerstvom izolovanom serveri. Presety 34 kontrol, #50 32 kontrol, materiály 19 kontrol; komerčný panel všetkých 54 kombinácií. Navigácia počas čakajúceho čítania reagovala za 16,14 ms, aktuálne chyby konzoly 0.
+
+Doplnený red/green test katalogových aliasov: ak firma používa dve rôzne katalógové identity odkazujúce na ten istý balík, zmení sa hash oboch referencií a zachovajú sa ich vlastné údaje. Iný balík rovnakého typu sa nemení. Opakovaná operácia so všetkými aktuálnymi hashmi nemení revíziu.
+
+Po doplnení aliasového scenára prešli všetky 442 unit súbory: 2 980 úspešných testov, jeden existujúci preskočený. Typecheck, build a skutočný PostgreSQL dump/restore drill opäť prešli. Frontend a transakčný protokol sa touto doplnkovou opravou nemenili.
