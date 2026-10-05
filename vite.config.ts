@@ -1,4 +1,11 @@
+import { execFileSync } from "node:child_process";
 import { defineConfig } from "vite";
+
+function appVersion(): string {
+  if (process.env.VITE_APP_VERSION) return process.env.VITE_APP_VERSION;
+  try { return execFileSync("git", ["rev-parse", "--short=12", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); }
+  catch { return `build-${new Date().toISOString()}`; }
+}
 
 const workerPort = process.env.BLENDER_WORKER_PORT || "5191";
 export const APP_CHUNK_WARNING_LIMIT_KB = 2100;
@@ -21,6 +28,7 @@ export function resolveManualChunk(id: string): string | undefined {
 
 export default defineConfig({
   clearScreen: false,
+  define: { "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion()) },
   build: {
     // The authenticated 3D editor is one cohesive runtime. Keep a tight budget while
     // lazy local catalog data and independently cached vendor libraries stay separate.

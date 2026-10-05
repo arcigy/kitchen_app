@@ -163,9 +163,10 @@ export function createReleaseNewsController(args: {
     try {
       const data = await load();
       const ordered = [...data.notices].sort((a, b) => b.date.localeCompare(a.date));
-      const notice = unreadOnly
-        ? ordered.find((item) => !data.acknowledgedNoticeIds.includes(item.id))
-        : ordered[0];
+      // Automatic delivery concerns the current release. Older unread notices
+      // remain in the archive instead of reopening after the current one is read.
+      const latest = ordered[0];
+      const notice = unreadOnly && latest && data.acknowledgedNoticeIds.includes(latest.id) ? undefined : latest;
       if (notice) render(notice, ordered);
     } catch {
       // News delivery is non-blocking; a transient API error must not block workspace use.

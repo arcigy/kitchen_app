@@ -1,3 +1,4 @@
+import { commercialTimings } from "./core/commercialDiagnostics";
 import * as THREE from "three";
 import polygonClipping from "polygon-clipping";
 import {
@@ -3488,6 +3489,7 @@ export function startApp(initialArgs: AppArgs) {
     restoreOptions: { recovery: boolean; historyTail: unknown[]; notice?: string | null }
   ) => {
     resetProjectInteractionStateForLoad();
+    materialsPhaseController?.destroy();
     marginsPhaseController?.destroy();
     projectMaterialAssignments = cloneJson(appState.materialAssignments);
     S.projectMaterialAssignments = cloneJson(projectMaterialAssignments);
@@ -3910,6 +3912,7 @@ export function startApp(initialArgs: AppArgs) {
   };
 
   const projectActions = createProjectActions({
+    getSnapshotToken: () => getPersistenceObservedToken(),
     buildAppState: (options) => options?.background
       ? buildProjectAppState({ commitDraft: false, syncActivity: false, includePreview: false })
       : projectStateCodec.captureServer(),
@@ -3980,6 +3983,9 @@ export function startApp(initialArgs: AppArgs) {
     catalog: clientCatalog,
     displayCurrency: args.clientProfile?.defaults.currency,
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
+    getPhaseId: () => projectActions.getState().currentProject?.activePhaseId,
+    getScopeKey: () => JSON.stringify([args.clientContext.userId, args.clientContext.clientId, projectActions.getState().currentProject?.projectId, projectActions.getState().currentProject?.activePhaseId]),
+    prepareRead: async () => { await projectPersistence?.ensureServerSnapshot(); },
     getQuantities: buildProjectMaterialQuantities,
     getScopes: () => buildProjectMaterialScopes({
       instances: S.instances,
@@ -4018,6 +4024,9 @@ export function startApp(initialArgs: AppArgs) {
     container: document.getElementById("marginsPhase")!,
     footerContainer: document.querySelector<HTMLElement>("[data-margin-footer]")!,
     getProjectId: () => projectActions.getState().currentProject?.projectId ?? null,
+    getPhaseId: () => projectActions.getState().currentProject?.activePhaseId,
+    getScopeKey: () => JSON.stringify([args.clientContext.userId, args.clientContext.clientId, projectActions.getState().currentProject?.projectId, projectActions.getState().currentProject?.activePhaseId]),
+    prepareRead: async () => { await projectPersistence?.ensureServerSnapshot(); },
     onViewChanged: (view) => {
       projectMarginSettings = cloneJson(view.settings);
     }
@@ -4066,9 +4075,6 @@ export function startApp(initialArgs: AppArgs) {
     },
     materialsController: {
       open: async () => {
-        if (projectActions.getState().currentProject) {
-          await projectActions.save();
-        }
         const view = await materialsPhaseController!.open();
         void supplierBridgeController?.open();
         return view;
@@ -4085,7 +4091,6 @@ export function startApp(initialArgs: AppArgs) {
     },
     marginsController: {
       open: async () => {
-        if (projectActions.getState().currentProject) await projectActions.save();
         return marginsPhaseController!.open();
       },
       close: async () => {
@@ -4147,27 +4152,13 @@ export function startApp(initialArgs: AppArgs) {
   };
   window.addEventListener("keydown", preventSecondaryWriterKeyboard, true);
 
-  const persistence = createProjectPersistenceController({
-    actions: projectActions,
-    codec: projectStateCodec,
-    store: recoveryStore,
-    lease: activeRecoveryLease,
-    scope: activeRecoveryScope,
-    getWorkspace: () => ({
-      kind: projectActions.getState().currentProject ? "project" : "blank",
-      project: projectActions.getState().currentProject
-    }),
-    writeWorkspacePointer: writeLastWorkspacePointer,
-    appVersion: import.meta.env?.VITE_APP_VERSION ?? null,
-    saveInitialState: Boolean(args.initialRecovery || (args.initialProject && !args.initialProjectSave)),
-    initialSequence: args.initialRecovery?.sequence,
-    initialCreatedAt: args.initialRecovery?.createdAt,
-    getObservedToken: () => {
+  const getPersistenceObservedToken = () => {
       const camera = cam();
       const target = ctl().target;
       const rounded = (value: number) => Math.round(value * 1000);
       return JSON.stringify([
         getLayoutHistoryRevision(S),
+        projectActions.getState().currentProject?.activePhaseId,
         mode,
         viewMode,
         renderMode,
@@ -4191,7 +4182,25 @@ export function startApp(initialArgs: AppArgs) {
         wardrobeMode?.getSaveState() ?? null,
         interactionContributor.capture()
       ]);
-    },
+    };
+
+  const persistence = createProjectPersistenceController({
+    actions: projectActions,
+    codec: projectStateCodec,
+    store: recoveryStore,
+    lease: activeRecoveryLease,
+    scope: activeRecoveryScope,
+    getWorkspace: () => ({
+      kind: projectActions.getState().currentProject ? "project" : "blank",
+      project: projectActions.getState().currentProject
+    }),
+    writeWorkspacePointer: writeLastWorkspacePointer,
+    appVersion: import.meta.env?.VITE_APP_VERSION ?? null,
+    prepareServerSnapshot: () => customFurnitureMode?.commitActiveDraft(),
+    saveInitialState: Boolean(args.initialRecovery || (args.initialProject && !args.initialProjectSave)),
+    initialSequence: args.initialRecovery?.sequence,
+    initialCreatedAt: args.initialRecovery?.createdAt,
+    getObservedToken: getPersistenceObservedToken,
     onConflict: (error) => {
       showToast(`Projekt sa na serveri zmenil (revízia ${error.currentRevision ?? "?"}). Lokálny draft je uložený ako recovery kópia.`, "error");
     },
@@ -4246,6 +4255,7 @@ export function startApp(initialArgs: AppArgs) {
     getDiagnostics: () => ({
       capturedAt: new Date().toISOString(),
       appVersion: import.meta.env?.VITE_APP_VERSION ?? null,
+      commercialTimings: commercialTimings(),
       viewMode,
       activeViewerTab,
       layoutTool,

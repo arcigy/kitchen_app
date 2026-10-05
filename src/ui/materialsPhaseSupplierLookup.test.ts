@@ -6,6 +6,24 @@ import { createDefaultProjectMaterialAssignments, createProjectMaterialsView } f
 import { EMPTY_SUPPLIER_BRIDGE_PANEL_STATE, mountProjectMaterialsPanel } from "./materialsPhasePanel";
 
 describe("materials supplier launch controls", () => {
+  it("disables editing controls while cached materials refresh, then enables them", () => {
+    const catalog: ClientCatalog = { clientId: "client_test", ...createSystemCatalogSeed() };
+    const view = createProjectMaterialsView(createDefaultProjectMaterialAssignments(catalog, "2026-07-10T08:00:00.000Z"), [], catalog);
+    const host = document.createElement("div");
+    const onAddBoard = vi.fn().mockResolvedValue(undefined);
+    const handle = mountProjectMaterialsPanel(host, view, { onCommitId: async () => ({ ok: true }), onAddBoard });
+    handle.update(view, { disabled: true, loadingMessage: "Obnovujem materiály." });
+    const draw = host.querySelector<HTMLButtonElement>('[data-add-board="draw"]')!;
+    expect(draw.disabled).toBe(true);
+    draw.click();
+    expect(onAddBoard).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLButtonElement>("[data-materials-settings-tab]")!.disabled).toBe(false);
+    handle.update(view);
+    host.querySelector<HTMLButtonElement>('[data-add-board="draw"]')!.click();
+    expect(onAddBoard).toHaveBeenCalledWith(true);
+    handle.destroy();
+  });
+
   it("opens one globally selected supplier without per-row IDs", () => {
     const catalog: ClientCatalog = { clientId: "client_test", ...createSystemCatalogSeed() };
     const view = createProjectMaterialsView(createDefaultProjectMaterialAssignments(catalog, "2026-07-10T08:00:00.000Z"), [], catalog);

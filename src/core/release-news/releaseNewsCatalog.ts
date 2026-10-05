@@ -3,6 +3,50 @@ import type { ReleaseNotice } from "./releaseNewsTypes";
 // Keep this immutable ID stable: acknowledgements are keyed by it across devices.
 export const RELEASE_NOTICES: readonly ReleaseNotice[] = [
   {
+    id: "2026-10-presets-and-commercial-overview",
+    date: "2026-10-05",
+    title: { sk: "Uložené presety a prehľadnejšie marže", cs: "Uložené presety a přehlednější marže", en: "Saved presets and clearer margins" },
+    summary: {
+      sk: "Presety zostávajú zachované pri obnove modulov. V maržiach nájdete viac informácií na jednej obrazovke.",
+      cs: "Presety zůstávají zachované při obnově modulů. V maržích najdete více informací na jedné obrazovce.",
+      en: "Presets are retained when modules are refreshed. Margins show more information on one screen."
+    },
+    changes: [
+      {
+        sk: "Import alebo obnova modulového balíka zachová uložené presety, ich nastavenia a sadzby práce. Pri nekompatibilnej zmene aplikácia odmietne prepísanie.",
+        cs: "Import nebo obnova modulového balíku zachová uložené presety, jejich nastavení a sazby práce. Při nekompatibilní změně aplikace odmítne přepsání.",
+        en: "Importing or refreshing a module package retains saved presets, their settings, and labor rates. Incompatible changes are rejected."
+      },
+      {
+        sk: "Opakovanie neúspešného uloženia po výpadku siete nevytvorí druhý preset. Súbežná zmena iného používateľa sa zobrazí ako konflikt.",
+        cs: "Opakování neúspěšného uložení po výpadku sítě nevytvoří druhý preset. Souběžná změna jiného uživatele se zobrazí jako konflikt.",
+        en: "Retrying a preset save after a network interruption does not create a duplicate. Concurrent edits are reported as conflicts."
+      },
+      {
+        sk: "Marže majú kompaktné karty s nákladmi, maržou a predajnou cenou. Vyhľadávanie a filtre pomôžu nájsť konkrétnu skrinku, dielec alebo položku bez ceny.",
+        cs: "Marže mají kompaktní karty s náklady, marží a prodejní cenou. Vyhledávání a filtry pomohou najít konkrétní skříňku, dílec nebo položku bez ceny.",
+        en: "Compact margin cards show costs, margin, and selling price. Search and filters help find a cabinet, part, or unpriced item."
+      },
+      {
+        sk: "Materiály sa sprístupnia počas výpočtu prerezov. Z čakajúceho načítavania možno odísť; pri chybe je dostupné Skúsiť znova.",
+        cs: "Materiály se zpřístupní během výpočtu prořezů. Z čekajícího načítání lze odejít; při chybě je dostupné Zkusit znovu.",
+        en: "Materials become available while waste is calculated. You can leave a pending load, and retry after an error."
+      }
+    ],
+    tryIt: [
+      {
+        sk: "V testovacom projekte uložte preset, obnovte stránku a overte jeho nastavenia. Rozmery a materiály cieľovej skrinky zostávajú samostatné.",
+        cs: "V testovacím projektu uložte preset, obnovte stránku a ověřte jeho nastavení. Rozměry a materiály cílové skříňky zůstávají samostatné.",
+        en: "Save a preset in a test project, reload, and check its settings. Target cabinet dimensions and materials remain independent."
+      },
+      {
+        sk: "Otvorte Marže, vyhľadajte názov skrinky a vyskúšajte filter Bez ceny. Projektové sadzby otvoríte cez Upraviť.",
+        cs: "Otevřete Marže, vyhledejte název skříňky a vyzkoušejte filtr Bez ceny. Projektové sazby otevřete přes Upravit.",
+        en: "Open Margins, search for a cabinet, and try the Unpriced filter. Use Edit to open project rates."
+      }
+    ]
+  },
+  {
     id: "2026-09-kitchen-pricing-and-production",
     date: "2026-09-30",
     title: {

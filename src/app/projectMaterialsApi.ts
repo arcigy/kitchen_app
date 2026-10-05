@@ -186,10 +186,10 @@ export async function lookupProjectMaterialCatalogItem(
   return component ? { kind: "component", definition: component, unitPrice } : null;
 }
 
-export async function updateProjectComponentValues(projectId: string, revision: number, operation: ProjectComponentOperation | MaterialEditOperation): Promise<ProjectMaterialsView> {
+export async function updateProjectComponentValues(projectId: string, revision: number, operation: ProjectComponentOperation | MaterialEditOperation, signal?: AbortSignal): Promise<ProjectMaterialsView> {
   const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/materials`, {
     method: "PUT", credentials: "include", headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({ revision, operation })
+    body: JSON.stringify({ revision, operation }), signal
   });
   const view = unwrapProjectMaterialsView(await readJson(response));
   confirmProjectEdgeGroups(projectId, view.assignments);

@@ -4,7 +4,7 @@ import { applyProjectAssignedPricing } from "./projectAssignedPricing";
 import { worktopPurchase } from "./worktopPurchase";
 import type { ClientCatalog } from "../../core/catalog/catalog-types";
 import type { ProjectManufacturingSettings } from "../../core/project-manufacturing/project-manufacturing-types";
-import { createPricingCatalog } from "../../core/catalog/pricing-catalog";
+import { createPricingCatalog, withPricingCatalogContext } from "../../core/catalog/pricing-catalog";
 import { calculateCommercialPricingFromQuoteBom, type PortableMaterialRef, type PortableQuoteBomPayload } from "../../modules/runtime/portableCommercial";
 import { getModuleDescriptor } from "../../modules/registry";
 import type { KitchenWorktopInstance, LayoutInstance } from "../appState";
@@ -199,6 +199,7 @@ export function buildProjectPricingViews(
   manufacturing?: ProjectManufacturingSettings | unknown,
   includeProjectExtras = true
 ): ProjectPricingView[] {
+  return withPricingCatalogContext(catalog, () => {
   const counts = new Map<string, number>();
 
   const moduleViews = instances.map((instance) => {
@@ -260,6 +261,7 @@ export function buildProjectPricingViews(
   return applyBacksplashPurchases(entries.map(entry => ({
     ...entry, result: applyProjectAssignedPricing(entry.result, entry.kind === "project" ? "project" : `${entry.kind === "module" ? "module" : "addition"}:${entry.instanceId}`, catalog)
   })), catalog);
+  });
 }
 
 export function buildProjectPricingPayload(entries: ProjectPricingView[], settings?: ProjectQuoteSettingsInput, options?: Parameters<typeof buildProjectQuoteSummary>[2]) {

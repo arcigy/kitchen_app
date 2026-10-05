@@ -298,6 +298,13 @@ function validateParameterPresets(modulePackage: FurnQuoteModulePackage, errors:
     errors.push(`duplicate parameter preset id: ${duplicate}`);
   }
   for (const preset of parameterPresets.presets) {
+    for (const operation of [preset.creationOperation, preset.laborOperation]) {
+      if (operation === undefined) continue;
+      if (!isRecord(operation) || typeof operation.operationId !== "string" || !/^[a-zA-Z0-9_-]{16,100}$/.test(operation.operationId) ||
+        typeof operation.userId !== "string" || !operation.userId.trim() || typeof operation.requestHash !== "string" || !/^[a-f0-9]{64}$/.test(operation.requestHash)) {
+        errors.push(`parameter preset ${preset.presetId}: invalid write operation`);
+      }
+    }
     if (preset.laborRate != null) {
       try { validateLaborRate(preset.laborRate); } catch (error) { errors.push(`parameter preset ${preset.presetId}: ${String(error)}`); }
     }

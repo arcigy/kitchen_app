@@ -24,6 +24,13 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     }
   };
 });
+vi.mock("../module-package/module-package-atomic-file", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../module-package/module-package-atomic-file")>();
+  return { writeModulePackageFile: async (...args: Parameters<typeof actual.writeModulePackageFile>) => {
+    await io.beforeWrite?.(args[0]);
+    return actual.writeModulePackageFile(...args);
+  } };
+});
 
 const ctx: ClientContext = { clientId: "readiness", userId: "fixture", role: "owner" };
 const roots: string[] = [];
