@@ -93,6 +93,115 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function searchPanel(view: ProjectMarginsView, footer = document.createElement("section")) {
+  const host = document.createElement("section");
+  document.body.append(host, footer);
+  const onCommitManufacturing = vi.fn(async () => ({ ok: true }));
+  const handle = mountProjectMarginsPanel(host, view, {
+    onCommitDefault: vi.fn(async () => ({ ok: true })),
+    onCommitAdditionalLabor: vi.fn(async () => ({ ok: true })),
+    onCommitManufacturing,
+    onApplyGroup: vi.fn(async () => ({ ok: true })),
+    onResetGroup: vi.fn(async () => ({ ok: true })),
+    onCommitItem: vi.fn(async () => ({ ok: true })),
+    onResetItem: vi.fn(async () => ({ ok: true }))
+  }, { footerContainer: footer });
+  handle.setInputsDisabled(false);
+  const click = (selector: string) => host.querySelector<HTMLButtonElement>(selector)!.click();
+  const search = (query: string) => {
+    const input = host.querySelector<HTMLInputElement>("[data-margin-search]")!;
+    input.value = query; input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  return { host, footer, handle, click, search, onCommitManufacturing };
+}
+
+describe("compact searchable margins", () => {
+  it("keeps expanded project settings and their draft when searching, updating and switching tabs", () => {
+    const panel = searchPanel(marginsView());
+    const settings = () => panel.host.querySelector<HTMLDetailsElement>("[data-margin-project-controls]")!;
+    expect(settings().open).toBe(false);
+    expect(settings().querySelector("summary")?.textContent).toContain("Projektové sadzby");
+    settings().open = true;
+    panel.host.querySelector<HTMLInputElement>("[data-margin-default-input]")!.value = "42";
+    panel.search("Korpus");
+    expect(settings().open).toBe(true);
+    panel.handle.update(marginsView());
+    expect(settings().open).toBe(true);
+    panel.click('[data-margin-settings-tab="modules"]');
+    panel.click('[data-margin-settings-tab="general"]');
+    expect(settings().open).toBe(true);
+    expect(panel.host.querySelector<HTMLInputElement>("[data-margin-default-input]")!.value).toBe("42");
+    settings().open = false;
+    panel.handle.update(marginsView());
+    expect(settings().open).toBe(false);
+    panel.handle.destroy();
+  });
+  it("saves visible manufacturing controls with a real external summary footer", async () => {
+    const view = marginsView();
+    view.settings.manufacturing.boardWastePercent = 11;
+    view.settings.manufacturing.edgeWastePercent = 4;
+    const panel = searchPanel(view);
+    panel.host.querySelector<HTMLInputElement>("[data-manufacturing-enabled]")!.checked = true;
+    panel.host.querySelector<HTMLInputElement>("[data-manufacturing-board-waste]")!.value = "22";
+    panel.click("[data-manufacturing-save]");
+    await panel.handle.flushPending();
+    expect(panel.onCommitManufacturing).toHaveBeenCalledWith({ manufacturing: expect.objectContaining({ pricingMode: "configured", boardWastePercent: 22, edgeWastePercent: 4 }) });
+    expect(panel.footer.querySelector("[data-manufacturing-settings]")).toBeNull();
+    panel.handle.destroy();
+  });
+
+  it("keeps navigation before the scroll and renders only the selected cabinet's preassembly", () => {
+    const items = Array.from({ length: 100 }, (_, index) => marginItem({ scopeId: `module:scope-${index}`, scopeLabel: `Skrinka ${index + 1}` }));
+    const panel = searchPanel(marginsView({ groups: [marginGroup(items[0], { items })] }));
+    expect(panel.host.querySelectorAll("[data-preassembly-instance]")).toHaveLength(0);
+    expect(panel.host.querySelector("[data-margin-settings-scroll] [data-margin-settings-tab]")).toBeNull();
+    panel.click('[data-margin-settings-tab="modules"]');
+    expect(panel.host.querySelectorAll("[data-preassembly-instance]")).toHaveLength(1);
+    expect(panel.host.querySelectorAll("[data-margin-scope-select] option")).toHaveLength(100);
+    panel.search("100");
+    expect(panel.host.querySelectorAll("[data-margin-scope-select] option")).toHaveLength(1);
+    expect(panel.host.querySelector("[data-preassembly-instance]")?.getAttribute("data-preassembly-instance")).toBe("scope-99");
+    panel.handle.destroy();
+  });
+
+  it("finds accents, material names and multiword queries; reports empty results and clears filters", () => {
+    const item = marginItem({ source: "group", missingPrice: true, scopeId: "module:second", scopeLabel: "Horná skrinka", resourceLabel: "Dub prírodný" });
+    const panel = searchPanel(marginsView({ groups: [marginGroup(marginItem(), { items: [marginItem(), item] })] }));
+    panel.click('[data-margin-settings-tab="modules"]');
+    panel.search("HORNA prirodny");
+    expect(panel.host.querySelectorAll("[data-margin-item-id]")).toHaveLength(1);
+    expect(panel.host.querySelector("[data-margin-item-id]")?.getAttribute("data-margin-item-id")).toBe(item.targetId);
+    const filter = panel.host.querySelector<HTMLSelectElement>("[data-margin-filter]")!;
+    filter.value = "override"; filter.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(panel.host.textContent).toContain("Nenašli sa žiadne položky");
+    panel.click("[data-margin-search-clear]");
+    expect(panel.host.querySelector<HTMLInputElement>("[data-margin-search]")!.value).toBe("");
+    expect(panel.host.querySelector<HTMLSelectElement>("[data-margin-filter]")!.value).toBe("all");
+    panel.handle.destroy();
+  });
+
+  it("retains drafts across tabs and saves selected preassembly without clearing project rates or other cabinets", async () => {
+    const first = marginItem(), second = marginItem({ scopeId: "module:second" });
+    const view = marginsView({ groups: [marginGroup(first, { items: [first, second] })] });
+    view.settings.manufacturing.pricingMode = "configured";
+    view.settings.manufacturing.boardWastePercent = 12;
+    view.settings.manufacturing.edgeWastePercent = 5;
+    view.settings.manufacturing.preassemblyByInstanceId = { "base-1": 100, second: 200 };
+    const panel = searchPanel(view);
+    panel.host.querySelector<HTMLInputElement>("[data-margin-default-input]")!.value = "19";
+    panel.click('[data-margin-settings-tab="modules"]');
+    panel.host.querySelector<HTMLInputElement>("[data-preassembly-instance]")!.value = "150";
+    panel.click('[data-margin-settings-tab="general"]');
+    expect(panel.host.querySelector<HTMLInputElement>("[data-margin-default-input]")!.value).toBe("19");
+    panel.click('[data-margin-settings-tab="modules"]');
+    expect(panel.host.querySelector<HTMLInputElement>("[data-preassembly-instance]")!.value).toBe("150");
+    panel.click("[data-manufacturing-save]");
+    await panel.handle.flushPending();
+    expect(panel.onCommitManufacturing).toHaveBeenCalledWith({ manufacturing: { ...view.settings.manufacturing, preassemblyByInstanceId: { "base-1": 150, second: 200 } } });
+    panel.handle.destroy();
+  });
+});
+
 describe("project margins phase panel", () => {
   it("keeps the numeric margin per area visible with a preliminary label and price warnings", () => {
     const html = renderProjectMarginsPanel(marginsView({
@@ -375,4 +484,40 @@ describe("project margins phase panel", () => {
     expect(actions.onResetItem).toHaveBeenCalledWith(projectMarginTargetId(target));
     handle.destroy();
   });
+});
+
+
+it("preserves the scroll owner, draft, checkbox and focus during an authoritative update", () => {
+  const container = document.createElement("section");
+  document.body.append(container);
+  const handle = mountProjectMarginsPanel(container, marginsView(), {
+    onCommitDefault: vi.fn(), onCommitAdditionalLabor: vi.fn(), onApplyGroup: vi.fn(), onResetGroup: vi.fn(), onCommitItem: vi.fn(), onResetItem: vi.fn()
+  });
+  handle.update(marginsView());
+  const selector = "[data-manufacturing-board-waste]";
+  const input = container.querySelector<HTMLInputElement>(selector)!;
+  input.value = "37"; input.focus();
+  const checkbox = container.querySelector<HTMLInputElement>("[data-manufacturing-enabled]")!;
+  checkbox.checked = true;
+  container.querySelector<HTMLElement>("[data-margin-settings-scroll]")!.scrollTop = 123;
+  handle.update(marginsView({ revision: 5 }));
+  expect(container.querySelector<HTMLInputElement>(selector)!.value).toBe("37");
+  expect(document.activeElement).toBe(container.querySelector(selector));
+  expect(container.querySelector<HTMLInputElement>("[data-manufacturing-enabled]")!.checked).toBe(true);
+  expect(container.querySelector<HTMLElement>("[data-margin-settings-scroll]")!.scrollTop).toBe(123);
+  handle.destroy();
+});
+
+
+it("accepts a server checkbox change when the user has no checkbox draft", () => {
+  const container = document.createElement("section");
+  document.body.append(container);
+  const action = vi.fn(async () => ({ ok: true }));
+  const handle = mountProjectMarginsPanel(container, marginsView(), { onCommitDefault: action, onCommitAdditionalLabor: action, onApplyGroup: action, onResetGroup: action, onCommitItem: action, onResetItem: action });
+  handle.update(marginsView());
+  const next = marginsView();
+  next.settings.manufacturing.pricingMode = "configured";
+  handle.update(next);
+  expect(container.querySelector<HTMLInputElement>("[data-manufacturing-enabled]")!.checked).toBe(true);
+  handle.destroy();
 });

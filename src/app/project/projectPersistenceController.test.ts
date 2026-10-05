@@ -8,7 +8,7 @@ import type { ProjectStateCodec } from "./projectStateCodec";
 
 const scope = { clientId: "client_1", userId: "user_1", workspaceId: "project:project_1", projectId: "project_1" };
 
-function harness(saveImplementation: () => Promise<unknown> = async () => ({})) {
+function harness(saveImplementation: () => Promise<unknown> = async () => ({}), tokens?: { observed: () => string; saved: () => string | null }) {
   const writeActive = vi.fn(async () => undefined);
   const archiveActive = vi.fn(async () => null);
   const save = vi.fn(saveImplementation);
@@ -16,6 +16,7 @@ function harness(saveImplementation: () => Promise<unknown> = async () => ({})) 
     getState: () => ({
       currentProject: { projectId: "project_1", name: "Test" },
       saveRevision: 4,
+      serverSnapshotToken: tokens?.saved(),
       lastSavedAt: null,
       editingSessionId: "edit_1"
     }),
@@ -39,6 +40,7 @@ function harness(saveImplementation: () => Promise<unknown> = async () => ({})) 
   } as unknown as ProjectRecoveryLease;
   const controller = createProjectPersistenceController({
     actions,
+    getObservedToken: tokens?.observed,
     codec,
     store,
     lease,
@@ -186,4 +188,61 @@ describe("project persistence controller", () => {
     expect(save).toHaveBeenCalledTimes(3);
     await controller.stop({ flush: false });
   });
+});
+
+
+describe("ensureServerSnapshot", () => {
+  it("does not write an unchanged loaded project even after repeated openings", async () => {
+    const { controller, save } = harness();
+    controller.start();
+    await controller.ensureServerSnapshot();
+    await controller.ensureServerSnapshot();
+    expect(save).not.toHaveBeenCalled();
+    await controller.stop({ flush: false });
+  });
+
+  it("shares an in-flight save and confirms changes made during that save", async () => {
+    let finish!: () => void;
+    const saveImplementation = vi.fn().mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; })).mockResolvedValue({});
+    const { controller, save } = harness(saveImplementation);
+    controller.start(); controller.markDomainChanged();
+    const first = controller.ensureServerSnapshot();
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    controller.markDomainChanged();
+    const second = controller.ensureServerSnapshot();
+    finish();
+    await Promise.all([first, second]);
+    expect(save).toHaveBeenCalledTimes(2);
+    await controller.ensureServerSnapshot();
+    expect(save).toHaveBeenCalledTimes(2);
+    await controller.stop({ flush: false });
+  });
+
+  it("propagates a failed save instead of reading an unconfirmed snapshot", async () => {
+    const { controller, save } = harness(async () => { throw new Error("save failed"); });
+    controller.start(); controller.markDomainChanged();
+    await expect(controller.ensureServerSnapshot()).rejects.toThrow("save failed");
+    expect(save).toHaveBeenCalledOnce();
+    await controller.stop({ flush: false });
+  });
+});
+
+
+it("acknowledges an already completed manual save without repeating the write", async () => {
+  let token = "before";
+  const { controller, save } = harness(undefined, { observed: () => token, saved: () => token });
+  controller.start(); token = "after"; controller.markDomainChanged();
+  await controller.ensureServerSnapshot();
+  expect(save).not.toHaveBeenCalled();
+  await controller.stop({ flush: false });
+});
+
+it("cannot confirm a new token using a shared older manual save", async () => {
+  let token = "old", savedToken = "old";
+  let attempts = 0;
+  const { controller, save } = harness(async () => { if (++attempts > 1) savedToken = token; }, { observed: () => token, saved: () => savedToken });
+  controller.start(); token = "new"; controller.markDomainChanged();
+  await controller.ensureServerSnapshot();
+  expect(save).toHaveBeenCalledTimes(2);
+  await controller.stop({ flush: false });
 });

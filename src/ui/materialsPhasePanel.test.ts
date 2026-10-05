@@ -215,7 +215,7 @@ describe("materials phase panel", () => {
     expect(html).toContain("<small>Počet</small><strong>2 ks</strong>");
   });
 
-  it("restores the committed input value and leaves derived content mounted after invalid blur validation", async () => {
+  it("retains the draft and leaves derived content mounted after invalid blur validation", async () => {
     const catalog = testCatalog();
     const state = createDefaultProjectMaterialAssignments(catalog, "2026-07-09T20:00:00.000Z");
     const view = createProjectMaterialsView(state, [], catalog);
@@ -233,7 +233,7 @@ describe("materials phase panel", () => {
     await vi.waitFor(() => expect(onCommitId).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(input.disabled).toBe(false));
 
-    expect(input.value).toBe("material.front.old");
+    expect(input.value).toBe("missing.id");
     expect(input.attributes.get("aria-invalid")).toBe("true");
     expect(host.error.textContent).toContain("Ponechaná pôvodná hodnota");
     expect(host.innerHTML).toContain("General settings");

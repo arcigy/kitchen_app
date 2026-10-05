@@ -1,3 +1,5 @@
+import { withPricingCatalogContext } from "../core/catalog/pricing-catalog";
+import { commercialViewSource } from "./commercialViewSource";
 import { createProjectMaterialRuntimeCatalog } from "../app/projectMaterialRuntimeCatalog";
 import type http from "node:http";
 import type { ClientCatalogRepository } from "../core/catalog/catalog-repository";
@@ -180,16 +182,18 @@ export function projectMarginsViewFromSave(
   currency: PriceCurrency = "EUR",
   sheetMaterialMargin?: ProjectMarginSheetMaterialPolicy
 ): ProjectMarginsView {
+  const startedAt = performance.now();
   const runtime = createProjectMaterialRuntimeCatalog(catalog);
   runtime.applyProjectAssignments(save.appState.materialAssignments);
-  const { entries, warnings } = entriesFromSave(save, runtime.catalog);
-  return buildProjectMarginsView(entries, normalizeProjectMarginSettingsState(save.appState.quoteSettings), {
+  const { entries, warnings } = withPricingCatalogContext(runtime.catalog, () => entriesFromSave(save, runtime.catalog));
+  const result = buildProjectMarginsView(entries, normalizeProjectMarginSettingsState(save.appState.quoteSettings), {
     editable,
     warnings,
     currency,
     sheetMaterialMargin,
     materialAssignments: save.appState.materialAssignments.assignments
   });
+  return { ...result, source: commercialViewSource(save, catalog), calculationMs: performance.now() - startedAt };
 }
 
 export async function handleProjectMarginsApi(

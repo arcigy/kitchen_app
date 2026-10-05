@@ -35,6 +35,7 @@ describe("material waste controls through the existing pricing owner", () => {
     expect(save).not.toHaveBeenCalled();
     expect(container.querySelector<HTMLInputElement>(board)!.value).toBe("12");
     fill(container, board, "30,5"); fill(container, edge, "0"); submit(container);
+    await vi.waitFor(() => expect(onViewChanged).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 5 })));
     await controller.close();
     expect(save).toHaveBeenCalledTimes(1);
     expect(save.mock.calls[0]![1]).toEqual({ revision: 4, manufacturing: { ...original.settings.manufacturing, boardWastePercent: 30.5, edgeWastePercent: 0 } });
@@ -59,7 +60,7 @@ describe("material waste controls through the existing pricing owner", () => {
       api: { loadProjectMargins: vi.fn(async () => original), setProjectManufacturing: save } });
     await controller.open(); fill(container, board, ""); fill(container, edge, "0");
     container.querySelector<HTMLInputElement>("[data-material-waste-enabled]")!.checked = false;
-    submit(container); await controller.close();
+    submit(container); await vi.waitFor(() => expect(save).toHaveBeenCalledOnce()); await controller.close();
     expect(save.mock.calls[0]![1].manufacturing).toEqual({ ...original.settings.manufacturing, pricingMode: "legacy", boardWastePercent: null, edgeWastePercent: 0 });
   });
 
@@ -83,29 +84,35 @@ describe("material waste controls through the existing pricing owner", () => {
     const controller = createMarginsPhaseController({ container, presentation: "material-waste", getProjectId: () => "p", api: { loadProjectMargins: load, setProjectManufacturing: save } });
     await controller.open(); fill(container, board, "30"); submit(container);
     await vi.waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("medzičasom zmenil"));
-    expect(container.querySelector<HTMLInputElement>(board)!.value).toBe("44");
-    fill(container, board, "31"); submit(container); await controller.close();
+    expect(container.querySelector<HTMLInputElement>(board)!.value).toBe("30");
+    expect(controller.getView()?.revision).toBe(9);
+    fill(container, board, "31"); submit(container); await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2)); await controller.close();
     expect(save.mock.calls[1]![1]).toEqual({ revision: 9, manufacturing: { ...newer.settings.manufacturing, boardWastePercent: 31 } });
   });
 
-  it("waits for saving when leaving and ignores duplicate submits", async () => {
+  it("leaves during saving immediately and ignores duplicate submits", async () => {
     const container = host(); let finish!: (view: ProjectMarginsView) => void;
     const save = vi.fn(() => new Promise<ProjectMarginsView>(resolve => { finish = resolve; }));
     const controller = createMarginsPhaseController({ container, presentation: "material-waste", getProjectId: () => "p",
       api: { loadProjectMargins: vi.fn(async () => initialView()), setProjectManufacturing: save } });
     await controller.open(); submit(container); submit(container);
-    let closed = false; const closing = controller.close().then(() => { closed = true; });
     await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(closed).toBe(false); finish(initialView()); await closing; expect(closed).toBe(true);
+    const startedAt = performance.now();
+    await controller.close();
+    expect(performance.now() - startedAt).toBeLessThan(250);
+    finish(initialView());
+    controller.destroy();
   });
 
-  it("restores saved values after a failed request and does not publish draft settings", async () => {
+  it("retains the draft after a failed request and verifies authoritative settings", async () => {
     const container = host(), onViewChanged = vi.fn();
     const controller = createMarginsPhaseController({ container, presentation: "material-waste", getProjectId: () => "p", onViewChanged,
       api: { loadProjectMargins: vi.fn(async () => initialView()), setProjectManufacturing: vi.fn().mockRejectedValue(new Error("Offline")) } });
-    await controller.open(); fill(container, board, "90"); submit(container); await controller.close();
-    expect(container.querySelector<HTMLInputElement>(board)!.value).toBe("12");
-    expect(onViewChanged).toHaveBeenCalledTimes(1);
+    await controller.open(); fill(container, board, "90"); submit(container);
+    await vi.waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("Offline"));
+    await controller.close();
+    expect(container.querySelector<HTMLInputElement>(board)!.value).toBe("90");
+    expect(onViewChanged).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Offline");
   });
 
@@ -115,6 +122,7 @@ describe("material waste controls through the existing pricing owner", () => {
     const controller = createMaterialsPhaseController({ container, catalog, getProjectId: () => "p", getQuantities: () => [], onPricingChanged: vi.fn(),
       api: { loadProjectMaterials: vi.fn(async () => materials) }, pricingApi: { loadProjectMargins: vi.fn(async () => initialView()) } });
     await controller.open();
+    await vi.waitFor(() => expect(container.querySelector(board)).not.toBeNull());
     const input = container.querySelector<HTMLInputElement>(board)!; input.value = "37,5"; input.focus();
     controller.setSupplierBridgeState({ ...EMPTY_SUPPLIER_BRIDGE_PANEL_STATE, connection: "connected" });
     expect(container.querySelector(board)).toBe(input); expect(input.value).toBe("37,5"); expect(document.activeElement).toBe(input);

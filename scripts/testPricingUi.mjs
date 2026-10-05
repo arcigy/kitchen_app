@@ -21,6 +21,9 @@ async function verifyMarginPerSquareMeter(browser) {
     await page.locator('[data-workspace-nav="margins"]').click();
     const result = await response;
     assert(result.ok(), "Authoritative margins load successfully");
+    const settings = page.locator("[data-margin-project-controls]");
+    await settings.waitFor();
+    if (!await settings.evaluate(element => element.open)) await settings.locator("summary").click();
     await page.locator("[data-margin-default-input]").waitFor();
     const view = (await result.json()).view;
     if (expectSheetMargin) await metric().waitFor();
