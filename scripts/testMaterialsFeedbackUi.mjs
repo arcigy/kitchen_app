@@ -120,6 +120,7 @@ try {
   assert(board?.params.boards[0].profile[2].x === 720 && board.params.boards[0].profile[2].y === 360 && board.params.boards[0].thicknessMm === 18, 'Decimal supplier thickness is accepted and uses the existing whole-millimetre board normalization');
   await page.getByRole('button', { name: 'Close Custom Furniture Editor', exact: true }).click();
   await save(page); await page.locator('[data-workspace-nav="margins"]').click();
+  await page.locator('[data-margin-project-controls] > summary').click();
   await page.locator('[data-margin-construction-input]').fill('10');
   await Promise.all([page.waitForResponse(r => r.url().endsWith('/margins') && r.request().method() === 'PUT'), page.locator('[data-margin-construction-save]').click()]);
   // The response may precede the UI rerender, so read the persisted authority as well.

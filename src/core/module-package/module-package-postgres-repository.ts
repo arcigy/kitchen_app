@@ -6,6 +6,7 @@ import { computeModulePackageHash } from "./module-package-file";
 import type { FurnQuoteModulePackagePayload, ModulePackageStoredMeta } from "./module-file-types";
 import type { FurnQuoteModulePackage } from "./module-package-types";
 import { validateFurnQuoteModulePackage } from "./module-package-validation";
+import { assertModulePresetsRetained } from "./module-preset-retention";
 import {
   normalizePersistedSystemModulePackage,
   normalizedSystemTemplateForStoredIdentity
@@ -57,7 +58,7 @@ export function createPostgresModulePackageRepository(args: {
     };
     const source: ModulePackageStoredMeta["source"] = options.source ?? "dev-json";
     await withSchemaClient(args.connectionString, args.schema, async (client) => {
-      if (options.expectedPackageHash !== undefined) {
+      if (typeof options.expectedPackageHash === "string") {
         // Stored system templates may be normalized on read. Compare the same
         // public revision, then guard the write with the actual database hash.
         const current = await client.query<PackageRow & { package_hash: string }>(
@@ -65,6 +66,7 @@ export function createPostgresModulePackageRepository(args: {
           [ctx.clientId, persisted.module.modulePackageId]);
         const row = current.rows[0];
         if (!row || computeModulePackageHash(validatePersistedPackage(row)) !== options.expectedPackageHash) throw new ModulePackageRevisionConflictError();
+        assertModulePresetsRetained(validatePersistedPackage(row), persisted);
         const updated = await client.query(`UPDATE arcigy_module_packages SET module_type=$3, package_version=$4,
           package_hash=$5, package=$6::jsonb, source=$7, updated_at=now()
           WHERE client_id=$1 AND module_package_id=$2 AND package_hash=$8 RETURNING module_package_id`,
@@ -73,7 +75,7 @@ export function createPostgresModulePackageRepository(args: {
         if (updated.rowCount !== 1) throw new ModulePackageRevisionConflictError();
         return;
       }
-      await client.query(
+      const written = await client.query(
         `
           INSERT INTO arcigy_module_packages (
             client_id,
@@ -87,13 +89,16 @@ export function createPostgresModulePackageRepository(args: {
             updated_at
           )
           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, now(), now())
-          ON CONFLICT (client_id, module_package_id) DO UPDATE SET
+          ${options.expectedPackageHash === null ? "ON CONFLICT (client_id, module_package_id) DO NOTHING" : `ON CONFLICT (client_id, module_package_id) DO UPDATE SET
             module_type = EXCLUDED.module_type,
             package_version = EXCLUDED.package_version,
             package_hash = EXCLUDED.package_hash,
             package = EXCLUDED.package,
             source = EXCLUDED.source,
             updated_at = now()
+          WHERE COALESCE(EXCLUDED.package->'parameterPresets'->'presets', '[]'::jsonb)
+            @> COALESCE(arcigy_module_packages.package->'parameterPresets'->'presets', '[]'::jsonb)`}
+          RETURNING module_package_id
         `,
         [
           ctx.clientId,
@@ -105,6 +110,7 @@ export function createPostgresModulePackageRepository(args: {
           source
         ]
       );
+      if (written.rowCount !== 1) throw new ModulePackageRevisionConflictError();
     });
     return persisted;
   }

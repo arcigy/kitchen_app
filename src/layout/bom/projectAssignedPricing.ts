@@ -42,7 +42,8 @@ export function applyProjectAssignedPricing(result: BOMResult, scopeId: string, 
       item.pricingUnit = amount.unit;
       item.pricingBasis = amount.unit === "lm" ? "linear_length" : "piece";
       item.unitPriceOverride = amount.unitPrice;
-      if (amount.unitPrice !== null) item.validationErrors = item.validationErrors?.filter(message => !message.startsWith("Missing catalog component"));
+      if (amount.unitPrice !== null) item.validationErrors = item.validationErrors?.filter(message =>
+        !message.startsWith("Missing catalog component") && !message.startsWith("Missing price for "));
     }
     if (assignment.snapshots.component) {
       const definition = assignment.snapshots.component.definition;

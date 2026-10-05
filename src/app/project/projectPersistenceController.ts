@@ -1,3 +1,4 @@
+import { recordCommercialTiming } from "../../core/commercialDiagnostics";
 import { pendingProjectEdgeGroups } from "./projectEdgeGroupBaseline";
 import { ProjectApiError } from "./projectApi";
 import type { ProjectActions } from "./projectActions";
@@ -34,6 +35,7 @@ export type ProjectPersistenceController = {
   checkpointInteraction(checkpoint: ProjectInteractionCheckpoint | null): void;
   flushLocal(): Promise<void>;
   saveServer(): Promise<void>;
+  ensureServerSnapshot(): Promise<void>;
 };
 
 export function createProjectPersistenceController(args: {
@@ -45,6 +47,7 @@ export function createProjectPersistenceController(args: {
   getWorkspace(): ProjectRecoveryWorkspace;
   writeWorkspacePointer(pointer: LastWorkspacePointerV1): void;
   getObservedToken?(): string;
+  prepareServerSnapshot?(): void;
   setInteractionCheckpoint?(checkpoint: ProjectInteractionCheckpoint | null): void;
   appVersion?: string | null;
   saveInitialState?: boolean;
@@ -94,6 +97,7 @@ export function createProjectPersistenceController(args: {
   let serverInFlight: Promise<void> | null = null;
   let retryIndex = 0;
   let serverSyncBlocked = false;
+  let lastServerError: unknown = null;
   let lastObservedToken: string | null = null;
   let lastWriterState: boolean | null = null;
   let switchingScope = false;
@@ -153,7 +157,10 @@ export function createProjectPersistenceController(args: {
   const scheduleInitialCheckpoint = (saveInitialState: boolean) => {
     dirtyGeneration += 1;
     scheduleLocal(false);
-    if (!saveInitialState) return;
+    if (!saveInitialState) {
+      if (args.actions.getState().hasServerSnapshot !== false) serverSavedGeneration = dirtyGeneration;
+      return;
+    }
     dirtySince = now();
     scheduleServer();
   };
@@ -218,7 +225,10 @@ export function createProjectPersistenceController(args: {
       return;
     }
     clearServerTimer();
+    const startedAt = performance.now();
+    lastServerError = null;
     const generation = dirtyGeneration;
+    const snapshotToken = args.getObservedToken?.();
     const saveWriter = { ownerId: lease.ownerId, fencingToken: lease.fencingToken() };
     if (saveWriter.fencingToken <= 0) return;
     serverInFlight = (async () => {
@@ -226,13 +236,16 @@ export function createProjectPersistenceController(args: {
         await flushLocal();
         if (!lease.isOwner() || lease.fencingToken() !== saveWriter.fencingToken) return;
         await args.actions.save({ background: true });
-        serverSavedGeneration = generation;
+        // ProjectActions can share an earlier manual save. Only acknowledge
+        // this generation if that write actually captured the requested token.
+        if (!snapshotToken || !args.actions.getState().serverSnapshotToken || args.actions.getState().serverSnapshotToken === snapshotToken) serverSavedGeneration = generation;
         retryIndex = 0;
         if (serverSavedGeneration >= dirtyGeneration) dirtySince = null;
         // Update the draft base revision after the authoritative write. The
         // local envelope remains useful for an immediate refresh.
         await flushLocal();
       } catch (error) {
+        lastServerError = error;
         if (isRevisionConflict(error)) {
           await args.store.archiveActive(scope, "revision-conflict", saveWriter);
           serverSyncBlocked = true;
@@ -246,10 +259,36 @@ export function createProjectPersistenceController(args: {
         scheduleServer(delay);
       }
     })().finally(() => {
+      recordCommercialTiming("save", startedAt, lastServerError ? "error" : "success");
       serverInFlight = null;
       if (serverSavedGeneration < dirtyGeneration && serverTimer === null) scheduleServer();
     });
     await serverInFlight;
+  };
+
+  const observeChanges = () => {
+    const token = args.getObservedToken?.() ?? null;
+    if (token !== null && token !== lastObservedToken) {
+      lastObservedToken = token;
+      markChanged(true);
+    }
+  };
+
+  const ensureServerSnapshot = async (): Promise<void> => {
+    if (!started || switchingScope) throw new Error("Ukladanie projektu ešte nie je pripravené.");
+    const requestedScope = scope;
+    args.prepareServerSnapshot?.();
+    observeChanges();
+    const generation = dirtyGeneration;
+    if (lastObservedToken !== null && args.actions.getState().hasServerSnapshot !== false && args.actions.getState().serverSnapshotToken === lastObservedToken) serverSavedGeneration = generation;
+    while (serverSavedGeneration < generation || args.actions.getState().hasServerSnapshot === false) {
+      if (scope !== requestedScope || switchingScope || !started) throw new DOMException("Projekt sa zmenil.", "AbortError");
+      if (serverSyncBlocked) throw lastServerError ?? new Error("Projekt sa zmenil na serveri. Najprv vyriešte konflikt uloženia.");
+      if (!lease.isOwner() || lease.fencingToken() <= 0) throw new Error("Projekt je otvorený v inom tabe. Zmeny najprv uložte v aktívnom tabe.");
+      await saveServer();
+      if (lastServerError) throw lastServerError;
+    }
+    if (scope !== requestedScope || switchingScope) throw new DOMException("Projekt sa zmenil.", "AbortError");
   };
 
   const handleVisibility = () => {
@@ -273,11 +312,7 @@ export function createProjectPersistenceController(args: {
         lastObservedToken = args.getObservedToken();
         observerTimer = setIntervalFn(() => {
           emitWriterState();
-          const token = args.getObservedToken?.() ?? null;
-          if (token !== null && token !== lastObservedToken) {
-            lastObservedToken = token;
-            markChanged(true);
-          }
+          observeChanges();
         }, observeMs);
       }
       if (typeof document !== "undefined") document.addEventListener("visibilitychange", handleVisibility);
@@ -325,6 +360,8 @@ export function createProjectPersistenceController(args: {
       serverSavedGeneration = -1;
       retryIndex = 0;
       serverSyncBlocked = false;
+      lastServerError = null;
+      lastObservedToken = args.getObservedToken?.() ?? null;
       lastWriterState = null;
       switchingScope = false;
       if (started) {
@@ -347,6 +384,7 @@ export function createProjectPersistenceController(args: {
       markChanged(true);
     },
     flushLocal,
-    saveServer
+    saveServer,
+    ensureServerSnapshot
   };
 }

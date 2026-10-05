@@ -5,7 +5,7 @@ import {
   getDatabaseUrl,
   normalizeAppEnvironment
 } from "../src/core/database/database-config";
-import { closeSchemaPools, withSchemaClient } from "../src/core/database/postgres-client";
+import { closeSchemaPools } from "../src/core/database/postgres-client";
 import { createFileClientCatalogRepository } from "../src/core/catalog/catalog-file-repository";
 import { createPostgresClientCatalogRepository } from "../src/core/catalog/catalog-postgres-repository";
 import type { ClientCatalogRepository } from "../src/core/catalog/catalog-repository";
@@ -13,7 +13,7 @@ import { createFileModulePackageRepository, type ModulePackageRepository } from 
 import { createPostgresModulePackageRepository } from "../src/core/module-package/module-package-postgres-repository";
 import type { ClientContext } from "../src/core/client/client-context";
 import type { FurnQuoteModulePackage } from "../src/core/module-package/module-package-types";
-import { validateFurnQuoteModulePackage } from "../src/core/module-package/module-package-validation";
+import { computeModulePackageHash } from "../src/core/module-package/module-package-file";
 import { systemModulePackageTemplates } from "../src/system/module-packages";
 import { assignClientModules } from "../src/core/catalog/client-module-assignment";
 import { refreshClientModulePackagesFromSystemTemplates } from "../src/core/catalog/client-module-package-refresh";
@@ -144,25 +144,15 @@ function resolveScriptDatabaseConfig(args: Args): DatabaseConfig | null {
   return { connectionString, schema, appEnv };
 }
 
-async function readPostgresModulePackages(connectionString: string, schema: string, clientId: string): Promise<FurnQuoteModulePackage[]> {
-  return withSchemaClient(connectionString, schema, async (client) => {
-    const result = await client.query<{ package: unknown }>(
-      "SELECT package FROM arcigy_module_packages WHERE client_id = $1 ORDER BY module_type, module_package_id",
-      [clientId]
-    );
-    return result.rows.map((row) => validateFurnQuoteModulePackage(row.package as FurnQuoteModulePackage));
-  });
-}
-
 function selectedRefreshPackages(existingPackages: readonly FurnQuoteModulePackage[], moduleIds: readonly string[]): FurnQuoteModulePackage[] {
-  return [
-    ...refreshClientModulePackagesFromSystemTemplates({
+  const refreshed = refreshClientModulePackagesFromSystemTemplates({
       existingPackages,
       sourcePackages: systemModulePackageTemplates,
       moduleIds
-    }),
-    ...selectedSystemPackages(moduleIds)
-  ];
+    });
+  const byId = new Map(selectedSystemPackages(moduleIds).map(pkg => [pkg.module.modulePackageId, pkg]));
+  for (const pkg of refreshed) byId.set(pkg.module.modulePackageId, pkg);
+  return [...byId.values()];
 }
 
 function mergePackageSources(existingPackages: readonly FurnQuoteModulePackage[], refreshModuleIds: readonly string[] = []): FurnQuoteModulePackage[] {
@@ -204,7 +194,8 @@ async function ensureSelectedPackages(args: {
     : selectedSystemPackages(args.moduleIds);
   for (const modulePackage of selectedPackages) {
     if (existingIds.has(modulePackage.module.modulePackageId) && !args.refreshExisting) continue;
-    await args.repository.savePackage(args.ctx, modulePackage, { source: "system-template" });
+    const current = args.existingPackages.find(pkg => pkg.module.modulePackageId === modulePackage.module.modulePackageId);
+    await args.repository.savePackage(args.ctx, modulePackage, { source: "system-template", expectedPackageHash: current ? computeModulePackageHash(current) : null });
     savedCount++;
   }
   return savedCount;
@@ -240,9 +231,7 @@ const modulePackageRepository: ModulePackageRepository = usePostgres && database
   : createFileModulePackageRepository(args.projectRoot);
 
 try {
-  const existingPackages = usePostgres && databaseConfig
-    ? await readPostgresModulePackages(databaseConfig.connectionString, databaseConfig.schema, args.clientId)
-    : await modulePackageRepository.listPackages(ctx);
+  const existingPackages = await modulePackageRepository.listPackages(ctx);
   const availablePackages = mergePackageSources(existingPackages, args.refreshPackages ? args.modules : []);
   const catalog = await catalogRepository.getCatalog(ctx);
   const result = assignClientModules(catalog, availablePackages, {

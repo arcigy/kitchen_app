@@ -1,3 +1,4 @@
+import type { CommercialViewSource } from "../../core/commercialViewSource";
 import { projectContribution, type ProjectContribution } from "./projectContribution";
 import { projectComponentAmount } from "../../core/project-materials/project-component-values";
 import { repairSupplierMaterialAssignment } from "../../core/project-materials/supplierMaterialPricingRepair";
@@ -95,6 +96,8 @@ export type ProjectMarginSheetMaterialView = ProjectMarginSheetMaterialPolicy & 
 };
 
 export type ProjectMarginsView = {
+  source?: CommercialViewSource;
+  calculationMs?: number;
   constructionLabor?: { percent: number; baseAmount: number; amount: number; preliminary: boolean };
   revision: number;
   editable: boolean;

@@ -10,6 +10,8 @@ export type ProjectRuntimeState = {
   saveRevision: number;
   /** Legacy snapshots can exist without a revision; metadata alone is not a save. */
   hasServerSnapshot?: boolean;
+  /** In-memory change token captured by the last successful write. */
+  serverSnapshotToken?: string | null;
 };
 
 export type ProjectSaveOptions = {
@@ -31,6 +33,7 @@ export type ProjectActions = {
 export function createProjectActions(args: {
   buildAppState: (options?: ProjectSaveOptions) => ProjectSaveFile["appState"];
   buildBomSnapshot?: () => unknown;
+  getSnapshotToken?: () => string;
   restoreSave: (save: ProjectSaveFile) => void | Promise<void>;
   beforeProjectReplace?: () => void | Promise<void>;
   onProjectChanged: (project: ProjectMetadata | null, status?: string) => void;
@@ -52,6 +55,7 @@ export function createProjectActions(args: {
 
   const setProject = (project: ProjectMetadata | null, status?: string, resetSession = false) => {
     state.currentProject = project;
+    if (resetSession) state.serverSnapshotToken = null;
     if (resetSession) state.editingSessionId = createEditingSessionId();
     args.onProjectChanged(project, status);
   };
@@ -67,6 +71,7 @@ export function createProjectActions(args: {
     const projectId = state.currentProject.projectId;
     const appState = args.buildAppState(options);
     const bomSnapshot = args.buildBomSnapshot?.();
+    const snapshotToken = args.getSnapshotToken?.() ?? null;
     const expectedRevision = state.saveRevision;
     const editingSessionId = state.editingSessionId;
     saveInFlightIsBackground = options?.background === true;
@@ -75,6 +80,7 @@ export function createProjectActions(args: {
         state.lastSavedAt = save.integrity.savedAt;
         state.saveRevision = save.integrity.saveRevision ?? state.saveRevision;
         state.hasServerSnapshot = true;
+        state.serverSnapshotToken = snapshotToken;
         setProject(save.project, "Saved.");
         return save;
       })

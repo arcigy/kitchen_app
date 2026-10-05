@@ -45,9 +45,13 @@ export function normalizePersistedSystemModulePackage(args: {
   source: string | null | undefined;
 }): unknown {
   if (args.source !== "system-template" || !isLegacyWallCorner90(args.package)) return args.package;
-  return normalizedSystemTemplateForStoredIdentity({
+  const normalized = normalizedSystemTemplateForStoredIdentity({
     modulePackageId: LEGACY_WALL_CORNER_90_ID,
     moduleType: LEGACY_WALL_CORNER_90_ID,
     source: args.source
-  }) ?? args.package;
+  });
+  if (!normalized) return args.package;
+  const stored = record(args.package);
+  // Historical normalization must not replace configurations saved on the old template.
+  return stored?.parameterPresets ? { ...normalized, parameterPresets: stored.parameterPresets, integrity: { ...normalized.integrity, packageHash: undefined } } : normalized;
 }

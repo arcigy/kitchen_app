@@ -1,3 +1,5 @@
+import { preservePanelRenderState, type PhasePanelState } from "./panelRenderState";
+import { recordCommercialTiming } from "../core/commercialDiagnostics";
 import { renderBacksplashPurchases, renderWorktopPurchases } from "./backsplashPurchaseView";
 import type { MaterialEditCommand } from "../app/materialAssignmentEditor";
 import type { MaterialEditTarget } from "../core/project-materials/project-material-edits";
@@ -89,7 +91,7 @@ export const EMPTY_SUPPLIER_BRIDGE_PANEL_STATE: SupplierBridgePanelState = {
 };
 
 export type ProjectMaterialsPanelHandle = {
-  update: (view: ProjectMaterialsView) => void;
+  update: (view: ProjectMaterialsView, state?: PhasePanelState) => void;
   setLoading: (loading: boolean, message?: string) => void;
   setInputsDisabled: (disabled: boolean) => void;
   setGlobalError: (message: string | null) => void;
@@ -141,6 +143,8 @@ export function mountProjectMaterialsPanel(
   const pendingCommits = new Set<Promise<void>>();
   const render = () => {
     if (destroyed) return;
+    const startedAt = performance.now();
+    const restore = preservePanelRenderState(container);
     const restoreMaterialFocus = typeof document !== "undefined" && selectableRow(document.activeElement)?.dataset.materialEditKey === selectedMaterialKey;
     const focusedWasteInput = actions.wasteControls?.contains(document.activeElement) ? document.activeElement as HTMLElement : null;
     container.innerHTML = renderInteractiveProjectMaterialsPanel(currentView, {
@@ -152,12 +156,19 @@ export function mountProjectMaterialsPanel(
       selectedScopeId,
       displayCurrency: actions.displayCurrency
     });
+    if (inputsDisabled || loadingMessage) {
+      for (const control of container.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("input,select,button")) {
+        if (!control.hasAttribute("data-materials-settings-tab") && !control.hasAttribute("data-material-scope-select")) control.disabled = true;
+      }
+    }
     if (actions.wasteControls) {
       container.querySelector("[data-material-waste-slot]")?.appendChild(actions.wasteControls);
       focusedWasteInput?.focus({ preventScroll: true });
     }
     highlightSelection();
     if (restoreMaterialFocus) selectedRow()?.focus({ preventScroll: true });
+    restore();
+    recordCommercialTiming("render", startedAt, "success");
   };
   const focusCategoryCard = (category: MaterialAssignmentCategory) => {
     const group = container.querySelector<HTMLElement>(`[data-material-assignment-category="${category}"]`);
@@ -240,11 +251,14 @@ export function mountProjectMaterialsPanel(
     } catch (error) {
       result = { ok: false, error: errorMessage(error) };
     }
-    if (destroyed || commitSequence.get(inputElement) !== sequence || !inputElement.isConnected) return;
-    inputElement.disabled = false;
+    if (destroyed || commitSequence.get(inputElement) !== sequence) return;
+    // A reconciliation can rerender the field while its write is pending.
+    const currentInput = inputElement.isConnected ? inputElement : container.querySelector<HTMLInputElement>(`[data-material-category="${category}"][data-material-id-field="${field}"]`);
+    if (!currentInput) return;
+    inputElement = currentInput;
+    inputElement.disabled = inputsDisabled;
     inputElement.removeAttribute("aria-busy");
     if (!result.ok) {
-      inputElement.value = committedValue;
       setInputError(container, inputElement, result.error ?? `ID ${value || "(prázdne)"} sa nepodarilo overiť.`);
       return;
     }
@@ -385,10 +399,11 @@ export function mountProjectMaterialsPanel(
   render();
 
   return {
-    update(view) {
+    update(view, state = {}) {
       currentView = view;
-      loadingMessage = null;
-      globalError = null;
+      loadingMessage = state.loadingMessage ?? null;
+      globalError = state.error ?? null;
+      inputsDisabled = state.disabled ?? false;
       render();
     },
     setLoading(loading, message = "Načítavam materiály projektu…") {

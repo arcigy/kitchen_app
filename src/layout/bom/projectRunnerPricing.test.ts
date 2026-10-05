@@ -32,10 +32,25 @@ function fixture(copies = 1, unitPrice: number | null = 859.54, heights = "264,2
     const view = buildProjectMarginsView([{ instanceId: "drawers", kind: "module", label: "Drawers", result }], settings, { currency: "CZK", materialAssignments: assignments });
     return { result, group: view.groups.find(group => group.category === "runner")! };
   };
-  return { base, runtime, assignment, price, params };
+  return { base, runtime, assignment, price, params, raw };
 }
 
 describe("project runner price authority", () => {
+  it.each([0, 30])("clears obsolete catalog-price warnings after a valid project price %s, retaining other validation", unitPrice => {
+    const { runtime, assignment, raw } = fixture(1, null);
+    const runner = raw.quoteBom.items.find(item => item.category === "runner")!;
+    runner.validationErrors = [`Missing price for ${assignment.componentId}`, "Missing catalog component: supplier runner", "Invalid drawer geometry"];
+    const priced = { ...assignment, projectValues: { unitPrice, currency: "EUR" as const } };
+    runtime.applyProjectAssignments({ schemaVersion: 2, initialized: true, revision: 2, assignments: [priced] });
+    const result = applyProjectAssignedPricing(raw, "module:drawers", runtime.catalog);
+    const item = result.pricing.items.find(item => item.category === "runner")!;
+    expect(item.itemCost).toBe(unitPrice * 3);
+    expect(item.validationErrors).toEqual(["Invalid drawer geometry"]);
+    runtime.applyProjectAssignments({ schemaVersion: 2, initialized: true, revision: 3, assignments: [assignment] });
+    const missing = applyProjectAssignedPricing(raw, "module:drawers", runtime.catalog).pricing.items.find(item => item.category === "runner")!;
+    expect(missing.itemCost).toBeNull();
+    expect(missing.validationErrors).toContain(`Missing price for ${assignment.componentId}`);
+  });
   it.each([1, 2])("prices three sets per cabinet from the saved variant when the supplier ID is absent (%s cabinets)", copies => {
     const { base, assignment, price } = fixture(copies);
     expect(base.components.some(component => component.id === assignment.componentId)).toBe(false);

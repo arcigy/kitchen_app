@@ -6,13 +6,13 @@ describe("refreshClientModulePackageFromSystemTemplate", () => {
   it("keeps client presets and explicit false values, with existing ids winning over new system versions", () => {
     const source = structuredClone(systemModulePackageTemplates.find(item => item.module.moduleType === "fwm_catalog_base_doors")!);
     source.parameterPresets = { freeParameterKeys: ["width", "height", "depth"], presets: [
-      { presetId: "shared", label: "System updated", note: "", parameterValues: { hasDoors: true } },
-      { presetId: "new-system", label: "New", note: "", parameterValues: { doorCount: 2 } },
+      { presetId: "shared", label: "System updated", note: "System configuration", parameterValues: { hasDoors: true } },
+      { presetId: "new-system", label: "New", note: "System configuration", parameterValues: { doorCount: 2 } },
     ] };
     const existing = structuredClone(source);
     existing.parameterPresets!.presets = [
       { presetId: "shared", label: "Saved configuration", note: "Keep me", parameterValues: { hasDoors: false, doorCount: 1 } },
-      { presetId: "client-only", label: "Client", note: "", parameterValues: { shelfCount: 3 } },
+      { presetId: "client-only", label: "Client", note: "Client configuration", parameterValues: { shelfCount: 3 } },
     ];
     const before = structuredClone(existing);
     const refreshed = refreshClientModulePackageFromSystemTemplate({ existingPackage: existing, sourcePackages: [source] })!;

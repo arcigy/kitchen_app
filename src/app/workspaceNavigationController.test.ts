@@ -216,7 +216,7 @@ describe("createWorkspaceNavigationController", () => {
     expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).hidden).toBe(true);
   });
 
-  it("shows the Materials skeleton synchronously while the authoritative reload is pending", async () => {
+  it("shows warnings loading while the Materials owner controls its own loading UI", async () => {
     vi.stubGlobal("document", {
       addEventListener: vi.fn(),
       createElement: () => new WorkspaceFakeElement()
@@ -235,7 +235,7 @@ describe("createWorkspaceNavigationController", () => {
     });
 
     controller.openMaterials();
-    expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).innerHTML).toContain('data-loading-skeleton="phase"');
+    expect((materialsPhase.warningListEl as unknown as WorkspaceFakeElement).innerHTML).toContain('data-loading-skeleton="phase"');
     resolveOpen({ warnings: [] });
     await vi.waitFor(() => expect((materialsPhase.hostEl as unknown as WorkspaceFakeElement).dataset.loadingSkeleton).toBeUndefined());
   });

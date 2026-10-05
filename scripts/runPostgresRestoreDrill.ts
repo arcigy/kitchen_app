@@ -7,6 +7,7 @@ import { quotePgIdentifier } from "../src/core/database/database-config";
 import { createPostgresReleaseNewsRepository } from "../src/core/release-news/releaseNewsPostgresRepository";
 import type { ClientContext } from "../src/core/client/client-context";
 import { closeSchemaPools } from "../src/core/database/postgres-client";
+import { verifyModulePresetsPostgres, verifyRestoredModulePreset } from "./verifyModulePresetsPostgres";
 import {
   RESTORE_DRILL_DOCKER_LABEL,
   RESTORE_DRILL_SCHEMA,
@@ -411,6 +412,7 @@ export async function runDockerPostgresRestoreDrill(): Promise<void> {
     runRestoreDrillMigrations(sourceUrl);
     await seedSyntheticArcigyData(sourceUrl);
     await verifyReleaseNewsPostgresRepository(sourceUrl);
+    const presetEvidence = await verifyModulePresetsPostgres(sourceUrl);
     const sourceEvidence = await collectRestoreDrillEvidence(sourceUrl);
 
     runDocker([
@@ -466,6 +468,7 @@ export async function runDockerPostgresRestoreDrill(): Promise<void> {
     runRestoreDrillMigrations(targetUrl);
     const targetEvidence = await collectRestoreDrillEvidence(targetUrl);
     assertEquivalentRestoreEvidence(sourceEvidence, targetEvidence);
+    await verifyRestoredModulePreset(targetUrl, presetEvidence);
 
     const restoreDurationMs = Date.now() - restoreStartedAt;
     const totalRows = Object.values(targetEvidence.tableCounts).reduce((sum, count) => sum + count, 0);
@@ -487,6 +490,7 @@ export async function runDockerPostgresRestoreDrill(): Promise<void> {
         tenantBoundaryLeakCount: targetEvidence.representative.tenantBoundaryLeakCount
       },
       releaseNewsRepositoryIsolation: true,
+      presetWritesAndRestore: true,
       achievedRpoSeconds: 0,
       achievedRtoSeconds: Number((restoreDurationMs / 1000).toFixed(3))
     }));

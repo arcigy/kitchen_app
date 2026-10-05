@@ -149,6 +149,52 @@ try {
   assert((await module()).params.hasDoors === false, 'Failed preset save leaves the cabinet unchanged');
   await dialog().getByRole('button', { name: /^(Zrušiť|Cancel)$/ }).click();
   await page.unroute('**/parameter-presets');
+  // Persist the first delivery but lose its response body. A visible retry must
+  // confirm that same preset instead of creating a suffixed duplicate.
+  let lostReply = true;
+  const writeBodies = [];
+  let committedPreset;
+  await page.route('**/parameter-presets', async route => {
+    writeBodies.push(route.request().postData());
+    const response = await route.fetch();
+    if (lostReply) {
+      lostReply = false;
+      committedPreset = await response.json();
+      await route.fulfill({ status: 201, contentType: 'application/json', body: '{' });
+    } else await route.fulfill({ response });
+  });
+  const beforeRetry = await module();
+  const retryName = `QA uncertain ${Date.now()}`;
+  await page.locator('.module-parameter-preset-create').click();
+  await dialog().locator('input[type="text"]').fill(retryName);
+  await dialog().locator('textarea').fill('Uncertain response regression');
+  await dialog().locator('button[type="submit"]').click();
+  await dialog().getByText('Preset save failed.', { exact: true }).waitFor();
+  assert(await dialog().locator('input[type="text"]').inputValue() === retryName, 'Uncertain save retains the entered preset name');
+  assert(JSON.stringify((await module()).params) === JSON.stringify(beforeRetry.params), 'Uncertain save preserves the placed cabinet');
+  const retriedResponse = page.waitForResponse(response => response.url().endsWith('/parameter-presets') && response.request().method() === 'POST');
+  await dialog().locator('button[type="submit"]').click();
+  const retried = await (await retriedResponse).json();
+  await dialog().waitFor({ state: 'detached' });
+  assert(writeBodies.length === 2 && writeBodies[0] === writeBodies[1], 'Visible retry sends the exact same operation and revision');
+  assert(retried.preset.presetId === committedPreset.preset.presetId, 'Lost response retry returns the already committed preset');
+  assert(retried.modulePackage.parameterPresets.presets.filter(p => p.label === retryName).length === 1, 'Uncertain save creates one preset');
+  await page.unroute('**/parameter-presets');
+  const reimportPackage = structuredClone(retried.modulePackage);
+  delete reimportPackage.parameterPresets;
+  delete reimportPackage.integrity.packageHash;
+  const reimportedResponse = await page.request.post(new URL('/api/modules/import', baseUrl).toString(), { data: { package: reimportPackage } });
+  assert(reimportedResponse.ok(), 'Reimport of the template succeeds');
+  const reimported = await reimportedResponse.json();
+  assert(reimported.modulePackage.parameterPresets.presets.some(p => p.presetId === presetId) &&
+    reimported.modulePackage.parameterPresets.presets.some(p => p.presetId === retried.preset.presetId), 'Reimport retains both successfully saved presets');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => !!window.__kitchenDebug);
+  await select();
+  await trigger().scrollIntoViewIfNeeded(); await trigger().click();
+  assert(await customCard().count() === 1 && await page.locator(`[data-parameter-preset-id="${retried.preset.presetId}"]`).count() === 1,
+    'Reimported client presets remain usable after reload');
+  await trigger().click();
   const exportedIcon = await page.evaluate(async () => {
     const { resolveArcigyModuleIconTargets } = await import('/src/modules/fwmFurniture/moduleIconRenderContract.ts');
     await import('/scripts/arcigyModuleIconRenderer.ts');

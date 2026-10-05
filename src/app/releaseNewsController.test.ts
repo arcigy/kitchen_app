@@ -15,6 +15,19 @@ const response = { notices: [...RELEASE_NOTICES], acknowledgedNoticeIds: [] };
 afterEach(() => { document.body.innerHTML = ""; });
 
 describe("release news dialog", () => {
+  it("keeps older unread notices in the archive after the latest notice is acknowledged", async () => {
+    setCurrentLanguage("sk");
+    const latest = RELEASE_NOTICES[0]!;
+    const older = { ...latest, id: "older_unread", date: "2026-01-01" };
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json({ notices: [older, latest], acknowledgedNoticeIds: [latest.id] }));
+    const controller = createReleaseNewsController({ fetcher, uiScale: { createControl: createScaleControl } });
+    await controller.openUnread();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await controller.openArchive();
+    expect(document.querySelectorAll(".release-news-date")).toHaveLength(2);
+    expect(document.querySelectorAll(".release-news-date")[1]?.textContent).toContain("Neprečítané");
+    controller.dispose();
+  });
   it("opens the newest unread notice automatically and acknowledges it only on confirmation", async () => {
     setCurrentLanguage("sk");
     const fetcher = vi.fn(async (input: RequestInfo | URL) => input === "/api/release-news"
