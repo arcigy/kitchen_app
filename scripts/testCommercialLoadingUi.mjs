@@ -34,7 +34,10 @@ try {
   });
   const saving = page.waitForResponse(response => response.url().endsWith('/save') && response.request().method() === 'POST');
   await page.locator('[data-quick-action="save"]').click();
-  const saved = await (await saving).json();
+  const saveResponse = await saving;
+  assert(saveResponse.ok(), 'Commercial fixture is saved successfully');
+  const saved = await saveResponse.json();
+  await page.locator('body.project-save-blocking').waitFor({ state: 'hidden' });
   const projectId = saved.save.projectId;
   const endpoint = new URL(`/api/projects/${projectId}/margins`, baseUrl).toString();
   const actual = (await (await page.request.get(endpoint)).json()).view;
@@ -135,8 +138,8 @@ try {
     const panel = document.getElementById('marginsPhase');
     const button = document.querySelector('[data-workspace-nav="design"]');
     if (!panel || panel.hidden || !button) throw new Error('Pending margin navigation fixture is not visible');
-    button.addEventListener('click', () => {
-      performance.mark('qa-margin-navigation-click');
+    button.addEventListener('click', event => {
+      performance.mark('qa-margin-navigation-click', { startTime: event.timeStamp });
       const observer = new MutationObserver(() => {
         if (!panel.hidden) return;
         performance.mark('qa-margin-navigation-hidden');
@@ -172,6 +175,10 @@ try {
   await page.waitForFunction(() => Boolean(document.querySelector('[data-manufacturing-save]:not(:disabled)')));
   await page.unroute(endpoint);
   // Current healthy browser state is checked after intentional cancellation.
+  const finalSave = page.waitForResponse(response => response.url().endsWith('/save') && response.request().method() === 'POST');
+  await page.locator('[data-quick-action="save"]').click();
+  assert((await finalSave).ok(), 'Healthy reload starts from a completed authoritative save');
+  await page.locator('body.project-save-blocking').waitFor({ state: 'hidden' });
   errors.length = 0;
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => Boolean(window.__kitchenDebug) && !document.querySelector('.viewer-startup'));
@@ -185,6 +192,6 @@ try {
   console.log(JSON.stringify({ checks, layouts, errors, navigationMs, driverNavigationMs }, null, 2));
 } catch (error) {
   await page.screenshot({ path: `${output}/failure.png` }).catch(() => {});
-  await writeFile(`${output}/failure.txt`, String(error.stack) + '\n' + JSON.stringify(errors));
+  await writeFile(`${output}/failure.txt`, String(error.stack) + '\n' + JSON.stringify(errors) + '\n' + await page.locator('body').innerText().catch(() => ''));
   throw error;
 } finally { await browser.close(); }
