@@ -131,11 +131,29 @@ try {
   await page.route(endpoint, route => { pendingRoute = route; });
   await page.locator('[data-workspace-nav="margins"]').click();
   await page.waitForFunction(() => Boolean(document.querySelector('.margins-phase__status')));
-  const started = performance.now();
+  await page.evaluate(() => {
+    const panel = document.getElementById('marginsPhase');
+    const button = document.querySelector('[data-workspace-nav="design"]');
+    if (!panel || panel.hidden || !button) throw new Error('Pending margin navigation fixture is not visible');
+    button.addEventListener('click', () => {
+      performance.mark('qa-margin-navigation-click');
+      const observer = new MutationObserver(() => {
+        if (!panel.hidden) return;
+        performance.mark('qa-margin-navigation-hidden');
+        performance.measure('qa-margin-navigation', 'qa-margin-navigation-click', 'qa-margin-navigation-hidden');
+        observer.disconnect();
+      });
+      observer.observe(panel, { attributes: true, attributeFilter: ['hidden'] });
+    }, { capture: true, once: true });
+  });
+  // Measure the application's input-to-DOM response in the browser. The driver
+  // also waits for actionability and protocol round trips on a shared CI runner.
+  const driverStarted = performance.now();
   await page.locator('[data-workspace-nav="design"]').click();
-  await page.waitForFunction(() => document.getElementById('marginsPhase').hidden);
-  const navigationMs = performance.now() - started;
-  assert(navigationMs < 250, `Navigation during a pending read took ${Math.round(navigationMs)} ms`);
+  await page.waitForFunction(() => performance.getEntriesByName('qa-margin-navigation', 'measure').length === 1);
+  const driverNavigationMs = performance.now() - driverStarted;
+  const navigationMs = await page.evaluate(() => performance.getEntriesByName('qa-margin-navigation', 'measure')[0].duration);
+  assert(navigationMs < 250, `Navigation during a pending read took ${Math.round(navigationMs)} ms; driver took ${Math.round(driverNavigationMs)} ms`);
   if (pendingRoute) await pendingRoute.abort().catch(() => {});
   await page.unroute(endpoint);
   let failNextRead = true;
@@ -163,8 +181,8 @@ try {
   await page.locator('[data-material-board-waste]').waitFor();
   assert(errors.length === 0, `Current console errors: ${errors.length}`);
   await page.screenshot({ path: `${output}/materials.png` });
-  await writeFile(`${output}/results.json`, JSON.stringify({ checks, layouts, errors, navigationMs }, null, 2));
-  console.log(JSON.stringify({ checks, layouts, errors, navigationMs }, null, 2));
+  await writeFile(`${output}/results.json`, JSON.stringify({ checks, layouts, errors, navigationMs, driverNavigationMs }, null, 2));
+  console.log(JSON.stringify({ checks, layouts, errors, navigationMs, driverNavigationMs }, null, 2));
 } catch (error) {
   await page.screenshot({ path: `${output}/failure.png` }).catch(() => {});
   await writeFile(`${output}/failure.txt`, String(error.stack) + '\n' + JSON.stringify(errors));
