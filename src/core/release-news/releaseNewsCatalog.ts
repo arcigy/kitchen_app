@@ -13,6 +13,11 @@ export const RELEASE_NOTICES: readonly ReleaseNotice[] = [
     },
     changes: [
       {
+        sk: "Uloženie presetu zachová firemné názvy, ceny a nastavenia modulov. Preset a jeho referencia v katalógu sa na serveri uložia spoločne.",
+        cs: "Uložení presetu zachová firemní názvy, ceny a nastavení modulů. Preset a jeho reference v katalogu se na serveru uloží společně.",
+        en: "Saving a preset preserves company module names, prices, and settings. The server commits the preset and its catalog reference together."
+      },
+      {
         sk: "Import alebo obnova modulového balíka zachová uložené presety, ich nastavenia a sadzby práce. Pri nekompatibilnej zmene aplikácia odmietne prepísanie.",
         cs: "Import nebo obnova modulového balíku zachová uložené presety, jejich nastavení a sazby práce. Při nekompatibilní změně aplikace odmítne přepsání.",
         en: "Importing or refreshing a module package retains saved presets, their settings, and labor rates. Incompatible changes are rejected."

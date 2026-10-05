@@ -6,6 +6,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { systemModulePackageTemplates } from "../../system/module-packages";
 import { createSystemSeedClientCatalogRepository } from "../catalog/catalog-repository";
+import { createCatalogModuleDefinitionFromPackage } from "./module-package-catalog";
 import { createFileModulePackageRepository } from "./module-package-repository";
 import { createModulePackageService } from "./module-package-service";
 import { computeModulePackageHash } from "./module-package-file";
@@ -31,6 +32,22 @@ async function fixture() {
 }
 
 describe("preset durability through the complete write path", () => {
+  it("changes only the package hash of a company's catalog module when creating and editing a preset", async () => {
+    const f = await fixture();
+    const before = await f.catalog.getCatalog(f.context);
+    const customized = { ...createCatalogModuleDefinitionFromPackage(f.original, { catalog: before }),
+      id: "company_drawer_identity", name: "Company drawer label", description: "Company description", enabled: false,
+      defaultWidth: 742, pricingRef: Object.keys(before.priceList.prices)[0], tags: ["company-tag"] };
+    before.modules = [customized]; await f.catalog.saveCatalog(f.context, before);
+    const created = await f.service.createParameterPreset(f.request);
+    const after = await f.catalog.getCatalog(f.context);
+    expect(after.modules).toEqual([{ ...customized, packageHash: created.modulePackage.integrity.packageHash }]);
+    expect(after.priceList).toEqual(before.priceList);
+    expect(after.materials).toEqual(before.materials);
+    const edited = await f.service.updatePresetLabor({ modulePackageId: f.request.modulePackageId, presetId: created.preset.presetId,
+      expectedPackageHash: created.modulePackage.integrity.packageHash!, laborRate: { amount: 80, currency: "EUR" }, operationId: "catalog_preservation_labor" });
+    expect((await f.catalog.getCatalog(f.context)).modules).toEqual([{ ...customized, packageHash: edited.modulePackage.integrity.packageHash }]);
+  });
   it("replays a lost response across a fresh service without another preset or package write", async () => {
     const f = await fixture();
     const first = await f.service.createParameterPreset(f.request);

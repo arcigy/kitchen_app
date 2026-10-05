@@ -2,12 +2,13 @@ import { validateLaborRate, type LaborRate } from "../project-manufacturing/modu
 import { ModulePackageRevisionConflictError } from "./module-package-write-lock";
 import type { ClientContext } from "../client/client-context";
 import type { ClientCatalogRepository } from "../catalog/catalog-repository";
-import type { ModulePackageRepository } from "./module-package-repository";
+import type { PrepareModulePreset, ModulePackageRepository } from "./module-package-repository";
 import { parseModulePackageImport, type ModulePackageImportInput } from "./module-package-import";
 import { createCatalogModuleDefinitionFromPackage } from "./module-package-catalog";
 import { computeModulePackageHash } from "./module-package-file";
 import type { FurnQuoteModulePackage, ModuleParameterPreset } from "./module-package-types";
 import { preserveModuleParameterPresets } from "./module-preset-retention";
+import { presetCatalogReference } from "./module-preset-catalog";
 import { createModulePresetWriteOperation, isSameModulePresetOperation } from "./module-preset-operation";
 
 const DEFAULT_PRESET_FREE_PARAMETER_KEYS = [
@@ -167,68 +168,58 @@ export function createModulePackageService(args: {
 
   async function updateCatalog(persisted: FurnQuoteModulePackage) {
     const catalog = await args.catalogRepository.ensureCatalogExists(args.context);
-    const catalogModules = catalog.modules.map(normalizeCatalogModuleIdentity);
-    const packageHash = computeModulePackageHash(persisted);
-    const persistedCatalogKey = {
-      modulePackageId: persisted.module.modulePackageId,
-      moduleType: persisted.module.moduleType
-    };
-    const existingCatalogModule = catalogModules.find((module) => matchesCatalogPackage(module, persistedCatalogKey));
-    const catalogModule = createCatalogModuleDefinitionFromPackage(persisted, {
-      catalog,
-      enabled: existingCatalogModule?.enabled ?? true,
-      packageHash
+    const reference = presetCatalogReference(catalog, persisted);
+    if (reference.changed) await args.catalogRepository.saveCatalog(args.context, {
+      ...catalog, modules: reference.modules,
+      meta: { ...catalog.meta, updatedAt: new Date().toISOString() }
     });
-    const modules = catalogModules.some((module) => matchesCatalogPackage(module, catalogModule))
-      ? catalogModules.map((module) =>
-          matchesCatalogPackage(module, catalogModule)
-            ? { ...module, ...catalogModule }
-            : module
-        )
-      : [...catalogModules, catalogModule];
-    await args.catalogRepository.saveCatalog(args.context, {
-      ...catalog,
-      modules,
-      meta: {
-        ...catalog.meta,
-        source: "client-custom",
-        updatedAt: new Date().toISOString()
+    return reference.catalogModule;
+  }
+
+  async function commitPreset(modulePackageId: string, prepare: PrepareModulePreset) {
+    const current = await args.packageRepository.getPackage(args.context, modulePackageId);
+    if (!current) throw new Error("Module package not found.");
+    if (args.packageRepository.mutatePreset) {
+      if (!await args.catalogRepository.getRevision(args.context)) await args.catalogRepository.ensureCatalogExists(args.context);
+      return args.packageRepository.mutatePreset(args.context, modulePackageId, prepare);
+    }
+    const prepared = prepare(current);
+    let persisted = current;
+    if (prepared.modulePackage !== current) {
+      try {
+        persisted = await args.packageRepository.savePackage(args.context, prepared.modulePackage,
+          { source: "dev-json", expectedPackageHash: computeModulePackageHash(current) });
+      } catch (error) {
+        if (!(error instanceof ModulePackageRevisionConflictError)) throw error;
+        const latest = await args.packageRepository.getPackage(args.context, modulePackageId);
+        if (!latest) throw error;
+        const replay = prepare(latest);
+        // Only an exact persisted receipt permits recovery. Never repeat a write.
+        if (replay.modulePackage !== latest) throw error;
+        return { ...replay, catalogModule: await updateCatalog(latest) };
       }
-    });
-    return catalogModule;
+    }
+    return { modulePackage: persisted, preset: prepared.preset, catalogModule: await updateCatalog(persisted) };
   }
 
   const updatePresetLabor = async (input: { modulePackageId: string; presetId: string; expectedPackageHash: string; laborRate: LaborRate | null; operationId?: string }) => {
     if (args.context.role === "viewer") throw new Error("Viewer role cannot edit presets.");
     if (!input.expectedPackageHash?.trim()) throw new Error("Preset revision is required.");
     if (input.laborRate !== null) validateLaborRate(input.laborRate);
-    const current = await args.packageRepository.getPackage(args.context, input.modulePackageId);
-    if (!current) throw new Error("Module package not found.");
     const operation = createModulePresetWriteOperation(input.operationId, args.context.userId, { presetId: input.presetId, laborRate: input.laborRate });
-    const savedPreset = current.parameterPresets?.presets.find(item => item.presetId === input.presetId);
-    if (isSameModulePresetOperation(savedPreset?.laborOperation, operation)) {
-      const catalogModule = await updateCatalog(current);
-      return { modulePackage: current, preset: savedPreset!, catalogModule };
-    }
-    if (computeModulePackageHash(current) !== input.expectedPackageHash) throw new ModulePackageRevisionConflictError();
-    const next = structuredClone(current);
-    const preset = next.parameterPresets?.presets.find(item => item.presetId === input.presetId);
-    if (!preset) throw new Error("Preset not found.");
-    preset.laborRate = input.laborRate ? structuredClone(input.laborRate) : null;
-    if (operation) preset.laborOperation = operation;
-    else delete preset.laborOperation;
-    next.integrity = { ...next.integrity, updatedAt: new Date().toISOString(), packageHash: undefined };
-    let persisted: FurnQuoteModulePackage;
-    try { persisted = await args.packageRepository.savePackage(args.context, next, { source: "dev-json", expectedPackageHash: input.expectedPackageHash }); }
-    catch (error) {
-      if (!(error instanceof ModulePackageRevisionConflictError) || !operation) throw error;
-      const latest = await args.packageRepository.getPackage(args.context, input.modulePackageId);
-      const saved = latest?.parameterPresets?.presets.find(item => item.presetId === input.presetId);
-      if (!latest || !saved || !isSameModulePresetOperation(saved.laborOperation, operation)) throw error;
-      return { modulePackage: latest, preset: saved, catalogModule: await updateCatalog(latest) };
-    }
-    const catalogModule = await updateCatalog(persisted);
-    return { modulePackage: persisted, preset, catalogModule };
+    return commitPreset(input.modulePackageId, current => {
+      const savedPreset = current.parameterPresets?.presets.find(item => item.presetId === input.presetId);
+      if (isSameModulePresetOperation(savedPreset?.laborOperation, operation)) return { modulePackage: current, preset: savedPreset! };
+      if (computeModulePackageHash(current) !== input.expectedPackageHash) throw new ModulePackageRevisionConflictError();
+      const next = structuredClone(current);
+      const preset = next.parameterPresets?.presets.find(item => item.presetId === input.presetId);
+      if (!preset) throw new Error("Preset not found.");
+      preset.laborRate = input.laborRate ? structuredClone(input.laborRate) : null;
+      if (operation) preset.laborOperation = operation;
+      else delete preset.laborOperation;
+      next.integrity = { ...next.integrity, updatedAt: new Date().toISOString(), packageHash: undefined };
+      return { modulePackage: next, preset };
+    });
   };
 
   const createParameterPreset = async (input: {
@@ -247,45 +238,22 @@ export function createModulePackageService(args: {
     if (!name) throw new Error("Preset name is required.");
     if (!note) throw new Error("Preset note is required.");
     const operation = createModulePresetWriteOperation(input.operationId, args.context.userId, { name, note, parameters: input.parameters, laborRate: input.laborRate ?? null });
-    const current = await args.packageRepository.getPackage(args.context, input.modulePackageId);
-    if (!current) throw new Error("Module package not found.");
-    const replay = current.parameterPresets?.presets.find(item => isSameModulePresetOperation(item.creationOperation, operation));
-    if (replay) return { modulePackage: current, preset: replay, catalogModule: await updateCatalog(current) };
-    const { freeParameterKeys, preset } = buildParameterPreset({
-      modulePackage: current,
-      parameters: input.parameters,
-      name,
-      note
+    return commitPreset(input.modulePackageId, current => {
+      const replay = current.parameterPresets?.presets.find(item => isSameModulePresetOperation(item.creationOperation, operation));
+      if (replay) return { modulePackage: current, preset: replay };
+      if (input.expectedPackageHash && computeModulePackageHash(current) !== input.expectedPackageHash) throw new ModulePackageRevisionConflictError();
+      const { freeParameterKeys, preset } = buildParameterPreset({ modulePackage: current, parameters: input.parameters, name, note });
+      if (input.laborRate !== undefined) preset.laborRate = input.laborRate ? structuredClone(input.laborRate) : null;
+      if (operation) preset.creationOperation = operation;
+      return {
+        preset,
+        modulePackage: {
+          ...current,
+          parameterPresets: { freeParameterKeys, presets: [...(current.parameterPresets?.presets ?? []), preset] },
+          integrity: { ...current.integrity, updatedAt: new Date().toISOString(), packageHash: undefined }
+        }
+      };
     });
-    if (input.expectedPackageHash && computeModulePackageHash(current) !== input.expectedPackageHash) throw new ModulePackageRevisionConflictError();
-    if (input.laborRate !== undefined) preset.laborRate = input.laborRate ? structuredClone(input.laborRate) : null;
-    if (operation) preset.creationOperation = operation;
-    const nextPackage: FurnQuoteModulePackage = {
-      ...current,
-      parameterPresets: {
-        freeParameterKeys,
-        presets: [...(current.parameterPresets?.presets ?? []), preset]
-      },
-      integrity: {
-        ...current.integrity,
-        updatedAt: new Date().toISOString(),
-        packageHash: undefined
-      }
-    };
-    let persisted: FurnQuoteModulePackage;
-    try {
-      persisted = await args.packageRepository.savePackage(args.context, nextPackage, { source: "dev-json", expectedPackageHash: computeModulePackageHash(current) });
-    } catch (error) {
-      // Two deliveries of the same operation may race. The losing writer must
-      // confirm the receipt, never create a suffixed duplicate.
-      if (!(error instanceof ModulePackageRevisionConflictError) || !operation) throw error;
-      const latest = await args.packageRepository.getPackage(args.context, input.modulePackageId);
-      const saved = latest?.parameterPresets?.presets.find(item => isSameModulePresetOperation(item.creationOperation, operation));
-      if (!latest || !saved) throw error;
-      return { modulePackage: latest, preset: saved, catalogModule: await updateCatalog(latest) };
-    }
-    const catalogModule = await updateCatalog(persisted);
-    return { modulePackage: persisted, preset, catalogModule };
   };
 
   return {

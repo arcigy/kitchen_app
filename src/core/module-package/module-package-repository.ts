@@ -7,18 +7,25 @@ import { resolveClientModulePackagePath, resolveClientModulePackagesPath } from 
 import { sanitizeStorageFileName, sanitizeStorageId } from "../storage/storage-types";
 import { packModulePackage, unpackModulePackage } from "./module-file-codec";
 import type { FurnQuoteModulePackagePayload, ModulePackageStoredMeta } from "./module-file-types";
-import type { FurnQuoteModulePackage } from "./module-package-types";
+import type { FurnQuoteModulePackage, ModuleParameterPreset } from "./module-package-types";
+import type { ClientModuleDefinition } from "../catalog/catalog-types";
 import { computeModulePackageHash } from "./module-package-file";
 import { validateFurnQuoteModulePackage } from "./module-package-validation";
 import { assertModulePresetsRetained } from "./module-preset-retention";
 import { writeModulePackageFile } from "./module-package-atomic-file";
 
 export type ModulePackageRepository = {
+  /** Production commits the preset and its catalog reference together. */
+  mutatePreset?(ctx: ClientContext, modulePackageId: string, prepare: PrepareModulePreset): Promise<ModulePresetMutationResult>;
   savePackage(ctx: ClientContext, modulePackage: FurnQuoteModulePackage, options?: SaveModulePackageOptions): Promise<FurnQuoteModulePackage>;
   getPackage(ctx: ClientContext, modulePackageId: string): Promise<FurnQuoteModulePackage | null>;
   listPackages(ctx: ClientContext): Promise<FurnQuoteModulePackage[]>;
   getRevision(ctx: ClientContext): Promise<ModulePackageRepositoryRevision>;
 };
+
+export type PreparedModulePreset = { modulePackage: FurnQuoteModulePackage; preset: ModuleParameterPreset };
+export type PrepareModulePreset = (current: FurnQuoteModulePackage) => PreparedModulePreset;
+export type ModulePresetMutationResult = PreparedModulePreset & { catalogModule: ClientModuleDefinition };
 
 export type ModulePackageRepositoryRevision = {
   count: number;

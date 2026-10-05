@@ -810,3 +810,5 @@ REPORT-57-UI;2026-10-05;Kompaktne marze a vyhladavanie;Projektove sadzby oddelen
 REPORT-57-DENSE;2026-10-05T17:19:24+02:00;Margins;Compact responsive categories and project settings plus correct project-price warnings;Open local 100-cabinet fixture and Margins then Materials;16 full category cards in desktop window and 3413 priced items with no warnings;typecheck and 2954 tests and build and full UI regression passed;Ready for local review;Synthetic prices only and no production deployment
 
 2026-10-05,preset-durability,isolated PostgreSQL and restored production snapshot,PASS,create and labor retries CAS tenant isolation refresh reimport restart pg_dump restore; 24 production presets restored exactly; no production customer mutations
+
+2026-10-05,Codex,preset atomic catalog preservation,"Red/green commercial metadata regression; actual PG different-package concurrency; forced catalog failure rolls back create and labor; exact retry has no writes; dump/restore; 441 unit files and full UI regression passed",PASS
