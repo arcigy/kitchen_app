@@ -11,6 +11,10 @@ import {
   normalizePersistedSystemModulePackage,
   normalizedSystemTemplateForStoredIdentity
 } from "./module-package-persistence-compatibility";
+import { presetCatalogReference } from "./module-preset-catalog";
+import type { ClientCatalog } from "../catalog/catalog-types";
+import { validateClientCatalog } from "../catalog/catalog-validation";
+import { invalidateCatalogExactLookupCaches } from "../catalog/catalog-exact-lookup";
 import type { ModulePackageRepository, SaveModulePackageOptions } from "./module-package-repository";
 
 type PackageRow = {
@@ -126,6 +130,59 @@ export function createPostgresModulePackageRepository(args: {
   }
 
   return {
+    async mutatePreset(ctx, modulePackageId, prepare) {
+      if (ctx.role === "viewer") throw new Error("Viewer role cannot edit presets.");
+      const committed = await withSchemaClient(args.connectionString, args.schema, async client => {
+        await client.query("BEGIN");
+        try {
+          // Every package in a tenant shares this row. Lock it first so concurrent
+          // preset writes cannot publish stale catalog snapshots or deadlock.
+          const catalogResult = await client.query<{ catalog: ClientCatalog }>(
+            "SELECT catalog FROM arcigy_client_catalogs WHERE client_id=$1 FOR UPDATE", [ctx.clientId]);
+          const catalogRow = catalogResult.rows[0];
+          if (!catalogRow) throw new Error("Client catalog not found.");
+          const catalog = validateClientCatalog(catalogRow.catalog);
+          if (catalog.clientId !== ctx.clientId) throw new Error("Catalog clientId must match ClientContext.");
+          const packageResult = await client.query<PackageRow & { package_hash: string }>(
+            "SELECT package, source, package_hash FROM arcigy_module_packages WHERE client_id=$1 AND module_package_id=$2 FOR UPDATE",
+            [ctx.clientId, modulePackageId]);
+          const row = packageResult.rows[0];
+          if (!row) throw new Error("Module package not found.");
+          const current = validatePersistedPackage(row);
+          const prepared = prepare(current);
+          let persisted = current;
+          if (prepared.modulePackage !== current) {
+            const validated = validateFurnQuoteModulePackage(prepared.modulePackage);
+            if (validated.module.modulePackageId !== modulePackageId) throw new Error("Preset module identity cannot change.");
+            assertModulePresetsRetained(current, validated);
+            persisted = { ...validated, integrity: { ...validated.integrity, packageHash: computeModulePackageHash(validated) } };
+            const result = await client.query(`UPDATE arcigy_module_packages SET module_type=$3, package_version=$4,
+              package_hash=$5, package=$6::jsonb, source='dev-json', updated_at=now()
+              WHERE client_id=$1 AND module_package_id=$2 AND package_hash=$7`,
+              [ctx.clientId, modulePackageId, persisted.module.moduleType, persisted.module.version,
+                persisted.integrity.packageHash, JSON.stringify(persisted), row.package_hash]);
+            if (result.rowCount !== 1) throw new ModulePackageRevisionConflictError();
+          }
+          const reference = presetCatalogReference(catalog, persisted);
+          if (reference.changed) {
+            // Patch only the module references, preserving all commercial data
+            // and root metadata exactly as stored by the company.
+            validateClientCatalog({ ...catalog, modules: reference.modules });
+            const result = await client.query(`UPDATE arcigy_client_catalogs
+              SET catalog=jsonb_set(catalog,'{modules}',$2::jsonb), db_updated_at=now()
+              WHERE client_id=$1`, [ctx.clientId, JSON.stringify(reference.modules)]);
+            if (result.rowCount !== 1) throw new Error("Client catalog not found.");
+          }
+          await client.query("COMMIT");
+          return { result: { modulePackage: persisted, preset: prepared.preset, catalogModule: reference.catalogModule }, catalogChanged: reference.changed };
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        }
+      });
+      if (committed.catalogChanged) invalidateCatalogExactLookupCaches(ctx.clientId);
+      return committed.result;
+    },
     savePackage,
     async getPackage(ctx, modulePackageId) {
       return withSchemaClient(args.connectionString, args.schema, async (client) => {

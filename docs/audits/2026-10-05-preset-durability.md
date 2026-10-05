@@ -57,3 +57,21 @@ Rozšírený browser scenár presetov prešiel 34 kontrolami vrátane reálnej s
 Pred release bola cez oprávnené SSH vytvorená čerstvá šifrovaná off-host záloha celej produkčnej databázy, globals, storage a konfigurácie. SHA-256 archívov bol overený a databáza obnovená do izolovaného PostgreSQL bez siete. Inventár obnovených presetov sa presne zhodoval so snapshotom: 42 balíkov a 24 presetov. Obnovilo sa aj všetkých 8 projektov a 7 migrácií. Záloha a recovery key zostávajú mimo Git, oddelene a so súkromnými oprávneniami. Produkčný disk mal približne 8,4 GiB voľných; žiadne volumes ani images neboli prerezané.
 
 Táto skúška preukazuje obnoviteľnosť konkrétnej zálohy, nie pravidelné zálohovanie alebo PITR. Zmena nevyžaduje novú databázovú migráciu. Úplnú odolnosť voči strate hosta, administrátorskému SQL alebo všetkým budúcim zmenám nemožno tvrdiť iba na základe týchto testov. Nasadenie sa eviduje osobitne presným main SHA a online overením.
+
+## Doplnená kontrola firemného katalógu pred main release
+
+Pri kontrole staršieho otvoreného PR #154 bol nájdený ďalší reprodukovateľný problém: preset služba znova vytvárala katalógový modul zo systémového balíka. Regresný test pred opravou zlyhal, pretože sa zmenili vlastné ID, názov, popis, šírka, tags a pricingRef. Nová pomocná funkcia mení iba packageHash existujúceho modulu. Zachováva jeho disabled stav a všetky firemné obchodné údaje.
+
+Produkčný preset zápis teraz používa jednu PostgreSQL transakciu. Zamkne klientsky katalóg a potom balík v rovnakom poradí pre všetky moduly, pripraví validovanú zmenu proti zamknutej aktuálnej revízii, uloží balík a upraví iba modules JSON. COMMIT nasleduje až po úspechu oboch zápisov. Cache sa invaliduje až po COMMIT. Presný retry s uloženou identitou operácie nemení ani databázové revízie. File režim naďalej obnovuje zlyhanú odvodenú publikáciu pomocou durable receipt.
+
+Rozšírený skutočný PostgreSQL drill používa aj skutočný katalógový repository. Overuje firemné metadáta, dva súbežné zápisy do odlišných modulov, nulový zápis pri presnom create/labor retry a vynútené zlyhanie katalógu pomocou triggera. Pri chybe sa tvorba presetu aj úprava práce kompletne vrátili späť; následný retry prešiel. Viewer je odmietnutý aj priamo na transakčnej repository hranici. Následná obnova zo zálohy opäť prešla.
+
+Kontrola pravidelných záloh našla pripravené GitHub secrets pre Backblaze a bucket arcigy-kitchen-backup-2026. Zálohovací worker je iba v staršej pracovnej vetve, bez aktívneho GitHub workflow alebo serverového backup service/timer. Tieto nastavenia preto nie sú dôkazom vykonávaného zálohovania. Produkcia má WAL archive_mode=off. Manuálna šifrovaná off-host záloha a overená obnova uvedená vyššie zostávajú samostatným dôkazom.
+
+Po doplnení katalógovej opravy prešiel celý unit suite s limitom štyroch workerov: 441 súborov, 2 979 úspešných testov a jeden existujúci preskočený. Prvý lokálny beh súbežne s buildom prekročil predvolené päťsekundové limity siedmich testov; išlo o timeouty, bez nezhody hodnôt. Obmedzený celý beh prešiel bez zvýšenia timeoutov alebo vynechania testov. Typecheck, lint, build a secret scan prešli. Lokálny browser načítal 23 kategórií záťažového projektu so 100 skrinkami a 30 dielcami, s nulovými aktuálnymi chybami konzoly.
+
+Celá UI regresia po doplnení transakčného zápisu prešla na čerstvom izolovanom serveri. Presety 34 kontrol, #50 32 kontrol, materiály 19 kontrol; komerčný panel všetkých 54 kombinácií. Navigácia počas čakajúceho čítania reagovala za 16,14 ms, aktuálne chyby konzoly 0.
+
+Doplnený red/green test katalogových aliasov: ak firma používa dve rôzne katalógové identity odkazujúce na ten istý balík, zmení sa hash oboch referencií a zachovajú sa ich vlastné údaje. Iný balík rovnakého typu sa nemení. Opakovaná operácia so všetkými aktuálnymi hashmi nemení revíziu.
+
+Po doplnení aliasového scenára prešli všetky 442 unit súbory: 2 980 úspešných testov, jeden existujúci preskočený. Typecheck, build a skutočný PostgreSQL dump/restore drill opäť prešli. Frontend a transakčný protokol sa touto doplnkovou opravou nemenili.
