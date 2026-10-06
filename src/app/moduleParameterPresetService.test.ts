@@ -14,7 +14,7 @@ describe("company preset saving", () => {
     const updated = structuredClone(pkg); updated.integrity.packageHash = "new-hash";
     const parameters = { width: 720, commercialSelections: { boardMaterials: { corpus: "fixture-material" } }, packageHash: "original" };
     const before = structuredClone(parameters);
-    const fetch = vi.fn(async (_url: string, _init: RequestInit) => ({ ok: true, json: async () => ({ ok: true, modulePackage: updated, catalogModule: createCatalogModuleDefinitionFromPackage(updated), preset: { presetId: "new-preset" } }) }));
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => Response.json({ ok: true, modulePackage: updated, catalogModule: createCatalogModuleDefinitionFromPackage(updated), preset: { presetId: "new-preset" } }));
     vi.stubGlobal("fetch", fetch);
     const result = await createModuleParameterPresetSaver(catalog)({ modulePackage: pkg, parameters, name: "Fixture", note: "Configuration" });
     expect(result?.presetId).toBe("new-preset"); expect(parameters).toEqual(before);
@@ -24,8 +24,37 @@ describe("company preset saving", () => {
   it("preserves caller state when the server refuses the write", async () => {
     const pkg = structuredClone(systemModulePackageTemplates[0]!); const before = structuredClone(pkg);
     const catalog = { clientId: "fixture", ...createSystemCatalogSeed() };
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, json: async () => ({ ok: false, error: "Forbidden" }) })));
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ok: false, error: "Forbidden" }, { status: 403 })));
     await expect(createModuleParameterPresetSaver(catalog)({ modulePackage: pkg, parameters: { width: 780 }, name: "Fixture", note: "Configuration" })).rejects.toThrow("Forbidden");
     expect(pkg).toEqual(before);
+  });
+  it("keeps the same identity and body after a lost or malformed response", async () => {
+    const pkg = structuredClone(systemModulePackageTemplates[0]!);
+    const catalog = { clientId: "fixture", ...createSystemCatalogSeed() };
+    const request = { modulePackage: pkg, parameters: { width: 780 }, name: "Fixture", note: "Configuration" };
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockRejectedValueOnce(new TypeError("Network disconnected"))
+      .mockResolvedValueOnce(new Response("{", { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ ok: true, modulePackage: pkg, preset: { presetId: "one" } }));
+    vi.stubGlobal("fetch", fetch);
+    const save = createModuleParameterPresetSaver(catalog);
+    await expect(save(request)).rejects.toThrow("Network disconnected");
+    pkg.integrity.packageHash = "revision-from-another-read";
+    await expect(save(request)).rejects.toThrow("Preset save failed");
+    expect((await save(request))?.presetId).toBe("one");
+    const bodies = fetch.mock.calls.map(([, init]) => init?.body);
+    expect(new Set(bodies).size).toBe(1);
+    expect(JSON.parse(String(bodies[0])).operationId).toMatch(/^[a-f0-9-]{36}$/);
+  });
+  it("shares a double-click and gives each caller a readable response body", async () => {
+    const pkg = structuredClone(systemModulePackageTemplates[0]!);
+    const catalog = { clientId: "fixture", ...createSystemCatalogSeed() };
+    const fetch = vi.fn(async () => Response.json({ ok: true, modulePackage: pkg, preset: { presetId: "one" } }));
+    vi.stubGlobal("fetch", fetch);
+    const save = createModuleParameterPresetSaver(catalog);
+    const request = { modulePackage: pkg, parameters: {}, name: "Fixture", note: "Configuration" };
+    const results = await Promise.all([save(request), save(request), save(request)]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(results.map(result => result?.presetId)).toEqual(["one", "one", "one"]);
   });
 });

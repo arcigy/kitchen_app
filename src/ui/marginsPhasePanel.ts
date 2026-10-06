@@ -1,3 +1,7 @@
+import { preservePanelRenderState, type PhasePanelState } from "./panelRenderState";
+import { recordCommercialTiming } from "../core/commercialDiagnostics";
+import { matchesMarginSearch, matchesMarginText, type MarginSearchFilter } from "./marginSearch";
+import { createPanelDrafts } from "./panelDrafts";
 import type {
   ProjectMarginGroupView,
   ProjectMarginItemView,
@@ -60,7 +64,7 @@ export type ProjectMarginsPanelActions = {
 };
 
 export type ProjectMarginsPanelHandle = {
-  update: (view: ProjectMarginsView) => void;
+  update: (view: ProjectMarginsView, state?: PhasePanelState) => void;
   setLoading: (loading: boolean, message?: string) => void;
   setInputsDisabled: (disabled: boolean) => void;
   setGlobalError: (message: string | null) => void;
@@ -75,6 +79,9 @@ type RenderState = {
   globalError?: string | null;
   inputsDisabled?: boolean;
   busyKeys?: ReadonlySet<string>;
+  searchQuery?: string;
+  searchFilter?: MarginSearchFilter;
+  projectControlsOpen?: boolean;
 };
 
 type MarginSettingsTab = "general" | "modules" | "additions";
@@ -99,23 +106,38 @@ export function mountProjectMarginsPanel(
   let destroyed = false;
   let activeSettingsTab: MarginSettingsTab = "general";
   let selectedScopeId: string | null = null;
+  let searchQuery = "";
+  let searchFilter: MarginSearchFilter = "all";
+  let projectControlsOpen = false;
+  const drafts = createPanelDrafts(container);
   const busyKeys = new Set<string>();
   const pendingCommits = new Set<Promise<void>>();
   const footerContainer = options.footerContainer;
 
   const queryPanel = <T extends Element>(selector: string): T | null =>
     footerContainer?.querySelector<T>(selector) ?? container.querySelector<T>(selector);
+  const resetScroll = () => {
+    const scroll = container.querySelector<HTMLElement>("[data-margin-settings-scroll]");
+    if (scroll) scroll.scrollTop = 0;
+  };
 
   const render = () => {
     if (destroyed) return;
-    const scrollTop = container.scrollTop;
+    const projectControls = container.querySelector<HTMLDetailsElement>("[data-margin-project-controls]");
+    if (projectControls) projectControlsOpen = projectControls.open;
+    const startedAt = performance.now();
+    drafts.capture();
+    const restore = preservePanelRenderState(container, footerContainer);
     container.innerHTML = renderProjectMarginsPanel(view, {
       activeSettingsTab,
       selectedScopeId,
       loadingMessage,
       globalError,
       inputsDisabled,
-      busyKeys
+      busyKeys,
+      searchQuery,
+      searchFilter,
+      projectControlsOpen
     });
     if (footerContainer) {
       footerContainer.replaceChildren();
@@ -125,7 +147,9 @@ export function mountProjectMarginsPanel(
       if (summary) footer.appendChild(summary);
       footerContainer.appendChild(footer);
     }
-    container.scrollTop = scrollTop;
+    restore();
+    drafts.restore();
+    recordCommercialTiming("render", startedAt, "success");
   };
 
   const track = (operation: Promise<void>) => {
@@ -139,7 +163,6 @@ export function mountProjectMarginsPanel(
     input?: HTMLInputElement
   ) => {
     if (busyKeys.has(key) || inputsDisabled || !view.editable) return;
-    const committedValue = input?.dataset.committedValue ?? "";
     busyKeys.add(key);
     globalError = null;
     render();
@@ -154,7 +177,7 @@ export function mountProjectMarginsPanel(
       busyKeys.delete(key);
       if (!result.ok) {
         globalError = result.error ?? "Maržu sa nepodarilo uložiť. Pôvodná hodnota zostala zachovaná.";
-        if (input?.isConnected) input.value = committedValue;
+        // Keep the entered draft so a failed save can be reviewed and retried.
       }
       render();
     })();
@@ -238,6 +261,14 @@ export function mountProjectMarginsPanel(
       const kind = settingsTab === "modules" ? "module" : settingsTab === "additions" ? "addition" : null;
       selectedScopeId = kind ? marginScopes(view, kind)[0]?.id ?? null : null;
       render();
+      resetScroll();
+      return;
+    }
+
+    if (element?.closest("[data-margin-search-clear]")) {
+      searchQuery = ""; searchFilter = "all"; render();
+      resetScroll();
+      queryPanel<HTMLInputElement>("[data-margin-search]")?.focus();
       return;
     }
 
@@ -275,7 +306,7 @@ export function mountProjectMarginsPanel(
 
     const manufacturingSave = element?.closest<HTMLButtonElement>("[data-manufacturing-save]");
     if (manufacturingSave) {
-      const manufacturing = manufacturingFromPanel(view, container, footerContainer);
+      const manufacturing = manufacturingFromPanel(view, container);
       if (!manufacturing) {
         globalError = "Prerez a predmontáž musia byť nezáporné čísla. Prázdna hodnota znamená chýbajúce nastavenie.";
         render();
@@ -362,15 +393,28 @@ export function mountProjectMarginsPanel(
 
   const onChange = (event: Event) => {
     const select = event.target as HTMLSelectElement | null;
+    if (select?.matches("[data-margin-filter]")) {
+      if (select.value === "all" || select.value === "missing" || select.value === "override") searchFilter = select.value;
+      render(); resetScroll(); return;
+    }
     if (select?.dataset.marginScopeSelect !== "true") return;
     selectedScopeId = select.value || null;
     render();
+    resetScroll();
+  };
+
+  const onInput = (event: Event) => {
+    if (!(event.target instanceof HTMLInputElement) || !event.target.matches("[data-margin-search]")) return;
+    searchQuery = event.target.value;
+    render();
+    resetScroll();
   };
 
   container.addEventListener("click", onClick);
   container.addEventListener("focusout", onFocusOut);
   container.addEventListener("keydown", onKeyDown);
   container.addEventListener("change", onChange);
+  container.addEventListener("input", onInput);
   footerContainer?.addEventListener("click", onClick);
   footerContainer?.addEventListener("focusout", onFocusOut);
   footerContainer?.addEventListener("keydown", onKeyDown);
@@ -383,10 +427,11 @@ export function mountProjectMarginsPanel(
   render();
 
   return {
-    update(nextView) {
+    update(nextView, state = {}) {
       view = structuredClone(nextView);
-      loadingMessage = null;
-      globalError = null;
+      loadingMessage = state.loadingMessage ?? null;
+      globalError = state.error ?? null;
+      inputsDisabled = state.disabled ?? !view.editable;
       if (activeSettingsTab !== "general") {
         const kind = activeSettingsTab === "modules" ? "module" : "addition";
         if (!marginScopes(view, kind).some((scope) => scope.id === selectedScopeId)) selectedScopeId = null;
@@ -417,6 +462,7 @@ export function mountProjectMarginsPanel(
       container.removeEventListener("focusout", onFocusOut);
       container.removeEventListener("keydown", onKeyDown);
       container.removeEventListener("change", onChange);
+      container.removeEventListener("input", onInput);
       footerContainer?.removeEventListener("click", onClick);
       footerContainer?.removeEventListener("focusout", onFocusOut);
       footerContainer?.removeEventListener("keydown", onKeyDown);
@@ -428,49 +474,76 @@ export function renderProjectMarginsPanel(view: ProjectMarginsView, state: Rende
   const disabled = state.inputsDisabled || !view.editable;
   const busyKeys = state.busyKeys ?? new Set<string>();
   const activeSettingsTab = state.activeSettingsTab ?? "general";
-  const phaseState = state.globalError ? "error" : state.loadingMessage ? "loading" : disabled ? "readonly" : "ready";
+  const query = state.searchQuery ?? "";
+  const filter = state.searchFilter ?? "all";
+  const phaseState = state.globalError ? "error" : state.loadingMessage ? "refreshing" : disabled ? "readonly" : "ready";
   return `<div class="margins-phase" data-margin-phase-state="${phaseState}" aria-labelledby="margins-phase-title">
     <header class="margins-phase__header">
-      <div><span class="margins-phase__eyebrow">CENOVÁ PONUKA</span><h1 id="margins-phase-title">Marže projektu</h1><p>Skupinová marža platí pre celú kategóriu. Jednotlivé položky môžete následne upraviť samostatne.</p><small class="margins-phase__authority">${escapeHtml(view.priceAuthority)}</small></div>
+      <div><h1 id="margins-phase-title">Marže projektu</h1></div>
       <div class="margins-phase__revision">Revízia <strong>${formatNumber(view.revision, 0)}</strong></div>
     </header>
-    ${renderSummary(view)}
-    ${renderProjectControls(view, disabled, busyKeys)}
-    ${view.summary.missingPriceCount > 0 ? `<p class="margins-phase__warning" role="alert">${formatNumber(view.summary.missingPriceCount, 0)} položiek nemá cenu. Nie sú zahrnuté do úplného výsledku.</p>` : ""}
-    ${view.warnings.length > 0 ? `<details class="margins-phase__warnings"><summary>${formatNumber(view.warnings.length, 0)} cenových upozornení</summary><ul>${view.warnings.map((warning) => `<li>${escapeHtml(warning.message)}</li>`).join("")}</ul></details>` : ""}
+    <div data-phase-load-notice>
     ${state.loadingMessage ? `<p class="margins-phase__status" data-margin-status role="status" aria-live="polite">${escapeHtml(state.loadingMessage)}</p>` : ""}
     ${state.globalError ? `<p class="margins-phase__status margins-phase__status--error" data-margin-error role="alert">${escapeHtml(state.globalError)}</p>` : ""}
-    ${!view.editable ? `<p class="margins-phase__status">Marže sú iba na čítanie. Na úpravu nemáte oprávnenie.</p>` : ""}
-    <div class="margins-settings-scroll" data-margin-settings-scroll>
+    </div>
+    ${renderSummary(view)}
+    <div class="margins-navigation">
       ${renderMarginSettingsTabs(activeSettingsTab)}
+      <div class="margins-search-tools" role="search" aria-label="Vyhľadávanie marží">
+        <input type="text" role="searchbox" data-margin-search data-committed-value="${escapeHtml(query)}" value="${escapeHtml(query)}" aria-label="Hľadať v maržiach" placeholder="Názov skrinky, dielca, materiálu alebo kategórie…" />
+        <select data-margin-filter aria-label="Filtrovať cenové položky"><option value="all" ${filter === "all" ? "selected" : ""}>Všetky položky</option><option value="missing" ${filter === "missing" ? "selected" : ""}>Bez ceny</option><option value="override" ${filter === "override" ? "selected" : ""}>Vlastná marža</option></select>
+        <button type="button" data-margin-search-clear ${!query && filter === "all" ? "disabled" : ""}>Vymazať filtre</button>
+      </div>
+    </div>
+    <div class="margins-settings-scroll" data-margin-settings-scroll>
+    ${activeSettingsTab === "general" ? renderProjectControls(view, disabled, busyKeys, state.projectControlsOpen ?? false) : ""}
+    ${view.summary.missingPriceCount > 0 ? `<p class="margins-phase__warning" role="alert">${formatNumber(view.summary.missingPriceCount, 0)} položiek nemá cenu. Nie sú zahrnuté do úplného výsledku.</p>` : ""}
+    ${renderMarginWarnings(view)}
+    ${!view.editable ? `<p class="margins-phase__status">Marže sú iba na čítanie. Na úpravu nemáte oprávnenie.</p>` : ""}
       ${activeSettingsTab === "modules"
-        ? renderMarginScopeSettings(view, "module", state.selectedScopeId, disabled, busyKeys)
+        ? renderMarginScopeSettings(view, "module", state.selectedScopeId, disabled, busyKeys, query, filter)
         : activeSettingsTab === "additions"
-          ? renderMarginScopeSettings(view, "addition", state.selectedScopeId, disabled, busyKeys)
-          : renderGeneralMarginSettings(view, disabled, busyKeys)}
+          ? renderMarginScopeSettings(view, "addition", state.selectedScopeId, disabled, busyKeys, query, filter)
+          : renderGeneralMarginSettings(view, disabled, busyKeys, query, filter)}
     </div>
   </div>`;
 }
 
 function renderMarginSettingsTabs(active: MarginSettingsTab): string {
   const tab = (id: MarginSettingsTab, label: string) => `<button type="button" class="materials-settings-tab ${active === id ? "materials-settings-tab--active" : ""}" data-margin-settings-tab="${id}" aria-pressed="${active === id}">${label}</button>`;
-  return `<nav class="materials-settings-tabs" aria-label="Nastavenia marží">${tab("general", "General settings")}${tab("modules", "Module settings")}${tab("additions", "Additions")}</nav>`;
+  return `<nav class="materials-settings-tabs" aria-label="Nastavenia marží">${tab("general", "Projekt a kategórie")}${tab("modules", "Skrinky")}${tab("additions", "Dielce a doplnky")}</nav>`;
+}
+
+function renderMarginWarnings(view: ProjectMarginsView): string {
+  if (!view.warnings.length) return "";
+  const messages = new Map<string, number>();
+  for (const warning of view.warnings) messages.set(warning.message, (messages.get(warning.message) ?? 0) + 1);
+  return `<details class="margins-phase__warnings"><summary>${formatNumber(view.warnings.length, 0)} cenových upozornení</summary><ul>${[...messages].map(([message, count]) => `<li>${escapeHtml(message)}${count > 1 ? ` <span>(${count}×)</span>` : ""}</li>`).join("")}</ul></details>`;
 }
 
 function renderGeneralMarginSettings(
   view: ProjectMarginsView,
   disabled: boolean,
-  busyKeys: ReadonlySet<string>
+  busyKeys: ReadonlySet<string>,
+  query: string,
+  filter: MarginSearchFilter
 ): string {
+  const groups = view.groups.filter(group => {
+    if (filter === "missing" && !group.missingPriceCount) return false;
+    if (filter === "override" && !group.overrideCount) return false;
+    return matchesMarginText(query, group.label, group.description) || group.items.some(item => matchesMarginSearch(item, query, filter, group.label));
+  });
   return `<section class="materials-phase__groups margins-general-groups" data-margin-groups data-margin-settings-panel="general" aria-label="General settings">
-    ${view.groups.map((group) => renderGroup(view, group, disabled, busyKeys)).join("")}
+    <p class="margins-results" role="status">${groups.length} z ${view.groups.length} kategórií${query || filter !== "all" ? " · Filtre obmedzujú zobrazenie. Sadzba sa ukladá pre celú kategóriu." : " · Skupinová sadzba platí pre všetky jej položky."}</p>
+    ${groups.length ? groups.map((group) => renderGroup(view, group, disabled, busyKeys)).join("") : renderSearchEmpty()}
   </section>`;
 }
 
 function renderProjectControls(
   view: ProjectMarginsView,
   disabled: boolean,
-  busyKeys: ReadonlySet<string>
+  busyKeys: ReadonlySet<string>,
+  open: boolean
 ): string {
   const defaultBusy = busyKeys.has("default");
   const laborBusy = busyKeys.has("labor");
@@ -481,9 +554,11 @@ function renderProjectControls(
   const manufacturingBusy = busyKeys.has("manufacturing");
   const manufacturingDisabled = disabled || manufacturingBusy;
   const manufacturing = normalizeProjectManufacturingSettings(view.settings.manufacturing);
-  return `<section class="margins-project-controls" aria-label="Základné nastavenia marže">
+  return `<details class="margins-project-settings" data-margin-project-controls ${open ? "open" : ""}>
+    <summary><strong>Projektové sadzby</strong><span>Základná marža <b>${formatPercent(view.settings.defaultMarginPercent)}</b></span><span>Dodatočná práca <b>${formatCurrency(view.settings.additionalLaborCost, view.currency)}</b></span><span>Konštrukcia <b>${formatPercent(view.settings.constructionLaborPercent ?? 0)}</b></span><span>Prerez dosiek / hrán <b>${manufacturing.pricingMode === "configured" ? `${optionalNumberInputValue(manufacturing.boardWastePercent) || "—"} / ${optionalNumberInputValue(manufacturing.edgeWastePercent) || "—"} %` : "Podľa cenníka"}</b></span><span class="margins-project-settings__action">Upraviť</span></summary>
+    <section class="margins-project-controls" aria-label="Základné nastavenia marže">
     <div class="margins-project-control">
-      <label for="margin-default-input"><strong>Základná marža projektu</strong><small>Fallback pre skupiny a položky bez vlastnej marže.</small></label>
+      <label for="margin-default-input"><strong>Základná marža projektu</strong><small>Pre položky bez vlastnej alebo skupinovej sadzby.</small></label>
       <div class="margins-project-control__editor"><div><input id="margin-default-input" type="number" min="0" max="${PROJECT_MARGIN_PERCENT_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(view.settings.defaultMarginPercent)}" data-committed-value="${numberInputValue(view.settings.defaultMarginPercent)}" data-margin-default-input ${defaultDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><button type="button" data-margin-default-save ${defaultDisabled ? "disabled" : ""}>${defaultBusy ? "Ukladám…" : "Uložiť"}</button></div>
     </div>
     <div class="margins-project-control">
@@ -491,31 +566,31 @@ function renderProjectControls(
       <div class="margins-project-control__editor"><div><input id="margin-additional-labor-input" type="number" min="0" max="${PROJECT_MARGIN_ADDITIONAL_LABOR_COST_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(view.settings.additionalLaborCost)}" data-committed-value="${numberInputValue(view.settings.additionalLaborCost)}" data-margin-additional-labor-input ${laborDisabled ? "disabled" : ""} /><span aria-hidden="true">${escapeHtml(view.currency)}</span></div><button type="button" data-margin-additional-labor-save ${laborDisabled ? "disabled" : ""}>${laborBusy ? "Ukladám…" : "Uložiť"}</button></div>
     </div>
     <div class="margins-project-control">
-      <label for="margin-construction-input"><strong>Konštrukčná práca</strong><small>Percento z predajnej ceny kuchyne bez spotrebičov, pred dodatočnou a konštrukčnou prácou. Spotrebiče označte pri úprave komponentu.</small></label>
+      <label for="margin-construction-input"><strong>Konštrukčná práca</strong><small title="Z predajnej ceny kuchyne bez spotrebičov, pred dodatočnou a konštrukčnou prácou. Spotrebiče označte pri úprave komponentu.">Percento z ceny kuchyne bez spotrebičov.</small></label>
       <div class="margins-project-control__editor"><div><input id="margin-construction-input" type="number" min="0" max="${PROJECT_MARGIN_PERCENT_MAX}" step="0.01" value="${numberInputValue(view.settings.constructionLaborPercent ?? 0)}" data-committed-value="${numberInputValue(view.settings.constructionLaborPercent ?? 0)}" data-margin-construction-input ${constructionDisabled ? "disabled" : ""} /><span>%</span></div><button type="button" data-margin-construction-save ${constructionDisabled ? "disabled" : ""}>${constructionBusy ? "Ukladám…" : "Uložiť"}</button></div>
       ${view.constructionLabor ? `<small>${view.constructionLabor.preliminary ? "Predbežný základ" : "Základ"}: ${formatCurrency(view.constructionLabor.baseAmount, view.currency)} · konštrukčná práca: ${formatCurrency(view.constructionLabor.amount, view.currency)}</small>` : ""}
     </div>
     <div class="margins-project-control" data-manufacturing-settings>
-      <label><strong>Výrobný cenník projektu</strong><small>Prerez sa aplikuje presne raz na čisté množstvo. Predmontáž sa účtuje bez ďalšej prirážky; celá suma patrí do marže.</small></label>
+      <label><strong>Prerez materiálov</strong><small>Pripočíta sa raz k čistému množstvu. Predmontáž nastavíte pri vybranej skrinke.</small></label>
       <label><input type="checkbox" data-manufacturing-enabled ${manufacturing.pricingMode === "configured" ? "checked" : ""} ${manufacturingDisabled ? "disabled" : ""} /> Použiť explicitné sadzby</label>
-      <div class="margins-project-control__editor"><div><input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Prerez dosiek %" value="${optionalNumberInputValue(manufacturing.boardWastePercent)}" data-manufacturing-board-waste ${manufacturingDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><div><input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Prerez hrán %" value="${optionalNumberInputValue(manufacturing.edgeWastePercent)}" data-manufacturing-edge-waste ${manufacturingDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><button type="button" data-manufacturing-save ${manufacturingDisabled ? "disabled" : ""}>${manufacturingBusy ? "Ukladám…" : "Uložiť výrobu"}</button></div>
-      ${renderPreassemblyInputs(view, manufacturing, manufacturingDisabled)}
+      <div class="margins-project-control__editor"><div><label for="margin-board-waste">Dosky</label><input id="margin-board-waste" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Prerez dosiek %" value="${optionalNumberInputValue(manufacturing.boardWastePercent)}" data-manufacturing-board-waste ${manufacturingDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><div><label for="margin-edge-waste">Hrany</label><input id="margin-edge-waste" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Prerez hrán %" value="${optionalNumberInputValue(manufacturing.edgeWastePercent)}" data-manufacturing-edge-waste ${manufacturingDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><button type="button" data-manufacturing-save ${manufacturingDisabled ? "disabled" : ""}>${manufacturingBusy ? "Ukladám…" : "Uložiť výrobu"}</button></div>
       <small>Bez vyplnenej sadzby zostane cena označená ako neúplná. Hodnota 0 je platná sadzba.</small>
     </div>
-  </section>`;
+    </section>
+  </details>`;
 }
 
-function renderPreassemblyInputs(view: ProjectMarginsView, manufacturing: ProjectManufacturingSettings, disabled: boolean): string {
-  const modules = marginScopes(view, "module");
+function renderPreassemblyInputs(view: ProjectMarginsView, manufacturing: ProjectManufacturingSettings, disabled: boolean, scopeId: string): string {
+  const modules = marginScopes(view, "module").filter(scope => scope.id === scopeId);
   if (modules.length === 0) return "";
-  return `<div class="margins-preassembly-rates"><strong>Predmontáž konkrétnej skrinky</strong><small>Pri pôvodných nastaveniach je suma za všetky kusy. Prácu za jeden modul nastavíte vo vlastnostiach skrinky.</small>${modules.map((scope) => {
+  return `<div class="margins-preassembly-rates"><strong>Predmontáž vybranej skrinky</strong><small>Práca sa účtuje bez ďalšej prirážky. Pri pôvodných nastaveniach ide o sumu za všetky kusy.</small>${modules.map((scope) => {
     const instanceId = scope.id.replace(/^module:/, "");
     const labor = view.groups.find(group => group.category === "labor")?.items.find(item => item.scopeId === scope.id && item.itemId === "labor");
     if (labor?.laborManaged) return `<div>${escapeHtml(scope.label)} · ${formatCurrency(labor.baseCost / Math.max(1, labor.quantity), view.currency)} / skrinka × ${labor.quantity}. Sadzbu a preset upravíte vo vlastnostiach skrinky → Práca za modul.</div>`;
     const value = Object.prototype.hasOwnProperty.call(manufacturing.preassemblyByInstanceId, instanceId)
       ? manufacturing.preassemblyByInstanceId[instanceId]
       : null;
-    return `<label>${escapeHtml(scope.label)}<input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Zdediť z presetu alebo typu" value="${optionalNumberInputValue(value)}" data-preassembly-instance="${escapeHtml(instanceId)}" ${disabled ? "disabled" : ""} /></label>`;
+    return `<label>Predmontáž (${escapeHtml(view.currency)})<input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Zdediť z presetu alebo typu" value="${optionalNumberInputValue(value)}" data-preassembly-instance="${escapeHtml(instanceId)}" ${disabled ? "disabled" : ""} /></label><button type="button" data-manufacturing-save ${disabled ? "disabled" : ""}>Uložiť predmontáž</button>`;
   }).join("")}</div>`;
 }
 
@@ -529,14 +604,16 @@ function optionalRate(input: HTMLInputElement | null): number | null | "invalid"
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : "invalid";
 }
 
-function manufacturingFromPanel(view: ProjectMarginsView, container: HTMLElement, footerContainer?: HTMLElement): ProjectManufacturingSettings | null {
-  const root = footerContainer ?? container;
-  const boardWastePercent = optionalRate(root.querySelector<HTMLInputElement>("[data-manufacturing-board-waste]"));
-  const edgeWastePercent = optionalRate(root.querySelector<HTMLInputElement>("[data-manufacturing-edge-waste]"));
-  if (boardWastePercent === "invalid" || edgeWastePercent === "invalid") return null;
+function manufacturingFromPanel(view: ProjectMarginsView, root: HTMLElement): ProjectManufacturingSettings | null {
   const current = normalizeProjectManufacturingSettings(view.settings.manufacturing);
+  const boardInput = root.querySelector<HTMLInputElement>("[data-manufacturing-board-waste]");
+  const edgeInput = root.querySelector<HTMLInputElement>("[data-manufacturing-edge-waste]");
+  const boardWastePercent = boardInput ? optionalRate(boardInput) : current.boardWastePercent;
+  const edgeWastePercent = edgeInput ? optionalRate(edgeInput) : current.edgeWastePercent;
+  if (boardWastePercent === "invalid" || edgeWastePercent === "invalid") return null;
   const next = structuredClone(current);
-  next.pricingMode = root.querySelector<HTMLInputElement>("[data-manufacturing-enabled]")?.checked ? "configured" : "legacy";
+  const enabled = root.querySelector<HTMLInputElement>("[data-manufacturing-enabled]");
+  if (enabled) next.pricingMode = enabled.checked ? "configured" : "legacy";
   next.boardWastePercent = boardWastePercent;
   next.edgeWastePercent = edgeWastePercent;
   next.preassemblyByInstanceId = { ...current.preassemblyByInstanceId };
@@ -608,14 +685,14 @@ function renderGroup(
   return `<article class="materials-group margins-general-group materials-group--${escapeHtml(groupId)}${group.missingPriceCount > 0 ? " margins-general-group--warning" : ""}" data-margin-group="${escapeHtml(groupId)}">
     <div class="materials-group__icon" aria-hidden="true">${marginCategoryIcon(group.category)}</div>
     <div class="materials-group__body">
-      ${group.category === "backsplash" && group.items.length === 0 ? `<p>Zástena nemá vytvorené dielce, preto ešte nemá účtovanú cenu.</p><button type="button" data-margin-create-backsplash ${disabled ? "disabled" : ""}>Vytvoriť zástenu</button>` : ""}
-      <header><div><h2>${escapeHtml(group.label)}</h2><p>${escapeHtml(group.description)}</p>${group.category === "labor" ? "<small>Celá účtovaná práca patrí do marže pred mzdami a réžiou. Percento nižšie je ďalšia prirážka k sadzbe, nie celá marža.</small>" : ""}</div><div class="materials-group__quantity"><strong>${formatCurrency(group.baseCost, view.currency)} ${incompletePrice}</strong><small>${formatNumber(group.items.length, 0)} položiek</small></div></header>
+      <header><h2 title="${escapeHtml(group.description)}">${escapeHtml(group.label)}</h2><span class="margin-source margin-source--${group.missingPriceCount > 0 ? "missing" : group.overrideCount > 0 ? "override" : "group"}" title="${escapeHtml(stateLabel)}">${group.missingPriceCount > 0 || group.overrideCount > 0 ? escapeHtml(stateLabel) : `${formatNumber(group.items.length, 0)} položiek`}</span>${group.category === "backsplash" && group.items.length === 0 ? `<button type="button" data-margin-create-backsplash aria-label="Vytvoriť zástenu" title="Zástena nemá vytvorené dielce. Vytvoriť zástenu." ${disabled ? "disabled" : ""}>+</button>` : ""}</header>
       <div class="materials-group__selection margins-general-group__summary">
-        <div><small>Stav</small><strong><span class="margin-source margin-source--${group.missingPriceCount > 0 ? "missing" : group.overrideCount > 0 ? "override" : "group"}">${escapeHtml(stateLabel)}</span></strong></div>
+        <span><small>${group.category === "labor" ? "Sadzba práce" : "Náklady"}</small><strong>${formatCurrency(group.baseCost, view.currency)} ${incompletePrice}</strong></span>
         <span><small>Suma marže</small><strong>${formatCurrency(group.contribution?.contributionAmount ?? group.marginAmount, view.currency)}</strong></span>
         <span><small>Predajná cena</small><strong>${formatCurrency(group.finalPrice, view.currency)} ${incompletePrice}</strong></span>
       </div>
-      <div class="margins-group-control margins-general-group__control"><label class="sr-only" for="${inputId}">${group.category === "labor" ? "Prirážka k sadzbe práce" : "Skupinová marža"} ${escapeHtml(group.label)}</label><div><input id="${inputId}" type="number" min="0" max="${PROJECT_MARGIN_PERCENT_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(group.marginPercent)}" data-committed-value="${numberInputValue(group.marginPercent)}" data-margin-group-input="${escapeHtml(groupId)}" ${groupDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><div class="margins-group-control__actions"><button type="button" data-margin-group-apply-all="${escapeHtml(groupId)}" ${groupDisabled ? "disabled" : ""}>${busy ? "Ukladám…" : "Použiť na celú skupinu"}</button><button type="button" class="margins-group-reset" data-margin-group-reset="${escapeHtml(groupId)}" ${groupDisabled || !hasGroupOrItemOverride ? "disabled" : ""}>Obnoviť základnú</button></div>${group.overrideCount > 0 ? `<small>Prepíše aj ${formatNumber(group.overrideCount, 0)} vlastné marže.</small>` : ""}</div>
+      <div class="margins-group-control margins-general-group__control"><label for="${inputId}">${group.category === "labor" ? "Prirážka" : "Marža"}<span class="sr-only"> ${escapeHtml(group.label)}</span></label><div><input id="${inputId}" type="number" min="0" max="${PROJECT_MARGIN_PERCENT_MAX}" step="0.01" inputmode="decimal" value="${numberInputValue(group.marginPercent)}" data-committed-value="${numberInputValue(group.marginPercent)}" data-margin-group-input="${escapeHtml(groupId)}" ${groupDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><div class="margins-group-control__actions"><button type="button" data-margin-group-apply-all="${escapeHtml(groupId)}" aria-label="Použiť na celú skupinu ${escapeHtml(group.label)}" title="Použiť na celú skupinu ${escapeHtml(group.label)}" ${groupDisabled ? "disabled" : ""}>${busy ? "Ukladám…" : "Použiť"}</button><button type="button" class="margins-group-reset" data-margin-group-reset="${escapeHtml(groupId)}" aria-label="Obnoviť základnú maržu ${escapeHtml(group.label)}" title="Obnoviť základnú maržu ${escapeHtml(group.label)}" ${groupDisabled || !hasGroupOrItemOverride ? "disabled" : ""}>↺</button></div>${group.overrideCount > 0 ? `<small>Prepíše aj ${formatNumber(group.overrideCount, 0)} vlastné marže.</small>` : ""}</div>
+      ${group.category === "labor" ? "<small class=\"margins-general-group__note\">Práca patrí do marže pred mzdami a réžiou. Prirážka je navyše k sadzbe.</small>" : ""}
     </div>
   </article>`;
 }
@@ -625,21 +702,32 @@ function renderMarginScopeSettings(
   kind: MarginScopeKind,
   selectedScopeId: string | null | undefined,
   disabled: boolean,
-  busyKeys: ReadonlySet<string>
+  busyKeys: ReadonlySet<string>,
+  query: string,
+  filter: MarginSearchFilter
 ): string {
-  const scopes = marginScopes(view, kind);
+  const allScopes = marginScopes(view, kind);
+  const categories = new Map(view.groups.map(group => [group.category, group.label]));
+  const scopes = allScopes.filter((scope, index) => scope.items.some(item => matchesMarginSearch(item, query, filter, categories.get(item.category), String(index + 1))));
   const selected = scopes.find((scope) => scope.id === selectedScopeId) ?? scopes[0];
   if (!selected) {
-    return `<section class="materials-scope-empty" data-margin-settings-panel="${kind === "module" ? "modules" : "additions"}"><strong>${kind === "module" ? "V layoute zatiaľ nie je modul." : "V projekte zatiaľ nie sú additions."}</strong><p>Po vložení položky sa tu zobrazia jej cenové skupiny a marže.</p></section>`;
+    return `<section class="materials-scope-empty" data-margin-settings-panel="${kind === "module" ? "modules" : "additions"}">${allScopes.length ? renderSearchEmpty() : `<strong>${kind === "module" ? "V layoute zatiaľ nie je skrinka." : "V projekte zatiaľ nie sú dielce ani doplnky."}</strong><p>Po vložení položky sa tu zobrazia jej cenové skupiny a marže.</p>`}</section>`;
   }
+  const scopeNumber = allScopes.findIndex(scope => scope.id === selected.id) + 1;
   const groups = view.groups
-    .map((group) => ({ group, items: selected.items.filter((item) => item.category === group.category) }))
+    .map((group) => ({ group, items: selected.items.filter((item) => item.category === group.category && matchesMarginSearch(item, query, filter, group.label, String(scopeNumber))) }))
     .filter(({ items }) => items.length > 0);
   return `<section class="materials-scope-settings margins-scope-settings" data-margin-settings-panel="${kind === "module" ? "modules" : "additions"}" aria-label="${escapeHtml(selected.label)}">
-    <header><div><span>${kind === "module" ? "MODULE" : "ADDITION"}</span><h2>${escapeHtml(selected.label)}</h2><p>Položky dedia maržu z General settings. Každú môžete prepísať samostatne.</p></div>
-    <label>Vybrať ${kind === "module" ? "modul" : "addition"}<select data-margin-scope-select="true">${scopes.map((scope) => `<option value="${escapeHtml(scope.id)}" ${scope.id === selected.id ? "selected" : ""}>${escapeHtml(scope.label)}</option>`).join("")}</select></label></header>
+    <header><div><h2>${scopeNumber}. ${escapeHtml(selected.label)}</h2><p>Položky dedia maržu kategórie. Vlastnú maržu uložíte klávesom Enter alebo odchodom z poľa.</p></div>
+    <label>Vybrať ${kind === "module" ? "skrinku" : "dielec alebo doplnok"}<select data-margin-scope-select="true">${scopes.map((scope) => `<option value="${escapeHtml(scope.id)}" ${scope.id === selected.id ? "selected" : ""}>${allScopes.indexOf(scope) + 1}. ${escapeHtml(scope.label)}</option>`).join("")}</select></label></header>
+    <p class="margins-results" role="status">${scopes.length} z ${allScopes.length} ${kind === "module" ? "skriniek" : "dielcov a doplnkov"} · ${groups.reduce((count, group) => count + group.items.length, 0)} z ${selected.items.length} položiek vybraného objektu</p>
+    ${kind === "module" ? renderPreassemblyInputs(view, normalizeProjectManufacturingSettings(view.settings.manufacturing), disabled || busyKeys.has("manufacturing"), selected.id) : ""}
     <div class="materials-scope-groups">${groups.map(({ group, items }) => `<section class="materials-scope-group margins-scope-group" data-margin-scope-group="${escapeHtml(group.category)}"><h3>${escapeHtml(group.label)}</h3>${items.map((item) => renderScopeItem(view, item, disabled, busyKeys)).join("")}</section>`).join("")}</div>
   </section>`;
+}
+
+function renderSearchEmpty(): string {
+  return `<div class="margins-search-empty"><strong>Nenašli sa žiadne položky.</strong><p>Skúste kratší názov alebo odstráňte filter stavu.</p><button type="button" data-margin-search-clear>Vymazať filtre</button></div>`;
 }
 
 function renderScopeItem(

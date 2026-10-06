@@ -25,12 +25,17 @@ export async function verifyMaterialWasteUi(page, baseUrl, assert) {
     await page.locator('[data-workspace-nav="margins"]').click();
     const result = await response;
     assert(result.ok(), "Margins reopens after changing waste in Materials");
+    const settings = page.locator("[data-margin-project-controls]");
+    await settings.waitFor();
+    if (!await settings.evaluate(element => element.open)) await settings.locator("summary").click();
     await page.locator("[data-manufacturing-save]").waitFor();
     return (await result.json()).view;
   };
 
   // Establish a zero-waste baseline with explicit cabinet labor. UI writes must
   // retain these rates and the pre-existing project labor/margin overrides.
+  const settings = page.locator("[data-margin-project-controls]");
+  if (!await settings.evaluate(element => element.open)) await settings.locator("summary").click();
   await page.locator("[data-manufacturing-enabled]").check();
   await page.locator("[data-manufacturing-board-waste]").fill("0");
   await page.locator("[data-manufacturing-edge-waste]").fill("0");

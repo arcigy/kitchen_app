@@ -158,7 +158,7 @@ describe("margins phase controller", () => {
     await controller.close();
   });
 
-  it("replaces a previously loaded Margins view with a skeleton until the refreshed server view arrives", async () => {
+  it("shows cached Margins read-only while refreshing", async () => {
     const container = document.createElement("section");
     const footer = document.createElement("footer");
     document.body.append(container, footer);
@@ -176,9 +176,9 @@ describe("margins phase controller", () => {
     await controller.close();
 
     const opening = controller.open();
-    expect(container.querySelector('[data-loading-skeleton="phase"]')).not.toBeNull();
-    expect(footer.querySelector('[data-loading-skeleton="phase"]')).not.toBeNull();
-    expect(container.querySelector("[data-margin-group]")).toBeNull();
+    expect(container.textContent).toContain("Obnovujem");
+    expect(container.querySelector<HTMLInputElement>("[data-margin-default-input]")?.disabled).toBe(true);
+    expect(container.querySelector("[data-margin-group]")).not.toBeNull();
     resolveCurrent(view(2));
     await opening;
 
@@ -234,4 +234,110 @@ describe("margins phase controller", () => {
     );
     await controller.close();
   });
+});
+
+
+describe("margins request lifecycle regressions", () => {
+  it("leaves an unending preparation immediately and never sends the late read", async () => {
+    let finish!: () => void;
+    const load = vi.fn(async () => view(1));
+    const controller = createMarginsPhaseController({ container: document.createElement("div"), getProjectId: () => "p", prepareRead: () => new Promise<void>(resolve => { finish = resolve; }), api: { loadProjectMargins: load } });
+    const opening = controller.open().catch(error => error);
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    const started = performance.now();
+    await controller.close();
+    expect(performance.now() - started).toBeLessThan(250);
+    expect((await opening).name).toBe("AbortError");
+    finish();
+    await Promise.resolve();
+    expect(load).not.toHaveBeenCalled();
+    expect(controller.getLoadState().kind).toBe("closed");
+  });
+
+  it("ignores older responses and isolates cached views by client and phase", async () => {
+    let scope = "user/clientA/p/phase1";
+    let late!: (value: ProjectMarginsView) => void;
+    const load = vi.fn().mockImplementationOnce(() => new Promise<ProjectMarginsView>(resolve => { late = resolve; })).mockResolvedValueOnce(view(8));
+    const container = document.createElement("div");
+    const controller = createMarginsPhaseController({ container, getProjectId: () => "p", getScopeKey: () => scope, api: { loadProjectMargins: load } });
+    const first = controller.open().catch(error => error);
+    await vi.waitFor(() => expect(late).toBeTypeOf("function"));
+    await controller.open();
+    late(view(2));
+    expect((await first).name).toBe("AbortError");
+    expect(controller.getView()?.revision).toBe(8);
+    scope = "user/clientB/p/phase2";
+    load.mockImplementationOnce(() => new Promise(() => {}));
+    const different = controller.open().catch(error => error);
+    expect(container.querySelector("[data-margin-group]")).toBeNull();
+    expect(controller.getView()).toBeNull();
+    controller.destroy();
+    await different;
+    expect(controller.getView()).toBeNull();
+  });
+
+  it("times out a never resolving read, shows retry, and recovers", async () => {
+    vi.useFakeTimers();
+    try {
+      const container = document.createElement("div");
+      document.body.append(container);
+      const load = vi.fn().mockImplementationOnce(() => new Promise(() => {})).mockResolvedValueOnce(view(3));
+      const controller = createMarginsPhaseController({ container, getProjectId: () => "p", api: { loadProjectMargins: load } });
+      const opening = controller.open().catch(error => error);
+      await vi.advanceTimersByTimeAsync(15000);
+      expect((await opening).name).toBe("PhaseRequestTimeoutError");
+      expect(controller.getLoadState().kind).toBe("error");
+      container.querySelector<HTMLButtonElement>("[data-phase-retry]")!.click();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.getLoadState().kind).toBe("ready");
+      controller.destroy();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("lets a pending write finish while closed without reopening or duplicating it", async () => {
+    let finish!: (value: ProjectMarginsView) => void;
+    const write = vi.fn(() => new Promise<ProjectMarginsView>(resolve => { finish = resolve; }));
+    const notify = vi.fn();
+    const controller = createMarginsPhaseController({ container: document.createElement("div"), getProjectId: () => "p", onViewChanged: notify, api: { loadProjectMargins: async () => view(1), updateProjectMarginDefault: write } });
+    await controller.open();
+    const saving = controller.commitDefault({ marginPercent: 25, committedValue: 20 });
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    await controller.close();
+    finish(view(2));
+    expect(await saving).toEqual({ ok: true });
+    expect(controller.getLoadState().kind).toBe("closed");
+    expect(write).toHaveBeenCalledOnce();
+    expect(controller.getView()?.revision).toBe(2);
+    controller.destroy();
+  });
+});
+
+
+it("rejects a response for a different project before showing or publishing its prices", async () => {
+  const container = document.createElement("div"), notify = vi.fn();
+  const source = { projectId: "other", phaseId: "phase", saveRevision: 3, materialRevision: 1, marginRevision: 4, catalogVersion: "1", catalogUpdatedAt: "2026-10-05" };
+  const controller = createMarginsPhaseController({ container, getProjectId: () => "p", getPhaseId: () => "phase", onViewChanged: notify, api: { loadProjectMargins: async () => view(4, { source }) } });
+  await expect(controller.open()).rejects.toThrow("inému projektu");
+  expect(notify).not.toHaveBeenCalled();
+  expect(container.querySelector("[data-margin-group]")).toBeNull();
+  expect(container.querySelector("[data-phase-retry]")).not.toBeNull();
+  controller.destroy();
+});
+
+it("allows a slow snapshot save without consuming the subsequent read deadline", async () => {
+  vi.useFakeTimers();
+  try {
+    const controller = createMarginsPhaseController({
+      container: document.createElement("div"), getProjectId: () => "p",
+      prepareRead: () => new Promise(resolve => setTimeout(resolve, 12_000)),
+      api: { loadProjectMargins: () => new Promise(resolve => setTimeout(() => resolve(view(1)), 5_000)) }
+    });
+    const opening = controller.open();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(controller.getLoadState().kind).toBe("loading");
+    await vi.advanceTimersByTimeAsync(2_000);
+    await opening;
+    expect(controller.getLoadState().kind).toBe("ready");
+    controller.destroy();
+  } finally { vi.useRealTimers(); }
 });

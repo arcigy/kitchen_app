@@ -35,7 +35,7 @@ describe("preset labor HTTP boundary", () => {
       }
       const body = { expectedPackageHash: pkg.integrity.packageHash, laborRate: { amount: 0, currency: "CZK" } };
       expect((await send({ ...body, laborRate: { amount: -1, currency: "CZK" } })).status).toBe(422);
-      expect((await send({ ...body, clientId: "another" })).status).toBe(422);
+      expect((await send({ ...body, clientId: "another" })).status).toBe(403);
       context = { ...context, role: "viewer" }; expect((await send(body)).status).toBe(403);
       context = { ...context, role: "owner", clientId: "another" }; expect((await send(body)).status).toBe(422);
       context = { ...context, clientId: "labor-api" };

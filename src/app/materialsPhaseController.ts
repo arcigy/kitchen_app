@@ -1,3 +1,6 @@
+import { recordCommercialDuration } from "../core/commercialDiagnostics";
+import { isPhaseCancellation, runPhaseRequest, PHASE_WRITE_TIMEOUT_MS, type PhaseLoadState } from "./phaseRequest";
+import { mountPhaseLoadFailure } from "../ui/phaseLoadFailure";
 import { setRuntimeProjectAssignments } from "../core/project-materials/runtimeProjectAssignments";
 import { createMaterialAssignmentEditor } from "./materialAssignmentEditor";
 import { applyMaterialAssignmentChanges } from "../core/project-materials/project-material-edits";
@@ -75,6 +78,9 @@ export type MaterialsPhaseControllerArgs = {
   container: HTMLElement;
   catalog: ClientCatalog;
   getProjectId?: () => string | null;
+  getScopeKey?: () => string;
+  getPhaseId?: () => string | undefined;
+  prepareRead?: (signal: AbortSignal) => Promise<void>;
   getQuantities: () => readonly ProjectMaterialQuantity[];
   getScopes?: () => readonly ProjectMaterialScope[];
   initialAssignments?: ProjectMaterialAssignmentsState;
@@ -108,12 +114,57 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
   let loadAbort: AbortController | null = null;
   let remoteLoaded = false;
   let active = false;
+  let cachedScope: string | null = null;
+  let loadState: PhaseLoadState = { kind: "closed" };
+  const validateSource = (remoteView: ProjectMaterialsView) => {
+    if (remoteView.source && (remoteView.source.projectId !== args.getProjectId?.() || (args.getPhaseId?.() && remoteView.source.phaseId !== args.getPhaseId()))) throw new Error("Odpoveď patrí inému projektu alebo fáze. Obnovte materiály.");
+    if (remoteView.calculationMs !== undefined) recordCommercialDuration("calculation", remoteView.calculationMs, "success");
+  };
+  const scopeKey = () => args.getScopeKey?.() ?? args.getProjectId?.() ?? "";
+  const pendingWrites = new Set<Promise<void>>();
+  const writeAborts = new Set<AbortController>();
+  let lifetime = 0;
+  const writeRemote = async (operation: (signal: AbortSignal) => Promise<ProjectMaterialsView>): Promise<ProjectMaterialsView> => {
+    const scope = scopeKey();
+    const generation = lifetime;
+    const abort = new AbortController();
+    writeAborts.add(abort);
+    const pending = runPhaseRequest(operation, { signal: abort.signal, timeoutMs: PHASE_WRITE_TIMEOUT_MS });
+    let finish!: () => void;
+    const completed = new Promise<void>(resolve => { finish = resolve; });
+    pendingWrites.add(completed);
+    try {
+      const result = await pending;
+      if (generation !== lifetime || scope !== scopeKey()) throw new DOMException("Projekt sa zmenil.", "AbortError");
+      return result;
+    } catch (error) {
+      if (generation === lifetime && scope === scopeKey() && !isPhaseCancellation(error)) {
+        remoteLoaded = false;
+        panel?.setInputsDisabled(true);
+        // A failed response does not prove that the server rejected the write.
+        // Read it back once; never resubmit the mutation automatically.
+        try {
+          const id = args.getProjectId?.();
+          if (id) {
+            const current = await runPhaseRequest(signal => api.loadProjectMaterials(id, signal), { stage: "materials-read" });
+            if (generation === lifetime && scope === scopeKey()) {
+              remoteLoaded = active && !loadAbort;
+              applyRemoteView(current, now());
+            }
+          }
+        } catch { /* Keep editing blocked until an explicit successful refresh. */ }
+      }
+      throw error;
+    } finally { finish(); pendingWrites.delete(completed); writeAborts.delete(abort); }
+  };
   let supplierBridgeState = { ...EMPTY_SUPPLIER_BRIDGE_PANEL_STATE };
   const wasteHost = args.onPricingChanged ? document.createElement("div") : undefined;
   const wasteController = wasteHost ? createMarginsPhaseController({
     container: wasteHost,
     presentation: "material-waste",
     getProjectId: () => args.getProjectId?.() ?? null,
+    getScopeKey: scopeKey,
+    getPhaseId: args.getPhaseId,
     onViewChanged: args.onPricingChanged,
     api: args.pricingApi
   }) : null;
@@ -140,7 +191,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       const projectId = args.getProjectId?.() ?? null;
       if (projectId) {
         if (!remoteLoaded) throw new Error("Serverové priradenia nie sú načítané. Obnovte Materiály.");
-        const nextView = await api.updateProjectComponentValues(projectId, assignments.revision, { type: "edit_assignments", changes });
+        const nextView = await writeRemote(signal => api.updateProjectComponentValues(projectId, assignments.revision, { type: "edit_assignments", changes }, signal));
         if (generation !== materialEditGeneration || projectId !== args.getProjectId?.()) return;
         applyRemoteView(nextView, now());
       } else {
@@ -178,18 +229,23 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
   const renderLocalView = () => {
     setRuntimeProjectAssignments(args.catalog, assignments);
     view = withLiveScopes(createProjectMaterialsView(assignments, args.getQuantities(), args.catalog), args);
-    panel?.update(view);
+    panel?.update(view, { disabled: Boolean(args.getProjectId?.()) && (!remoteLoaded || Boolean(loadAbort)) });
     notifyViewChanged();
   };
 
+  const cancelLoad = () => { loadAbort?.abort(); loadAbort = null; };
   const abortRequests = () => {
-    loadAbort?.abort();
-    loadAbort = null;
+    cancelLoad();
+    for (const abort of writeAborts) abort.abort();
+    writeAborts.clear();
     for (const abort of commitAborts.values()) abort.abort();
     commitAborts.clear();
   };
 
   const commitId = async (request: ProjectMaterialIdCommitRequest): Promise<ProjectMaterialIdCommitResult> => {
+    const requestedScope = scopeKey();
+    const projectId = args.getProjectId?.() ?? null;
+    const generation = lifetime;
     const definition = getMaterialAssignmentCategoryDefinition(request.category);
     if (definition.idField !== request.field) return { ok: false, error: "Pole nepatrí do zvolenej kategórie." };
     const value = request.value.trim();
@@ -203,7 +259,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     commitAborts.set(request.category, abort);
     let lookup: ProjectMaterialCatalogLookup | null;
     try {
-      lookup = await lookupWithLocalFallback(args.catalog, api, request.category, value, abort.signal);
+      lookup = await runPhaseRequest(signal => lookupWithLocalFallback(args.catalog, api, request.category, value, signal), { signal: abort.signal });
     } catch (error) {
       if (isAbortError(error)) return { ok: false, error: "Overenie bolo zrušené." };
       return { ok: false, error: errorMessage(error, "ID sa nepodarilo overiť.") };
@@ -211,6 +267,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       if (commitAborts.get(request.category) === abort) commitAborts.delete(request.category);
     }
 
+    if (generation !== lifetime || requestedScope !== scopeKey()) return { ok: false, error: "Projekt sa zmenil. Úprava nebola odoslaná." };
     if (!lookup) return { ok: false, error: `ID ${value} sa v tenant katalógu nenašlo. Pôvodná hodnota zostala zachovaná.` };
     const compatibilityError = validateLookupCompatibility(request.category, lookup);
     if (compatibilityError) return { ok: false, error: compatibilityError };
@@ -220,7 +277,6 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
 
     const changedAt = now();
     const nextAssignment = applyLookup(current, lookup, args.catalog, changedAt);
-    const projectId = args.getProjectId?.() ?? null;
 
     if (projectId && !remoteLoaded) {
       return {
@@ -233,16 +289,12 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       const saveAbort = new AbortController();
       commitAborts.set(request.category, saveAbort);
       try {
-        const remoteView = await api.updateProjectMaterialAssignment(
+        const remoteView = await writeRemote(signal => api.updateProjectMaterialAssignment(
           projectId,
           { revision: assignments.revision, assignment: nextAssignment },
-          saveAbort.signal
-        );
-        assignments = initialAssignments(remoteView.assignments, args.catalog, now());
-        view = viewFromRemote(assignments, remoteView, args);
-        panel?.update(view);
-        notifyViewChanged();
-        notifyAssignmentsCommitted();
+          signal
+        ));
+        applyRemoteView(remoteView, now());
         return { ok: true };
       } catch (error) {
         if (isAbortError(error)) return { ok: false, error: "Uloženie bolo zrušené." };
@@ -267,7 +319,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     const projectId = args.getProjectId?.();
     if (projectId) {
       if (!remoteLoaded) throw new Error("Najprv obnovte materiály projektu.");
-      applyRemoteView(await api.updateProjectMaterialAssignment(projectId, { revision: assignments.revision, assignment: next }), now());
+      applyRemoteView(await writeRemote(signal => api.updateProjectMaterialAssignment(projectId, { revision: assignments.revision, assignment: next }, signal)), now());
     } else {
       if (assignments.assignments.some(a => a.assignmentId === next.assignmentId)) assignments = replaceAssignment(assignments, next, now());
       else assignments = { ...assignments, revision: assignments.revision + 1, assignments: [...assignments.assignments, next], updatedAt: now() };
@@ -279,7 +331,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     const projectId = args.getProjectId?.();
     if (projectId) {
       if (!remoteLoaded) throw new Error("Najprv obnovte materiály projektu.");
-      applyRemoteView(await api.updateProjectComponentValues(projectId, assignments.revision, operation), now());
+      applyRemoteView(await writeRemote(signal => api.updateProjectComponentValues(projectId, assignments.revision, operation, signal)), now());
     } else {
       assignments = applyProjectComponentOperation(assignments, operation, view.scopes ?? [], args.catalog, now());
       renderLocalView(); notifyAssignmentsCommitted();
@@ -298,7 +350,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
   async function removeComponent(assignmentId: string): Promise<void> {
     if (!assignments.assignments.some(item => item.assignmentId === assignmentId && item.extraComponent)) return;
     const projectId = args.getProjectId?.();
-    if (projectId) applyRemoteView(await api.removeProjectMaterialAssignment(projectId, { revision: assignments.revision, assignmentId }), now());
+    if (projectId) applyRemoteView(await writeRemote(signal => api.removeProjectMaterialAssignment(projectId, { revision: assignments.revision, assignmentId }, signal)), now());
     else { assignments = { ...assignments, revision: assignments.revision + 1, assignments: assignments.assignments.filter(item => item.assignmentId !== assignmentId) }; renderLocalView(); notifyAssignmentsCommitted(); }
   }
 
@@ -314,12 +366,8 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     };
     const projectId = args.getProjectId?.() ?? null;
     if (projectId && remoteLoaded) {
-      const remoteView = await api.updateProjectMaterialAssignment(projectId, { revision: assignments.revision, assignment: nextAssignment });
-      assignments = initialAssignments(remoteView.assignments, args.catalog, nowValue);
-      view = viewFromRemote(assignments, remoteView, args);
-      panel?.update(view);
-      notifyViewChanged();
-      notifyAssignmentsCommitted();
+      const remoteView = await writeRemote(signal => api.updateProjectMaterialAssignment(projectId, { revision: assignments.revision, assignment: nextAssignment }, signal));
+      applyRemoteView(remoteView, nowValue);
       return;
     }
     assignments = { ...assignments, revision: assignments.revision + 1, assignments: [...assignments.assignments, nextAssignment], updatedAt: nowValue };
@@ -328,28 +376,19 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
   }
 
   const applyRemoteView = (remoteView: ProjectMaterialsView, changedAt: string) => {
+    validateSource(remoteView);
     assignments = initialAssignments(remoteView.assignments, args.catalog, changedAt);
     view = viewFromRemote(assignments, remoteView, args);
-    panel?.update(view);
+    cachedScope = scopeKey();
+    panel?.update(view, { disabled: Boolean(args.getProjectId?.()) && (!remoteLoaded || Boolean(loadAbort)) });
     notifyViewChanged();
     notifyAssignmentsCommitted();
   };
 
   async function refreshFromServer(): Promise<ProjectMaterialsView> {
-    const projectId = args.getProjectId?.() ?? null;
-    if (!projectId) return view;
-    loadAbort?.abort();
-    const abort = new AbortController();
-    loadAbort = abort;
-    try {
-      const remoteView = await api.loadProjectMaterials(projectId, abort.signal);
-      if (loadAbort !== abort) return view;
-      remoteLoaded = true;
-      applyRemoteView(remoteView, now());
-    } finally {
-      if (loadAbort === abort) loadAbort = null;
-    }
-    return view;
+    const result = await open();
+    notifyAssignmentsCommitted();
+    return result;
   }
 
   async function resetCategory(category: MaterialAssignmentCategory): Promise<void> {
@@ -361,7 +400,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     const projectId = args.getProjectId?.() ?? null;
     if (projectId) {
       if (!remoteLoaded) throw new Error("Reload Materials before changing an assignment.");
-      applyRemoteView(await api.updateProjectMaterialAssignment(projectId, { revision: assignments.revision, assignment: nextAssignment }), changedAt);
+      applyRemoteView(await writeRemote(signal => api.updateProjectMaterialAssignment(projectId, { revision: assignments.revision, assignment: nextAssignment }, signal)), changedAt);
       return;
     }
     assignments = replaceAssignment(assignments, nextAssignment, changedAt);
@@ -379,11 +418,11 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     const projectId = args.getProjectId?.() ?? null;
     if (projectId) {
       if (!remoteLoaded) throw new Error("Reload Materials before creating an override.");
-      applyRemoteView(await api.copyProjectMaterialAssignment(projectId, {
+      applyRemoteView(await writeRemote(signal => api.copyProjectMaterialAssignment(projectId, {
         revision: assignments.revision,
         sourceAssignmentId: source.assignmentId,
         target: { scopeId, itemId, category }
-      }), changedAt);
+      }, signal)), changedAt);
       return;
     }
     const copied = copyProjectMaterialAssignmentToScope(source, scopeId, item, changedAt);
@@ -407,7 +446,7 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     const projectId = args.getProjectId?.() ?? null;
     if (projectId) {
       if (!remoteLoaded) throw new Error("Reload Materials before removing an override.");
-      applyRemoteView(await api.removeProjectMaterialAssignment(projectId, { revision: assignments.revision, assignmentId }), changedAt);
+      applyRemoteView(await writeRemote(signal => api.removeProjectMaterialAssignment(projectId, { revision: assignments.revision, assignmentId }, signal)), changedAt);
       return;
     }
     assignments = {
@@ -420,64 +459,73 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     notifyAssignmentsCommitted();
   }
 
-  return {
-    async open(): Promise<ProjectMaterialsView> {
-      active = true;
-      abortRequests();
-      const projectId = args.getProjectId?.() ?? null;
-      if (!projectId) {
-        remoteLoaded = false;
-        renderLocalView();
-        const activePanel = ensurePanel();
-        activePanel.setInputsDisabled(false);
-        activePanel.setGlobalError(null);
-        await openWasteControls();
-        return view;
-      }
-
-      panel?.destroy();
-      panel = null;
-      const loading = mountLoadingSkeleton(args.container, {
-        variant: "phase",
-        label: "Načítavam materiály projektu"
-      });
-      const abort = new AbortController();
-      loadAbort = abort;
-      try {
-        const remoteView = await api.loadProjectMaterials(projectId, abort.signal);
-        if (!active || loadAbort !== abort) return view;
-        remoteLoaded = true;
-        assignments = initialAssignments(remoteView.assignments, args.catalog, now());
-        view = viewFromRemote(assignments, remoteView, args);
-        loading.clear();
-        const activePanel = ensurePanel();
-        activePanel.update(view);
-        activePanel.setInputsDisabled(false);
-        notifyViewChanged();
-      } catch (error) {
-        if (!isAbortError(error) && active && loadAbort === abort) {
-          remoteLoaded = false;
-          loading.clear();
-          view = { ...view, warnings: [] };
-          args.container.innerHTML = `<p class="materials-phase__status materials-phase__status--error" role="alert">${escapeHtml(`Project materials could not be loaded safely. Editing is blocked. ${errorMessage(error, "")}`.trim())}</p>`;
-          notifyViewChanged();
-        }
-      } finally {
-        if (loadAbort === abort) loadAbort = null;
-      }
-      if (remoteLoaded) await openWasteControls();
+  const open = async (): Promise<ProjectMaterialsView> => {
+    active = true;
+    remoteLoaded = false;
+    cancelLoad();
+    const projectId = args.getProjectId?.() ?? null;
+    if (!projectId) {
+      renderLocalView();
+      ensurePanel().update(view);
+      void openWasteControls();
       return view;
-    },
+    }
+    const scope = scopeKey();
+    const abort = new AbortController();
+    loadAbort = abort;
+    const cached = cachedScope === scope;
+    loadState = { kind: cached ? "refreshing" : "loading", scope };
+    if (!cached) { panel?.destroy(); panel = null; }
+    const loading = cached ? null : mountLoadingSkeleton(args.container, { variant: "phase", label: "Načítavam materiály projektu" });
+    if (cached) ensurePanel().update(view, { disabled: true, loadingMessage: "Obnovujem aktuálne hodnoty. Zobrazené sú posledné načítané údaje." });
+    try {
+      await runPhaseRequest(async signal => {
+        await Promise.allSettled([...pendingWrites]);
+        signal.throwIfAborted();
+        await args.prepareRead?.(signal);
+      }, { signal: abort.signal, timeoutMs: PHASE_WRITE_TIMEOUT_MS });
+      const remoteView = await runPhaseRequest(signal => api.loadProjectMaterials(projectId, signal), { signal: abort.signal, stage: "materials-read" });
+      if (!active || loadAbort !== abort || scope !== scopeKey()) throw new DOMException("Načítanie bolo zrušené.", "AbortError");
+      validateSource(remoteView);
+      remoteLoaded = true;
+      cachedScope = scope;
+      loadState = { kind: "ready", scope };
+      assignments = initialAssignments(remoteView.assignments, args.catalog, now());
+      view = viewFromRemote(assignments, remoteView, args);
+      loading?.clear();
+      ensurePanel().update(view);
+      notifyViewChanged();
+      // Materials may normalize persisted assignments. Only start pricing after
+      // that response, and do not make Materials wait for pricing to finish.
+      void openWasteControls();
+      return structuredClone(view);
+    } catch (error) {
+      if (!isPhaseCancellation(error) && active && loadAbort === abort && scope === scopeKey()) {
+        const message = `Materiály sa nepodarilo načítať. Úpravy sú dočasne vypnuté. ${errorMessage(error, "")}`;
+        loadState = { kind: "error", scope, message };
+        loading?.clear();
+        if (cached && panel) panel.update(view, { disabled: true, error: message });
+        else args.container.replaceChildren();
+        mountPhaseLoadFailure(args.container, message, open);
+      }
+      throw error;
+    } finally { if (loadAbort === abort) loadAbort = null; }
+  };
+
+  return {
+    open,
+    getLoadState: (): PhaseLoadState => ({ ...loadState }),
     async close(): Promise<void> {
-      await panel?.flushPending();
-      await wasteController?.close();
       active = false;
       remoteLoaded = false;
-      abortRequests();
-      panel?.destroy();
-      panel = null;
+      loadState = { kind: "closed" };
+      cancelLoad();
+      void wasteController?.close();
     },
     destroy(): void {
+      lifetime += 1;
+      cachedScope = null;
+      loadState = { kind: "closed" };
       materialEditGeneration += 1;
       materialEditor.reset();
       wasteController?.destroy();
@@ -504,11 +552,15 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
       return structuredClone(assignments);
     },
     restoreSaveState(state: ProjectMaterialAssignmentsState | null | undefined): ProjectMaterialsView {
+      cachedScope = null;
       materialEditGeneration += 1;
       materialEditor.reset();
       assignments = initialAssignments(state, args.catalog, now());
       remoteLoaded = false;
       renderLocalView();
+      // Properties can refresh assignments while the phase read is pending.
+      // That is not a project replacement and must not strand its skeleton.
+      if (active && !loadAbort) void open().catch(() => undefined);
       return view;
     },
     commitId,
@@ -632,6 +684,8 @@ function viewFromRemote(
     quantities: structuredClone(remote.quantities),
     warnings: structuredClone(remote.warnings),
     priceSource: structuredClone(remote.priceSource),
+    source: remote.source ? { ...remote.source } : undefined,
+    calculationMs: remote.calculationMs,
     scopes: structuredClone(remote.scopes ?? [])
   }, args);
 }

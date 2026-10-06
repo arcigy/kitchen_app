@@ -1,3 +1,4 @@
+import { commercialViewSource } from "./commercialViewSource";
 import { createProjectMaterialRuntimeCatalog } from "../app/projectMaterialRuntimeCatalog";
 import { applyMaterialAssignmentChanges, parseMaterialEditOperation } from "../core/project-materials/project-material-edits";
 import { applyProjectComponentOperation, type ProjectComponentOperation } from "../core/project-materials/project-component-operations";
@@ -123,11 +124,14 @@ function projectMaterialsView(
   state: ProjectMaterialAssignmentsState,
   catalog: ClientCatalog
 ): ProjectMaterialsView {
+  const startedAt = performance.now();
   const resolution = resolveProjectMaterialQuantities(save, catalog);
   const view = createProjectMaterialsView(state, resolution.quantities, catalog);
+  view.source = commercialViewSource(save, catalog);
   return {
     ...view,
     scopes: resolveProjectMaterialScopes(save, catalog),
+    calculationMs: performance.now() - startedAt,
     warnings: [...new Map([...view.warnings, ...resolution.warnings].map((warning) => [warning.id, warning])).values()]
   };
 }

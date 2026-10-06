@@ -1,3 +1,4 @@
+import { preservePanelRenderState } from "./panelRenderState";
 import { normalizeProjectManufacturingSettings, type ProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
 import type { ProjectMarginsView } from "../layout/bom/projectMargins";
 import type { ProjectMarginCommitResult, ProjectMarginsPanelHandle } from "./marginsPhasePanel";
@@ -55,6 +56,9 @@ export function mountMaterialWastePanel(
     board.value = rates.boardWastePercent == null ? "" : String(rates.boardWastePercent);
     edge.value = rates.edgeWastePercent == null ? "" : String(rates.edgeWastePercent);
     enabled.checked = rates.pricingMode === "configured";
+    board.dataset.committedValue = board.value;
+    edge.dataset.committedValue = edge.value;
+    enabled.defaultChecked = enabled.checked;
     board.removeAttribute("aria-invalid"); edge.removeAttribute("aria-invalid");
     updateMode(); updateAvailability();
   };
@@ -76,15 +80,17 @@ export function mountMaterialWastePanel(
     }
     const rates: ProjectWasteRates = { boardWastePercent, edgeWastePercent, pricingMode: enabled.checked ? "configured" : "legacy" };
     setError(null); status.textContent = "";
-    // Defer dispatch so pending is already set even if an injected commit throws.
-    pending = Promise.resolve().then(() => commit(rates)).then(result => {
+    pending = Promise.resolve();
+    let operation: Promise<ProjectMarginCommitResult>;
+    try { operation = commit(rates); } catch (failure) { operation = Promise.reject(failure); }
+    pending = operation.then(result => {
       if (destroyed) return;
       if (result.ok) status.textContent = view.warnings.length || view.summary.missingPriceCount
         ? "Prerezy sú uložené. Cena zostáva neúplná; podrobnosti nájdete v Maržiach."
         : "Prerezy sú uložené. Cena projektu bola prepočítaná.";
-      else { restore(); setError(result.error ?? "Prerezy sa nepodarilo uložiť."); }
+      else { setError(result.error ?? "Prerezy sa nepodarilo uložiť."); }
     }).catch(failure => {
-      if (!destroyed) { restore(); setError(failure instanceof Error ? failure.message : "Prerezy sa nepodarilo uložiť."); }
+      if (!destroyed) { setError(failure instanceof Error ? failure.message : "Prerezy sa nepodarilo uložiť."); }
     }).finally(() => { pending = null; if (!destroyed) updateAvailability(); });
     updateAvailability();
   };
@@ -92,7 +98,7 @@ export function mountMaterialWastePanel(
   enabled.addEventListener("change", updateMode);
   restore();
   return {
-    update(next) { if (!destroyed) { view = structuredClone(next); restore(); } },
+    update(next, state = {}) { if (!destroyed) { const restoreDraft = preservePanelRenderState(container); view = structuredClone(next); disabled = state.disabled ?? !view.editable; restore(); restoreDraft(); updateMode(); status.textContent = state.loadingMessage ?? ""; setError(state.error ?? null); } },
     setInputsDisabled(next) { disabled = next; updateAvailability(); },
     setLoading(loading, message) { disabled = loading || !view.editable; status.textContent = loading ? message ?? "Načítavam prerezy…" : ""; updateAvailability(); },
     setGlobalError: setError,

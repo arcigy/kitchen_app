@@ -1,4 +1,5 @@
 import type { FurnQuoteModulePackage, ModuleParameterDefinition } from "../module-package/module-package-types";
+import { preserveModuleParameterPresets } from "../module-package/module-preset-retention";
 
 const PRESERVED_PARAMETER_DEFAULTS = new Set([
   "variant",
@@ -71,16 +72,7 @@ export function refreshClientModulePackageFromSystemTemplate(args: {
     ...source.parameters,
     parameters: refreshParameterDefaults(source.parameters.parameters, args.existingPackage)
   };
-  if (args.existingPackage.parameterPresets) {
-    const existing = args.existingPackage.parameterPresets;
-    const existingIds = new Set(existing.presets.map(preset => preset.presetId));
-    refreshed.parameterPresets = structuredClone({
-      ...existing,
-      presets: [...existing.presets, ...(source.parameterPresets?.presets ?? []).filter(preset => !existingIds.has(preset.presetId))],
-    });
-  }
-
-  return refreshed;
+  return preserveModuleParameterPresets(args.existingPackage, refreshed);
 }
 
 export function refreshClientModulePackagesFromSystemTemplates(args: {
@@ -89,13 +81,13 @@ export function refreshClientModulePackagesFromSystemTemplates(args: {
   moduleIds: readonly string[];
 }): FurnQuoteModulePackage[] {
   const requested = new Set(args.moduleIds.map((moduleId) => moduleId.trim().toLowerCase()).filter(Boolean));
-  if (requested.size === 0 || requested.has("all")) return [];
+  if (requested.size === 0) return [];
 
   const refreshed: FurnQuoteModulePackage[] = [];
   for (const existingPackage of args.existingPackages) {
     const packageId = existingPackage.module.modulePackageId.toLowerCase();
     const moduleType = existingPackage.module.moduleType.toLowerCase();
-    if (!requested.has(packageId) && !requested.has(moduleType)) continue;
+    if (!requested.has("all") && !requested.has(packageId) && !requested.has(moduleType)) continue;
     const nextPackage = refreshClientModulePackageFromSystemTemplate({
       existingPackage,
       sourcePackages: args.sourcePackages

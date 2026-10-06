@@ -1,3 +1,4 @@
+import { isPhaseCancellation } from "./phaseRequest";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import type { ProjectMaterialsView } from "../core/project-materials/project-material-types";
 import type { ProjectMarginsView } from "../layout/bom/projectMargins";
@@ -66,6 +67,9 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   let materialsPhaseActive = false;
   let marginsPhaseActive = false;
   let marginsOpenPromise: Promise<ProjectMarginsView> | null = null;
+  let navigationGeneration = 0;
+  let materialsGeneration = 0;
+  let marginsGeneration = 0;
 
   const setActiveNav = (id: WorkspaceNavId) => {
     for (const button of navButtons) button.classList.toggle("active", button.dataset.workspaceNav === id);
@@ -79,26 +83,29 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   const leaveMaterialsPhase = async () => {
     if (!materialsPhaseActive) return;
     materialsPhaseActive = false;
-    await args.materialsController?.close();
+    materialsGeneration += 1;
+    const closing = args.materialsController?.close();
     args.root.classList.remove("archux-materials-phase");
     args.materialsPhase.mainEl.classList.remove("archux-materials-phase");
     args.materialsPhase.hostEl.hidden = true;
     args.materialsPhase.viewsEl.hidden = false;
     args.materialsPhase.warningsEl.hidden = true;
+    await closing;
   };
 
   const leaveMarginsPhase = async () => {
     if (!marginsPhaseActive && !marginsOpenPromise) return;
     marginsPhaseActive = false;
-    const opening = marginsOpenPromise;
-    if (opening) await opening.catch(() => undefined);
-    await args.marginsController?.close();
+    marginsGeneration += 1;
+    marginsOpenPromise = null;
+    const closing = args.marginsController?.close();
     args.root.classList.remove("archux-margins-phase");
     args.marginsPhase?.mainEl.classList.remove("archux-margins-phase");
     if (args.marginsPhase) {
       args.marginsPhase.hostEl.hidden = true;
       args.marginsPhase.footerEl.hidden = true;
     }
+    await closing;
   };
 
   const openOverlay = (title: string, subtitle: string, body: HTMLElement, width: "wide" | "xl" = "wide") => {
@@ -223,27 +230,23 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.materialsPhase.warningsEl.hidden = false;
     materialsPhaseActive = true;
     if (args.materialsController) {
-      const materialsLoading = mountLoadingSkeleton(args.materialsPhase.hostEl, {
-        variant: "phase",
-        label: t("Loading project materials…")
-      });
+      const generation = ++materialsGeneration;
       const warningsLoading = mountLoadingSkeleton(args.materialsPhase.warningListEl, {
         variant: "phase",
         label: t("Loading material warnings…")
       });
       void args.materialsController.open()
         .then((view) => {
-          if (!materialsPhaseActive) return;
-          materialsLoading.clear();
+          if (!materialsPhaseActive || generation !== materialsGeneration) return;
           warningsLoading.clear();
           args.materialsPhase.warningListEl.innerHTML = renderMaterialWarnings(view.warnings);
         })
         .catch((error: unknown) => {
-          if (!materialsPhaseActive) return;
-          materialsLoading.clear();
+          if (!materialsPhaseActive || generation !== materialsGeneration || isPhaseCancellation(error)) return;
           warningsLoading.clear();
           const message = error instanceof Error ? error.message : t("Materials could not be loaded.");
-          args.materialsPhase.hostEl.innerHTML = `<p class="materials-phase__status materials-phase__status--error" role="alert">${t("Materials cannot be opened safely because the project could not be saved.")} ${escapeHtml(message)}</p>`;
+          // The phase owner retains cached values and renders the retry action.
+          if (!args.materialsPhase.hostEl.querySelector?.("[data-phase-retry]")) args.materialsPhase.hostEl.innerHTML = `<p class="materials-phase__status materials-phase__status--error" role="alert">${escapeHtml(message)}</p>`;
           args.materialsPhase.warningListEl.innerHTML = `<p class="materials-warning">${escapeHtml(message)}</p>`;
         });
       return;
@@ -273,20 +276,12 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     args.marginsPhase.hostEl.hidden = false;
     args.marginsPhase.footerEl.hidden = false;
     marginsPhaseActive = true;
-    const marginsLoading = mountLoadingSkeleton(args.marginsPhase.hostEl, {
-      variant: "phase",
-      label: t("Loading project margins")
-    });
-    const footerLoading = mountLoadingSkeleton(args.marginsPhase.footerEl, {
-      variant: "phase",
-      label: t("Loading margin summary")
-    });
+    const generation = ++marginsGeneration;
     const opening = args.marginsController.open();
     marginsOpenPromise = opening;
     void opening.catch((error: unknown) => {
-      if (!marginsPhaseActive || !args.marginsPhase) return;
-      marginsLoading.clear();
-      footerLoading.clear();
+      if (!marginsPhaseActive || !args.marginsPhase || generation !== marginsGeneration || isPhaseCancellation(error)) return;
+      if (args.marginsPhase.hostEl.querySelector?.("[data-phase-retry]")) return;
       const message = error instanceof Error ? error.message : t("Margins could not be loaded.");
       args.marginsPhase.hostEl.innerHTML = `<p class="margins-phase__status margins-phase__status--error" data-margin-error role="alert">${t("Margins cannot be opened safely.")} ${escapeHtml(message)}</p>`;
     }).finally(() => {
@@ -305,9 +300,11 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   };
 
   const handleNav = async (id: WorkspaceNavId) => {
+    const generation = ++navigationGeneration;
     if (id === "design") {
       await leaveMaterialsPhase();
       await leaveMarginsPhase();
+      if (generation !== navigationGeneration) return;
       closeOverlay();
       setActiveNav("design");
       args.setDesignTopbar();
@@ -316,6 +313,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     if (id === "visualisation") {
       await leaveMaterialsPhase();
       await leaveMarginsPhase();
+      if (generation !== navigationGeneration) return;
       closeOverlay();
       setActiveNav("visualisation");
       args.setVisualisationTopbar();
@@ -323,6 +321,7 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
     }
     if (id !== "materials") await leaveMaterialsPhase();
     if (id !== "margins") await leaveMarginsPhase();
+    if (generation !== navigationGeneration) return;
     setActiveNav(id);
     if (id === "sheets") openSheets();
     else if (id === "schedules") openSchedules();

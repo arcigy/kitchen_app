@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSystemCatalogSeed } from "../core/catalog/catalog-bootstrap";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
-import { createDefaultProjectMaterialAssignments } from "../core/project-materials/project-material-business";
+import { createDefaultProjectMaterialAssignments, createProjectMaterialsView } from "../core/project-materials/project-material-business";
 import type { ProjectMaterialsView } from "../core/project-materials/project-material-types";
 import { FakeElement } from "./testUtils/propertiesPanelHarness";
 import { createMaterialsPhaseController } from "./materialsPhaseController";
@@ -155,7 +155,7 @@ describe("materials phase controller", () => {
       }
     });
 
-    await controller.open();
+    await expect(controller.open()).rejects.toThrow("offline");
     const result = await controller.commitId({
       category: "front",
       field: "materialId",
@@ -273,7 +273,7 @@ describe("materials phase controller", () => {
     expect(onAssignmentsCommitted).toHaveBeenCalledWith(expect.objectContaining({ assignments: expect.arrayContaining([expect.objectContaining({ category: "corpus", thicknessMm: 19 })]) }));
   });
 
-  it("replaces a previously loaded Materials view with a skeleton until the refreshed server view arrives", async () => {
+  it("keeps cached Materials visible but read-only until refreshed", async () => {
     const catalog = testCatalog();
     const initial = createDefaultProjectMaterialAssignments(catalog, NOW);
     const stale = structuredClone(initial);
@@ -312,11 +312,94 @@ describe("materials phase controller", () => {
     await controller.close();
 
     const opening = controller.open();
-    expect(container.querySelector('[data-loading-skeleton="phase"]')).not.toBeNull();
-    expect(container.textContent).not.toContain("Old material warning");
+    expect(container.textContent).toContain("Obnovujem");
+    expect(container.textContent).toContain("Old material warning");
+    expect(controller.getLoadState().kind).toBe("refreshing");
     resolveCurrent(remoteView(current, "Current material warning"));
     await opening;
 
     expect(container.textContent).toContain("Current material warning");
   });
+});
+
+
+it("opens Materials without waiting for unending waste pricing and leaves immediately", async () => {
+  const catalog = testCatalog();
+  const assignments = createDefaultProjectMaterialAssignments(catalog, NOW);
+  const waste = vi.fn(() => new Promise<never>(() => {}));
+  const controller = createMaterialsPhaseController({ container: document.createElement("div"), catalog, getProjectId: () => "p", getQuantities: () => [], onPricingChanged: vi.fn(), api: { loadProjectMaterials: async () => ({ assignments, quantities: [], warnings: [], priceSource: { priceListId: catalog.priceList.id, name: catalog.priceList.name, currency: "EUR", source: "system-seed", lastSynchronizedAt: null } }) }, pricingApi: { loadProjectMargins: waste } });
+  await controller.open();
+  expect(controller.getLoadState().kind).toBe("ready");
+  await vi.waitFor(() => expect(waste).toHaveBeenCalledOnce());
+  const started = performance.now();
+  await controller.close();
+  expect(performance.now() - started).toBeLessThan(250);
+  controller.destroy();
+});
+
+
+it("waits for verification of an uncertain write before preparing another read", async () => {
+  const catalog = testCatalog();
+  const assignments = createDefaultProjectMaterialAssignments(catalog, NOW);
+  const original = createProjectMaterialsView(assignments, [], catalog);
+  const current = createProjectMaterialsView({ ...assignments, revision: assignments.revision + 1 }, [], catalog);
+  let verify!: (value: ProjectMaterialsView) => void;
+  const load = vi.fn().mockResolvedValueOnce(original).mockImplementationOnce(() => new Promise<ProjectMaterialsView>(resolve => { verify = resolve; })).mockResolvedValueOnce(current);
+  const write = vi.fn().mockRejectedValue(new Error("uncertain response"));
+  const prepareRead = vi.fn(async () => {});
+  const front = catalog.materials.find(material => material.boardFamily === "front")!;
+  const controller = createMaterialsPhaseController({ container: document.createElement("div"), catalog, getProjectId: () => "p", getQuantities: () => [], prepareRead, api: { loadProjectMaterials: load, updateProjectMaterialAssignment: write, lookupCatalogItem: async () => ({ kind: "material", definition: front, unitPrice: 12 }) } });
+  await controller.open();
+  const committing = controller.commitId({ category: "front", field: "materialId", value: front.id, committedValue: "old" });
+  await vi.waitFor(() => expect(verify).toBeTypeOf("function"));
+  const opening = controller.open();
+  await Promise.resolve(); await Promise.resolve();
+  expect(prepareRead).toHaveBeenCalledTimes(1);
+  verify(current);
+  expect((await committing).ok).toBe(false);
+  await opening;
+  expect(prepareRead).toHaveBeenCalledTimes(2);
+  expect(write).toHaveBeenCalledOnce();
+  expect(controller.getSaveState().revision).toBe(current.assignments.revision);
+  controller.destroy();
+});
+
+
+it("does not cancel the pending phase read when module properties refresh assignments", async () => {
+  const catalog = testCatalog();
+  const assignments = createDefaultProjectMaterialAssignments(catalog, NOW);
+  const remote = createProjectMaterialsView(assignments, [], catalog);
+  let finish!: (view: ProjectMaterialsView) => void;
+  const load = vi.fn(() => new Promise<ProjectMaterialsView>(resolve => { finish = resolve; }));
+  const container = document.createElement("div");
+  const controller = createMaterialsPhaseController({ container, catalog, getProjectId: () => "p", getQuantities: () => [], api: { loadProjectMaterials: load } });
+  const opening = controller.open();
+  await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+  controller.restoreSaveState(assignments);
+  finish(remote);
+  await opening;
+  expect(controller.getLoadState().kind).toBe("ready");
+  expect(container.querySelector('[data-loading-skeleton="phase"]')).toBeNull();
+  expect(container.querySelector('[data-material-assignment-id="material-assignment:corpus"]')).not.toBeNull();
+  controller.destroy();
+});
+
+it("allows a slow snapshot save without consuming the subsequent read deadline", async () => {
+  vi.useFakeTimers();
+  try {
+    const catalog = testCatalog();
+    const remote = createProjectMaterialsView(createDefaultProjectMaterialAssignments(catalog, NOW), [], catalog);
+    const controller = createMaterialsPhaseController({
+      container: document.createElement("div"), catalog, getProjectId: () => "p", getQuantities: () => [],
+      prepareRead: () => new Promise(resolve => setTimeout(resolve, 12_000)),
+      api: { loadProjectMaterials: () => new Promise(resolve => setTimeout(() => resolve(remote), 5_000)) }
+    });
+    const opening = controller.open();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(controller.getLoadState().kind).toBe("loading");
+    await vi.advanceTimersByTimeAsync(2_000);
+    await opening;
+    expect(controller.getLoadState().kind).toBe("ready");
+    controller.destroy();
+  } finally { vi.useRealTimers(); }
 });

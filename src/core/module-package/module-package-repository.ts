@@ -1,22 +1,31 @@
 import { withModulePackageWriteLock, ModulePackageRevisionConflictError } from "./module-package-write-lock";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { ClientContext } from "../client/client-context";
 import { resolveClientModulePackagePath, resolveClientModulePackagesPath } from "../storage/storage-path-resolver";
 import { sanitizeStorageFileName, sanitizeStorageId } from "../storage/storage-types";
 import { packModulePackage, unpackModulePackage } from "./module-file-codec";
 import type { FurnQuoteModulePackagePayload, ModulePackageStoredMeta } from "./module-file-types";
-import type { FurnQuoteModulePackage } from "./module-package-types";
+import type { FurnQuoteModulePackage, ModuleParameterPreset } from "./module-package-types";
+import type { ClientModuleDefinition } from "../catalog/catalog-types";
 import { computeModulePackageHash } from "./module-package-file";
 import { validateFurnQuoteModulePackage } from "./module-package-validation";
+import { assertModulePresetsRetained } from "./module-preset-retention";
+import { writeModulePackageFile } from "./module-package-atomic-file";
 
 export type ModulePackageRepository = {
+  /** Production commits the preset and its catalog reference together. */
+  mutatePreset?(ctx: ClientContext, modulePackageId: string, prepare: PrepareModulePreset): Promise<ModulePresetMutationResult>;
   savePackage(ctx: ClientContext, modulePackage: FurnQuoteModulePackage, options?: SaveModulePackageOptions): Promise<FurnQuoteModulePackage>;
   getPackage(ctx: ClientContext, modulePackageId: string): Promise<FurnQuoteModulePackage | null>;
   listPackages(ctx: ClientContext): Promise<FurnQuoteModulePackage[]>;
   getRevision(ctx: ClientContext): Promise<ModulePackageRepositoryRevision>;
 };
+
+export type PreparedModulePreset = { modulePackage: FurnQuoteModulePackage; preset: ModuleParameterPreset };
+export type PrepareModulePreset = (current: FurnQuoteModulePackage) => PreparedModulePreset;
+export type ModulePresetMutationResult = PreparedModulePreset & { catalogModule: ClientModuleDefinition };
 
 export type ModulePackageRepositoryRevision = {
   count: number;
@@ -25,7 +34,8 @@ export type ModulePackageRepositoryRevision = {
 };
 
 export type SaveModulePackageOptions = {
-  expectedPackageHash?: string;
+  /** null means insert only, a string means compare-and-swap. */
+  expectedPackageHash?: string | null;
   source?: ModulePackageStoredMeta["source"];
   originalModuleFile?: string;
   payload?: FurnQuoteModulePackagePayload;
@@ -56,9 +66,13 @@ export function createFileModulePackageRepository(projectRoot: string): ModulePa
       const targetDir = packageDir(projectRoot, ctx, modulePackageId);
       await mkdir(path.dirname(targetDir), { recursive: true });
       return withModulePackageWriteLock(targetDir, async () => {
-      if (options.expectedPackageHash !== undefined) {
-        const current = await readJson<FurnQuoteModulePackage>(path.join(targetDir, PACKAGE_FILE_NAME));
-        if (!current || computeModulePackageHash(current) !== options.expectedPackageHash) throw new ModulePackageRevisionConflictError();
+      const current = await readJson<FurnQuoteModulePackage>(path.join(targetDir, PACKAGE_FILE_NAME));
+      if (options.expectedPackageHash === null && current) throw new ModulePackageRevisionConflictError();
+      if (typeof options.expectedPackageHash === "string" && (!current || computeModulePackageHash(current) !== options.expectedPackageHash)) throw new ModulePackageRevisionConflictError();
+      if (current) {
+        assertModulePresetsRetained(current, validated);
+        if (options.expectedPackageHash === undefined && current.parameterPresets?.presets.some(preset =>
+          !validated.parameterPresets?.presets.some(candidate => JSON.stringify(candidate) === JSON.stringify(preset)))) throw new ModulePackageRevisionConflictError();
       }
       const hash = computeModulePackageHash(validated);
       const persisted: FurnQuoteModulePackage = {
@@ -80,13 +94,12 @@ export function createFileModulePackageRepository(projectRoot: string): ModulePa
         bundledAssets: []
       };
       const moduleFile = options.originalModuleFile ?? packModulePackage({ ...payload, modulePackage: persisted });
-      await writeFile(path.join(targetDir, MODULE_FILE_NAME), moduleFile.endsWith("\n") ? moduleFile : `${moduleFile}\n`, "utf-8");
-      await writeFile(path.join(targetDir, PACKAGE_FILE_NAME), `${JSON.stringify(persisted, null, 2)}\n`, "utf-8");
+      await writeModulePackageFile(path.join(targetDir, MODULE_FILE_NAME), moduleFile.endsWith("\n") ? moduleFile : `${moduleFile}\n`);
       for (const asset of payload.bundledAssets) {
         const safeFileName = sanitizeStorageFileName(asset.fileName);
-        await writeFile(path.join(targetDir, "assets", safeFileName), Buffer.from(asset.data, "base64"));
+        await writeModulePackageFile(path.join(targetDir, "assets", safeFileName), Buffer.from(asset.data, "base64"));
       }
-      await writeFile(
+      await writeModulePackageFile(
         path.join(targetDir, META_FILE_NAME),
         `${JSON.stringify(
           {
@@ -100,9 +113,11 @@ export function createFileModulePackageRepository(projectRoot: string): ModulePa
           } satisfies ModulePackageStoredMeta,
           null,
           2
-        )}\n`,
-        "utf-8"
+        )}\n`
       );
+      // The JSON package is authoritative. Commit it only after every auxiliary
+      // file has been written, and never truncate the previously saved presets.
+      await writeModulePackageFile(path.join(targetDir, PACKAGE_FILE_NAME), `${JSON.stringify(persisted, null, 2)}\n`);
       return persisted;
       });
     },

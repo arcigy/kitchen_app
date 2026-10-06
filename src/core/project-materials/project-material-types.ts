@@ -1,3 +1,4 @@
+import type { CommercialViewSource } from "../commercialViewSource";
 import type { ProjectComponentValues } from "./project-component-values";
 import type { ComponentDefinition, MaterialDefinition, PriceList, PricingUnit } from "../catalog/catalog-types";
 
@@ -137,6 +138,8 @@ export type ProjectMaterialScope = {
 };
 
 export type ProjectMaterialsView = {
+  source?: CommercialViewSource;
+  calculationMs?: number;
   assignments: ProjectMaterialAssignmentsState;
   quantities: ProjectMaterialQuantity[];
   warnings: ProjectMaterialWarning[];

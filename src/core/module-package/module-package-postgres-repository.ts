@@ -6,10 +6,15 @@ import { computeModulePackageHash } from "./module-package-file";
 import type { FurnQuoteModulePackagePayload, ModulePackageStoredMeta } from "./module-file-types";
 import type { FurnQuoteModulePackage } from "./module-package-types";
 import { validateFurnQuoteModulePackage } from "./module-package-validation";
+import { assertModulePresetsRetained } from "./module-preset-retention";
 import {
   normalizePersistedSystemModulePackage,
   normalizedSystemTemplateForStoredIdentity
 } from "./module-package-persistence-compatibility";
+import { presetCatalogReference } from "./module-preset-catalog";
+import type { ClientCatalog } from "../catalog/catalog-types";
+import { validateClientCatalog } from "../catalog/catalog-validation";
+import { invalidateCatalogExactLookupCaches } from "../catalog/catalog-exact-lookup";
 import type { ModulePackageRepository, SaveModulePackageOptions } from "./module-package-repository";
 
 type PackageRow = {
@@ -57,7 +62,7 @@ export function createPostgresModulePackageRepository(args: {
     };
     const source: ModulePackageStoredMeta["source"] = options.source ?? "dev-json";
     await withSchemaClient(args.connectionString, args.schema, async (client) => {
-      if (options.expectedPackageHash !== undefined) {
+      if (typeof options.expectedPackageHash === "string") {
         // Stored system templates may be normalized on read. Compare the same
         // public revision, then guard the write with the actual database hash.
         const current = await client.query<PackageRow & { package_hash: string }>(
@@ -65,6 +70,7 @@ export function createPostgresModulePackageRepository(args: {
           [ctx.clientId, persisted.module.modulePackageId]);
         const row = current.rows[0];
         if (!row || computeModulePackageHash(validatePersistedPackage(row)) !== options.expectedPackageHash) throw new ModulePackageRevisionConflictError();
+        assertModulePresetsRetained(validatePersistedPackage(row), persisted);
         const updated = await client.query(`UPDATE arcigy_module_packages SET module_type=$3, package_version=$4,
           package_hash=$5, package=$6::jsonb, source=$7, updated_at=now()
           WHERE client_id=$1 AND module_package_id=$2 AND package_hash=$8 RETURNING module_package_id`,
@@ -73,7 +79,7 @@ export function createPostgresModulePackageRepository(args: {
         if (updated.rowCount !== 1) throw new ModulePackageRevisionConflictError();
         return;
       }
-      await client.query(
+      const written = await client.query(
         `
           INSERT INTO arcigy_module_packages (
             client_id,
@@ -87,13 +93,16 @@ export function createPostgresModulePackageRepository(args: {
             updated_at
           )
           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, now(), now())
-          ON CONFLICT (client_id, module_package_id) DO UPDATE SET
+          ${options.expectedPackageHash === null ? "ON CONFLICT (client_id, module_package_id) DO NOTHING" : `ON CONFLICT (client_id, module_package_id) DO UPDATE SET
             module_type = EXCLUDED.module_type,
             package_version = EXCLUDED.package_version,
             package_hash = EXCLUDED.package_hash,
             package = EXCLUDED.package,
             source = EXCLUDED.source,
             updated_at = now()
+          WHERE COALESCE(EXCLUDED.package->'parameterPresets'->'presets', '[]'::jsonb)
+            @> COALESCE(arcigy_module_packages.package->'parameterPresets'->'presets', '[]'::jsonb)`}
+          RETURNING module_package_id
         `,
         [
           ctx.clientId,
@@ -105,6 +114,7 @@ export function createPostgresModulePackageRepository(args: {
           source
         ]
       );
+      if (written.rowCount !== 1) throw new ModulePackageRevisionConflictError();
     });
     return persisted;
   }
@@ -120,6 +130,59 @@ export function createPostgresModulePackageRepository(args: {
   }
 
   return {
+    async mutatePreset(ctx, modulePackageId, prepare) {
+      if (ctx.role === "viewer") throw new Error("Viewer role cannot edit presets.");
+      const committed = await withSchemaClient(args.connectionString, args.schema, async client => {
+        await client.query("BEGIN");
+        try {
+          // Every package in a tenant shares this row. Lock it first so concurrent
+          // preset writes cannot publish stale catalog snapshots or deadlock.
+          const catalogResult = await client.query<{ catalog: ClientCatalog }>(
+            "SELECT catalog FROM arcigy_client_catalogs WHERE client_id=$1 FOR UPDATE", [ctx.clientId]);
+          const catalogRow = catalogResult.rows[0];
+          if (!catalogRow) throw new Error("Client catalog not found.");
+          const catalog = validateClientCatalog(catalogRow.catalog);
+          if (catalog.clientId !== ctx.clientId) throw new Error("Catalog clientId must match ClientContext.");
+          const packageResult = await client.query<PackageRow & { package_hash: string }>(
+            "SELECT package, source, package_hash FROM arcigy_module_packages WHERE client_id=$1 AND module_package_id=$2 FOR UPDATE",
+            [ctx.clientId, modulePackageId]);
+          const row = packageResult.rows[0];
+          if (!row) throw new Error("Module package not found.");
+          const current = validatePersistedPackage(row);
+          const prepared = prepare(current);
+          let persisted = current;
+          if (prepared.modulePackage !== current) {
+            const validated = validateFurnQuoteModulePackage(prepared.modulePackage);
+            if (validated.module.modulePackageId !== modulePackageId) throw new Error("Preset module identity cannot change.");
+            assertModulePresetsRetained(current, validated);
+            persisted = { ...validated, integrity: { ...validated.integrity, packageHash: computeModulePackageHash(validated) } };
+            const result = await client.query(`UPDATE arcigy_module_packages SET module_type=$3, package_version=$4,
+              package_hash=$5, package=$6::jsonb, source='dev-json', updated_at=now()
+              WHERE client_id=$1 AND module_package_id=$2 AND package_hash=$7`,
+              [ctx.clientId, modulePackageId, persisted.module.moduleType, persisted.module.version,
+                persisted.integrity.packageHash, JSON.stringify(persisted), row.package_hash]);
+            if (result.rowCount !== 1) throw new ModulePackageRevisionConflictError();
+          }
+          const reference = presetCatalogReference(catalog, persisted);
+          if (reference.changed) {
+            // Patch only the module references, preserving all commercial data
+            // and root metadata exactly as stored by the company.
+            validateClientCatalog({ ...catalog, modules: reference.modules });
+            const result = await client.query(`UPDATE arcigy_client_catalogs
+              SET catalog=jsonb_set(catalog,'{modules}',$2::jsonb), db_updated_at=now()
+              WHERE client_id=$1`, [ctx.clientId, JSON.stringify(reference.modules)]);
+            if (result.rowCount !== 1) throw new Error("Client catalog not found.");
+          }
+          await client.query("COMMIT");
+          return { result: { modulePackage: persisted, preset: prepared.preset, catalogModule: reference.catalogModule }, catalogChanged: reference.changed };
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        }
+      });
+      if (committed.catalogChanged) invalidateCatalogExactLookupCaches(ctx.clientId);
+      return committed.result;
+    },
     savePackage,
     async getPackage(ctx, modulePackageId) {
       return withSchemaClient(args.connectionString, args.schema, async (client) => {

@@ -1,3 +1,6 @@
+import { recordCommercialDuration } from "../core/commercialDiagnostics";
+import { isPhaseCancellation, runPhaseRequest, PHASE_WRITE_TIMEOUT_MS, type PhaseLoadState } from "./phaseRequest";
+import { mountPhaseLoadFailure } from "../ui/phaseLoadFailure";
 import type {
   ProjectMarginCategory,
   ProjectMarginTarget
@@ -75,6 +78,9 @@ export type MarginsPhaseControllerArgs = {
   presentation?: "margins" | "material-waste";
   footerContainer?: HTMLElement;
   getProjectId: () => string | null;
+  getScopeKey?: () => string;
+  getPhaseId?: () => string | undefined;
+  prepareRead?: (signal: AbortSignal) => Promise<void>;
   onViewChanged?: (view: ProjectMarginsView) => void;
   api?: Partial<MarginsPhaseControllerApi>;
 };
@@ -100,15 +106,27 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
   let mutationTail: Promise<unknown> = Promise.resolve();
   let active = false;
   let remoteLoaded = false;
+  let lifetime = 0;
+  let cachedScope: string | null = null;
+  let state: PhaseLoadState = { kind: "closed" };
+  const scopeKey = () => args.getScopeKey?.() ?? args.getProjectId() ?? "";
 
   const notifyViewChanged = () => {
     if (view) args.onViewChanged?.(structuredClone(view));
   };
 
+  const validateSource = (nextView: ProjectMarginsView) => {
+    if (nextView.source && (nextView.source.projectId !== args.getProjectId() || (args.getPhaseId?.() && nextView.source.phaseId !== args.getPhaseId()))) throw new Error("Odpoveď patrí inému projektu alebo fáze. Obnovte marže.");
+  };
   const setAuthoritativeView = (nextView: ProjectMarginsView) => {
+    validateSource(nextView);
+    if (nextView.calculationMs !== undefined) recordCommercialDuration("calculation", nextView.calculationMs, "success");
     view = structuredClone(nextView);
-    panel?.update(view);
-    panel?.setInputsDisabled(!view.editable);
+    cachedScope = scopeKey();
+    if (active) {
+      state = { kind: loadAbort ? "refreshing" : "ready", scope: cachedScope };
+      panel?.update(view, { disabled: Boolean(loadAbort) || !view.editable, loadingMessage: loadAbort ? "Obnovujem aktuálne hodnoty." : null });
+    }
     notifyViewChanged();
   };
 
@@ -132,24 +150,18 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
     return panel;
   };
 
-  const loadRemoteView = async (projectId: string, signal?: AbortSignal): Promise<ProjectMarginsView> => {
-    const nextView = await api.loadProjectMargins(projectId, signal);
-    if (!active) return nextView;
-    remoteLoaded = true;
-    setAuthoritativeView(nextView);
-    return nextView;
-  };
-
-  const reloadAfterConflict = async (projectId: string): Promise<void> => {
+  const reloadAfterConflict = async (projectId: string, scope: string, generation: number): Promise<void> => {
+    if (scopeKey() !== scope || generation !== lifetime) return;
+    remoteLoaded = false;
+    panel?.setInputsDisabled(true);
     try {
-      const nextView = await api.loadProjectMargins(projectId);
-      if (!active) return;
-      remoteLoaded = true;
+      const nextView = await runPhaseRequest(signal => api.loadProjectMargins(projectId, signal), { stage: "margins-read" });
+      if (scopeKey() !== scope || generation !== lifetime) return;
+      remoteLoaded = active;
       setAuthoritativeView(nextView);
     } catch (error) {
-      remoteLoaded = false;
-      panel?.setInputsDisabled(true);
-      panel?.setGlobalError(`Projekt sa medzičasom zmenil a aktuálne marže sa nepodarilo obnoviť. ${errorMessage(error, "")}`.trim());
+      if (scopeKey() !== scope || generation !== lifetime) return;
+      panel?.setGlobalError(`Aktuálne marže sa nepodarilo overiť. ${errorMessage(error, "")}`.trim());
     }
   };
 
@@ -161,10 +173,15 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
 
   const runMutation = (
     operation: (projectId: string, currentView: ProjectMarginsView, signal: AbortSignal) => Promise<ProjectMarginsView>
-  ): Promise<ProjectMarginCommitResult> => enqueueMutation(async () => {
+  ): Promise<ProjectMarginCommitResult> => {
+    const requestedScope = scopeKey();
+    const generation = lifetime;
+    if (!active || !remoteLoaded || !view) return Promise.resolve({ ok: false, error: "Serverové marže nie sú načítané. Úprava bola bezpečne zablokovaná." });
+    return enqueueMutation(async () => {
     const projectId = args.getProjectId();
+    if (scopeKey() !== requestedScope || generation !== lifetime) return { ok: false, error: "Projekt sa zmenil. Úprava nebola odoslaná." };
     if (!projectId) return { ok: false, error: "Nie je otvorený žiadny projekt." };
-    if (!active || !remoteLoaded || !view) {
+    if (!view || cachedScope !== requestedScope) {
       return { ok: false, error: "Serverové marže nie sú načítané. Úprava bola bezpečne zablokovaná." };
     }
     if (!view.editable) return { ok: false, error: "Na úpravu marží nemáte oprávnenie." };
@@ -172,24 +189,27 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
     const abort = new AbortController();
     mutationAbort = abort;
     try {
-      const nextView = await operation(projectId, view, abort.signal);
-      if (!active || mutationAbort !== abort) return { ok: false, error: "Uloženie bolo zrušené." };
+      const currentView = view;
+      const nextView = await runPhaseRequest(signal => operation(projectId, currentView, signal), { signal: abort.signal, timeoutMs: PHASE_WRITE_TIMEOUT_MS });
+      if (scopeKey() !== requestedScope || generation !== lifetime || mutationAbort !== abort) return { ok: false, error: "Uloženie bolo zrušené." };
       setAuthoritativeView(nextView);
       return { ok: true };
     } catch (error) {
-      if (isAbortError(error)) return { ok: false, error: "Uloženie bolo zrušené." };
+      if (isPhaseCancellation(error)) return { ok: false, error: "Uloženie bolo zrušené." };
       if (isRevisionConflict(error)) {
-        await reloadAfterConflict(projectId);
+        await reloadAfterConflict(projectId, requestedScope, generation);
         return {
           ok: false,
           error: "Projekt sa medzičasom zmenil. Načítal som aktuálne marže; skontrolujte hodnotu a skúste úpravu znova."
         };
       }
-      return { ok: false, error: `${errorMessage(error, "Maržu sa nepodarilo uložiť.")} Pôvodná hodnota zostala zachovaná.` };
+      await reloadAfterConflict(projectId, requestedScope, generation);
+      return { ok: false, error: `${errorMessage(error, "Maržu sa nepodarilo uložiť.")} Skontrolujte aktuálnu hodnotu. Rozpracovaný vstup zostal zachovaný.` };
     } finally {
       if (mutationAbort === abort) mutationAbort = null;
     }
-  });
+    });
+  };
 
   function commitGroup(request: ProjectMarginGroupCommitRequest): Promise<ProjectMarginCommitResult> {
     return runMutation((projectId, currentView, signal) => {
@@ -262,86 +282,94 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
     });
   }
 
-  const abortRequests = () => {
+  const cancelLoad = () => {
     loadAbort?.abort();
     loadAbort = null;
-    mutationAbort?.abort();
-    mutationAbort = null;
+  };
+
+  const open = async (): Promise<ProjectMarginsView> => {
+    active = true;
+    remoteLoaded = false;
+    cancelLoad();
+    const projectId = args.getProjectId();
+    if (!projectId) throw new Error("Nie je otvorený žiadny projekt.");
+    const scope = scopeKey();
+    const abort = new AbortController();
+    loadAbort = abort;
+    const cached = cachedScope === scope && view !== null;
+    state = { kind: cached ? "refreshing" : "loading", scope };
+    if (!cached) {
+      panel?.destroy();
+      panel = null;
+      view = null;
+    }
+    const loading = cached ? null : mountLoadingSkeleton(args.container, {
+      variant: "phase", label: args.presentation === "material-waste" ? "Načítavam prerezy projektu" : "Načítavam marže projektu"
+    });
+    const footerLoading = !cached && args.footerContainer
+      ? mountLoadingSkeleton(args.footerContainer, { variant: "phase", label: "Načítavam súhrn marží" }) : null;
+    if (cached && view) ensurePanel(view).update(view, { disabled: true, loadingMessage: "Obnovujem aktuálne hodnoty. Zobrazené sú posledné načítané údaje." });
+    try {
+      await runPhaseRequest(async signal => {
+        await mutationTail;
+        signal.throwIfAborted();
+        await args.prepareRead?.(signal);
+      }, { signal: abort.signal, timeoutMs: PHASE_WRITE_TIMEOUT_MS });
+      const loaded = await runPhaseRequest(signal => api.loadProjectMargins(projectId, signal), { signal: abort.signal, stage: "margins-read" });
+      if (!active || loadAbort !== abort || scopeKey() !== scope) throw new DOMException("Načítanie bolo zrušené.", "AbortError");
+      validateSource(loaded);
+      loading?.clear();
+      footerLoading?.clear();
+      loadAbort = null;
+      remoteLoaded = true;
+      view = structuredClone(loaded);
+      ensurePanel(view);
+      setAuthoritativeView(view);
+      return structuredClone(view);
+    } catch (error) {
+      if (!isPhaseCancellation(error) && active && loadAbort === abort && scopeKey() === scope) {
+        remoteLoaded = false;
+        const message = `Marže sa nepodarilo načítať. Úpravy sú dočasne vypnuté. ${errorMessage(error, "")}`.trim();
+        state = { kind: "error", scope, message };
+        loading?.clear();
+        footerLoading?.clear();
+        if (panel && view) panel.update(view, { disabled: true, error: message });
+        else args.container.replaceChildren();
+        mountPhaseLoadFailure(args.container, message, open);
+      }
+      throw error;
+    } finally {
+      if (loadAbort === abort) loadAbort = null;
+    }
   };
 
   return {
-    async open(): Promise<ProjectMarginsView> {
-      active = true;
-      remoteLoaded = false;
-      abortRequests();
-      const projectId = args.getProjectId();
-      if (!projectId) throw new Error("Nie je otvorený žiadny projekt.");
-
-      panel?.destroy();
-      panel = null;
-      const loading = mountLoadingSkeleton(args.container, {
-        variant: "phase",
-        label: args.presentation === "material-waste" ? "Načítavam prerezy projektu" : "Načítavam marže projektu"
-      });
-      const footerLoading = args.footerContainer
-        ? mountLoadingSkeleton(args.footerContainer, { variant: "phase", label: "Načítavam súhrn marží" })
-        : null;
-
-      const abort = new AbortController();
-      loadAbort = abort;
-      try {
-        const loaded = await api.loadProjectMargins(projectId, abort.signal);
-        if (!active || loadAbort !== abort) return view ?? loaded;
-        remoteLoaded = true;
-        view = structuredClone(loaded);
-        loading.clear();
-        footerLoading?.clear();
-        const activePanel = ensurePanel(view);
-        activePanel.update(view);
-        activePanel.setInputsDisabled(!view.editable);
-        notifyViewChanged();
-        return structuredClone(view);
-      } catch (error) {
-        if (!isAbortError(error) && active && loadAbort === abort) {
-          remoteLoaded = false;
-          loading.clear();
-          footerLoading?.clear();
-          const errorPanel = document.createElement("p");
-          errorPanel.className = "margins-phase__status margins-phase__status--error";
-          errorPanel.dataset.marginError = "";
-          errorPanel.setAttribute("role", "alert");
-          errorPanel.textContent = `Project margins could not be loaded safely. Editing is blocked. ${errorMessage(error, "")}`.trim();
-          args.container.replaceChildren(errorPanel);
-        }
-        throw error;
-      } finally {
-        if (loadAbort === abort) loadAbort = null;
-      }
-    },
+    open,
     async close(): Promise<void> {
-      await panel?.flushPending();
-      await mutationTail;
       active = false;
       remoteLoaded = false;
-      abortRequests();
-      panel?.destroy();
-      panel = null;
+      state = { kind: "closed" };
+      cancelLoad();
+      // Writes finish independently; leaving the screen must never await a network response.
     },
     destroy(): void {
+      lifetime += 1;
       active = false;
       remoteLoaded = false;
-      abortRequests();
+      state = { kind: "closed" };
+      cancelLoad();
+      mutationAbort?.abort();
+      mutationAbort = null;
       panel?.destroy();
       panel = null;
+      view = null;
+      cachedScope = null;
     },
+    getLoadState: (): PhaseLoadState => ({ ...state }),
     getView(): ProjectMarginsView | null {
-      return view ? structuredClone(view) : null;
+      return cachedScope === scopeKey() && view ? structuredClone(view) : null;
     },
-    reload(): Promise<ProjectMarginsView> {
-      const projectId = args.getProjectId();
-      if (!projectId) return Promise.reject(new Error("Nie je otvorený žiadny projekt."));
-      return loadRemoteView(projectId);
-    },
+    reload: open,
     commitGroup,
     commitDefault,
     commitAdditionalLabor,
@@ -364,10 +392,6 @@ function isRevisionConflict(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const candidate = error as { status?: unknown; code?: unknown };
   return candidate.status === 409 || candidate.code === "REVISION_CONFLICT" || candidate.code === "PROJECT_MARGIN_REVISION_CONFLICT";
-}
-
-function isAbortError(error: unknown): boolean {
-  return !!error && typeof error === "object" && "name" in error && (error as { name?: unknown }).name === "AbortError";
 }
 
 function errorMessage(error: unknown, fallback: string): string {

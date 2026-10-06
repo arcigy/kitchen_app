@@ -435,6 +435,9 @@ export type ModuleParameterPresetRatioParameter = {
 };
 
 export type ModuleParameterPreset = {
+  /** Written atomically with the preset, for retry after a lost response. */
+  creationOperation?: ModulePresetWriteOperation;
+  laborOperation?: ModulePresetWriteOperation;
   /** Company rate per cabinet; absent/null inherits the module type. */
   laborRate?: LaborRate | null;
   presetId: string;
@@ -445,6 +448,12 @@ export type ModuleParameterPreset = {
   sourceLabels?: string[];
   parameterValues: Record<string, unknown>;
   ratioParameters?: ModuleParameterPresetRatioParameter[];
+};
+
+export type ModulePresetWriteOperation = {
+  operationId: string;
+  userId: string;
+  requestHash: string;
 };
 
 export type ModuleParameterPresetSet = {

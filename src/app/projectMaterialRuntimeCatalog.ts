@@ -16,9 +16,9 @@ export function createProjectMaterialRuntimeCatalog(baseCatalog: ClientCatalog):
   applyProjectAssignments: (assignments: ProjectMaterialAssignmentsState) => void;
 } {
   const catalog = structuredClone(baseCatalog);
-  const baseComponents = structuredClone(baseCatalog.components);
-  const baseMaterials = structuredClone(baseCatalog.materials);
-  const basePrices = structuredClone(baseCatalog.priceList.prices);
+  const baseComponents = catalog.components;
+  const baseMaterials = catalog.materials;
+  const basePrices = catalog.priceList.prices;
 
   const applyProjectAssignments = (assignments: ProjectMaterialAssignmentsState): void => {
     assignments = repairSupplierMaterialPricing(assignments);
@@ -26,7 +26,7 @@ export function createProjectMaterialRuntimeCatalog(baseCatalog: ClientCatalog):
     setRuntimeProjectAssignments(catalog, assignments);
     const componentSnapshots = new Map<string, ComponentDefinition>();
     const supplierSnapshots = new Map<string, MaterialDefinition>();
-    catalog.priceList.prices = structuredClone(basePrices);
+    catalog.priceList = { ...catalog.priceList, prices: { ...basePrices } };
     for (const assignment of assignments.assignments) {
       if (assignment.kind === "component" && assignment.snapshots.component && !isComponentAllowedForCategory(assignment.snapshots.component.definition, assignment.category)) continue;
       const snapshot = assignment.kind === "material" ? assignment.snapshots.material : assignment.snapshots.component;
@@ -42,11 +42,11 @@ export function createProjectMaterialRuntimeCatalog(baseCatalog: ClientCatalog):
     }
 
     catalog.components = [
-      ...baseComponents.filter(component => !componentSnapshots.has(component.id)).map(component => structuredClone(component)),
+      ...baseComponents.filter(component => !componentSnapshots.has(component.id)),
       ...componentSnapshots.values()
     ];
     catalog.materials = [
-      ...baseMaterials.filter((material) => !supplierSnapshots.has(material.id)).map((material) => structuredClone(material)),
+      ...baseMaterials.filter((material) => !supplierSnapshots.has(material.id)),
       ...supplierSnapshots.values()
     ];
   };
