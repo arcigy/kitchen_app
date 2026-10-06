@@ -479,13 +479,12 @@ export function createMaterialsPhaseController(args: MaterialsPhaseControllerArg
     const loading = cached ? null : mountLoadingSkeleton(args.container, { variant: "phase", label: "Načítavam materiály projektu" });
     if (cached) ensurePanel().update(view, { disabled: true, loadingMessage: "Obnovujem aktuálne hodnoty. Zobrazené sú posledné načítané údaje." });
     try {
-      const remoteView = await runPhaseRequest(async signal => {
+      await runPhaseRequest(async signal => {
         await Promise.allSettled([...pendingWrites]);
         signal.throwIfAborted();
         await args.prepareRead?.(signal);
-        signal.throwIfAborted();
-        return api.loadProjectMaterials(projectId, signal);
-      }, { signal: abort.signal, stage: "materials-read" });
+      }, { signal: abort.signal, timeoutMs: PHASE_WRITE_TIMEOUT_MS });
+      const remoteView = await runPhaseRequest(signal => api.loadProjectMaterials(projectId, signal), { signal: abort.signal, stage: "materials-read" });
       if (!active || loadAbort !== abort || scope !== scopeKey()) throw new DOMException("Načítanie bolo zrušené.", "AbortError");
       validateSource(remoteView);
       remoteLoaded = true;
