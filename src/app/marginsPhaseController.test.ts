@@ -323,3 +323,21 @@ it("rejects a response for a different project before showing or publishing its 
   expect(container.querySelector("[data-phase-retry]")).not.toBeNull();
   controller.destroy();
 });
+
+it("allows a slow snapshot save without consuming the subsequent read deadline", async () => {
+  vi.useFakeTimers();
+  try {
+    const controller = createMarginsPhaseController({
+      container: document.createElement("div"), getProjectId: () => "p",
+      prepareRead: () => new Promise(resolve => setTimeout(resolve, 12_000)),
+      api: { loadProjectMargins: () => new Promise(resolve => setTimeout(() => resolve(view(1)), 5_000)) }
+    });
+    const opening = controller.open();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(controller.getLoadState().kind).toBe("loading");
+    await vi.advanceTimersByTimeAsync(2_000);
+    await opening;
+    expect(controller.getLoadState().kind).toBe("ready");
+    controller.destroy();
+  } finally { vi.useRealTimers(); }
+});

@@ -383,3 +383,23 @@ it("does not cancel the pending phase read when module properties refresh assign
   expect(container.querySelector('[data-material-assignment-id="material-assignment:corpus"]')).not.toBeNull();
   controller.destroy();
 });
+
+it("allows a slow snapshot save without consuming the subsequent read deadline", async () => {
+  vi.useFakeTimers();
+  try {
+    const catalog = testCatalog();
+    const remote = createProjectMaterialsView(createDefaultProjectMaterialAssignments(catalog, NOW), [], catalog);
+    const controller = createMaterialsPhaseController({
+      container: document.createElement("div"), catalog, getProjectId: () => "p", getQuantities: () => [],
+      prepareRead: () => new Promise(resolve => setTimeout(resolve, 12_000)),
+      api: { loadProjectMaterials: () => new Promise(resolve => setTimeout(() => resolve(remote), 5_000)) }
+    });
+    const opening = controller.open();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(controller.getLoadState().kind).toBe("loading");
+    await vi.advanceTimersByTimeAsync(2_000);
+    await opening;
+    expect(controller.getLoadState().kind).toBe("ready");
+    controller.destroy();
+  } finally { vi.useRealTimers(); }
+});

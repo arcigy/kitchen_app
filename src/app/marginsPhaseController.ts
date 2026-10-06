@@ -310,13 +310,12 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
       ? mountLoadingSkeleton(args.footerContainer, { variant: "phase", label: "Načítavam súhrn marží" }) : null;
     if (cached && view) ensurePanel(view).update(view, { disabled: true, loadingMessage: "Obnovujem aktuálne hodnoty. Zobrazené sú posledné načítané údaje." });
     try {
-      const loaded = await runPhaseRequest(async signal => {
+      await runPhaseRequest(async signal => {
         await mutationTail;
         signal.throwIfAborted();
         await args.prepareRead?.(signal);
-        signal.throwIfAborted();
-        return api.loadProjectMargins(projectId, signal);
-      }, { signal: abort.signal, stage: "margins-read" });
+      }, { signal: abort.signal, timeoutMs: PHASE_WRITE_TIMEOUT_MS });
+      const loaded = await runPhaseRequest(signal => api.loadProjectMargins(projectId, signal), { signal: abort.signal, stage: "margins-read" });
       if (!active || loadAbort !== abort || scopeKey() !== scope) throw new DOMException("Načítanie bolo zrušené.", "AbortError");
       validateSource(loaded);
       loading?.clear();
