@@ -1,0 +1,8 @@
+{
+  "database": "/var/lib/arcigy-feedback-webhook/spool.sqlite3",
+  "unix_socket": "/run/arcigy-feedback-webhook/receiver.sock",
+  "port": 18763,
+  "key_file": "/etc/arcigy-feedback-webhook/receiver-keys.json",
+  "stream_token": "",
+  "allowed_sources": [["SOURCE", "TENANT", "PROJECT", "EPOCH"]]
+}

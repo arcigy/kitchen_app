@@ -38,6 +38,7 @@ class PlannerTests(unittest.TestCase):
         home = self.root / '.codex-orchestrator'
         home.mkdir()
         shutil.copy2(HERE / 'coordinator.py', home / 'coordinator.py')
+        shutil.copy2(HERE / 'feedback_authorization.py', home / 'feedback_authorization.py')
         shutil.copy2(HERE / 'model_policy.py', home / 'model_policy.py')
         shutil.copy2(HERE / 'model-policy.json', home / 'model-policy.json')
         self.c = COORDINATOR.Coordinator(self.root)

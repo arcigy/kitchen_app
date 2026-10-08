@@ -62,4 +62,3 @@ class TestWebhookOutbox(TestFeedback):
         self.assertEqual(retry['claim'],'owner')
         with self.assertRaises(ValidationError):
             agent.arcigy_work_report(task.id,'foreign','start',{'worker':'other','expected_revision':task.arcigy_revision})
-

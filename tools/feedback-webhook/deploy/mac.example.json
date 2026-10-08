@@ -1,0 +1,12 @@
+{
+  "coordinator_root": "/ABSOLUTE/APP/ROOT",
+  "inbox": "/PRIVATE/feedback-inbox.sqlite3",
+  "ssh_destination": "feedback-events@HOST",
+  "ssh_identity": "/PRIVATE/ssh-key",
+  "known_hosts": "/PRIVATE/known_hosts",
+  "local_port": 18764,
+  "remote_port": 18763,
+  "stream_token": "",
+  "allowed_sources": [["SOURCE", "TENANT", "PROJECT", "EPOCH"]],
+  "authorization_policy": null
+}

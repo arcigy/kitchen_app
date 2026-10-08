@@ -1,0 +1,25 @@
+[Unit]
+Description=Arcigy durable feedback webhook transport
+After=network.target
+
+[Service]
+Type=simple
+User=arcigy-webhook
+Group=arcigy-feedback
+ExecStart=/usr/bin/python3 /opt/arcigy/tools/feedback-webhook/server.py --config /etc/arcigy-feedback-webhook/receiver.json
+Restart=on-failure
+RestartSec=5
+UMask=0077
+RuntimeDirectory=arcigy-feedback-webhook
+RuntimeDirectoryMode=0750
+StateDirectory=arcigy-feedback-webhook
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_INET
+ReadWritePaths=/var/lib/arcigy-feedback-webhook /run/arcigy-feedback-webhook
+
+[Install]
+WantedBy=multi-user.target

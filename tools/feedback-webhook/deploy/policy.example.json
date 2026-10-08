@@ -1,0 +1,11 @@
+{
+  "id": "feedback-repairs-v1",
+  "version": 1,
+  "source_id": "SOURCE",
+  "tenant_id": "TENANT",
+  "project_id": "PROJECT",
+  "allowed_paths": ["src/layout", "src/ui", "tests"],
+  "operations": ["edit", "test", "commit"],
+  "max_files": 10,
+  "expires_at": "2026-12-31T23:59:59+00:00"
+}

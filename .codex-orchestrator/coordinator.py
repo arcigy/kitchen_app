@@ -21,6 +21,7 @@ import tempfile
 import time
 import uuid
 from urllib.parse import urlparse
+from feedback_authorization import evaluate, validate_policy, policy_digest
 
 
 STATES = set("CREATED QUEUED PLANNING AWAITING_APPROVAL APPROVED IMPLEMENTING TESTING READY_FOR_INTEGRATION INTEGRATING INTEGRATED BLOCKED PAUSED CANCELLED".split())
@@ -99,6 +100,8 @@ class Coordinator:
                 CREATE TABLE IF NOT EXISTS tasks (n INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, data TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS integrations (n INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, data TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS events (n INTEGER PRIMARY KEY AUTOINCREMENT, subject TEXT NOT NULL, at TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS feedback_sources (external_key TEXT PRIMARY KEY, task_id TEXT UNIQUE NOT NULL);
+                CREATE TABLE IF NOT EXISTS feedback_policies (id TEXT PRIMARY KEY, data TEXT NOT NULL, evidence TEXT NOT NULL, revoked_at TEXT);
             """)
 
     @contextlib.contextmanager
@@ -180,12 +183,22 @@ class Coordinator:
             raise Error(f"Invalid transition {source} -> {target}")
         task["status"] = target
 
-    def register(self, title, request, slug, base="develop", dependencies=(), sample=False, resources=()):
+    def register(self, title, request, slug, base="develop", dependencies=(), sample=False, resources=(), external=None):
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
             raise Error("slug must use lowercase letters, digits, and single hyphens")
         if not title.strip() or not request.strip():
             raise Error("title and request are required")
         with self.transaction() as db:
+            if external is not None:
+                if set(external) != {'source_id','tenant_id','project_id','report_id'} or type(external['report_id']) is not int or external['report_id'] < 1:
+                    raise Error('Invalid external feedback identity')
+                for key in ('source_id','tenant_id','project_id'):
+                    if not isinstance(external[key],str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,119}',external[key]):
+                        raise Error('Invalid external feedback source')
+                external_key = json.dumps(external, sort_keys=True, separators=(',',':'))
+                existing = db.execute('SELECT task_id FROM feedback_sources WHERE external_key=?',(external_key,)).fetchone()
+                if existing:
+                    return self.get(existing[0],db)
             for dependency in dependencies:
                 self.get(dependency, db)
             n = db.execute("INSERT INTO tasks(data) VALUES('{}')").lastrowid
@@ -195,7 +208,62 @@ class Coordinator:
             if sample:
                 task["sample_manifest"] = {f"orchestrator-samples/{task_id}.txt": f"{task_id}: {title}\n"}
             db.execute("UPDATE tasks SET id=?,data=? WHERE n=?", (task_id, json.dumps(task), n))
+            if external is not None:
+                task['external_feedback'] = external
+                db.execute('INSERT INTO feedback_sources(external_key,task_id) VALUES(?,?)',(external_key,task_id))
             return self.save(db, task, "registered")
+
+    def grant_feedback_policy(self, policy, evidence):
+        validate_policy(policy)
+        if not evidence.strip():
+            raise Error('Actual human standing authorization evidence is required')
+        with self.transaction() as db:
+            if db.execute('SELECT id FROM feedback_policies WHERE id=?',(policy['id'],)).fetchone():
+                raise Error('Policy identifiers are immutable; grant a new version')
+            db.execute('INSERT INTO feedback_policies(id,data,evidence) VALUES(?,?,?)',
+                       (policy['id'],json.dumps(policy),evidence))
+            self.event(db,policy['id'],'feedback_policy_granted',{'policy_sha256':policy_digest(policy),'evidence':evidence})
+        return {'id':policy['id'],'policy_sha256':policy_digest(policy)}
+
+    def authorize_feedback_plan(self, task_id, policy_id, scope):
+        with self.transaction() as db:
+            task = self.get(task_id,db)
+            if task['status'] != 'AWAITING_APPROVAL':
+                raise Error('Task must be awaiting approval')
+            self.plan_guard(task,approved=False)
+            row = db.execute('SELECT * FROM feedback_policies WHERE id=?',(policy_id,)).fetchone()
+            if not row or row['revoked_at']:
+                raise Error('Feedback authorization policy is not active')
+            policy = json.loads(row['data'])
+            decision = evaluate(policy,task.get('external_feedback'),scope)
+            task['policy_authorization'] = {**decision,'kind':'standing_policy','policy_id':policy_id,
+                                            'plan_sha256':task['plan_sha256'],'at':now()}
+            # Human approval stays empty. Delegation is not a fabricated human
+            # approval of a previously unknown plan hash.
+            self.set_status(task,'APPROVED')
+            return self.save(db,task,'feedback_policy_authorized',task['policy_authorization'])
+
+    def revoke_feedback_policy(self, policy_id, reason):
+        if not reason.strip():
+            raise Error('Revocation reason is required')
+        with self.transaction() as db:
+            row = db.execute('SELECT id FROM feedback_policies WHERE id=?',(policy_id,)).fetchone()
+            if not row:
+                raise Error('Unknown feedback policy')
+            db.execute('UPDATE feedback_policies SET revoked_at=coalesce(revoked_at,?) WHERE id=?',(now(),policy_id))
+            for task in self.all(db):
+                if (task.get('policy_authorization') or {}).get('policy_id') != policy_id:
+                    continue
+                task['policy_authorization'] = None
+                if task['status'] in ACTIVE:
+                    task['stop_pending'] = True
+                    task['status_before_stop'] = task['status']
+                    self.set_status(task,'PAUSED')
+                elif task['status'] == 'APPROVED':
+                    self.set_status(task,'AWAITING_APPROVAL')
+                self.save(db,task,'feedback_policy_revoked',{'policy_id':policy_id,'reason':reason,'native_stop_confirmed':False})
+            self.event(db,policy_id,'feedback_policy_revoked',{'reason':reason})
+        return {'id':policy_id,'revoked':True}
 
     def provision(self, task_id):
         with self.operation(task_id):
@@ -304,7 +372,7 @@ class Coordinator:
             self.set_status(task, "PLANNING")
             return self.save(db, task, "planning_claimed", {"note": "Capacity reserved; session liveness requires native tool verification"})
 
-    def save_plan(self, task_id, plan):
+    def save_plan(self, task_id, plan, scope=None):
         if not plan.strip():
             raise Error("Plan cannot be empty")
         with self.transaction() as db:
@@ -312,16 +380,27 @@ class Coordinator:
             if task["status"] not in {"PLANNING", "AWAITING_APPROVAL", "APPROVED", "IMPLEMENTING", "TESTING", "READY_FOR_INTEGRATION"}:
                 raise Error("Task is not accepting a plan")
             self.set_status(task, "AWAITING_APPROVAL")
-            task.update(plan=plan, plan_sha256=digest(plan), approval=None, validation=None)
+            task.update(plan=plan, plan_sha256=digest(plan), plan_scope=scope, approval=None, policy_authorization=None, validation=None)
             atomic(self.home / "tasks" / task_id / "PLAN.md", plan)
             return self.save(db, task, "plan_saved", {"plan_sha256": task["plan_sha256"], "approval_invalidated": True})
 
-    def plan_guard(self, task, approved=True):
+    def plan_guard(self, task, approved=True, db=None):
         path = self.home / "tasks" / task["id"] / "PLAN.md"
         if not path.exists() or digest(read_text(path)) != task.get("plan_sha256"):
             raise Error("Plan file changed outside save-plan; submit it again for approval")
         if approved and (not task.get("approval") or task["approval"]["plan_sha256"] != task["plan_sha256"]):
-            raise Error("Current plan has no matching human approval")
+            decision = task.get('policy_authorization') or {}
+            if decision.get('kind') != 'standing_policy' or decision.get('plan_sha256') != task['plan_sha256']:
+                raise Error("Current plan has no matching human or delegated approval")
+            if db is None:
+                with self.transaction() as current:
+                    return self.plan_guard(task,approved,current)
+            row = db.execute('SELECT * FROM feedback_policies WHERE id=?',(decision['policy_id'],)).fetchone()
+            if not row or row['revoked_at']:
+                raise Error('Delegated authorization has been revoked')
+            result = evaluate(json.loads(row['data']),task.get('external_feedback'),decision['scope'])
+            if result['policy_sha256'] != decision['policy_sha256']:
+                raise Error('Delegated authorization policy changed')
 
     def approve(self, task_id, evidence):
         if not evidence.strip():
@@ -369,7 +448,7 @@ class Coordinator:
                 raise Error("Task must be approved or returning from validation")
             if task.get("stop_pending"):
                 raise Error("Previous execution must acknowledge stopping before resume")
-            self.plan_guard(task)
+            self.plan_guard(task,db=db)
             self.verify_worktree(task)
             self.dependencies_guard(task, db)
             if not self.capacity(db, task_id):
@@ -545,7 +624,7 @@ class Coordinator:
                 task = self.get(task_id, db)
                 if task["status"] not in {"IMPLEMENTING", "TESTING"}:
                     raise Error("Validation requires IMPLEMENTING or TESTING")
-                self.plan_guard(task)
+                self.plan_guard(task,db=db)
                 sha = self.verify_worktree(task, clean=True)
                 if task["sample"]:
                     self.sample_guard(task)
@@ -570,7 +649,12 @@ class Coordinator:
         allowed = {"READY_FOR_INTEGRATION", "INTEGRATING"} if integrating else {"TESTING", "READY_FOR_INTEGRATION"}
         if task["status"] not in allowed:
             raise Error("Task is not ready for integration: " + task["id"])
-        self.plan_guard(task)
+        self.plan_guard(task,db=db)
+        decision = task.get('policy_authorization')
+        if decision and not task.get('approval'):
+            changed = self.git('diff','--name-only',task['base_sha'],'HEAD',cwd=task['worktree']).splitlines()
+            if set(changed)-set(decision['scope']['paths']):
+                raise Error('Actual changes exceed delegated plan scope')
         self.dependencies_guard(task, db)
         sha = self.verify_worktree(task, clean=True)
         validation = task.get("validation") or {}
@@ -792,9 +876,20 @@ def main():
     plan = sub.add_parser("save-plan")
     plan.add_argument("id")
     plan.add_argument("--file", required=True)
+    plan.add_argument('--scope-file')
     approval = sub.add_parser("approve")
     approval.add_argument("id")
     approval.add_argument("--evidence-file", required=True)
+    grant = sub.add_parser('grant-feedback-policy')
+    grant.add_argument('--file',required=True)
+    grant.add_argument('--evidence-file',required=True)
+    authorize = sub.add_parser('authorize-feedback-plan')
+    authorize.add_argument('id')
+    authorize.add_argument('--policy',required=True)
+    authorize.add_argument('--scope-file',required=True)
+    revoke = sub.add_parser('revoke-feedback-policy')
+    revoke.add_argument('--policy',required=True)
+    revoke.add_argument('--reason',required=True)
     transition = sub.add_parser("transition")
     transition.add_argument("id")
     transition.add_argument("status", choices=sorted(STATES))
@@ -839,9 +934,15 @@ def main():
         elif command == "bind-session":
             result = coordinator.bind_session(args.id, args.thread_id, args.host_id, args.kind, read_text(args.evidence_file))
         elif command == "save-plan":
-            result = coordinator.save_plan(args.id, read_text(args.file))
+            result = coordinator.save_plan(args.id, read_text(args.file),json.loads(read_text(args.scope_file)) if args.scope_file else None)
         elif command == "approve":
             result = coordinator.approve(args.id, read_text(args.evidence_file))
+        elif command == 'grant-feedback-policy':
+            result = coordinator.grant_feedback_policy(json.loads(read_text(args.file)),read_text(args.evidence_file))
+        elif command == 'authorize-feedback-plan':
+            result = coordinator.authorize_feedback_plan(args.id,args.policy,json.loads(read_text(args.scope_file)))
+        elif command == 'revoke-feedback-policy':
+            result = coordinator.revoke_feedback_policy(args.policy,args.reason)
         elif command == "transition":
             result = coordinator.transition(args.id, args.status, args.reason)
         elif command == "set-resources":
