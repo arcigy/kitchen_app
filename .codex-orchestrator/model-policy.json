@@ -1,0 +1,6 @@
+{
+  "min_successes": 3,
+  "max_seconds": 300,
+  "max_tokens": 30000,
+  "max_credits": null
+}

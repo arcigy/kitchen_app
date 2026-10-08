@@ -1,0 +1,14 @@
+<odoo noupdate="1">
+  <record id="retry_notifications" model="ir.cron">
+    <field name="name">Arcigy: opakovanie upozornení</field>
+    <field name="model_id" ref="model_arcigy_feedback_notification"/>
+    <field name="state">code</field><field name="code">model._send_pending()</field>
+    <field name="interval_number">1</field><field name="interval_type">minutes</field>
+  </record>
+  <record id="migrate_legacy_reports" model="ir.cron">
+    <field name="name">Arcigy: doplnenie staršieho formátu hlásení</field>
+    <field name="model_id" ref="project.model_project_task"/>
+    <field name="state">code</field><field name="code">model._arcigy_migrate_legacy()</field>
+    <field name="interval_number">1</field><field name="interval_type">minutes</field>
+  </record>
+</odoo>

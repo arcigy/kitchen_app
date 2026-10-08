@@ -1,0 +1,7 @@
+state/
+logs/
+tasks/
+__pycache__/
+*.pyc
+integrations/
+worktrees/

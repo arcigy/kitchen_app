@@ -1,0 +1,9 @@
+.arcigy-feedback-cards .o_kanban_record { min-width: 280px; border-radius: 14px; padding: 18px; }
+.arcigy-feedback-detail .arcigy-feedback-text { white-space: pre-wrap; font-size: 1.1rem; line-height: 1.6; }
+.arcigy-feedback-detail summary { cursor: pointer; padding: 14px 0; font-weight: 600; }
+.arcigy-feedback-detail img { max-width: 100%; height: auto; }
+@media (max-width: 767px) {
+  .arcigy-feedback-cards .o_kanban_record { width: 100% !important; margin: 6px 0 !important; }
+  .arcigy-feedback-detail .o_statusbar_status { flex-wrap: wrap; }
+  .arcigy-feedback-detail h1 { font-size: 1.5rem; overflow-wrap: anywhere; }
+}

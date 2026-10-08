@@ -1,0 +1,9 @@
+{
+  "max_concurrency": 3,
+  "checks": [
+    ["npm", "run", "typecheck"],
+    ["npm", "test"],
+    ["npm", "run", "build"],
+    ["npm", "run", "test:ui-regression"]
+  ]
+}
