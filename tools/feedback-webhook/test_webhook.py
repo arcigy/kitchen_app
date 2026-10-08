@@ -107,6 +107,32 @@ class StoreTests(unittest.TestCase):
 
 
 class SocketE2ETests(unittest.TestCase):
+    def test_crash_socket_recovery_preserves_directory_and_durable_event(self):
+        import socket
+        with tempfile.TemporaryDirectory(prefix='arc3-',dir='/tmp') as directory:
+            path=Path(directory);socket_path=path/'r.sock';inode=path.stat().st_ino
+            spool=Store(path/'server.sqlite3');spool.accept(event(),raw())
+            # SIGKILL leaves exactly this bound but no longer listening inode.
+            with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as abandoned:
+                abandoned.bind(str(socket_path))
+            stop=threading.Event();ready=threading.Event()
+            thread=threading.Thread(target=serve,args=(spool,socket_path,0,{},'t'*32,set(),lambda _:ready.set(),stop))
+            thread.start()
+            try:
+                self.assertTrue(ready.wait(5))
+                with self.assertRaises(BlockingIOError):
+                    serve(spool,socket_path,0,{},'t'*32,set())
+                self.assertEqual(spool.pending()[0]['body'],raw())
+                self.assertEqual(path.stat().st_ino,inode)
+            finally:
+                stop.set();thread.join(5)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(path.stat().st_ino,inode)
+            socket_path.write_text('Unrelated file')
+            with self.assertRaises(ValueError):
+                serve(spool,socket_path,0,{},'t'*32,set())
+            self.assertEqual(socket_path.read_text(),'Unrelated file')
+
     def test_odoo_sender_to_spool_sse_inbox_ack_and_offline_replay(self):
         with tempfile.TemporaryDirectory(prefix='arc3-',dir='/tmp') as directory:
             path=Path(directory)

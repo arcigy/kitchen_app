@@ -2,12 +2,16 @@
 """Signed Unix-socket receiver, loopback SSE and ACK. No LLM dependency."""
 import argparse
 import base64
+import contextlib
+import fcntl
 import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 import signal
+import socket
+import stat
 from pathlib import Path
 import socketserver
 import threading
@@ -95,13 +99,46 @@ class UnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
 
 
+@contextlib.contextmanager
+def socket_owner(path):
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    directory = path.parent.stat()
+    if directory.st_uid != os.getuid() or directory.st_mode & 0o022:
+        raise ValueError('Socket directory must be owned and not writable by others')
+    descriptor = os.open(path.parent/'receiver.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, 'a') as lock:
+        info = os.fstat(lock.fileno())
+        if info.st_uid != os.getuid() or not stat.S_ISREG(info.st_mode):
+            raise ValueError('Socket lock must be an owned regular file')
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if path.exists() or path.is_symlink():
+            previous = path.lstat()
+            if previous.st_uid != os.getuid() or not stat.S_ISSOCK(previous.st_mode):
+                raise ValueError('Existing path is not an owned Unix socket')
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                probe.settimeout(1)
+                try:
+                    probe.connect(str(path))
+                except (ConnectionRefusedError, FileNotFoundError):
+                    pass
+                else:
+                    raise ValueError('An existing receiver is still listening')
+            current = path.lstat()
+            if (current.st_dev, current.st_ino) != (previous.st_dev, previous.st_ino):
+                raise ValueError('Socket ownership changed during recovery')
+            path.unlink()
+        yield
+
+
 def serve(store, unix_path, port, keys, token, allowed, ready=None, stop=None):
     if len(token) < 32:
         raise ValueError('Stream bearer token must contain at least 32 characters')
+    with socket_owner(Path(unix_path)):
+        return serve_owned(store, unix_path, port, keys, token, allowed, ready, stop)
+
+
+def serve_owned(store, unix_path, port, keys, token, allowed, ready, stop):
     path = Path(unix_path)
-    if path.exists() or path.is_symlink():
-        raise ValueError('Socket path already exists; verify previous owner before cleanup')
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     unix = UnixServer(str(path), Handler)
     os.chmod(path, 0o660)
     try:

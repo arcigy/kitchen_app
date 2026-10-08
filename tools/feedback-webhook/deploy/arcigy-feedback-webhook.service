@@ -12,6 +12,7 @@ RestartSec=5
 UMask=0077
 RuntimeDirectory=arcigy-feedback-webhook
 RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
 StateDirectory=arcigy-feedback-webhook
 StateDirectoryMode=0700
 NoNewPrivileges=yes
