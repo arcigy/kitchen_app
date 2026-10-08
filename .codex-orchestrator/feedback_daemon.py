@@ -24,6 +24,16 @@ from app_server_adapter import AppServerAdapter
 from feedback_events import Processor
 
 
+def source_connector():
+    # Keep transport and claim contracts from the same installed release. The
+    # coordinator root is state/project ownership, not a plugin installation.
+    source_path = Path(__file__).resolve().parent.parent/'plugins/arcigy-feedback/scripts/server.py'
+    spec = importlib.util.spec_from_file_location('arcigy_source_connector',source_path)
+    source = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(source)
+    return source
+
+
 def accept_delivery(value, inbox, allowed):
     if not isinstance(value,dict) or set(value) != {'seq','checksum','body'} or type(value['seq']) is not int or value['seq'] < 1:
         raise ValueError('Invalid stream delivery')
@@ -112,9 +122,7 @@ def main():
         raise ValueError('Invalid stream token')
     allowed = {tuple(row) for row in config['allowed_sources']}
     root = Path(config['coordinator_root']).resolve()
-    spec = importlib.util.spec_from_file_location('arcigy_source_connector',root/'plugins/arcigy-feedback/scripts/server.py')
-    source = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(source)
+    source = source_connector()
     c, inbox = Coordinator(root), Store(config['inbox'])
     # No config boolean can declare independent saved history a shared runtime.
     # Automatic wake remains inactive until a supported verifier is supplied.

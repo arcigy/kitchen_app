@@ -14,6 +14,7 @@ from protocol import parse_event
 from store import Store
 from feedback_events import Processor, authoritative, Ineligible
 from feedback_authorization import evaluate, policy_digest
+from feedback_daemon import source_connector
 from app_server_adapter import AppServerAdapter, RuntimeUnavailable, RuntimeBusy
 import test_coordinator as fixture
 Error=fixture.Error
@@ -209,8 +210,7 @@ class AdapterTests(unittest.TestCase):
 
 class ConnectorTests(unittest.TestCase):
     def test_claim_is_server_confirmed_not_synthesized(self):
-        spec=importlib.util.spec_from_file_location('fixture_connector',HERE.parent/'plugins/arcigy-feedback/scripts/server.py')
-        connector=importlib.util.module_from_spec(spec);spec.loader.exec_module(connector)
+        connector=source_connector()
         for value in [{'status':'working'},{'status':'implemented','claim':'op'},{'status':'working','claim':'other'}]:
             connector.call=lambda *_:value
             with self.assertRaises(ValueError):connector.execute('start_report',{'task_id':7,'operation_id':'op','worker':'fixture'})
