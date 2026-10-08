@@ -1,4 +1,10 @@
 <odoo noupdate="1">
+  <record id="retry_webhook_outbox" model="ir.cron">
+    <field name="name">Arcigy: opakovanie webhook doručenia bez LLM</field>
+    <field name="model_id" ref="model_arcigy_feedback_webhook_outbox"/>
+    <field name="state">code</field><field name="code">model._send_pending()</field>
+    <field name="interval_number">1</field><field name="interval_type">minutes</field>
+  </record>
   <record id="retry_notifications" model="ir.cron">
     <field name="name">Arcigy: opakovanie upozornení</field>
     <field name="model_id" ref="model_arcigy_feedback_notification"/>

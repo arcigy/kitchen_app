@@ -1,0 +1,6 @@
+<odoo noupdate="1">
+  <record id="webhook_cutover_config" model="ir.config_parameter">
+    <field name="key">arcigy_feedback.webhook_cutover</field>
+    <field name="value">{"enabled": false}</field>
+  </record>
+</odoo>

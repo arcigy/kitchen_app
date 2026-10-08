@@ -78,6 +78,7 @@ class FeedbackTask(models.Model):
     arcigy_manifest = fields.Json()
     arcigy_legacy = fields.Json(copy=False)
     arcigy_claim = fields.Char(copy=False)
+    arcigy_revision = fields.Integer(default=0, copy=False)
     arcigy_worker = fields.Char()
     arcigy_screenshot = fields.Many2one('ir.attachment')
     arcigy_screenshot_data = fields.Binary(related='arcigy_screenshot.datas')
@@ -268,13 +269,18 @@ class FeedbackTask(models.Model):
 
     def _arcigy_event(self, key, kind, payload):
         self.ensure_one()
+        self._arcigy_lock()
         events = self.env['arcigy.feedback.event'].sudo()
         old = events.search([('event_key', '=', key)], limit=1)
         if old:
             if old.task_id != self or old.kind != kind or old.payload != payload:
                 raise ValidationError('Udalosť má odlišný obsah.')
             return old
-        return events.create({'task_id': self.id, 'event_key': key, 'kind': kind, 'payload': payload, 'actor_id': self.env.uid})
+        self.arcigy_revision += 1
+        event = events.create({'task_id': self.id, 'event_key': key, 'kind': kind, 'payload': payload, 'actor_id': self.env.uid})
+        if kind == 'received':
+            self.env['arcigy.feedback.webhook.outbox']._capture(event)
+        return event
 
     @api.model
     def arcigy_list_reports(self, after_id=0, limit=50):
@@ -299,6 +305,9 @@ class FeedbackTask(models.Model):
         task = self._arcigy_task(task_id)
         attachments = self.env['ir.attachment'].sudo().search([('res_model', '=', 'project.task'), ('res_id', '=', task.id)])
         return {**task._arcigy_summary(), 'description': task.arcigy_body, 'comment': task.arcigy_comment,
+                'sourceId': self.env['arcigy.feedback.webhook.outbox']._configuration().get('source_id'),
+                'tenantId': task.arcigy_tenant_id, 'projectId': str(task.project_id.id),
+                'ready': task.arcigy_ready, 'revision': task.arcigy_revision, 'claim': task.arcigy_claim or None,
                 'metadata': task.arcigy_metadata or {}, 'legacy': task.arcigy_legacy or {},
                 'files': [{'id': a.id, 'name': a.name, 'size': a.file_size, 'sha256': hashlib.sha256(a.raw).hexdigest()} for a in attachments],
                 'events': [{'id': e.id, 'kind': e.kind, 'at': str(e.create_date), 'payload': e.payload} for e in task.arcigy_events]}
@@ -329,9 +338,14 @@ class FeedbackTask(models.Model):
         old = events.search([('event_key', '=', key)], limit=1)
         if old:
             task._arcigy_event(key, action, details)
-            return task._arcigy_summary()
+            return {**task._arcigy_summary(), 'claim': task.arcigy_claim or None, 'revision': task.arcigy_revision}
         if action == 'start':
             bounded(details.get('worker'), 'worker', 250)
+            expected = details.get('expected_revision')
+            if expected is not None and (type(expected) is not int or expected != task.arcigy_revision):
+                raise ValidationError('Hlásenie sa zmenilo; prečítajte ho znova.')
+            if not task.arcigy_ready:
+                raise ValidationError('Podklady hlásenia ešte nie sú úplné.')
             if task.arcigy_status == 'working' and task.arcigy_claim != operation_id:
                 raise ValidationError('Na hlásení už pracuje ' + (task.arcigy_worker or 'iný pracovník'))
             if task.arcigy_status not in ('review', 'new', 'working'):
@@ -349,7 +363,7 @@ class FeedbackTask(models.Model):
         else:
             raise ValidationError('Neplatná operácia.')
         task._arcigy_event(key, action, details)
-        return task._arcigy_summary()
+        return {**task._arcigy_summary(), 'claim': task.arcigy_claim or None, 'revision': task.arcigy_revision}
 
     @api.model
     def arcigy_record_fix(self, fix):

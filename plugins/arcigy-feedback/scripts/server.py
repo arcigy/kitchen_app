@@ -63,7 +63,7 @@ TOOLS = [
     ('prepare_reproduction', 'Priprav izolovanú lokálnu databázu, testovacieho používateľa a projekt z kompletných podkladov.',
      schema({'task_id': INT}, ['task_id']), False),
     ('start_report', 'Iba po pokyne používateľa prevezmi konkrétne hlásenie. operation_id je stabilné UUID tejto operácie, zachovaj ho pri retry.',
-     schema({'task_id': INT, 'operation_id': TEXT, 'worker': TEXT}, ['task_id', 'operation_id', 'worker']), False),
+     schema({'task_id': INT, 'operation_id': TEXT, 'worker': TEXT, 'expected_revision': {'type': 'integer', 'minimum': 0}}, ['task_id', 'operation_id', 'worker']), False),
     ('complete_report', 'Po dokončení opravy a kontrolách nastav Zapracované. Neoznačuje produkciu za opravenú.',
      schema({'task_id': INT, 'operation_id': TEXT, 'claim': TEXT, 'summary': TEXT, 'tests': TEXT}, ['task_id', 'operation_id', 'claim', 'summary', 'tests']), False),
     ('reopen_report', 'Znovu otvor konkrétne hlásenie s uvedením dôvodu; zachovaj históriu.',
@@ -136,7 +136,8 @@ def execute(name, args):
     action = {'start_report': 'start', 'complete_report': 'complete', 'reopen_report': 'reopen'}[name]
     details = {key: value for key, value in args.items() if key not in ('task_id', 'operation_id')}
     result = call('arcigy_work_report', {'task_id': args['task_id'], 'operation_id': args['operation_id'], 'action': action, 'details': details})
-    if action == 'start': result['claim'] = args['operation_id']
+    if action == 'start' and (result.get('status') != 'working' or result.get('claim') != args['operation_id']):
+        raise ValueError('Odoo did not confirm claim ownership; read the report before retrying.')
     return result
 
 
