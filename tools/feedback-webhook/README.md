@@ -93,6 +93,16 @@ Acknowledged bodies can be collected after 90 days; identifiers and checksums
 remain indefinitely. Same identity with different bytes goes to quarantine.
 Backups must include the SQLite database and WAL consistently.
 
+The systemd unit preserves the socket directory across stops and restarts so
+Odoo's directory mount remains valid. A lifetime file lock prevents two
+receivers from owning it. Startup replaces only an owned socket that no longer
+accepts connections, recovering after a crash without removing a live listener
+or an unrelated file.
+
+On macOS, a LaunchAgent may need permission to access a coordinator located in
+Documents. A foreground test launched by Codex does not prove that permission.
+Check the actual LaunchAgent error log and verify its startup independently.
+
 A crash after `turn/start` can leave an unknown result. Persisted prepared/sending
 dispatches are never resent automatically. Reconcile the dispatch marker with
 the exact shared native thread. A missing or ambiguous result needs review.
