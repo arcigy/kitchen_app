@@ -19,19 +19,28 @@ async function auditKitchenProperties(current) {
   for (const theme of ['dark', 'light']) {
     await current.locator('.account-menu-trigger').click();
     await current.locator(`.theme-picker input[value="${theme}"]`).check();
+    await current.waitForFunction(value => document.documentElement.dataset.theme === value, theme);
     await current.locator('.account-menu-trigger').click();
     for (const width of [1600, 1280]) {
       await current.setViewportSize({ width, height: 1000 });
+      await current.evaluate(() => Promise.all(document.getAnimations()
+        .filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map(animation => animation.finished.catch(() => {}))));
       const controls = await panel.locator('input[type="number"]').evaluateAll(inputs => {
         const luminance = rgb => rgb.map(v => { const n = v / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
         return inputs.map(input => {
           const style = getComputedStyle(input);
           const colors = [style.color, style.backgroundColor].map(value => luminance(value.match(/[\d.]+/g).slice(0, 3).map(Number))).sort((a, b) => a - b);
           const rect = input.getBoundingClientRect();
-          return { value: input.value, contrast: (colors[1] + .05) / (colors[0] + .05), visible: input.getClientRects().length > 0, fits: rect.left >= 0 && rect.right <= innerWidth && rect.right <= input.closest('.props-row').getBoundingClientRect().right + 1 };
+          return { label: input.closest(".props-row")?.textContent, color: style.color, background: style.backgroundColor, value: input.value, contrast: (colors[1] + .05) / (colors[0] + .05), visible: input.getClientRects().length > 0, fits: rect.left >= 0 && rect.right <= innerWidth && rect.right <= input.closest('.props-row').getBoundingClientRect().right + 1 };
         });
       });
-      assert(controls.length >= 9 && controls.every(control => control.value && control.visible && control.fits && control.contrast >= 4.5), `Kitchen numeric values are readable and fit their rows in ${theme} at ${width}px`);
+      const readable = controls.length >= 9 && controls.every(control => control.value && control.visible && control.fits && control.contrast >= 4.5);
+      if (!readable) {
+        console.log('Kitchen property audit failure', JSON.stringify({ theme, width, controls }));
+        await current.screenshot({ path: `${output}/properties-failure-${theme}-${width}.png` });
+      }
+      assert(readable, `Kitchen numeric values are readable and fit their rows in ${theme} at ${width}px`);
       const activity = await current.locator('[data-recent-activity]').evaluate(el => ({ fits: el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= innerWidth, cellCounts: [...el.children].map(row => row.children.length) }));
       assert(activity.fits && activity.cellCounts.every(count => count === 2), `Recent activity keeps its label and relative time without date overflow in ${theme} at ${width}px`);
       await panel.locator('input[type="number"]').first().scrollIntoViewIfNeeded();
