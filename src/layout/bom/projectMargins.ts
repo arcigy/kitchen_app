@@ -479,6 +479,7 @@ export function buildProjectMarginsView(
   const packagingRate = state.manufacturing.packagingRatePerM2;
   if (packagingRate) {
     const measurement = projectPackagingBoardArea(entries);
+    const missingArea = packagingRate.amount > 0 && measurement.unmeasuredBoardCount > 0;
     const amount = round(convertPriceCurrency(measurement.areaM2 * packagingRate.amount, packagingRate.currency, currency));
     const target = { scopeId: "project", itemId: "packaging-material", category: "packaging" } satisfies ProjectMarginTarget;
     drafts.push(draftItem({
@@ -491,9 +492,9 @@ export function buildProjectMarginsView(
       unit: "m2",
       baseCost: amount,
       marginPercent: state.groupMargins.packaging ?? 0,
-      missingPrice: measurement.unmeasuredBoardCount > 0
+      missingPrice: missingArea
     }));
-    if (measurement.unmeasuredBoardCount > 0) {
+    if (missingArea) {
       warnings.push({
         code: "missing_price",
         targetId: projectMarginTargetId(target),
