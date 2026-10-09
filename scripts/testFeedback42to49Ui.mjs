@@ -15,6 +15,11 @@ try{
  await installAuthSession(page,{autoStartWorkspace:false});await page.goto(baseUrl,{waitUntil:'domcontentloaded'});
  await page.waitForSelector('[data-project-manager-form]',{state:'attached'});if(!await page.locator('[data-project-manager-form]').isVisible())await page.locator('[data-project-manager-new]').click();
  await page.locator('input[name="name"]').fill(`QA Feedback 42–49 ${Date.now()}`);await page.locator('input[name="address"]').fill('QA');await page.locator('input[name="contactName"]').fill('QA');await page.locator('[data-project-manager-form] button[type="submit"]').click();await page.waitForFunction(()=>!!window.__kitchenDebug);
+ // The backsplash fixture picks the 3D surface on the axis of a centered wall.
+ // Keep its geometry explicit when the drawing default changes to interior.
+ await page.getByRole('button',{name:/^(Stena|Wall)$/}).click();
+ await page.locator('select').filter({has:page.locator('option[value="interior"]')}).selectOption('center');
+ await page.keyboard.press('Escape');
  const fixture=await page.evaluate(()=>{const api=window.__kitchenDebug;const f=api.createKitchenScenario({path:[{x:0,z:0},{x:2400,z:0}],moduleType:'fwm_catalog_base_doors',offsetAlongMm:300});api.addKitchenModule(f.group.id,{type:'fwm_catalog_base_doors',offsetAlongMm:1500});api.createWall({aMm:{x:0,z:-50},bMm:{x:2600,z:-50},thicknessMm:100});api.selectKitchenGroup(f.group.id);return f;});
  // Production toolbar, preview and confirmation; fixture setup never creates a backsplash directly.
  await page.getByRole('button',{name:/^(Upraviť kuchyňu|Edit kitchen)$/}).click();
