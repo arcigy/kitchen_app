@@ -23,7 +23,7 @@ try{
  const wallPoint=await page.evaluate(()=>window.__kitchenDebug.projectPlanPoint({x:1300,z:-50,y:1300}));await page.mouse.click(wallPoint.x,wallPoint.y);await dialog.waitFor();
  assert((await dialog.textContent()).includes('dielcov'),'Clicking a wall opens its backsplash preview');
  await dialog.getByRole('button',{name:'Zrušiť',exact:true}).click();assert(!(await snapshot()).customFurniture.some(f=>f.params.groupKind==='backsplash'),'Cancelling wall preview leaves the project unchanged');
- await page.getByRole('button',{name:'Zástena · Celá kuchyňa',exact:true}).click();
+ await page.getByRole('button',{name:'Pridať zástenu',exact:true}).click();
  await dialog.waitFor();
  assert((await dialog.textContent()).includes('dielcov'),'Automatic preview contains supported wall coverage');
  await dialog.getByLabel('Materiál zásteny',{exact:true}).selectOption({index:1});
@@ -36,7 +36,8 @@ try{
  await page.locator('button[data-quick-action="undo"]').click();assert(!(await snapshot()).customFurniture.some(f=>f.params.groupKind==='backsplash'),'Undo removes the inserted backsplash group');
  await page.locator('button[data-quick-action="redo"]').click();assert((await snapshot()).customFurniture.filter(f=>f.params.groupKind==='backsplash').length===1,'Redo restores the group and source bindings');
  await page.evaluate(id=>window.__kitchenDebug.selectKitchenGroup(id),fixture.group.id);
- await page.getByRole('button',{name:'Zástena · Celá kuchyňa',exact:true}).click();await dialog.getByRole('button',{name:'Potvrdiť zástenu',exact:true}).click();
+ await page.getByRole('button',{name:/^(Upraviť kuchyňu|Edit kitchen)$/}).click();
+ await page.getByRole('button',{name:'Pridať zástenu',exact:true}).click();await dialog.getByRole('button',{name:'Potvrdiť zástenu',exact:true}).click();
  layout=await snapshot();assert(layout.customFurniture.filter(f=>f.params.groupKind==='backsplash').length===1,'Repeated insertion updates the existing group without duplicates');
  await page.getByRole('button',{name:'Close Custom Furniture Editor',exact:true}).click();
  await page.evaluate(id=>window.__kitchenDebug.selectKitchenGroup(id),fixture.group.id);

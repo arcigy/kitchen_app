@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { isDeepStrictEqual } from 'node:util';
 import { installAuthSession } from './uiAuthSession.mjs';
+import { auditFeedback50Corrections } from './testFeedback50Corrections.mjs';
 
 const baseUrl = process.env.KITCHEN_UI_BASE_URL;
 if (!baseUrl || !['localhost', '127.0.0.1'].includes(new URL(baseUrl).hostname)) throw new Error('Isolated local runtime required');
@@ -9,12 +10,40 @@ if ((await (await fetch(new URL('/ready', baseUrl))).json()).storage !== 'file')
 const output = '.tmp/feedback-50-ui'; await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const checks = [], errors = [];
-const assert = (condition, message) => { if (!condition) throw new Error(message); checks.push(message); };
+const assert = (condition, message) => { if (!condition) throw new Error(message); checks.push(message); console.log(`PASS: ${message}`); };
 const snapshot = page => page.evaluate(() => window.__kitchenDebug.layoutSnapshot());
 let page;
+async function auditKitchenProperties(current) {
+  const panel = current.locator('.kitchen-properties-panel');
+  if (!await panel.isVisible()) await current.getByRole('button', { name: /Vlastnosti|Properties/ }).click();
+  for (const theme of ['dark', 'light']) {
+    await current.locator('.account-menu-trigger').click();
+    await current.locator(`.theme-picker input[value="${theme}"]`).check();
+    await current.locator('.account-menu-trigger').click();
+    for (const width of [1600, 1280]) {
+      await current.setViewportSize({ width, height: 1000 });
+      const controls = await panel.locator('input[type="number"]').evaluateAll(inputs => {
+        const luminance = rgb => rgb.map(v => { const n = v / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+        return inputs.map(input => {
+          const style = getComputedStyle(input);
+          const colors = [style.color, style.backgroundColor].map(value => luminance(value.match(/[\d.]+/g).slice(0, 3).map(Number))).sort((a, b) => a - b);
+          const rect = input.getBoundingClientRect();
+          return { value: input.value, contrast: (colors[1] + .05) / (colors[0] + .05), visible: input.getClientRects().length > 0, fits: rect.left >= 0 && rect.right <= innerWidth && rect.right <= input.closest('.props-row').getBoundingClientRect().right + 1 };
+        });
+      });
+      assert(controls.length >= 9 && controls.every(control => control.value && control.visible && control.fits && control.contrast >= 4.5), `Kitchen numeric values are readable and fit their rows in ${theme} at ${width}px`);
+      const activity = await current.locator('[data-recent-activity]').evaluate(el => ({ fits: el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= innerWidth, cellCounts: [...el.children].map(row => row.children.length) }));
+      assert(activity.fits && activity.cellCounts.every(count => count === 2), `Recent activity keeps its label and relative time without date overflow in ${theme} at ${width}px`);
+      await panel.locator('input[type="number"]').first().scrollIntoViewIfNeeded();
+      await current.screenshot({ path: `${output}/properties-${theme}-${width}.png` });
+    }
+  }
+  await current.setViewportSize({ width: 1600, height: 1000 });
+}
 async function createProject(label, importPackage = false) {
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   const current = await context.newPage();
+  current.setDefaultTimeout(30_000);
   current.on('pageerror', error => errors.push(String(error)));
   current.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   await installAuthSession(current, { autoStartWorkspace: false }); await current.goto(baseUrl);
@@ -27,13 +56,33 @@ async function createProject(label, importPackage = false) {
     assert(ok, 'Cabinet fixture is assigned to the isolated company'); await current.reload();
   }
   await current.waitForSelector('[data-project-manager-form]', { state: 'attached' });
+  if (await current.locator('.release-news-scrim').isVisible()) {
+    await current.locator('.release-news-acknowledge').click();
+    await current.locator('.release-news-scrim').waitFor({ state: 'detached' });
+  }
   if (!await current.locator('[data-project-manager-form]').isVisible()) await current.locator('[data-project-manager-new]').click();
   await current.locator('input[name="name"]').fill(`QA Labor ${label} ${Date.now()}`);
-  await current.locator('input[name="address"]').fill('QA'); await current.locator('input[name="contactName"]').fill('QA');
   await current.locator('[data-project-manager-form] button[type="submit"]').click();
   await current.waitForFunction(() => !!window.__kitchenDebug);
   const fixture = await current.evaluate(() => window.__kitchenDebug.createKitchenScenario({ path: [{ x: 0, z: 0 }, { x: 4000, z: 0 }], moduleType: 'fwm_catalog_base_drawers', offsetAlongMm: 200 }));
+  if (label === 'D') {
+    await current.evaluate(() => window.__kitchenDebug.createWall({ aMm: { x: 0, z: -100 }, bMm: { x: 4000, z: -100 }, thicknessMm: 200 }));
+    await current.evaluate(group => window.__kitchenDebug.selectKitchenGroup(group), fixture.group.id);
+  }
   await current.getByRole('button', { name: /^(Upraviť kuchyňu|Edit kitchen)$/ }).click();
+  assert(await current.locator('.module-catalog-body > .module-catalog-section').first().locator('.module-catalog-worktop').count() === 1, 'Worktop creation is the first action above the module catalog');
+  assert(await current.locator('.kitchen-properties-panel input[placeholder="Vyhľadať názov materiálu"]').count() > 0, 'Kitchen properties use human-readable material lookup fields');
+  assert(!await current.locator('.kitchen-properties-panel').innerText().then(text => text.includes('Module gaps')), 'Internal module-gap diagnostics are hidden from kitchen properties');
+  if (label === 'A') await auditKitchenProperties(current);
+  if (label === 'A') {
+    const beforeSelection = await snapshot(current);
+    const point = await current.evaluate(() => window.__kitchenDebug.projectPlanPoint({ x: 3000, z: 300 }));
+    await current.mouse.click(point.x, point.y);
+    await current.locator('.props-title').filter({ hasText: 'Worktop 1' }).waitFor();
+    await current.keyboard.press('Escape');
+    await current.locator('.props-title').filter({ hasText: /^(Kuchyňa|Kitchen)$/ }).waitFor();
+    assert(isDeepStrictEqual(await snapshot(current), beforeSelection), 'Escape clears the worktop wing selection while retaining the kitchen edit and all geometry');
+  }
   const id = fixture.instances[0].id;
   await current.evaluate(id => window.__kitchenDebug.selectModule(id), id);
   return { page: current, id, group: fixture.group.id };
@@ -85,15 +134,73 @@ async function save(current) {
 }
 const labor = (data, id) => data.instances.find(i => i.id === id)?.params.moduleLabor;
 try {
+  if (process.env.ARCIGY_UI_CORRECTIONS_ONLY !== '1') {
   const a = await createProject('A', true); page = a.page;
+  await page.locator('[data-workspace-nav="margins"]').click();
+  await page.waitForSelector('[data-margin-settings-panel="general"]');
+  await page.locator("[data-margin-project-controls] > summary").click();
+  assert(await page.locator("[data-margin-project-controls]").getAttribute("open") !== null, "Current compact project rates expand without replacing category filters");
+  const packagingVisible = await page.locator('[data-manufacturing-packaging-rate]').evaluate(input => {
+    const rect = input.getBoundingClientRect();
+    return !!input.closest("[data-margin-project-controls]") && rect.top >= 0 && rect.bottom <= innerHeight && rect.right <= innerWidth;
+  });
+  assert(packagingVisible, 'Packaging rate is visible inside the current expandable project rates');
+  assert(await page.locator('select[data-manufacturing-packaging-currency]').count() === 0, 'Packaging currency is fixed by the tenant without a currency selector');
+  const manufacturingControls = await page.locator('[data-manufacturing-settings]').evaluate(root => {
+    const input = root.querySelector('[data-manufacturing-packaging-rate]');
+    const checkbox = root.querySelector('[data-manufacturing-enabled]');
+    const toggle = checkbox.closest('label').getBoundingClientRect();
+    const checkboxRect = checkbox.getBoundingClientRect();
+    return { hasFieldBorder: parseFloat(getComputedStyle(input.parentElement).borderTopWidth) > 0,
+      compactToggle: toggle.height <= 24 && Math.abs(checkboxRect.left - toggle.left) <= 1 };
+  });
+  assert(manufacturingControls.hasFieldBorder && manufacturingControls.compactToggle, 'Packaging has a bordered input and manufacturing checkbox stays beside its label');
+  await page.locator('[data-manufacturing-packaging-rate]').fill('2.5');
+  const packagingSaved = page.waitForResponse(r => r.url().endsWith('/margins') && r.request().method() === 'PUT');
+  await page.locator('[data-manufacturing-save]').click();
+  const packagingResponse = await packagingSaved;
+  if (!packagingResponse.ok()) throw new Error(await packagingResponse.text());
+  const packagingView = (await packagingResponse.json()).view;
+  const packaging = packagingView.groups.find(group => group.category === 'packaging');
+  assert(packaging.items.length === 1 && packaging.items[0].quantity > 0 && packaging.baseCost === Math.round(packaging.items[0].quantity * 2.5 * 100) / 100, 'Packaging is saved through the UI and charged once for net sheet area');
+  for (const width of [1600, 960, 720]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.locator('[data-manufacturing-packaging-rate]').scrollIntoViewIfNeeded();
+    const layout = await page.locator('[data-manufacturing-settings]').evaluate(root => {
+      const scroll = root.closest('[data-margin-settings-scroll]');
+      return { fits: scroll.scrollWidth <= scroll.clientWidth + 1,
+        reachable: [...root.querySelectorAll('[data-manufacturing-packaging-rate], [data-manufacturing-packaging-currency]')].every(control => {
+          const rect = control.getBoundingClientRect();
+          return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight;
+        }) };
+    });
+    assert(layout.fits && layout.reachable, `Current project rates and packaging fit without horizontal overflow at ${width}px`);
+  }
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.screenshot({ path: `${output}/packaging-general.png` });
+  await page.locator('[data-margin-settings-tab="modules"]').click();
+  await page.locator('[data-open-module-labor]').click();
+  await page.waitForFunction(() => document.activeElement?.matches('[data-module-labor-rate]'), null, { timeout: 10_000 });
+  assert(await page.locator('[data-module-labor]').isVisible(), 'Margin module navigation opens the cabinet labor editor');
   await page.evaluate(id => window.__kitchenDebug.patchModuleParams(id, { quantity: 3 }), a.id);
   await page.evaluate(id => window.__kitchenDebug.selectModule(id), a.id);
+  await page.locator('.account-menu-trigger').click();
+  await page.locator('.theme-picker input[value="dark"]').check();
+  await page.locator('.account-menu-trigger').click();
   await page.locator('.module-parameter-preset-create').click();
   const dialog = page.locator('[data-preset-dialog]');
+  const dialogContrast = await dialog.evaluate(element => {
+    const luminance = value => value.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => { const n = v / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+    const style = getComputedStyle(element.querySelector('form'));
+    const [low, high] = [luminance(style.color), luminance(style.backgroundColor)].sort((a, b) => a - b);
+    return (high + .05) / (low + .05);
+  });
+  assert(dialogContrast >= 4.5, 'Preset dialog text is readable in the dark theme');
+  await page.screenshot({ path: `${output}/preset-dialog-dark.png` });
   await dialog.getByRole('textbox', { name: /^(Názov|Name)$/ }).fill(`QA50 ${Date.now()}`);
   await dialog.locator('textarea').fill('Labor preset regression');
   await dialog.locator('[data-create-preset-labor]').fill('200');
-  await dialog.getByLabel('Práca za jeden modul · mena', { exact: true }).selectOption('EUR');
+  assert(await dialog.locator('select').count() === 0, 'Preset creation uses a fixed tenant currency without a picker');
   const creating = page.waitForResponse(r => r.url().endsWith('/parameter-presets') && r.request().method() === 'POST');
   await dialog.locator('button[type="submit"]').click();
   const createResponse = await creating; if (!createResponse.ok()) throw new Error(await createResponse.text());
@@ -133,9 +240,17 @@ try {
   const marginResponse = await page.request.get(new URL(`/api/projects/${saved.projectId}/margins`, baseUrl).toString());
   const view = (await marginResponse.json()).view;
   assert(view.groups.find(g => g.category === 'labor').items.find(i => i.scopeId === `module:${a.id}`).baseCost === 750, 'Server charges 3 × 250 exactly once');
+  const populatedActivity = await page.locator('[data-recent-activity]').evaluate(el => ({
+    fits: el.scrollWidth <= el.clientWidth + 1,
+    rows: [...el.children].map(row => ({ cells: row.children.length, time: row.querySelector('b')?.textContent, fits: row.scrollWidth <= row.clientWidth + 1 })),
+  }));
+  assert(populatedActivity.fits && populatedActivity.rows.some(row => row.time) && populatedActivity.rows.every(row => row.cells === 2 && row.fits), 'Populated recent activity shows relative times without horizontal overflow or a date column');
   assert(Math.abs(view.summary.contribution.contributionAmount - (view.summary.finalPrice - view.summary.contribution.purchaseCost)) < 0.001, 'API contribution equals sale minus purchasing cost');
   await page.locator('[data-workspace-nav="margins"]').click();
-  await page.locator('[data-margin-group="labor"]').waitFor();
+  assert(await page.locator('[data-margin-settings-tab="modules"]').getAttribute('aria-pressed') === 'true', 'Returning to margins preserves the selected cabinet tab');
+  await page.locator('[data-margin-settings-tab="general"]').click();
+  await page.locator('[data-margin-phase-state="ready"]').waitFor();
+  await page.locator('[data-margin-group="labor"]').scrollIntoViewIfNeeded();
   assert((await page.locator('[data-margin-group="labor"]').innerText()).includes('750'), 'Margins show the full labor contribution');
   await page.screenshot({ path: `${output}/margins.png` });
   const envelope = await (await page.request.get(new URL(`/api/projects/${saved.projectId}/download`, baseUrl).toString())).text();
@@ -143,6 +258,7 @@ try {
   if (!imported.ok()) throw new Error(await imported.text());
   const restored = (await imported.json()).save;
   assert(isDeepStrictEqual(restored.appState.layout.snapshot.instances.find(i => i.id === a.id).params.moduleLabor, newRate), 'Encrypted FQP retains identity, version, currency and captured rate');
+  assert(isDeepStrictEqual(restored.appState.quoteSettings.manufacturing.packagingRatePerM2, { amount: 2.5, currency: packagingView.currency }), 'Encrypted FQP preserves the packaging rate and its currency');
   const oldSave = (await (await b.page.request.get(new URL(`/api/projects/${(await save(b.page)).projectId}/load`, baseUrl).toString())).json()).save;
   assert(oldSave.appState.layout.snapshot.instances.find(i => i.id === b.id).params.moduleLabor.inherited.rate.amount === 200, 'Reloading project B retains its old quote after library changes');
   assert(savedA.projectId === saved.projectId, 'Changes remain in the same project');
@@ -228,6 +344,10 @@ try {
   assert(isDeepStrictEqual(labor(await snapshot(page), a.id), labor(beforeDuplicate, a.id)), 'Reimporting a company package preserves the saved cabinet identity, rate and override');
   const afterRemoval = (await (await page.request.get(new URL(`/api/projects/${savedWithDuplicate.projectId}/margins`, baseUrl).toString())).json()).view;
   assert(afterRemoval.groups.find(group => group.category === 'labor').items.find(item => item.scopeId === `module:${a.id}`).baseCost === 420, 'Server retains the quote after its company package is reimported');
+
+  }
+  const correctionFixture = await createProject('D'); page = correctionFixture.page;
+  await auditFeedback50Corrections({ page, id: correctionFixture.id, snapshot, save, baseUrl, output, assert });
 
   assert(errors.length === 0, `Console errors: ${errors.join('; ')}`);
   await writeFile(`${output}/result.json`, JSON.stringify({ checks, errors }, null, 2));
