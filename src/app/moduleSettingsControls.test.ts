@@ -41,7 +41,7 @@ describe("expanded module controls", () => {
     expect(row("drawer1FrontHeightMm")?.hidden).toBe(false);
     expect(row("drawer2FrontHeightMm")?.hidden).toBe(false);
     expect(row("drawer3FrontHeightMm")?.hidden).toBe(true);
-    expect(row("bodyMaterialId")).not.toBeNull();
+    expect(row("bodyMaterialId")).toBeNull();
     for (const key of ["type", "packageHash", "bodyMaterialGroup", "frontMaterialGroup"]) expect(row(key), key).toBeNull();
     parameters.drawerCount = 3;
     controls.syncFromParams();

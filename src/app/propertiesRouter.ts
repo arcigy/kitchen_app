@@ -8,6 +8,7 @@ import { mountColumnPlacementPropsPanel, mountColumnPropsPanel, mountDoorPlaceme
 import { loadUnderlayToCanvas } from "../ui/loadUnderlay";
 import type { Material } from "../types/material";
 import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
+import type { PriceCurrency } from "../core/pricing/currency";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { AppState } from "../layout/appState";
 import type { LedStripPointMm } from "../layout/ledStripTypes";
@@ -197,6 +198,7 @@ type PropertiesRouterContext = {
   getAllMaterials: () => Material[];
   getMaterialDefinitionById: (id: string) => MaterialDefinition | null;
   catalog: ClientCatalog;
+  defaultCurrency?: PriceCurrency;
   recordActivity?: (label: string) => void;
   getManufacturingSettings?: () => ProjectManufacturingSettings;
   mountModuleCommercialProperties?: (host: HTMLElement, instanceId: string) => void;
@@ -231,8 +233,8 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
   const mountFloorProps = (floor: FloorInstance) => mountFloorPropsPanel({ props: ctx.props, getAllMaterials: ctx.getAllMaterials, floorDefault: ctx.floorDefault, rebuildFloor: ctx.rebuildFloor, updateSelectionHighlights: ctx.updateSelectionHighlights, commitHistory: ctx.commitHistory, S: ctx.S, enterFloorBoundaryEdit: ctx.enterFloorBoundaryEdit, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, floor);
   const mountSectionToolProps = () => mountSectionToolPropsPanel({ props: ctx.props, sectionDraw: ctx.sectionDraw, drawOrthoEnabled: ctx.drawOrthoEnabled });
   const mountSectionProps = (id: string) => mountSectionPropsPanel({ props: ctx.props, sections: ctx.sections, showNoProps: ctx.showNoProps, getSectionBasis, updateAllSectionVisuals: ctx.updateAllSectionVisuals, mountProps, commitHistory: ctx.commitHistory, S: ctx.S }, id);
-  const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs, renderModuleCatalogIconSvg: ctx.kitchenMode?.renderModuleCatalogIconSvg, mountModuleCommercialProperties: ctx.mountModuleCommercialProperties, getManufacturingSettings: ctx.getManufacturingSettings }, id);
-  const mountMultiModuleProps = () => mountMultiModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, ctx.selectedInstanceIds);
+  const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, defaultCurrency: ctx.defaultCurrency, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs, renderModuleCatalogIconSvg: ctx.kitchenMode?.renderModuleCatalogIconSvg, mountModuleCommercialProperties: ctx.mountModuleCommercialProperties, getManufacturingSettings: ctx.getManufacturingSettings }, id);
+  const mountMultiModuleProps = () => mountMultiModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, defaultCurrency: ctx.defaultCurrency, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, ctx.selectedInstanceIds);
   const mountWindowProps = () => mountWindowPropsPanel({
     props: ctx.props,
     windowInst: ctx.windowInst,

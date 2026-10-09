@@ -1,0 +1,33 @@
+.kitchen-properties-panel__number,
+.kitchen-properties-panel__material {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.kitchen-properties-panel__number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.kitchen-properties-panel__lookup {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.kitchen-properties-panel__lookup-status {
+  color: var(--warning);
+  overflow-wrap: anywhere;
+}
+
+.kitchen-properties-panel__lookup-status[hidden] {
+  display: none;
+}

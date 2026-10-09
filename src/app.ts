@@ -2212,6 +2212,7 @@ export function startApp(initialArgs: AppArgs) {
     floorEdit,
     floors,
     catalog: clientCatalog,
+    defaultCurrency: args.clientProfile?.defaults.currency,
     getAllMaterials: () => clientCatalog.legacyMaterials.filter((material) => material.is_public),
     getMaterialDefinitionById: (id) => clientCatalog.materials.find((material) => material.id === id) ?? null,
     columns,
@@ -4027,6 +4028,7 @@ export function startApp(initialArgs: AppArgs) {
     getPhaseId: () => projectActions.getState().currentProject?.activePhaseId,
     getScopeKey: () => JSON.stringify([args.clientContext.userId, args.clientContext.clientId, projectActions.getState().currentProject?.projectId, projectActions.getState().currentProject?.activePhaseId]),
     prepareRead: async () => { await projectPersistence?.ensureServerSnapshot(); },
+    onOpenModuleLabor: async (instanceId) => workspaceNavigationController.openModuleLabor(instanceId),
     onViewChanged: (view) => {
       projectMarginSettings = cloneJson(view.settings);
     }
@@ -4107,6 +4109,7 @@ export function startApp(initialArgs: AppArgs) {
       selectInstanceById(instanceId);
       mountProps();
     },
+    enterKitchenGroup: (groupId, instanceId) => kitchenMode?.enterExisting(groupId, instanceId),
     setDesignTopbar: () => {
       ensureLayoutMode();
       setClassicTopbarTab("architecture");

@@ -76,6 +76,42 @@ describe("createWorkspaceNavigationController", () => {
     vi.unstubAllGlobals();
   });
 
+  it.each([false, true])("opens module labor through its kitchen editor (already editing: %s)", async (editing) => {
+    const focus = vi.fn();
+    const scrollIntoView = vi.fn();
+    vi.stubGlobal("window", { requestAnimationFrame: (callback: () => void) => callback() });
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      querySelector: () => ({ scrollIntoView, querySelector: () => ({ focus }) })
+    });
+    const state = emptyAppState();
+    state.instances = [{ id: "cabinet", kitchenGroupId: "kitchen" }] as AppState["instances"];
+    state.kitchenEditMode = editing;
+    state.activeKitchenGroupId = editing ? "kitchen" : null;
+    const root = new WorkspaceFakeElement();
+    root.querySelectorAll = () => [];
+    const enterKitchenGroup = vi.fn();
+    const selectModuleById = vi.fn();
+    const controller = createWorkspaceNavigationController({
+      root: root as unknown as HTMLElement,
+      S: state,
+      catalog: { materials: [] } as unknown as ClientCatalog,
+      materialsPhase: materialsPhaseHarness(),
+      setDesignTopbar: vi.fn(), setVisualisationTopbar: vi.fn(),
+      enterKitchenGroup, selectModuleById
+    });
+    await controller.openModuleLabor("cabinet");
+    if (editing) {
+      expect(selectModuleById).toHaveBeenCalledExactlyOnceWith("cabinet");
+      expect(enterKitchenGroup).not.toHaveBeenCalled();
+    } else {
+      expect(enterKitchenGroup).toHaveBeenCalledExactlyOnceWith("kitchen", "cabinet");
+      expect(selectModuleById).not.toHaveBeenCalled();
+    }
+    expect(scrollIntoView).toHaveBeenCalledOnce();
+    expect(focus).toHaveBeenCalledOnce();
+  });
+
   it("opens sheets overlay with sheet cards and PDF import input behavior", () => {
     const createdInputs: WorkspaceFakeElement[] = [];
     vi.stubGlobal("document", {
