@@ -71,6 +71,27 @@ try {
   console.log("Wall workspace ready");
   await button(["Architektúra", "Architektura", "Architecture"]);
   await button(["Stena", "Wall"]);
+  const emptyCorner = await pixels();
+  for (const sign of [1, -1]) {
+    if (sign === -1) await space();
+    for (const turn of [-1, 1]) {
+      await click(-1000, 0); await click(1000, 0); await click(1000, turn * 1000);
+      await walls(2); await escape();
+      const corner = (await snapshot()).walls;
+      assert.deepEqual(corner[0].params.bMm, corner[1].params.aMm);
+      const farFaceX = 1000 + Math.max(0, -sign * turn * 150);
+      const overhang = await point(farFaceX + 75, sign * 75);
+      const filledWall = await point(0, sign * 75);
+      const cornerPixels = await pixels();
+      assert(colorDifference(emptyCorner, cornerPixels, filledWall) > 10, "Corner wall must be visible");
+      assert(colorDifference(emptyCorner, cornerPixels, overhang) < 10, "Corner has a T-shaped overhang beyond the vertical wall face");
+      if (sign === -1 && turn === -1) await page.screenshot({ path: path.join(output, "corner-flush.png") });
+      await page.keyboard.press("Control+z"); await walls(1);
+      await page.keyboard.press("Control+z"); await walls(0);
+      await button(["Stena", "Wall"]);
+    }
+  }
+  await space(); // restore the initial default side after the corner matrix
   await move(1000, 0);
   const blank = await pixels();
   await space(); // defaults before first endpoint
