@@ -23,7 +23,7 @@ function report(submissionId = "report-1") {
   };
 }
 
-async function send(body: ReturnType<typeof report>, fetchImpl: typeof fetch) {
+async function send(body: Omit<ReturnType<typeof report>, "title" | "description"> & { title?: string; description?: string }, fetchImpl: typeof fetch) {
   const sendJson = vi.fn();
   const handled = await handleFeedbackReportApi(
     { method: "POST", headers: { cookie: "session=yes", "idempotency-key": body.submissionId } } as never,
