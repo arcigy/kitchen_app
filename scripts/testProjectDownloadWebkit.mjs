@@ -19,13 +19,17 @@ try {
   const credentials = readUiTestCredentials();
   await page.locator('.auth-form input[name="username"]').fill(credentials.username);
   await page.locator('.auth-form input[name="password"]').fill(credentials.password);
+  const initialCatalogRequests = ["/api/catalog/bootstrap", "/api/modules"].map(pathname =>
+    page.waitForResponse(response => new URL(response.url()).pathname === pathname && response.ok())
+      .then(async response => { const failure = await response.finished(); if (failure) throw failure; }));
   await page.locator('.auth-form button[type="submit"]').click();
   await page.locator('[data-project-manager-new]').waitFor();
+  // The manager appears before catalog bootstrap finishes. Complete startup
+  // before beginning the authenticated export scenario.
+  await Promise.all(initialCatalogRequests);
   // The initial signed-out session probe returns 401 by contract. Audit the
-  // authenticated reload and export, including persistence of its login cookie.
+  // authenticated project creation, export and encrypted import.
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
-  await page.reload();
-  await page.locator('[data-project-manager-new]').waitFor();
   const news = await (await page.request.get(new URL('/api/release-news', baseUrl).toString())).json();
   const latestNotice = [...news.notices].sort((a, b) => b.date.localeCompare(a.date))[0];
   if (latestNotice && !news.acknowledgedNoticeIds.includes(latestNotice.id)) {
@@ -71,7 +75,7 @@ try {
   if (!imported.ok()) throw new Error(`FQP import roundtrip failed: HTTP ${imported.status()}`);
   const result = await imported.json();
   if (!result.save?.projectId || result.save.projectId === originalProjectId) throw new Error("FQP import did not create a project copy.");
-  if (errors.length) throw new Error(`Browser console/page errors: ${errors.join(" | ")}`);
+  if (errors.length) throw new Error(`Browser console/page errors; download URL ${download.url()}: ${errors.join(" | ")}`);
   console.log("WebKit FQP download and encrypted import-copy roundtrip passed; browser errors: 0.");
 } finally {
   await context.close();
