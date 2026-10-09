@@ -61,6 +61,7 @@ export type ProjectMarginsPanelActions = {
   onResetGroup: (groupId: string) => Promise<ProjectMarginCommitResult>;
   onCommitItem: (request: ProjectMarginItemCommitRequest) => Promise<ProjectMarginCommitResult>;
   onResetItem: (itemId: string) => Promise<ProjectMarginCommitResult>;
+  onOpenModuleLabor?: (instanceId: string) => void | Promise<void>;
 };
 
 export type ProjectMarginsPanelHandle = {
@@ -252,6 +253,13 @@ export function mountProjectMarginsPanel(
       const percent = finiteInputValue(input, PROJECT_MARGIN_PERCENT_MAX);
       if (percent == null) { globalError = "Konštrukčná práca vyžaduje platné percento."; render(); return; }
       runCommit("construction", () => actions.onCommitConstructionLabor!(percent), input);
+      return;
+    }
+
+    const openLabor = element?.closest<HTMLButtonElement>("[data-open-module-labor]");
+    const instanceId = openLabor?.dataset.openModuleLabor;
+    if (instanceId) {
+      void actions.onOpenModuleLabor?.(instanceId);
       return;
     }
 
@@ -573,7 +581,7 @@ function renderProjectControls(
     <div class="margins-project-control" data-manufacturing-settings>
       <label><strong>Prerez materiálov</strong><small>Pripočíta sa raz k čistému množstvu. Predmontáž nastavíte pri vybranej skrinke.</small></label>
       <label><input type="checkbox" data-manufacturing-enabled ${manufacturing.pricingMode === "configured" ? "checked" : ""} ${manufacturingDisabled ? "disabled" : ""} /> Použiť explicitné sadzby</label>
-      <div class="margins-project-control__editor"><div><label for="margin-board-waste">Dosky</label><input id="margin-board-waste" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Prerez dosiek %" value="${optionalNumberInputValue(manufacturing.boardWastePercent)}" data-manufacturing-board-waste ${manufacturingDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><div><label for="margin-edge-waste">Hrany</label><input id="margin-edge-waste" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Prerez hrán %" value="${optionalNumberInputValue(manufacturing.edgeWastePercent)}" data-manufacturing-edge-waste ${manufacturingDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><button type="button" data-manufacturing-save ${manufacturingDisabled ? "disabled" : ""}>${manufacturingBusy ? "Ukladám…" : "Uložiť výrobu"}</button></div>
+      <div class="margins-project-control__editor"><div><label for="margin-board-waste">Dosky</label><input id="margin-board-waste" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Prerez dosiek %" value="${optionalNumberInputValue(manufacturing.boardWastePercent)}" data-manufacturing-board-waste ${manufacturingDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><div><label for="margin-edge-waste">Hrany</label><input id="margin-edge-waste" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Prerez hrán %" value="${optionalNumberInputValue(manufacturing.edgeWastePercent)}" data-manufacturing-edge-waste ${manufacturingDisabled ? "disabled" : ""} /><span aria-hidden="true">%</span></div><label class="margins-manufacturing-packaging">Baliaci materiál / m² <span><input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Vypnuté" value="${optionalNumberInputValue(manufacturing.packagingRatePerM2?.currency === view.currency ? manufacturing.packagingRatePerM2.amount : undefined)}" data-manufacturing-packaging-rate ${manufacturingDisabled ? "disabled" : ""} /><span data-manufacturing-packaging-currency>${escapeHtml(view.currency)}</span></span>${manufacturing.packagingRatePerM2 && manufacturing.packagingRatePerM2.currency !== view.currency ? `<small>Uložená sadzba používa inú menu. Bez nového zadania zostane zachovaná. Novú sumu zadajte v ${escapeHtml(view.currency)}.</small>` : ""}</label><button type="button" data-manufacturing-save ${manufacturingDisabled ? "disabled" : ""}>${manufacturingBusy ? "Ukladám…" : "Uložiť výrobu"}</button></div>
       <small>Bez vyplnenej sadzby zostane cena označená ako neúplná. Hodnota 0 je platná sadzba.</small>
     </div>
     </section>
@@ -616,6 +624,14 @@ function manufacturingFromPanel(view: ProjectMarginsView, root: HTMLElement): Pr
   if (enabled) next.pricingMode = enabled.checked ? "configured" : "legacy";
   next.boardWastePercent = boardWastePercent;
   next.edgeWastePercent = edgeWastePercent;
+  const packagingInput = root.querySelector<HTMLInputElement>("[data-manufacturing-packaging-rate]");
+  if (packagingInput) {
+    const packagingAmount = optionalRate(packagingInput);
+    if (packagingAmount === "invalid") return null;
+    if (packagingAmount === null) {
+      if (!current.packagingRatePerM2 || current.packagingRatePerM2.currency === view.currency) delete next.packagingRatePerM2;
+    } else next.packagingRatePerM2 = { amount: packagingAmount, currency: view.currency };
+  }
   next.preassemblyByInstanceId = { ...current.preassemblyByInstanceId };
   for (const input of root.querySelectorAll<HTMLInputElement>("[data-preassembly-instance]")) {
     const rate = optionalRate(input);
@@ -717,9 +733,10 @@ function renderMarginScopeSettings(
   const groups = view.groups
     .map((group) => ({ group, items: selected.items.filter((item) => item.category === group.category && matchesMarginSearch(item, query, filter, group.label, String(scopeNumber))) }))
     .filter(({ items }) => items.length > 0);
+  const selectedInstanceId = kind === "module" ? selected.id.replace(/^module:/, "") : null;
   return `<section class="materials-scope-settings margins-scope-settings" data-margin-settings-panel="${kind === "module" ? "modules" : "additions"}" aria-label="${escapeHtml(selected.label)}">
     <header><div><h2>${scopeNumber}. ${escapeHtml(selected.label)}</h2><p>Položky dedia maržu kategórie. Vlastnú maržu uložíte klávesom Enter alebo odchodom z poľa.</p></div>
-    <label>Vybrať ${kind === "module" ? "skrinku" : "dielec alebo doplnok"}<select data-margin-scope-select="true">${scopes.map((scope) => `<option value="${escapeHtml(scope.id)}" ${scope.id === selected.id ? "selected" : ""}>${allScopes.indexOf(scope) + 1}. ${escapeHtml(scope.label)}</option>`).join("")}</select></label></header>
+    <label>Vybrať ${kind === "module" ? "skrinku" : "dielec alebo doplnok"}<select data-margin-scope-select="true">${scopes.map((scope) => `<option value="${escapeHtml(scope.id)}" ${scope.id === selected.id ? "selected" : ""}>${allScopes.indexOf(scope) + 1}. ${escapeHtml(scope.label)}</option>`).join("")}</select></label>${selectedInstanceId ? `<button type="button" data-open-module-labor="${escapeHtml(selectedInstanceId)}">Upraviť prácu za modul</button>` : ""}</header>
     <p class="margins-results" role="status">${scopes.length} z ${allScopes.length} ${kind === "module" ? "skriniek" : "dielcov a doplnkov"} · ${groups.reduce((count, group) => count + group.items.length, 0)} z ${selected.items.length} položiek vybraného objektu</p>
     ${kind === "module" ? renderPreassemblyInputs(view, normalizeProjectManufacturingSettings(view.settings.manufacturing), disabled || busyKeys.has("manufacturing"), selected.id) : ""}
     <div class="materials-scope-groups">${groups.map(({ group, items }) => `<section class="materials-scope-group margins-scope-group" data-margin-scope-group="${escapeHtml(group.category)}"><h3>${escapeHtml(group.label)}</h3>${items.map((item) => renderScopeItem(view, item, disabled, busyKeys)).join("")}</section>`).join("")}</div>

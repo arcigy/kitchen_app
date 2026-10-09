@@ -35,6 +35,7 @@ export type ProjectQuoteSummary = {
   boardsCost: number;
   edgesCost: number;
   hardwareCost: number;
+  packagingCost: number;
   materialCost: number;
   moduleLaborCost: number;
   additionalLaborCost: number;
@@ -103,7 +104,8 @@ export function buildProjectQuoteSummary(
   const boardsCost = round(entries.reduce((sum, entry) => sum + money(entry, entry.result.pricing.groups.boards.cost), 0));
   const edgesCost = round(entries.reduce((sum, entry) => sum + money(entry, entry.result.pricing.groups.edge_bands.cost), 0));
   const hardwareCost = round(entries.reduce((sum, entry) => sum + money(entry, entry.result.pricing.groups.hardware.cost), 0));
-  const materialCost = round(boardsCost + edgesCost + hardwareCost);
+  const packagingCost = marginView.groups.find(group => group.category === "packaging")?.baseCost ?? 0;
+  const materialCost = round(boardsCost + edgesCost + hardwareCost + packagingCost);
   const moduleLaborCost = round(entries.reduce((sum, entry) => sum + money(entry, entry.result.pricing.laborCostFixed), 0));
   const constructionLaborCost = marginView.constructionLabor?.amount ?? 0;
   const laborCostTotal = round(moduleLaborCost + additionalLaborCost + constructionLaborCost);
@@ -118,6 +120,7 @@ export function buildProjectQuoteSummary(
     boardsCost,
     edgesCost,
     hardwareCost,
+    packagingCost,
     materialCost,
     moduleLaborCost,
     additionalLaborCost,
@@ -131,7 +134,7 @@ export function buildProjectQuoteSummary(
     contribution: marginView.summary.contribution,
     formulas: {
       boardPricing: "pricedAreaM2 = netAreaM2 * wasteMultiplier",
-      materialCost: "boards + edge bands + hardware",
+      materialCost: "boards + edge bands + hardware + packaging",
       laborCost: "module labor + additional project labor",
       subtotalBeforeMargin: "materialCost + laborCostTotal",
       marginAmount: "sum(lineCost * effectiveMarginPercent / 100)",

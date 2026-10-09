@@ -109,6 +109,30 @@ function buildDelfiMarginsView(
 }
 
 describe("project margin calculation", () => {
+  it("charges the configured packaging rate once for net board area across the project", () => {
+    const board = (id: string, areaM2: number, quantity = 1) => ({
+      ...pricedItem({ id, cost: 0, quantity }),
+      quantity,
+      dimensionsMm: { length: 1000, width: 1000, thickness: 12 },
+      metrics: { areaM2, billableAreaM2: areaM2 * 1.25 }
+    });
+    const entries = [
+      entry({ instanceId: "a", items: [board("thin-back", 4)] }),
+      entry({ instanceId: "b", items: [board("worktop", 6)] })
+    ];
+    const state = initializedState({ manufacturing: {
+      ...createDefaultProjectMarginSettingsState().manufacturing,
+      packagingRatePerM2: { amount: 2.5, currency: "CZK" }
+    } });
+
+    const quote = buildProjectQuoteSummary(entries, state, { currency: "CZK" });
+    expect(quote.packagingCost).toBe(25);
+    expect(quote.materialCost).toBe(25);
+    expect(quote.marginView.groups.find(group => group.category === "packaging")).toMatchObject({ baseCost: 25, marginAmount: 0, finalPrice: 25 });
+    expect(quote.finalPrice).toBe(25);
+    expect(buildProjectQuoteSummary(entries, JSON.parse(JSON.stringify(quote.marginView.settings)), { currency: "CZK" }).packagingCost).toBe(25);
+  });
+
   it("leaves the standard margin summary unchanged unless a tenant policy enables the metric", () => {
     const entries = [entry({ instanceId: "a", items: [pricedItem({ id: "board", cost: 100 })] })];
     const view = buildProjectMarginsView(entries, initializedState());

@@ -167,7 +167,7 @@ function assignedPriceResolution(
   targetCurrency: PriceCurrency,
   moduleQuantity: number
 ): AssignedPriceResolution | null {
-  if (category === "labor") return null;
+  if (category === "labor" || category === "packaging") return null;
   if (item.backsplashPurchase) return null;
   // A recipe is already one manufactured final material. Its layer snapshot must
   // not be replaced by the generic board assignment and counted twice.
@@ -331,14 +331,34 @@ function projectSheetMaterialArea(entries: readonly ProjectPricingView[], minimu
   return { areaM2: round(areaM2, 6), unmeasuredBoardCount };
 }
 
+function projectPackagingBoardArea(entries: readonly ProjectPricingView[]): { areaM2: number; unmeasuredBoardCount: number } {
+  let areaM2 = 0;
+  let unmeasuredBoardCount = 0;
+  for (const entry of entries) {
+    for (const item of entry.result.quoteBom.items) {
+      if (item.itemType !== "board" || item.quantity === 0) continue;
+      if (!Number.isFinite(item.quantity) || item.quantity < 0) {
+        unmeasuredBoardCount += 1;
+        continue;
+      }
+      const area = netBoardAreaM2(item);
+      if (area == null) unmeasuredBoardCount += 1;
+      else areaM2 += area;
+    }
+  }
+  return { areaM2: round(areaM2, 6), unmeasuredBoardCount };
+}
+
 function groupMetadata(category: ProjectMarginCategory): { label: string; description: string } {
   if (category === "labor") return { label: "Práca", description: "Modulová a dodatočná projektová práca" };
+  if (category === "packaging") return { label: "Baliaci materiál", description: "Jednorazová sadzba za čistú plochu doskových dielcov projektu" };
   const definition = getMaterialAssignmentCategoryDefinition(category);
   return { label: definition.label, description: definition.description };
 }
 
 const ORDERED_CATEGORIES: readonly ProjectMarginCategory[] = [
   ...MATERIAL_ASSIGNMENT_CATEGORIES.map((definition) => definition.category),
+  "packaging",
   "labor"
 ];
 
@@ -456,6 +476,32 @@ export function buildProjectMarginsView(
     }), laborManaged: entry.laborManaged });
   }
 
+  const packagingRate = state.manufacturing.packagingRatePerM2;
+  if (packagingRate) {
+    const measurement = projectPackagingBoardArea(entries);
+    const amount = round(convertPriceCurrency(measurement.areaM2 * packagingRate.amount, packagingRate.currency, currency));
+    const target = { scopeId: "project", itemId: "packaging-material", category: "packaging" } satisfies ProjectMarginTarget;
+    drafts.push(draftItem({
+      state,
+      target,
+      label: "Baliaci materiál",
+      scopeLabel: "Projekt",
+      resourceLabel: `${measurement.areaM2.toFixed(3)} m² × ${packagingRate.amount.toFixed(2)} ${packagingRate.currency}/m²`,
+      quantity: measurement.areaM2,
+      unit: "m2",
+      baseCost: amount,
+      marginPercent: state.groupMargins.packaging ?? 0,
+      missingPrice: measurement.unmeasuredBoardCount > 0
+    }));
+    if (measurement.unmeasuredBoardCount > 0) {
+      warnings.push({
+        code: "missing_price",
+        targetId: projectMarginTargetId(target),
+        message: `Baliaci materiál: plochu nemožno určiť pre ${measurement.unmeasuredBoardCount} doskových dielcov.`
+      });
+    }
+  }
+
   const projectLaborTarget = { scopeId: "project", itemId: "additional-labor", category: "labor" } satisfies ProjectMarginTarget;
   const projectLaborTargetId = projectMarginTargetId(projectLaborTarget);
   if (seenTargetIds.has(projectLaborTargetId)) throw new Error(`Duplicate project margin target ${projectLaborTargetId} in the current BOM.`);
@@ -510,7 +556,7 @@ export function buildProjectMarginsView(
       ...metadata,
       contribution: projectContribution(category === "labor" ? 0 : baseCents / 100, (baseCents + marginCents) / 100, category === "labor" ? (baseCents + marginCents) / 100 : 0),
       baseCost: baseCents / 100,
-      marginPercent: state.groupMargins[category] ?? state.defaultMarginPercent,
+      marginPercent: state.groupMargins[category] ?? (category === "packaging" ? 0 : state.defaultMarginPercent),
       combinedMarginPercent: combinedPercent(baseCents, marginCents),
       marginAmount: marginCents / 100,
       finalPrice: (baseCents + marginCents) / 100,

@@ -1,3 +1,5 @@
+import { isPriceCurrency, type PriceCurrency } from "../pricing/currency";
+
 export const PROJECT_MANUFACTURING_SETTINGS_SCHEMA_VERSION = 1 as const;
 
 export type ManufacturingRecipeOperationBasis = "area" | "length" | "pieces" | "fixed";
@@ -53,6 +55,7 @@ export type ProjectManufacturingSettings = {
   /** A cabinet instance wins over the preset and module type. Null deliberately means missing. */
   preassemblyByInstanceId: Record<string, number | null>;
   recipeSnapshots: Record<string, ManufacturingRecipeSnapshot>;
+  packagingRatePerM2?: { amount: number; currency: PriceCurrency };
 };
 
 export function createDefaultProjectManufacturingSettings(): ProjectManufacturingSettings {
@@ -100,6 +103,7 @@ export function normalizeProjectManufacturingSettings(value: unknown): ProjectMa
     return createDefaultProjectManufacturingSettings();
   }
   const recipes = record(input.recipeSnapshots) ?? {};
+  const packagingRate = record(input.packagingRatePerM2);
   return {
     schemaVersion: PROJECT_MANUFACTURING_SETTINGS_SCHEMA_VERSION,
     pricingMode: input.pricingMode === "configured" ? "configured" : "legacy",
@@ -113,7 +117,10 @@ export function normalizeProjectManufacturingSettings(value: unknown): ProjectMa
     recipeSnapshots: Object.fromEntries(Object.entries(recipes).flatMap(([id, recipe]) => {
       const candidate = recipe as ManufacturingRecipeSnapshot;
       return candidate && typeof candidate === "object" && candidate.id === id ? [[id, structuredClone(candidate)]] : [];
-    }))
+    })),
+    ...(packagingRate && typeof packagingRate.amount === "number" && Number.isFinite(packagingRate.amount) && packagingRate.amount >= 0 && isPriceCurrency(packagingRate.currency)
+      ? { packagingRatePerM2: { amount: packagingRate.amount, currency: packagingRate.currency } }
+      : {})
   };
 }
 
