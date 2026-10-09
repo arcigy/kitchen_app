@@ -1,4 +1,5 @@
 import html2canvas from "html2canvas";
+import { normalizeFeedbackText } from "../core/feedback/feedbackText";
 
 export type FeedbackKind = "bug" | "feature_request" | "improvement" | "question" | "other";
 
@@ -179,8 +180,8 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
         <p>Spolu s popisom sa pripojí screenshot celej viditeľnej Arcigy aplikácie, aktuálny snapshot projektu a technická diagnostika vrátane posledných dvoch minút bezpečných akcií a chýb. Nezaznamenávajú sa texty z polí formulára ani obrazovka mimo Arcigy.</p>
         <form id="feedback-report-form" novalidate>
           <label>Typ<select name="kind">${FEEDBACK_KINDS.map((kind) => `<option value="${kind.value}">${kind.label}</option>`).join("")}</select></label>
-          <label>Stručný názov problému<input name="title" maxlength="180" required></label>
-          <label>Presný opis<textarea name="description" maxlength="8000" required></textarea></label>
+          <label>Stručný názov problému<input name="title" maxlength="180"></label>
+          <label>Presný opis<textarea name="description" maxlength="8000"></textarea></label>
           <label>Doplňujúci komentár<textarea name="comment" maxlength="4000"></textarea></label>
           ${screenshotDataUrl ? `<img class="feedback-report-preview" alt="Náhľad pripojeného screenshotu celej aplikácie" src="${screenshotDataUrl}">` : "<p>Screenshot celej viditeľnej Arcigy aplikácie nie je v tomto okamihu dostupný. Report sa neodošle bez neho.</p>"}
           <label class="feedback-report-consent"><input type="checkbox" name="consent" required> Rozumiem, že môj projekt, technické údaje a bezpečná dvojminútová diagnostická stopa budú pripojené k Odoo úlohe.</label>
@@ -206,11 +207,16 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!form.reportValidity()) return;
+      const data = new FormData(form);
+      const feedbackText = normalizeFeedbackText(data.get("title"), data.get("description"), data.get("comment"));
+      if (!feedbackText) {
+        status.textContent = "Vyplňte názov alebo opis problému.";
+        return;
+      }
       if (!screenshotDataUrl) {
         status.textContent = "Screenshot celej viditeľnej Arcigy aplikácie nie je dostupný. Skúste report odoslať po načítaní projektu.";
         return;
       }
-      const data = new FormData(form);
       const submitButton = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
       submitButton.disabled = true;
       status.textContent = "Odosielam…";
@@ -218,9 +224,7 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
         const body = {
           submissionId: requestId,
           kind: data.get("kind"),
-          title: data.get("title"),
-          description: data.get("description"),
-          comment: data.get("comment"),
+          ...feedbackText,
           consent: data.get("consent") === "on",
           screenshotDataUrl,
           projectSnapshot: ctx.buildProjectSnapshot(),
