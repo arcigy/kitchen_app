@@ -11,7 +11,7 @@ assert(baseUrl, "Set KITCHEN_UI_BASE_URL to an isolated test service");
 assert(["127.0.0.1", "localhost"].includes(new URL(baseUrl).hostname), "Wall regression requires a local synthetic service");
 assert(!["5180", "5191"].includes(new URL(baseUrl).port), "Use a task-owned port");
 const readiness = await fetch(new URL("/ready", baseUrl));
-assert(readiness.ok() && (await readiness.json()).storage === "file", "Wall regression requires disposable file storage");
+assert(readiness.ok && (await readiness.json()).storage === "file", "Wall regression requires disposable file storage");
 const output = path.join(process.env.ARCIGY_TASK_RUNTIME ?? "outputs", "wall-drawing");
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
