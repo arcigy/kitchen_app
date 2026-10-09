@@ -3,7 +3,7 @@ import { createEmptyProjectMaterialAssignmentsState } from "../../core/project-m
 import type { ProjectMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import { createProjectActions } from "./projectActions";
-import { createProject, loadProject, saveProject } from "./projectApi";
+import { createProject, downloadProject, loadProject, saveProject } from "./projectApi";
 
 vi.mock("./projectApi", () => ({
   createProject: vi.fn(),
@@ -107,6 +107,20 @@ describe("project actions", () => {
       7
     );
     expect(actions.getState().saveRevision).toBe(8);
+  });
+
+  it("saves the current edits before downloading and stops if that save fails", async () => {
+    const actions = createProjectActions({ buildAppState: () => appState, restoreSave: vi.fn(), onProjectChanged: vi.fn(), initialProject: project });
+    vi.mocked(saveProject).mockResolvedValueOnce(saveWithRevision(1));
+
+    await actions.download();
+
+    expect(saveProject).toHaveBeenCalledOnce();
+    expect(downloadProject).toHaveBeenCalledWith(project);
+
+    vi.mocked(saveProject).mockRejectedValueOnce(new Error("save failed"));
+    await expect(actions.download()).rejects.toThrow("save failed");
+    expect(downloadProject).toHaveBeenCalledOnce();
   });
 
   it("coalesces concurrent saves into one revision-checked server write", async () => {

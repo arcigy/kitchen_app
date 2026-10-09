@@ -131,6 +131,7 @@ function field(label: string, required = false) {
   const input = document.createElement("input");
   input.type = "text";
   input.autocomplete = "off";
+  input.required = required;
   wrap.append(span, input);
   return { wrap, input };
 }
@@ -573,9 +574,9 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
   }
   const fields = {
     name: field(t("Project name"), true),
-    address: field(t("Address"), true),
+    address: field(t("Address")),
     city: field(t("City")),
-    contactName: field(t("Contact"), true),
+    contactName: field(t("Contact")),
     email: field(t("Email")),
     phone: field(t("Phone")),
     notes: field(t("Note"))
@@ -629,8 +630,8 @@ export function renderProjectManager(args: ProjectManagerArgs): void {
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const input = collectProjectInput(form);
-    if (!input.name || !input.address || !input.contactName) {
-      setStatus(args.root, t("Please enter the project name, address and contact."), "error");
+    if (!input.name) {
+      setStatus(args.root, t("Please enter the project name."), "error");
       return;
     }
     const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");

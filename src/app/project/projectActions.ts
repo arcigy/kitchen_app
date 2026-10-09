@@ -109,6 +109,7 @@ export function createProjectActions(args: {
     save: saveCurrent,
     async download() {
       if (!state.currentProject) throw new Error("Create or load a project before downloading.");
+      await saveCurrent();
       await downloadProject(state.currentProject);
     },
     async loadCurrent() {

@@ -164,7 +164,7 @@ export const CZECH_SYSTEM_TEXT: Readonly<Record<string, string>> = {
   Note: "Poznámka",
   "Loading project list…": "Načítám seznam projektů…",
   "Project manager is ready.": "Správce projektů je připraven.",
-  "Please enter the project name, address and contact.": "Vyplňte název projektu, adresu a kontakt.",
+  "Please enter the project name.": "Vyplňte název projektu.",
   "Creating project": "Vytvářím projekt",
   "Opening blank workspace": "Otevírám prázdné pracovní prostředí",
   "Importing project": "Importuji projekt",
