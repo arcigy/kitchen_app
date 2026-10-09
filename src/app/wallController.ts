@@ -19,7 +19,7 @@ import { SNAP_DISTANCE_PX } from "./snapToolProfiles";
 import { DEFAULT_WALL_MITER_LIMIT, solveWallNetwork } from "../walls2d/solver";
 import type { AppState } from "../layout/appState";
 import { type WallJustification } from "../walls2d/model";
-import { getWallTypeName, getWallTypePreset, resolveWallTypeId } from "./wallTypes";
+import { CUSTOM_WALL_TYPE_ID, getWallTypeName, getWallTypePreset, resolveWallTypeId } from "./wallTypes";
 import {
   fromMmPoint,
   joinExtensionM as computeJoinExtensionM,
@@ -93,7 +93,13 @@ type WallCutoutBounds = {
   holeY1: number;
 };
 
+export type WallExteriorFlipTarget = { kind: "defaults" } | { kind: "wall"; wallId: string };
+
 export type WallControllerContext = {
+  getWallDrawPreview: () => { preview: THREE.Mesh | null; a: THREE.Vector3 | null; hoverB: THREE.Vector3 | null } | null;
+  mountProps: () => void;
+  updateWindowTransform: (inst: WindowInstance) => void;
+  updateDoorTransform: (inst: DoorInstance) => void;
   reconcileMountedModules?: () => boolean;
   walls: WallInstance[];
   instances: LayoutInstance[];
@@ -2229,13 +2235,18 @@ export function createWallController(ctx: WallControllerContext) {
     const b = refB ?? a.clone();
     const center = wallRefLineToCenterLine(a, b, thicknessMm, justification, exteriorSign);
     updateWallMesh(mesh, center.a, center.b, thicknessMm, heightMm);
+    if (mesh.name === "wallPreview") mesh.visible = a.distanceToSquared(b) >= 1e-12;
   }
 
   function makeWallPreviewMesh(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) {
     const mesh = createWallMesh(a, b, thicknessMm);
+    mesh.name = "wallPreview";
+    mesh.userData.viewDisplaySkipMaterialRestore = true;
+    mesh.visible = a.distanceToSquared(b) >= 1e-12;
     const m = mesh.material as THREE.MeshBasicMaterial;
     m.transparent = true;
     m.opacity = 0.5;
+    m.depthWrite = false;
     return mesh;
   }
 
@@ -2396,7 +2407,10 @@ export function createWallController(ctx: WallControllerContext) {
     if (idx >= 0) walls.splice(idx, 1);
   };
 
-  function addWall(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number): WallInstance | null {
+  function addWall(a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number, options: { joinEndpoints?: boolean } = {}): WallInstance | null {
+    const aMm = toMmPoint(a);
+    const bMm = toMmPoint(b);
+    if (aMm.x === bMm.x && aMm.z === bMm.z) return null;
     const id = ctx.nextWallId();
     const params: WallParams = {
       typeId: resolveWallTypeId(wallDefault),
@@ -2405,8 +2419,8 @@ export function createWallController(ctx: WallControllerContext) {
       materialId: wallDefault.materialId,
       justification: wallDefault.justification,
       exteriorSign: wallDefault.exteriorSign,
-      aMm: toMmPoint(a),
-      bMm: toMmPoint(b)
+      aMm,
+      bMm
     };
 
     const inst = createWallInstanceFromParams(id, params);
@@ -2420,8 +2434,37 @@ export function createWallController(ctx: WallControllerContext) {
       return null;
     }
 
+    if (options.joinEndpoints) {
+      autoJoinAtMmPoint(aMm);
+      autoJoinAtMmPoint(bMm);
+    }
     commitHistory(S);
     return inst;
+  }
+
+  function flipWallExterior(target: WallExteriorFlipTarget): boolean {
+    if (target.kind === "defaults") {
+      wallDefault.exteriorSign = wallDefault.exteriorSign === 1 ? -1 : 1;
+      wallDefault.typeId = CUSTOM_WALL_TYPE_ID;
+      const draft = ctx.getWallDrawPreview();
+      if (draft?.preview && draft.a) {
+        updateWallMeshWithJustification(draft.preview, draft.a, draft.hoverB ?? draft.a, wallDefault.thicknessMm, wallDefault.justification, wallDefault.exteriorSign);
+      }
+      setUnderlayStatus("Stena: prehodený exteriér. Space = prehodiť, Esc = ukončiť reťaz.");
+    } else {
+      const wall = walls.find(item => item.id === target.wallId);
+      if (!wall || pinnedWallIds.has(wall.id)) return false;
+      wall.params.exteriorSign = (wall.params.exteriorSign ?? 1) === 1 ? -1 : 1;
+      wall.params.typeId = CUSTOM_WALL_TYPE_ID;
+      for (const item of walls) rebuildWall(item);
+      rebuildWallPlanMesh();
+      for (const inst of getWindowInsts()) ctx.updateWindowTransform(inst);
+      for (const inst of getDoorInsts()) ctx.updateDoorTransform(inst);
+      ctx.updateSelectionHighlights?.();
+      commitHistory(S);
+    }
+    ctx.mountProps();
+    return true;
   }
 
   function duplicateWall(id: string, offsetMm = { x: 300, z: 300 }): WallInstance | null {
@@ -2475,6 +2518,7 @@ export function createWallController(ctx: WallControllerContext) {
     makeWallPreviewMesh,
     rebuildWall,
     addWall,
+    flipWallExterior,
     duplicateWall
   };
 }

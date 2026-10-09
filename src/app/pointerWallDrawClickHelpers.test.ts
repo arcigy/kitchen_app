@@ -434,7 +434,7 @@ describe("pointer wall draw click helpers", () => {
     expect(addPreviewToLayout).toHaveBeenCalledWith(preview);
     expect(state.preview).toBe(preview);
     expect(updateWallMeshWithJustification).toHaveBeenCalledWith(preview, state.a, state.a, 120, "exterior", -1);
-    expect(setStatus).toHaveBeenCalledWith("Wall: second point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
+    expect(setStatus).toHaveBeenCalledWith("Wall: second point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Space = flip exterior, Ctrl/Cmd+click = select, Esc = stop)");
   });
 
   it("reuses existing preview and chain start", () => {
@@ -475,11 +475,9 @@ describe("pointer wall draw click helpers", () => {
       wallTypedHud: { style: { display: "block" } },
       snapAxisXZ: vi.fn(),
       addWall,
-      autoJoinAtMmPoint: vi.fn(),
       clearWallDrawState: vi.fn(),
       updateWallMeshWithJustification: vi.fn(),
       setStatus: vi.fn(),
-      selectWall: vi.fn()
     });
 
     expect(result).toBe(false);
@@ -499,11 +497,9 @@ describe("pointer wall draw click helpers", () => {
       wallTypedHud: { style: { display: "block" } },
       snapAxisXZ: vi.fn((_: THREE.Vector3, b: THREE.Vector3) => b.clone()),
       addWall: vi.fn(() => null),
-      autoJoinAtMmPoint: vi.fn(),
       clearWallDrawState: vi.fn(),
       updateWallMeshWithJustification,
       setStatus: vi.fn(),
-      selectWall: vi.fn()
     });
 
     expect(result).toBe(false);
@@ -511,7 +507,7 @@ describe("pointer wall draw click helpers", () => {
     expect(updateWallMeshWithJustification).not.toHaveBeenCalled();
   });
 
-  it("ends wall draw segment, continues chain, updates preview, and selects wall", () => {
+  it("ends wall draw segment, continues chain, updates preview, without selecting the committed segment", () => {
     const preview = makeMesh();
     const state = wallDraw({ active: true, a: new THREE.Vector3(0, 0, 0), preview, typedMm: "500" });
     const wallTypedHud = { style: { display: "block" } };
@@ -530,16 +526,13 @@ describe("pointer wall draw click helpers", () => {
       wallTypedHud,
       snapAxisXZ: vi.fn((_: THREE.Vector3, b: THREE.Vector3) => b.clone()),
       addWall: vi.fn(() => wall),
-      autoJoinAtMmPoint,
       clearWallDrawState: vi.fn(),
       updateWallMeshWithJustification,
       setStatus,
-      selectWall
     });
 
     expect(result).toBe(true);
-    expect(autoJoinAtMmPoint).toHaveBeenNthCalledWith(1, wall.params.aMm);
-    expect(autoJoinAtMmPoint).toHaveBeenNthCalledWith(2, wall.params.bMm);
+    expect(autoJoinAtMmPoint).not.toHaveBeenCalled();
     expect(state.segments).toBe(1);
     expect(state.active).toBe(true);
     expect(state.a).toEqual(new THREE.Vector3(2, 0, 0));
@@ -548,8 +541,8 @@ describe("pointer wall draw click helpers", () => {
     expect(state.typedMm).toBe("");
     expect(wallTypedHud.style.display).toBe("none");
     expect(updateWallMeshWithJustification).toHaveBeenCalledWith(preview, state.a, state.a, 120, "interior", -1);
-    expect(setStatus).toHaveBeenCalledWith("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
-    expect(selectWall).toHaveBeenCalledWith("wall_2");
+    expect(setStatus).toHaveBeenCalledWith("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Space = flip exterior, Ctrl/Cmd+click = select, Esc = stop)");
+    expect(selectWall).not.toHaveBeenCalled();
   });
 
   it("closes wall draw chain after adding closing wall without selecting it", () => {
@@ -576,11 +569,9 @@ describe("pointer wall draw click helpers", () => {
       wallTypedHud,
       snapAxisXZ: vi.fn((_: THREE.Vector3, b: THREE.Vector3) => b.clone()),
       addWall: vi.fn(() => makeWall("wall_close", { x: 0, z: 0 })),
-      autoJoinAtMmPoint: vi.fn(),
       clearWallDrawState,
       updateWallMeshWithJustification: vi.fn(),
       setStatus,
-      selectWall
     });
 
     expect(result).toBe(true);
@@ -605,17 +596,15 @@ describe("pointer wall draw click helpers", () => {
     const clearWallDrawState = vi.fn();
 
     const result = finishWallDrawAfterAddedWall({
-      wall: makeWall("wall_close", { x: 0, z: 0 }),
+      end: new THREE.Vector3(0, 0, 0),
       closes: true,
       wallDraw: state,
       wallDefault: { thicknessMm: 100 },
       wallTypedHud,
       clearTypedBeforeClose: true,
-      autoJoinAtMmPoint: vi.fn(),
       clearWallDrawState,
       updateWallMeshWithJustification: vi.fn(),
       setStatus: vi.fn(),
-      selectWall: vi.fn()
     });
 
     expect(result).toBe(true);

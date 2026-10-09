@@ -217,6 +217,7 @@ describe("selected props panels", () => {
         for (const edit of edits) { const target = walls.find(w => w.id === edit.id)!; target.params = edit.params; ctx.rebuildWall(target); }
         ctx.rebuildWallPlanMesh(); return true;
       },
+      flipWallExterior: vi.fn(() => true),
       selectedWallIds: new Set(["wall-1", "wall-2"]),
       walls,
       wallJoinTolMm: 1,
@@ -276,6 +277,7 @@ describe("selected props panels", () => {
       applyWallEdits: (edits: Array<{id:string;params:WallInstance["params"]}>) => {
         wall.params = edits[0]!.params; ctx.rebuildWall(wall); ctx.rebuildWallPlanMesh(); return true;
       },
+      flipWallExterior: vi.fn(() => true),
       selectedWallIds: new Set(["wall-1"]),
       walls: [wall],
       wallJoinTolMm: 1,
@@ -314,12 +316,8 @@ describe("selected props panels", () => {
 
     rows[4]!.control.dispatch("click");
 
-    expect(wall.params.exteriorSign).toBe(-1);
-    expect(wall.params.typeId).toBe("custom");
-    expect(ctx.rebuildWall).toHaveBeenCalledWith(wall);
-    expect(ctx.rebuildWallPlanMesh).toHaveBeenCalledOnce();
-    expect(ctx.commitHistory).toHaveBeenCalledWith(ctx.S);
-    expect(ctx.mountProps).toHaveBeenCalledOnce();
+    expect(ctx.flipWallExterior).toHaveBeenCalledExactlyOnceWith({ kind: "wall", wallId: wall.id });
+    expect(ctx.commitHistory).not.toHaveBeenCalled();
     expect(ctx.appendLinkedMeasureInputs).toHaveBeenCalledWith(section, { kind: "wall", wallId: "wall-1" });
   });
 

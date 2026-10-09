@@ -44,8 +44,10 @@ describe("tool props panels", () => {
       exteriorSign: 1
     } satisfies Pick<WallParams, "typeId" | "thicknessMm" | "heightMm" | "materialId" | "justification" | "exteriorSign">;
     const setUnderlayStatus = vi.fn();
+    const flipWallExterior = vi.fn(() => true);
 
     mountWallToolPropsPanel({
+      flipWallExterior,
       props,
       wallDefault,
       wallDraw: { preview: null, a: null, hoverB: null },
@@ -76,6 +78,8 @@ describe("tool props panels", () => {
     ]);
     expect(rows[4]!.control.type).toBe("button");
     expect(rows[4]!.control.textContent).toBe("Flip exterior");
+    rows[4]!.control.dispatch("click");
+    expect(flipWallExterior).toHaveBeenCalledExactlyOnceWith({ kind: "defaults" });
     expect(section.children.at(-1)?.className).toBe("muted");
 
     rows[0]!.control.value = "bearing_200";

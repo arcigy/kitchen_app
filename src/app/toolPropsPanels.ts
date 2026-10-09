@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { WallExteriorFlipTarget } from "./wallController";
 import type { AppState } from "../layout/appState";
 import { reportEditorToolEntryStatus } from "./editorToolEntryController";
 import type { AlignPickedLine, KitchenWorktopJustification, WallParams } from "./localTypes";
@@ -19,6 +20,7 @@ export type PropertiesPanelApi = {
 };
 
 type WallToolPropsContext = {
+  flipWallExterior: (target: WallExteriorFlipTarget) => boolean;
   props: PropertiesPanelApi;
   wallDefault: Pick<WallParams, "typeId" | "thicknessMm" | "heightMm" | "justification" | "exteriorSign" | "materialId">;
   wallDraw: {
@@ -98,7 +100,7 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
         wallDefault.exteriorSign ?? 1
       );
     };
-    appendMutedText(s, "Klikni 2 body v 2D. Shift = bez axis snap. Esc = stop chain.");
+    appendMutedText(s, "Klikaj body v 2D. Space = prehodiť exteriér. Ctrl/Cmd + klik = vybrať stenu. Shift = bez axis snap. Esc = ukončiť reťaz.");
     typeSelect.addEventListener("change", () => {
       const preset = applyWallTypeToParams(wallDefault, typeSelect.value);
       th.value = String(wallDefault.thicknessMm);
@@ -128,13 +130,7 @@ export function mountWallToolPropsPanel(ctx: WallToolPropsContext) {
       typeSelect.value = CUSTOM_WALL_TYPE_ID;
       updatePreview();
     });
-    flip.addEventListener("click", () => {
-      wallDefault.exteriorSign = wallDefault.exteriorSign === 1 ? -1 : 1;
-      wallDefault.typeId = CUSTOM_WALL_TYPE_ID;
-      typeSelect.value = CUSTOM_WALL_TYPE_ID;
-      updatePreview();
-      setUnderlayStatus(`Wall: exterior ${wallDefault.exteriorSign === 1 ? "left" : "right"} of A->B.`);
-    });
+    flip.addEventListener("click", () => ctx.flipWallExterior({ kind: "defaults" }));
   
 }
 

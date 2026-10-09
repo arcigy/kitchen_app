@@ -1,3 +1,4 @@
+import type { WallExteriorFlipTarget } from "./wallController";
 import * as THREE from "three";
 import type { LayoutInstance, SectionInstance, SelectedKind, WallInstance, WallParams } from "./localTypes";
 import type { AppState } from "../layout/appState";
@@ -18,8 +19,9 @@ type WallDefaultParams = Pick<WallParams, "heightMm" | "materialId" | "thickness
 };
 
 type KeyboardInputHandlersContext = {
+  flipWallExterior: (target: WallExteriorFlipTarget) => boolean;
   activeViewerTab: string;
-  addWall: (a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) => WallInstance | null;
+  addWall: (a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number, options?: { joinEndpoints?: boolean }) => WallInstance | null;
   anyOverlap: (instance: LayoutInstance, selectedId: string | null) => boolean;
   applyMoveDelta: (delta: THREE.Vector3) => void;
   applyRotateAngle: (angleRad: number) => void;
@@ -226,7 +228,7 @@ type KeyboardNudgeSelectionGuardContext = Pick<
 
 type GlobalUndoRedoShortcutCommandContext = Pick<
   KeyboardInputHandlersContext,
-  "customFurnitureMode" | "helpers" | "redo" | "S" | "undo"
+  "customFurnitureMode" | "helpers" | "redo" | "S" | "undo" | "wallDraw" | "clearWallDrawState"
 >;
 
 type LayoutToolShortcutCommandContext = Pick<
@@ -238,6 +240,8 @@ type LayoutSpaceShortcutCommandContext = Pick<
   KeyboardInputHandlersContext,
   | "commitHistory"
   | "findInstance"
+  | "flipWallExterior"
+  | "selectedWallIds"
   | "layoutTool"
   | "mountProps"
   | "rebuildInstance"
@@ -276,6 +280,63 @@ type KeyboardSpaceLike = Pick<KeyboardEvent, "code" | "key">;
 
 function isSpaceShortcut(ev: KeyboardSpaceLike) {
   return ev.key === " " || ev.key === "Spacebar" || ev.code === "Space";
+}
+
+type WallSpaceSelectionContext = {
+  layoutTool: string;
+  wallDraw: { active: boolean };
+  selectedKind: SelectedKind;
+  selectedWallId: string | null;
+  selectedWallIds: ReadonlySet<string>;
+};
+
+export function resolveWallSpaceTarget(ctx: WallSpaceSelectionContext): WallExteriorFlipTarget | null {
+  if (ctx.layoutTool === "wall" && ctx.wallDraw.active) return { kind: "defaults" };
+  if (ctx.selectedKind === "wall") {
+    const ids = ctx.selectedWallIds.size ? [...ctx.selectedWallIds] : ctx.selectedWallId ? [ctx.selectedWallId] : [];
+    return ids.length === 1 ? { kind: "wall", wallId: ids[0]! } : null;
+  }
+  return ctx.layoutTool === "wall" && !ctx.selectedKind ? { kind: "defaults" } : null;
+}
+
+export function isEditorKeyboardInteractionBlocked(target: EventTarget | null): boolean {
+  if (typeof document === "undefined" || !document.querySelectorAll) return false;
+  if (typeof Element !== "undefined" && target instanceof Element && target.closest('[role="menu"], [role="dialog"], dialog')) return true;
+  return [...document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"], [role="menu"]')]
+    .some(element => element.getClientRects().length > 0);
+}
+
+type WallSpaceScope = WallSpaceSelectionContext & {
+  mode: string;
+  kitchenEditMode: boolean;
+  placementActive: boolean;
+  transformActive: boolean;
+  floorEditActive: boolean;
+  measureEnabled: boolean;
+  activeViewerTab: string;
+  viewMode: string;
+};
+
+export function shouldYieldWallSpaceShortcut(ctx: WallSpaceScope, ev: KeyboardEvent): boolean {
+  if (!isSpaceShortcut(ev) || ev.ctrlKey || ev.metaKey || ev.altKey) return false;
+  if (ctx.mode !== "layout" || ctx.kitchenEditMode || ctx.placementActive || ctx.transformActive || ctx.floorEditActive || ctx.measureEnabled) return false;
+  if (ctx.layoutTool === "wall" && (ctx.viewMode !== "2d" || ctx.activeViewerTab !== "floorplan")) return false;
+  return !!resolveWallSpaceTarget(ctx) && !isEditorKeyboardInteractionBlocked(ev.target);
+}
+
+function runWallSpaceShortcut(ctx: KeyboardInputCommandContext, ev: KeyboardEvent): boolean {
+  if (!shouldYieldWallSpaceShortcut({ mode: ctx.mode, viewMode: ctx.viewMode, activeViewerTab: ctx.activeViewerTab,
+    layoutTool: ctx.layoutTool, wallDraw: ctx.wallDraw, selectedKind: ctx.selectedKind,
+    selectedWallId: ctx.selectedWallId, selectedWallIds: ctx.selectedWallIds,
+    kitchenEditMode: ctx.S.kitchenEditMode, placementActive: ctx.placement.active,
+    transformActive: !!ctx.transformState.kind, floorEditActive: ctx.floorEdit.active, measureEnabled: ctx.measureState.enabled }, ev)) return false;
+  if (typeof HTMLElement !== "undefined" && ev.target instanceof HTMLElement && ev.target.closest("button")) return false;
+  ev.preventDefault();
+  if (!ev.repeat) {
+    const target = resolveWallSpaceTarget(ctx);
+    if (target) ctx.flipWallExterior(target);
+  }
+  return true;
 }
 
 type DrawingSpaceShortcutCommandContext = Pick<
@@ -406,6 +467,7 @@ type WallTypedLengthCommandContext = Pick<
 export function handleGlobalUndoRedoShortcut(ctx: GlobalUndoRedoShortcutCommandContext, ev: KeyboardEvent) {
   if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return false;
   const key = ev.key.toLowerCase();
+  if ((key === "z" || key === "y") && ctx.wallDraw?.active) ctx.clearWallDrawState();
   if (key === "z") {
     const handled = ev.shiftKey ? ctx.customFurnitureMode?.redoActiveEdit?.() : ctx.customFurnitureMode?.undoActiveEdit?.();
     if (!handled) {
@@ -802,33 +864,9 @@ export function runModuleSideMirrorShortcutCommand(ctx: ModuleSideMirrorShortcut
 }
 
 export function runLayoutSpaceShortcutCommand(ctx: LayoutSpaceShortcutCommandContext) {
-  if (ctx.layoutTool === "wall") {
-    ctx.wallDefault.exteriorSign = ctx.wallDefault.exteriorSign === 1 ? -1 : 1;
-    ctx.setUnderlayStatus(`Wall: exterior ${ctx.wallDefault.exteriorSign === 1 ? "left" : "right"} of A->B.`);
-    if (ctx.wallDraw.preview && ctx.wallDraw.a) {
-      ctx.updateWallMeshWithJustification(
-        ctx.wallDraw.preview,
-        ctx.wallDraw.a,
-        ctx.wallDraw.hoverB ?? ctx.wallDraw.a,
-        ctx.wallDefault.thicknessMm,
-        ctx.wallDefault.justification,
-        ctx.wallDefault.exteriorSign
-      );
-    }
-    ctx.mountProps();
-    return true;
-  }
-
-  if (ctx.selectedKind === "wall" && ctx.selectedWallId) {
-    const wall = ctx.walls.find((item) => item.id === ctx.selectedWallId) ?? null;
-    if (wall) {
-      wall.params.exteriorSign = (wall.params.exteriorSign ?? 1) === 1 ? -1 : 1;
-      for (const item of ctx.walls) ctx.rebuildWall(item);
-      ctx.rebuildWallPlanMesh();
-      ctx.mountProps();
-    }
-    return true;
-  }
+  const target = resolveWallSpaceTarget(ctx);
+  if (target) return ctx.flipWallExterior(target);
+  if (ctx.selectedKind === "wall") return true;
 
   if (runModuleSideMirrorShortcutCommand(ctx)) return true;
 
@@ -956,24 +994,18 @@ export function runWallTypedLengthCommand(ctx: WallTypedLengthCommandContext, ev
       });
       if (!resolvedTypedEnd) return false;
 
-      const w = ctx.addWall(resolvedTypedEnd.a, resolvedTypedEnd.end, ctx.wallDefault.thicknessMm);
+      const w = ctx.addWall(resolvedTypedEnd.a, resolvedTypedEnd.end, ctx.wallDefault.thicknessMm, { joinEndpoints: true });
       if (!w) return true;
       finishWallDrawAfterAddedWall({
-        wall: w,
+        end: resolvedTypedEnd.end,
         closes: resolvedTypedEnd.closes,
         wallDraw: ctx.wallDraw,
         wallDefault: ctx.wallDefault,
         wallTypedHud: ctx.wallTypedHud,
         clearTypedBeforeClose: true,
-        autoJoinAtMmPoint: ctx.autoJoinAtMmPoint,
         clearWallDrawState: ctx.clearWallDrawState,
         updateWallMeshWithJustification: ctx.updateWallMeshWithJustification,
         setStatus: ctx.setUnderlayStatus,
-        selectWall: (id) => {
-          ctx.selectedKind = "wall";
-          ctx.selectedWallId = id;
-          ctx.mountProps();
-        }
       });
       return true;
     }
@@ -1185,7 +1217,8 @@ export function runLayoutKeyboardCommand(ctx: LayoutKeyboardCommandContext, ev: 
   }
 
   if (isSpaceShortcut(ev)) {
-    runLayoutSpaceShortcutCommand(ctx);
+    if ((ctx.layoutTool === "wall" || ctx.selectedKind === "wall") && (ev.ctrlKey || ev.metaKey || ev.altKey)) return false;
+    if (!ev.repeat) runLayoutSpaceShortcutCommand(ctx);
     ev.preventDefault();
     return true;
   }
@@ -1213,7 +1246,8 @@ export function runLayoutKeyboardCommand(ctx: LayoutKeyboardCommandContext, ev: 
 export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: KeyboardEvent) {
   // Native text controls own every key, including Escape and Undo/Redo. This
   // prevents an in-progress value from cancelling its enclosing editor tool.
-  if (ctx.isTypingTarget(ev.target)) return false;
+  if (ctx.isTypingTarget(ev.target) || isEditorKeyboardInteractionBlocked(ev.target)) return false;
+  if (isSpaceShortcut(ev) && typeof Element !== "undefined" && ev.target instanceof Element && ev.target.closest("button")) return false;
 
   if (ev.key === "Escape" && ctx.cancelModulePointerDrag?.()) {
     ev.preventDefault();
@@ -1228,11 +1262,13 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
         ev.stopImmediatePropagation();
         return true;
       }
+      if (runWallSpaceShortcut(ctx, ev)) return true;
       if (runModuleSideMirrorShortcutCommand(ctx)) return true;
     }
     if (ev.key === "Escape") {
       if (runPlacementShortcutCommand(ctx, ev)) return true;
       if (runActivePlacementEscapeCommand(ctx, ev)) return true;
+      if (!ctx.S.kitchenEditMode && ctx.layoutTool === "wall" && ctx.handleLayoutEscape(ev)) return true;
       if (runClearSelectionShortcutCommand(ctx, ev)) return true;
     }
     return true;
@@ -1281,10 +1317,14 @@ export function runKeyboardInputCommand(ctx: KeyboardInputCommandContext, ev: Ke
     return true;
   }
 
+  if (runWallSpaceShortcut(ctx, ev)) return true;
+
   if (isSpaceShortcut(ev) && runModuleSideMirrorShortcutCommand(ctx)) {
     ev.preventDefault();
     return true;
   }
+
+  if (ev.key === "Escape" && !ctx.S.kitchenEditMode && ctx.layoutTool === "wall" && ctx.handleLayoutEscape(ev)) return true;
 
   if (ev.key === "Escape" && runClearSelectionShortcutCommand(ctx, ev)) {
     ev.preventDefault();

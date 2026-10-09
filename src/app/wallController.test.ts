@@ -1,10 +1,14 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createWallController, WALL_PLAN_FILL_ROTATION_X, type WallControllerContext, type WallPlanMultiPolygon } from "./wallController";
 import type { AppState } from "../layout/appState";
 import type { DoorInstance, DoorParams, WallInstance, WindowInstance, WindowParams } from "./localTypes";
 
 const createTestWallContext = (): WallControllerContext => ({
+  getWallDrawPreview: () => null,
+  mountProps: () => {},
+  updateWindowTransform: () => {},
+  updateDoorTransform: () => {},
   walls: [],
   instances: [],
   kitchenWorktops: [],
@@ -1283,5 +1287,65 @@ describe("wall plan fill", () => {
     const solved = ctx.wallSolvedOutlines.get("left");
     expect(solved).toBeDefined();
     expect(solved?.some((point) => point.x !== 0 && point.z > 4.9)).toBe(true);
+  });
+});
+
+
+describe("wall drawing and exterior command", () => {
+  it("renders real preview thickness and alignment, flips immediately without adding a wall", () => {
+    const ctx = createTestWallContext();
+    ctx.wallDefault.justification = "interior";
+    ctx.wallDefault.thicknessMm = 150;
+    const controller = createWallController(ctx);
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3(2, 0, 0);
+    const preview = controller.makeWallPreviewMesh(a, b, 150);
+    ctx.getWallDrawPreview = () => ({ preview, a, hoverB: b });
+    const bounds = () => new THREE.Box3().setFromObject(preview);
+    expect(bounds().min.z).toBeCloseTo(0);
+    expect(bounds().max.z).toBeCloseTo(0.15);
+    expect(preview.material).toMatchObject({ transparent: true, opacity: 0.5 });
+    expect(preview.userData.viewDisplaySkipMaterialRestore).toBe(true);
+    expect(controller.flipWallExterior({ kind: "defaults" })).toBe(true);
+    expect(bounds().min.z).toBeCloseTo(-0.15);
+    expect(bounds().max.z).toBeCloseTo(0);
+    expect(ctx.walls).toHaveLength(0);
+    controller.updateWallMeshWithJustification(preview, a, a, 150, "interior", -1);
+    expect(preview.visible).toBe(false);
+  });
+
+  it("rejects zero length after rounding without allocating an ID or changing the model", () => {
+    const ctx = createTestWallContext();
+    ctx.nextWallId = vi.fn(() => "should-not-exist");
+    const controller = createWallController(ctx);
+    expect(controller.addWall(new THREE.Vector3(), new THREE.Vector3(0.0004, 0, 0), 150)).toBeNull();
+    expect(ctx.nextWallId).not.toHaveBeenCalled();
+    expect(ctx.walls).toHaveLength(0);
+  });
+
+  it("changes only the selected wall parameter and refreshes openings through their owners", () => {
+    const ctx = createTestWallContext();
+    const selected = createTestWallInstance("selected", { x: 0, z: 0 }, { x: 2000, z: 0 });
+    const other = createTestWallInstance("other", { x: 4000, z: 0 }, { x: 6000, z: 0 });
+    selected.params.justification = "interior";
+    ctx.walls.push(selected, other);
+    const original = structuredClone(selected.params);
+    const window = createTestWindowInstance({ wallId: selected.id, centerMm: 500, widthMm: 500, heightMm: 1000, sillHeightMm: 800 });
+    const door = createTestDoorInstance({ wallId: selected.id, centerMm: 1400, widthMm: 700, heightMm: 2000 });
+    const openingParams = structuredClone([window.params, door.params]);
+    ctx.getWindowInsts = () => [window];
+    ctx.getDoorInsts = () => [door];
+    ctx.updateWindowTransform = vi.fn();
+    ctx.updateDoorTransform = vi.fn();
+    ctx.mountProps = vi.fn();
+    const controller = createWallController(ctx);
+    expect(controller.flipWallExterior({ kind: "wall", wallId: selected.id })).toBe(true);
+    expect(selected.params).toMatchObject({ ...original, exteriorSign: -1, typeId: "custom" });
+    expect(other.params.exteriorSign).toBe(1);
+    expect(ctx.updateWindowTransform).toHaveBeenCalledExactlyOnceWith(window);
+    expect(ctx.updateDoorTransform).toHaveBeenCalledExactlyOnceWith(door);
+    expect([window.params, door.params]).toEqual(openingParams);
+    expect(ctx.mountProps).toHaveBeenCalledOnce();
+    expect(controller.flipWallExterior({ kind: "wall", wallId: "missing" })).toBe(false);
   });
 });
