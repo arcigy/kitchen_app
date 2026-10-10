@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { writeAtomicFile } from "./atomic-file";
 import { sanitizeStorageId } from "./storage-types";
 
 type AccessMode = "read" | "write";
@@ -76,7 +77,7 @@ async function writeProjectRecord(
 ): Promise<void> {
   const projectPath = createProjectPath(projectRoot, clientId, projectId);
   await mkdir(projectPath, { recursive: true });
-  await writeFile(createProjectMetaPath(projectRoot, clientId, projectId), JSON.stringify(record, null, 2), "utf-8");
+  await writeAtomicFile(createProjectMetaPath(projectRoot, clientId, projectId), JSON.stringify(record, null, 2));
 }
 
 function nowIso(): string {

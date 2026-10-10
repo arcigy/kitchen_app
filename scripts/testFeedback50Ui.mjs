@@ -121,7 +121,11 @@ async function save(current) {
     if (!response.ok()) throw new Error(await response.text());
     const saved = (await response.json()).save;
     projectIdsByPage.set(current, saved.projectId);
-    return saved;
+    // A background response can arrive before the queued manual save finishes.
+    await current.locator('body.project-save-blocking').waitFor({ state: 'hidden', timeout: 90_000 });
+    const latest = await current.request.get(new URL(`/api/projects/${saved.projectId}/load`, baseUrl).toString());
+    if (!latest.ok()) throw new Error(await latest.text());
+    return (await latest.json()).save;
   }
   const completed = current.evaluate(() => new Promise(resolve => {
     const body = document.body;
