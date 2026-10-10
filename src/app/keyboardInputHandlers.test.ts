@@ -22,6 +22,8 @@ import {
   runLayoutKeyboardCommand,
   runLayoutTransformKeyboardCommand,
   runLayoutSpaceShortcutCommand,
+  resolveWallSpaceTarget,
+  shouldYieldWallSpaceShortcut,
   runLayoutToolShortcutCommand,
   runPlacementShortcutCommand,
   runTransformEscapeCommand,
@@ -956,14 +958,14 @@ describe("wall typed length command", () => {
     expect(runWallTypedLengthCommand(ctx, plainKeyEvent("Enter"))).toBe(true);
 
     expect(ctx.addWall).toHaveBeenCalledOnce();
-    expect(ctx.addWall).toHaveBeenCalledWith(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1.2, 0, 0), 100);
-    expect(ctx.autoJoinAtMmPoint).toHaveBeenCalledTimes(2);
+    expect(ctx.addWall).toHaveBeenCalledWith(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1.2, 0, 0), 100, { joinEndpoints: true });
+    expect(ctx.autoJoinAtMmPoint).not.toHaveBeenCalled();
     expect(ctx.wallDraw.typedMm).toBe("");
     expect(ctx.wallDraw.a).toEqual(new THREE.Vector3(1.2, 0, 0));
-    expect(ctx.selectedKind).toBe("wall");
-    expect(ctx.selectedWallId).toBe("typed-wall");
-    expect(ctx.mountProps).toHaveBeenCalledOnce();
-    expect(ctx.setUnderlayStatus).toHaveBeenLastCalledWith("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
+    expect(ctx.selectedKind).toBeNull();
+    expect(ctx.selectedWallId).toBeNull();
+    expect(ctx.mountProps).not.toHaveBeenCalled();
+    expect(ctx.setUnderlayStatus).toHaveBeenLastCalledWith("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Space = flip exterior, Ctrl/Cmd+click = select, Esc = stop)");
   });
 
   it("returns false for unresolved typed wall endpoint without adding a wall", () => {
@@ -999,6 +1001,8 @@ describe("layout space keyboard shortcut", () => {
     const setUnderlayStatus = vi.fn();
     const ctx = {
       commitHistory: vi.fn(),
+      selectedWallIds: new Set<string>(),
+      flipWallExterior: vi.fn(() => true),
       findInstance: vi.fn(() => null),
       layoutTool: "wall",
       mountProps,
@@ -1035,10 +1039,7 @@ describe("layout space keyboard shortcut", () => {
 
     expect(runLayoutSpaceShortcutCommand(ctx)).toBe(true);
 
-    expect(ctx.wallDefault.exteriorSign).toBe(-1);
-    expect(setUnderlayStatus).toHaveBeenCalledExactlyOnceWith("Wall: exterior right of A->B.");
-    expect(updateWallMeshWithJustification).toHaveBeenCalledExactlyOnceWith(preview, a, hoverB, 100, "center", -1);
-    expect(mountProps).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.flipWallExterior).toHaveBeenCalledExactlyOnceWith({ kind: "defaults" });
     expect(ctx.setToolSelect).not.toHaveBeenCalled();
   });
 
@@ -1050,6 +1051,8 @@ describe("layout space keyboard shortcut", () => {
     const mountProps = vi.fn();
     const ctx = {
       commitHistory: vi.fn(),
+      selectedWallIds: new Set<string>(),
+      flipWallExterior: vi.fn(() => true),
       findInstance: vi.fn(() => null),
       layoutTool: "select",
       mountProps,
@@ -1086,12 +1089,7 @@ describe("layout space keyboard shortcut", () => {
 
     expect(runLayoutSpaceShortcutCommand(ctx)).toBe(true);
 
-    expect(selected.params.exteriorSign).toBe(-1);
-    expect(rebuildWall).toHaveBeenCalledTimes(2);
-    expect(rebuildWall).toHaveBeenCalledWith(selected);
-    expect(rebuildWall).toHaveBeenCalledWith(other);
-    expect(rebuildWallPlanMesh).toHaveBeenCalledExactlyOnceWith();
-    expect(mountProps).toHaveBeenCalledExactlyOnceWith();
+    expect(ctx.flipWallExterior).toHaveBeenCalledExactlyOnceWith({ kind: "wall", wallId: "w1" });
     expect(ctx.setToolSelect).not.toHaveBeenCalled();
   });
 
@@ -1100,6 +1098,8 @@ describe("layout space keyboard shortcut", () => {
     const mountProps = vi.fn();
     const ctx = {
       commitHistory: vi.fn(),
+      selectedWallIds: new Set<string>(),
+      flipWallExterior: vi.fn(() => true),
       findInstance: vi.fn(() => null),
       layoutTool: "select",
       mountProps,
@@ -1228,6 +1228,7 @@ describe("top-level keyboard input command dispatcher", () => {
     const ctx = {
       ...keyboardNudgeCommandContext({}),
       activeViewerTab: "floorplan",
+      flipWallExterior: vi.fn(() => true),
       addWall: vi.fn(),
       applyMoveDelta: vi.fn(),
       applyRotateAngle: vi.fn(),
@@ -1312,6 +1313,65 @@ describe("top-level keyboard input command dispatcher", () => {
     };
     return ctx as unknown as Parameters<typeof runKeyboardInputCommand>[0];
   }
+
+  it("routes wall Space before and during drawing once per physical press", () => {
+    const ctx = topLevelKeyboardContext({ layoutTool: "wall" });
+    const press = () => runKeyboardInputCommand(ctx, plainKeyEvent(" ", { code: "Space", preventDefault: vi.fn() }));
+    press();
+    ctx.wallDraw.active = true;
+    press();
+    runKeyboardInputCommand(ctx, plainKeyEvent(" ", { code: "Space", repeat: true, preventDefault: vi.fn() }));
+    expect(ctx.flipWallExterior).toHaveBeenCalledTimes(2);
+    expect(ctx.flipWallExterior).toHaveBeenLastCalledWith({ kind: "defaults" });
+    for (const modifier of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      runKeyboardInputCommand(ctx, plainKeyEvent(" ", { code: "Space", ...modifier }));
+    }
+    expect(ctx.flipWallExterior).toHaveBeenCalledTimes(2);
+  });
+
+  it("yields navigation Space only to an available wall command", () => {
+    const scope = { mode: "layout", viewMode: "2d", activeViewerTab: "floorplan", layoutTool: "wall",
+      wallDraw: { active: true }, selectedKind: null, selectedWallId: null, selectedWallIds: new Set<string>(),
+      kitchenEditMode: false, placementActive: false, transformActive: false, floorEditActive: false, measureEnabled: false };
+    expect(shouldYieldWallSpaceShortcut(scope, plainKeyEvent(" "))).toBe(true);
+    expect(shouldYieldWallSpaceShortcut({ ...scope, kitchenEditMode: true }, plainKeyEvent(" "))).toBe(false);
+    expect(shouldYieldWallSpaceShortcut({ ...scope, placementActive: true }, plainKeyEvent(" "))).toBe(false);
+    expect(shouldYieldWallSpaceShortcut(scope, plainKeyEvent(" ", { ctrlKey: true }))).toBe(false);
+  });
+
+  it("routes wall Escape to transient cleanup before selection, retaining kitchen selection fallback", () => {
+    const ctx = topLevelKeyboardContext({ layoutTool: "wall", handleLayoutEscape: vi.fn(() => true) });
+    runKeyboardInputCommand(ctx, plainKeyEvent("Escape"));
+    expect(ctx.handleLayoutEscape).toHaveBeenCalledOnce();
+    expect(ctx.clearSelection).not.toHaveBeenCalled();
+    ctx.S.kitchenEditMode = true;
+    runKeyboardInputCommand(ctx, plainKeyEvent("Escape", { preventDefault: vi.fn() }));
+    expect(ctx.clearSelection).toHaveBeenCalledOnce();
+  });
+
+  it("flips exactly one selected wall and leaves multiple selected walls unchanged", () => {
+    const ctx = topLevelKeyboardContext({ selectedKind: "wall", selectedWallId: "w1", selectedWallIds: new Set(["w1"]) });
+    runKeyboardInputCommand(ctx, plainKeyEvent(" ", { preventDefault: vi.fn() }));
+    expect(ctx.flipWallExterior).toHaveBeenCalledExactlyOnceWith({ kind: "wall", wallId: "w1" });
+    ctx.selectedWallIds.add("w2");
+    runKeyboardInputCommand(ctx, plainKeyEvent(" ", { preventDefault: vi.fn() }));
+    expect(ctx.flipWallExterior).toHaveBeenCalledOnce();
+    expect(resolveWallSpaceTarget(ctx)).toBeNull();
+  });
+
+  it("cleans a wall draft before project undo and lets typing targets retain Space and Escape", () => {
+    const ctx = topLevelKeyboardContext({ layoutTool: "wall" });
+    ctx.wallDraw.active = true;
+    runKeyboardInputCommand(ctx, shortcutEvent("z"));
+    expect(ctx.clearWallDrawState).toHaveBeenCalledOnce();
+    expect(ctx.undo).toHaveBeenCalledOnce();
+    expect(vi.mocked(ctx.clearWallDrawState).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(ctx.undo).mock.invocationCallOrder[0]!);
+    vi.mocked(ctx.isTypingTarget).mockReturnValue(true);
+    runKeyboardInputCommand(ctx, plainKeyEvent(" "));
+    runKeyboardInputCommand(ctx, plainKeyEvent("Escape"));
+    expect(ctx.flipWallExterior).not.toHaveBeenCalled();
+    expect(ctx.clearSelection).not.toHaveBeenCalled();
+  });
 
   it.each([false, true])('Escape cancels a catalog module in kitchen mode before selection, consumed=%s', defaultPrevented => {
     const ctx = topLevelKeyboardContext({ placement: { active: true } });

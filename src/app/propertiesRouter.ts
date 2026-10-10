@@ -1,3 +1,4 @@
+import type { WallExteriorFlipTarget } from "./wallController";
 import type { ProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
 import * as THREE from "three";
 import { formatMm } from "./sharedUtils";
@@ -45,6 +46,7 @@ type RebuildInstanceOptions = {
 };
 
 type WallDrawState = {
+  active: boolean;
   preview: THREE.Mesh | null;
   a: THREE.Vector3 | null;
   hoverB: THREE.Vector3 | null;
@@ -85,6 +87,7 @@ type UnderlayCalibrationState = {
 };
 
 type PropertiesRouterContext = {
+  flipWallExterior: (target: WallExteriorFlipTarget) => boolean;
   props: PropertiesPanelApi;
   floorEdit: FloorEditState;
   floorDefault: Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
@@ -214,12 +217,12 @@ type PropertiesRouterContext = {
 
 export function createPropertiesRouter(ctx: PropertiesRouterContext) {
   const mountFloorBoundaryProps = () => mountFloorBoundaryPropsPanel({ props: ctx.props, floorEdit: ctx.floorEdit, getAllMaterials: ctx.getAllMaterials, floorDefault: ctx.floorDefault });
-  const mountWallToolProps = () => mountWallToolPropsPanel({ props: ctx.props, wallDefault: ctx.wallDefault, wallDraw: ctx.wallDraw, updateWallMeshWithJustification: ctx.updateWallMeshWithJustification, setUnderlayStatus: ctx.setUnderlayStatus });
+  const mountWallToolProps = () => mountWallToolPropsPanel({ flipWallExterior: ctx.flipWallExterior, props: ctx.props, wallDefault: ctx.wallDefault, wallDraw: ctx.wallDraw, updateWallMeshWithJustification: ctx.updateWallMeshWithJustification, setUnderlayStatus: ctx.setUnderlayStatus });
   const mountKitchenWorktopToolProps = () => mountKitchenWorktopToolPropsPanel({ props: ctx.props, S: ctx.S, kitchenWorktopDraw: ctx.kitchenWorktopDraw, scheduleKitchenWorktopPreviewUpdate: ctx.scheduleKitchenWorktopPreviewUpdate, getMaterialDefinitionById: ctx.getMaterialDefinitionById });
   const mountAlignToolProps = () => mountAlignToolPropsPanel({ props: ctx.props, alignState: ctx.alignState });
   const mountTrimToolProps = () => mountTrimToolPropsPanel({ props: ctx.props, trimState: ctx.trimState });
   const mountMeasureToolProps = () => mountMeasureToolPropsPanel({ props: ctx.props, measureState: ctx.measureState, args: ctx.args, formatMm, clearAllMeasurements: ctx.clearAllMeasurements, setUnderlayStatus: ctx.setUnderlayStatus, mountProps });
-  const mountWallProps = (w?: WallInstance) => mountWallPropsPanel({ props: ctx.props, selectedWallIds: ctx.selectedWallIds, walls: ctx.walls, wallJoinTolMm: ctx.wallJoinTolMm, showNoProps: ctx.showNoProps, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, rebuildWall: ctx.rebuildWall, rebuildWallPlanMesh: ctx.rebuildWallPlanMesh, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, w);
+  const mountWallProps = (w?: WallInstance) => mountWallPropsPanel({ flipWallExterior: ctx.flipWallExterior, props: ctx.props, selectedWallIds: ctx.selectedWallIds, walls: ctx.walls, wallJoinTolMm: ctx.wallJoinTolMm, showNoProps: ctx.showNoProps, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, rebuildWall: ctx.rebuildWall, rebuildWallPlanMesh: ctx.rebuildWallPlanMesh, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, w);
   const mountColumnProps = () => mountColumnPropsPanel({ props: ctx.props, column: ctx.columns.find((x) => x.id === ctx.selectedColumnId) ?? null, showNoProps: ctx.showNoProps, rebuildColumn: ctx.rebuildColumn, commitHistory: ctx.commitHistory, S: ctx.S, mountProps });
   const mountColumnPlacementProps = () => {
     if (!ctx.columnPlacementParams) return ctx.showNoProps();
@@ -312,7 +315,7 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
     if (ctx.floorEdit.active) return mountFloorBoundaryProps();
     if (ctx.placement.active) return ctx.mountPlacementControls(ctx.S, ctx.placementHelpers);
     if (ctx.isColumnPlacementActive()) return mountColumnPlacementProps();
-    if (ctx.layoutTool === "wall") return mountWallToolProps();
+    if (ctx.layoutTool === "wall" && (ctx.wallDraw.active || ctx.selectedKind !== "wall")) return mountWallToolProps();
     if (ctx.layoutTool === "led" && mountLedStripProps()) return;
     if (ctx.isWindowPlacementActive()) return mountWindowPlacementProps();
     if (ctx.isDoorPlacementActive()) return mountDoorPlacementProps();

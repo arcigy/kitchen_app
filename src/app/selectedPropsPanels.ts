@@ -1,3 +1,4 @@
+import type { WallExteriorFlipTarget } from "./wallController";
 import { legacyModuleLaborState } from "./moduleLaborLegacyState";
 import type { ProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
 import { adoptPresetLabor, readModuleLabor, sameLaborPreset } from "../core/project-manufacturing/module-labor";
@@ -60,6 +61,7 @@ type RebuildInstanceOptions = {
 };
 
 type WallPropsContext = {
+  flipWallExterior: (target: WallExteriorFlipTarget) => boolean;
   props: PropertiesPanelApi;
   selectedWallIds: Set<string>;
   walls: WallInstance[];
@@ -360,15 +362,7 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
     const dz = firstWall.params.bMm.z - firstWall.params.aMm.z;
     len.textContent = `Length: ${Math.round(Math.hypot(dx, dz))} mm`;
     s.appendChild(len);
-    flip.addEventListener("click", () => {
-      firstWall.params.exteriorSign = (firstWall.params.exteriorSign ?? 1) === 1 ? -1 : 1;
-      applyToSelectedWalls((wall) => {
-        if (wall.id === firstWall.id) {
-          wall.params.exteriorSign = firstWall.params.exteriorSign;
-          wall.params.typeId = CUSTOM_WALL_TYPE_ID;
-        }
-      });
-    });
+    flip.addEventListener("click", () => ctx.flipWallExterior({ kind: "wall", wallId: firstWall.id }));
 
     const joinsLabel = document.createElement("div");
     joinsLabel.className = "muted";

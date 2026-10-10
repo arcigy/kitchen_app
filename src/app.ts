@@ -230,7 +230,7 @@ import { createWorktopController } from "./app/worktopController";
 import { createKitchenPlacementController } from "./app/kitchenPlacementController";
 import { installPointerInputHandlers } from "./app/pointerInputHandlers";
 import { createEditorContextMenuController, resolveActiveContextCommand } from "./app/editorContextMenuController";
-import { installKeyboardInputHandlers } from "./app/keyboardInputHandlers";
+import { installKeyboardInputHandlers, shouldYieldWallSpaceShortcut, isEditorKeyboardInteractionBlocked } from "./app/keyboardInputHandlers";
 import { createTransformController } from "./app/transformController";
 import { createViewModeController } from "./app/viewModeController";
 import { createInstanceRebuilder, type RebuildDebugState } from "./app/instanceRebuilder";
@@ -625,7 +625,7 @@ export function startApp(initialArgs: AppArgs) {
     thicknessMm: 150,
     heightMm: 2600,
     materialId: "default",
-    justification: "center" as "center" | "interior" | "exterior",
+    justification: "interior" as "center" | "interior" | "exterior",
     exteriorSign: 1 as 1 | -1
   };
 
@@ -1356,6 +1356,11 @@ export function startApp(initialArgs: AppArgs) {
     getControls: ctl,
     getState: () => ({ mode, viewMode, activeViewerTab }),
     getViewerToolMode,
+    shouldYieldKeyboardEvent: (ev) => isEditorKeyboardInteractionBlocked(ev.target) || shouldYieldWallSpaceShortcut({
+      mode, viewMode, activeViewerTab, layoutTool, wallDraw, selectedKind, selectedWallId, selectedWallIds,
+      kitchenEditMode: S.kitchenEditMode, placementActive: placement.active, transformActive: !!transformState.kind,
+      floorEditActive: floorEdit.active, measureEnabled: measureState.enabled
+    }, ev),
     setViewerPanActive,
     setNavigationInteractionActive: (active) => {
       if (active) rendererInteractionQuality.beginInteraction();
@@ -1782,6 +1787,10 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   wallController = createWallController({
+    getWallDrawPreview: () => wallDraw,
+    mountProps: () => mountProps(),
+    updateWindowTransform: (inst) => updateWindowTransform(inst),
+    updateDoorTransform: (inst) => updateDoorTransform(inst),
     reconcileMountedModules: () => kitchenPlacementController.reconcileMountedModules(),
     walls,
     instances,
@@ -2197,6 +2206,7 @@ export function startApp(initialArgs: AppArgs) {
   const deferredLinkedMeasureInputs = createDeferredLinkedMeasureInputs();
   let ledStripDrawController: ReturnType<typeof createLedStripDrawController> | null = null;
   const propertiesRouter = createPropertiesRouter({
+    flipWallExterior: (target) => wallController.flipWallExterior(target),
     S,
     args,
     alignState,
@@ -4504,6 +4514,7 @@ export function startApp(initialArgs: AppArgs) {
   });
 
   const keyboardInputController = installKeyboardInputHandlers({
+    flipWallExterior: (target) => wallController.flipWallExterior(target),
     S,
     cancelModulePointerDrag: () => pointerInputHandlers.cancelModuleDrag(),
     get activeViewerTab() { return activeViewerTab; }, set activeViewerTab(next) { activeViewerTab = next; },

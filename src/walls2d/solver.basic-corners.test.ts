@@ -55,6 +55,32 @@ const roundedGeometry = (res: ReturnType<typeof solveWallNetwork>) =>
     .sort((a, b) => a.id.localeCompare(b.id));
 
 describe("walls2d basic corner joins", () => {
+  test.each(["interior", "exterior"] as const)("keeps %s corners flush on both exterior sides and turn directions", (justification) => {
+    for (const turnZ of [-2, 2]) {
+      for (const exteriorSign of [1, -1] as const) {
+        for (const reverse of [false, true]) {
+          const cornerWall = (id: string, a: Point, b: Point): Wall => ({
+            id, a: reverse ? b : a, b: reverse ? a : b, thicknessM: 0.15,
+            justification, exteriorSign: reverse ? (exteriorSign === 1 ? -1 : 1) : exteriorSign
+          });
+          const res = solveWallNetwork([
+            cornerWall("horizontal", P(0, 0), P(2, 0)),
+            cornerWall("vertical", P(2, 0), P(2, turnZ))
+          ], { nodeTolM: 1e-6 });
+          const horizontal = solvedWall(res, "horizontal");
+          const vertical = solvedWall(res, "vertical");
+          const cornerCap = reverse ? horizontal.a : horizontal.b;
+          const verticalFreeCap = reverse ? vertical.a : vertical.b;
+          const outerFaceX = Math.max(verticalFreeCap.left.x, verticalFreeCap.right.x);
+          // The horizontal cap ends at the far face, never a thickness beyond it.
+          expect(cornerCap.left.x).toBeCloseTo(outerFaceX, 6);
+          expect(cornerCap.right.x).toBeCloseTo(outerFaceX, 6);
+          expect(Math.max(...res.footprint.flat(2).map(point => point[0]))).toBeCloseTo(outerFaceX, 6);
+        }
+      }
+    }
+  });
+
   test("solves a 90 degree L-corner as a deterministic butt/through join", () => {
     const res = solveWallNetwork([
       wall("east", P(0, 0), P(4, 0), 150),
