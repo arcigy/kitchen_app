@@ -25,4 +25,35 @@ describe("file project creation", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+  it("keeps project metadata readable while another request updates it", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "arcigy-concurrent-project-"));
+    try {
+      const ctx: ClientContext = { userId: "user_test", clientId: "client_test", role: "owner" };
+      const repository = createFileProjectRepository(root);
+      const project = await repository.createProject(ctx, { name: "Concurrent project", location: {}, contact: {} });
+      const errors: unknown[] = [];
+      await Promise.all([
+        (async () => {
+          for (let index = 0; index < 100; index += 1) {
+            await repository.saveProjectMetadata(ctx, { ...project, name: `Concurrent project ${index}` });
+          }
+        })(),
+        (async () => {
+          for (let index = 0; index < 200; index += 1) {
+            try {
+              const loaded = await repository.getProject(ctx, project.projectId);
+              expect(loaded.projectId).toBe(project.projectId);
+              expect(loaded.name).toMatch(/^Concurrent project/);
+            } catch (error) {
+              errors.push(error);
+            }
+          }
+        })()
+      ]);
+      expect(errors.map(error => error instanceof Error ? error.message : String(error))).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
 });

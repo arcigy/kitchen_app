@@ -1,5 +1,6 @@
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { writeAtomicFile } from "../storage/atomic-file";
 import type { ClientContext } from "../client/client-context";
 import { resolveClientStoragePath, resolveProjectStoragePath, resolvePhaseBucketPath } from "../storage/storage-path-resolver";
 import { createClientProjectPhaseScope, sanitizeStorageId } from "../storage/storage-types";
@@ -154,7 +155,7 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
       }
       const stored = preserveProjectOperationReceipt(existing, metadata);
       await mkdir(path.dirname(metaPath), { recursive: true });
-      await writeFile(metaPath, JSON.stringify(stored, null, 2), "utf-8");
+      await writeAtomicFile(metaPath, JSON.stringify(stored, null, 2));
     });
   };
 
@@ -233,7 +234,7 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
           if (!isMissingFile(error)) throw error;
         }
         await mkdir(path.dirname(metaPath), { recursive: true });
-        await writeFile(metaPath, JSON.stringify(attachProjectOperationReceipt(metadata, receipt), null, 2), "utf-8");
+        await writeAtomicFile(metaPath, JSON.stringify(attachProjectOperationReceipt(metadata, receipt), null, 2));
         return metadata;
       });
     },
@@ -277,7 +278,7 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
         }
         validateProjectSaveFile(prepared.save, { clientId: ctx.clientId, projectId: safeProjectId });
         await mkdir(path.dirname(target), { recursive: true });
-        await writeFile(target, JSON.stringify(prepared.save, null, 2), "utf-8");
+        await writeAtomicFile(target, JSON.stringify(prepared.save, null, 2));
         return prepared.save;
       });
     },
@@ -305,7 +306,7 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
           updatedByUserId: ctx.userId
         });
         validateProjectSaveFile(patched, { clientId: ctx.clientId, projectId: safeProjectId });
-        await writeFile(target, JSON.stringify(patched, null, 2), "utf-8");
+        await writeAtomicFile(target, JSON.stringify(patched, null, 2));
         await saveProjectMetadata(ctx, patched.project);
         return patched;
       });
@@ -330,7 +331,7 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
           updatedByUserId: ctx.userId
         });
         validateProjectSaveFile(patched, { clientId: ctx.clientId, projectId: safeProjectId });
-        await writeFile(target, JSON.stringify(patched, null, 2), "utf-8");
+        await writeAtomicFile(target, JSON.stringify(patched, null, 2));
         await saveProjectMetadata(ctx, patched.project);
         return patched;
       });
@@ -362,8 +363,8 @@ export function createFileProjectRepository(projectRoot: string): ProjectReposit
         ...versions.filter((item) => item.versionNumber !== metadata.versionNumber),
         metadata
       ].sort((a, b) => b.versionNumber - a.versionNumber);
-      await writeFile(versionSavePath(root, ctx, safeProjectId, metadata.versionNumber), JSON.stringify(save, null, 2), "utf-8");
-      await writeFile(path.join(dir, VERSION_MANIFEST_FILE), JSON.stringify(nextVersions, null, 2), "utf-8");
+      await writeAtomicFile(versionSavePath(root, ctx, safeProjectId, metadata.versionNumber), JSON.stringify(save, null, 2));
+      await writeAtomicFile(path.join(dir, VERSION_MANIFEST_FILE), JSON.stringify(nextVersions, null, 2));
     },
 
     async bundleProjectAssets(ctx, save) {
