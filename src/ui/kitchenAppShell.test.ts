@@ -65,7 +65,7 @@ describe("kitchen app bottom bar", () => {
   it("uses the four-column overview normally and the two-column replacement only in Margins", () => {
     const css = readFileSync("src/style.css", "utf8");
 
-    expect(css).toContain("grid-template-columns: minmax(310px, 1.2fr) minmax(250px, 1fr) 260px 210px;");
+    expect(css).toContain("grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(160px, .85fr) 260px;");
     expect(css).toContain(".archux-margins-phase .archux-bottom > [data-bottom-default]");
     expect(css).toContain(".archux-margins-phase .archux-margin-footer");
     expect(css).toContain(".archux-margins-phase .archux-activity");

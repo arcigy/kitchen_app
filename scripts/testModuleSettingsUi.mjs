@@ -257,7 +257,7 @@ try {
   await open(); await modal().locator('[data-module-parameter-preset-trigger]').click();
   await modal().locator(`[data-parameter-preset-id="${presetId}"]`).click();
   await page.waitForFunction(() => document.querySelector('[data-module-settings] [data-parameter-key="drawerCount"] input')?.value === '3', null, { timeout: 5000 });
-  assert(Number(await field('width').inputValue()) === width + 170 && await field('frontMaterialId').inputValue() === importedModule.params.frontMaterialId, 'Company preset is available in another project and preserves dimensions and materials');
+  assert(Number(await field('width').inputValue()) === width + 170 && await field('frontMaterialId').count() === 0 && (await module()).params.frontMaterialId === importedModule.params.frontMaterialId, 'Company preset is available in another project and preserves dimensions and materials');
   await action('Zrušiť').click(); await page.locator('.module-settings-confirm').getByRole('button', { name: 'Zahodiť zmeny', exact: true }).click();
   assert(errors.length === 0, 'Browser console and page errors are zero');
   await writeFile(`${out}/result.json`, JSON.stringify({ checks, errors }, null, 2));

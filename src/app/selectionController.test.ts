@@ -819,6 +819,17 @@ describe("createSelectionController", () => {
     expect(ctx.mountProps).toHaveBeenCalledTimes(1);
   });
 
+  it("clears the worktop segment selection through the universal selection path", () => {
+    const ctx = createContext();
+    const clearWorktopSegmentSelection = vi.fn();
+    ctx.kitchenMode = { filterSelectableInstanceId: (id) => id, clearWorktopSegmentSelection };
+    const controller = createSelectionController(ctx);
+
+    controller.clearSelection();
+
+    expect(clearWorktopSegmentSelection).toHaveBeenCalledOnce();
+  });
+
   it("keeps only wall ids when selecting a wall", () => {
     const ctx = createContext();
     const controller = createSelectionController(ctx);

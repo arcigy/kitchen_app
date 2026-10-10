@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEmptyProjectMaterialAssignmentsState } from "../../core/project-materials/project-material-types";
+import type { ProjectMetadata } from "../../core/project/project-types";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import {
   createProject,
+  downloadProject,
   deleteProject,
   importProjectFile,
   ProjectApiError,
@@ -18,9 +20,55 @@ const appState = {
   scene: {}
 } satisfies ProjectSaveFile["appState"];
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("project API", () => {
+  it("sends a new project request with only its required name", async () => {
+    const project = { projectId: "minimal_project", name: "Minimal project" };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ project }), {
+      status: 201,
+      headers: { "Content-Type": "application/json" }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createProject({ name: "Minimal project" });
+
+    const request = fetchMock.mock.calls[0]?.[1];
+    expect(request?.method).toBe("POST");
+    expect(JSON.parse(String(request?.body))).toEqual({ name: "Minimal project" });
+  });
+
+  it("keeps a project download anchor attached until after the browser dispatches the download", async () => {
+    vi.useFakeTimers();
+    const anchor = {
+      click: vi.fn(),
+      download: "",
+      href: "",
+      isConnected: false,
+      remove() { this.isConnected = false; },
+      style: {}
+    };
+    const append = vi.fn((node: unknown) => { anchor.isConnected = true; return node; });
+    vi.stubGlobal("document", { body: { appendChild: append }, createElement: vi.fn(() => anchor) });
+    vi.stubGlobal("window", { setTimeout: globalThis.setTimeout });
+    const createObjectURL = vi.fn(() => "blob:project-file");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Blob(["encrypted-file"]), { status: 200 })));
+
+    await downloadProject({ projectId: "project_1", name: "Kitchen" } as ProjectMetadata);
+
+    expect(anchor.isConnected).toBe(true);
+    expect(anchor.download).toBe("Kitchen.fqp");
+    expect(anchor.click).toHaveBeenCalledOnce();
+    expect(append).toHaveBeenCalledWith(anchor);
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(anchor.isConnected).toBe(false);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:project-file");
+    vi.useRealTimers();
+  });
+
   it("persists the BOM-derived material quantity snapshot with the current app state", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ save: {projectId: "project_1", appState} }), {
       status: 200,

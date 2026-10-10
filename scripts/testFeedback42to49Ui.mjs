@@ -23,7 +23,7 @@ try{
  const wallPoint=await page.evaluate(()=>window.__kitchenDebug.projectPlanPoint({x:1300,z:-50,y:1300}));await page.mouse.click(wallPoint.x,wallPoint.y);await dialog.waitFor();
  assert((await dialog.textContent()).includes('dielcov'),'Clicking a wall opens its backsplash preview');
  await dialog.getByRole('button',{name:'Zrušiť',exact:true}).click();assert(!(await snapshot()).customFurniture.some(f=>f.params.groupKind==='backsplash'),'Cancelling wall preview leaves the project unchanged');
- await page.getByRole('button',{name:'Zástena · Celá kuchyňa',exact:true}).click();
+ await page.getByRole('button',{name:'Pridať zástenu',exact:true}).click();
  await dialog.waitFor();
  assert((await dialog.textContent()).includes('dielcov'),'Automatic preview contains supported wall coverage');
  await dialog.getByLabel('Materiál zásteny',{exact:true}).selectOption({index:1});
@@ -36,7 +36,8 @@ try{
  await page.locator('button[data-quick-action="undo"]').click();assert(!(await snapshot()).customFurniture.some(f=>f.params.groupKind==='backsplash'),'Undo removes the inserted backsplash group');
  await page.locator('button[data-quick-action="redo"]').click();assert((await snapshot()).customFurniture.filter(f=>f.params.groupKind==='backsplash').length===1,'Redo restores the group and source bindings');
  await page.evaluate(id=>window.__kitchenDebug.selectKitchenGroup(id),fixture.group.id);
- await page.getByRole('button',{name:'Zástena · Celá kuchyňa',exact:true}).click();await dialog.getByRole('button',{name:'Potvrdiť zástenu',exact:true}).click();
+ await page.getByRole('button',{name:/^(Upraviť kuchyňu|Edit kitchen)$/}).click();
+ await page.getByRole('button',{name:'Pridať zástenu',exact:true}).click();await dialog.getByRole('button',{name:'Potvrdiť zástenu',exact:true}).click();
  layout=await snapshot();assert(layout.customFurniture.filter(f=>f.params.groupKind==='backsplash').length===1,'Repeated insertion updates the existing group without duplicates');
  await page.getByRole('button',{name:'Close Custom Furniture Editor',exact:true}).click();
  await page.evaluate(id=>window.__kitchenDebug.selectKitchenGroup(id),fixture.group.id);
@@ -64,7 +65,10 @@ try{
  await page.screenshot({path:`${output}/materials.png`});await writeFile(`${output}/materials-shape.json`,JSON.stringify({keys:Object.keys(materials)},null,2));
  const download=await page.request.get(new URL(`/api/projects/${projectId}/download`,baseUrl).toString());assert(download.ok(),'FQP download succeeds');const envelope=await download.text();const imported=await page.request.post(new URL('/api/projects/import',baseUrl).toString(),{data:{envelope}});if(!imported.ok())throw new Error(await imported.text());const restored=(await imported.json()).save;assert(isDeepStrictEqual(restored.appState.layout.snapshot.customFurniture,saved.appState.layout.snapshot.customFurniture),'Encrypted FQP restores backsplash fields exactly');
  assert(restored.appState.materialAssignments.assignments.some(a=>a.extraComponent?.label==='Náhradné diely QA'&&a.projectValues.quantity===3&&a.projectValues.unit==='set'),'FQP retains component quantities and units');
- await page.locator('[data-workspace-nav="design"]').click();await page.evaluate(id=>window.__kitchenDebug.selectModule(id),fixture.instances[0].id);
+ await page.locator('[data-workspace-nav="design"]').click();
+ // Navigation completes asynchronously after closing the Materials phase.
+ await page.locator('[data-workspace-nav="design"].active').waitFor();
+ await page.evaluate(id=>window.__kitchenDebug.selectModule(id),fixture.instances[0].id);
  if(await page.getByRole('button',{name:/^(Upraviť kuchyňu|Edit kitchen)$/}).isVisible()){await page.getByRole('button',{name:/^(Upraviť kuchyňu|Edit kitchen)$/}).click();await page.evaluate(id=>window.__kitchenDebug.selectModule(id),fixture.instances[0].id);}
  const recoveryEditStarted=Date.now();await hardware.getByLabel('Z toho predné',{exact:true}).fill('3');await hardware.getByLabel('Z toho predné',{exact:true}).press('Tab');
  await page.waitForFunction(async({projectId,id,after})=>{
@@ -79,5 +83,14 @@ try{
  await writeFile(`${output}/recovery-after.json`,JSON.stringify(await readRecovery(),null,2));
  const recovered=await snapshot();await writeFile(`${output}/recovered-layout.json`,JSON.stringify(recovered,null,2));assert(recovered.instances.find(i=>i.id===fixture.instances[0].id).params.legCountFront===3&&recovered.customFurniture.some(f=>f.params.groupKind==='backsplash'),'Draft recovery restores unsaved leg configuration together with backsplash geometry');
  assert(errors.length===0,`No browser errors: ${errors.join('; ')}`);await writeFile(`${output}/results.json`,JSON.stringify({checks,errors,projectId},null,2));console.log(JSON.stringify({checks,errors,projectId},null,2));
-}catch(error){await page.screenshot({path:`${output}/failure.png`}).catch(()=>{});await writeFile(`${output}/failure.txt`,String(error.stack)+'\n'+(await page.locator('body').innerText()).slice(0,18000)+'\nErrors: '+JSON.stringify(errors));throw error;}
+}catch(error){
+ await writeFile(`${output}/recovery-failure.json`,JSON.stringify(await page.evaluate(()=>new Promise(resolve=>{
+  const pointer=JSON.parse(localStorage.getItem('arcigy.kitchen.lastWorkspace.v1')??'null');
+  const layout=window.__kitchenDebug?.layoutSnapshot();
+  const summarize=draft=>({scope:draft.scope,updatedAt:draft.updatedAt,instances:draft.appState?.layout?.snapshot?.instances?.map(i=>({id:i.id,legCountFront:i.params.legCountFront})),backsplashes:draft.appState?.layout?.snapshot?.customFurniture?.filter(f=>f.params.groupKind==='backsplash').length});
+  const request=indexedDB.open('arcigy-kitchen-project-recovery',2);
+  request.onsuccess=()=>{const db=request.result;const query=db.transaction('active-drafts','readonly').objectStore('active-drafts').getAll();query.onsuccess=()=>{resolve({pointer,instances:layout?.instances?.map(i=>({id:i.id,legCountFront:i.params.legCountFront})),records:query.result.map(record=>summarize(record.envelope??record))});db.close();};};
+  request.onerror=()=>resolve({pointer,error:'Cannot read recovery database'});
+ })),null,2)).catch(()=>{});
+ await page.screenshot({path:`${output}/failure.png`}).catch(()=>{});await writeFile(`${output}/failure.txt`,String(error.stack)+'\n'+(await page.locator('body').innerText()).slice(0,18000)+'\nErrors: '+JSON.stringify(errors));throw error;}
 finally{await browser.close();}

@@ -43,11 +43,11 @@ export function createProjectMetadata(ctx: ClientContext, input: CreateProjectIn
     name: input.name.trim(),
     location: {
       ...input.location,
-      address: input.location.address.trim()
+      address: input.location.address?.trim() ?? ""
     },
     contact: {
       ...input.contact,
-      name: input.contact.name.trim()
+      name: input.contact.name?.trim() ?? ""
     },
     status: "draft",
     createdAt,

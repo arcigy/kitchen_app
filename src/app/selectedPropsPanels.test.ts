@@ -15,7 +15,7 @@ import {
 } from "./selectedPropsPanels";
 import type { ColumnParams, DoorInstance, DoorParams, FloorInstance, LayoutInstance, SectionInstance, WallInstance, WindowInstance, WindowParams } from "./localTypes";
 import type { AppState } from "../layout/appState";
-import { installFakeDocument, makePropertiesPanelHarness } from "./testUtils/propertiesPanelHarness";
+import { installFakeDocument, makePropertiesPanelHarness, type FakeElement } from "./testUtils/propertiesPanelHarness";
 import { makeDefaultModuleParams } from "../model/cabinetTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
 import { createSystemCatalogSeed } from "../core/catalog/catalog-bootstrap";
@@ -759,6 +759,7 @@ describe("selected props panels", () => {
       modulePackages: [modulePackage],
       args: { propertiesEl: section },
       clientCatalog: makeMinimalCatalog(),
+      defaultCurrency: "CZK",
       rebuildInstance: vi.fn(() => true),
       appendLinkedMeasureInputs: vi.fn()
     };
@@ -784,6 +785,15 @@ describe("selected props panels", () => {
       .map((child) => (child as { value?: string }).value)
       .filter(Boolean);
     expect(selectValues).toEqual(expect.arrayContaining(["chamfered", "rounded"]));
+    const pending: FakeElement[] = [section];
+    let laborCurrency: string | undefined;
+    while (pending.length) {
+      const element = pending.pop()!;
+      if (element.dataset.laborCurrency) laborCurrency = element.textContent;
+      expect(element.attributes.get("aria-label")).not.toBe("Vlastná práca za jednu skrinku · mena");
+      pending.push(...element.children);
+    }
+    expect(laborCurrency).toBe("CZK");
   });
 
   it("keeps selected window and door wall info muted text", () => {

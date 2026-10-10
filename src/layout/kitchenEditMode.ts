@@ -1,3 +1,6 @@
+import { actionIconMarkup } from "../ui/actionIcons";
+import "./kitchenEditMode.css";
+import { createCatalogNameInput } from "../ui/catalogNameInput";
 import * as THREE from "three";
 import type { Group, Object3D } from "three";
 import type { ModuleParams } from "../model/cabinetTypes";
@@ -864,6 +867,31 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     }
   };
 
+  const createWorktopCatalogSection = (isEditing: boolean) => {
+    const worktop = document.createElement("section");
+    worktop.className = "module-catalog-section";
+    const worktopTitle = document.createElement("h3");
+    worktopTitle.textContent = t("Pracovné dosky");
+    worktop.appendChild(worktopTitle);
+    const worktopButton = document.createElement("button");
+    worktopButton.type = "button";
+    worktopButton.className = "module-catalog-worktop";
+    worktopButton.disabled = !isEditing;
+    const worktopIcon = document.createElement("span");
+    worktopIcon.innerHTML = args.icons.worktop;
+    const worktopLabel = document.createElement("strong");
+    worktopLabel.textContent = t("Kresliť pracovnú dosku");
+    worktopButton.append(worktopIcon, worktopLabel);
+    worktopButton.addEventListener("click", () => {
+      if (!args.S.kitchenEditMode) return;
+      args.ensureLayoutMode();
+      args.cancelPlacementIfActive();
+      args.startWorktopDraw();
+    });
+    worktop.appendChild(worktopButton);
+    return worktop;
+  };
+
   const renderModuleCatalog = () => {
     const host = moduleCatalogHost;
     if (!host) return;
@@ -956,6 +984,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     const body = document.createElement("div");
     body.className = "module-catalog-body";
     body.classList.toggle("module-catalog-disabled", !isEditing);
+    body.appendChild(createWorktopCatalogSection(isEditing));
     if (isVendorCatalog) {
       for (const role of getKitchenCatalogRolesForLayer(activeModuleEditLayer)) {
         const roleGroups = vendorCatalog.groups[role];
@@ -1070,28 +1099,6 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       }
     }
 
-    const worktop = document.createElement("section");
-    worktop.className = "module-catalog-section";
-    const worktopTitle = document.createElement("h3");
-    worktopTitle.textContent = t("Pracovné dosky");
-    worktop.appendChild(worktopTitle);
-    const worktopButton = document.createElement("button");
-    worktopButton.type = "button";
-    worktopButton.className = "module-catalog-worktop";
-    worktopButton.disabled = !isEditing;
-    const worktopIcon = document.createElement("span");
-    worktopIcon.innerHTML = args.icons.worktop;
-    const worktopLabel = document.createElement("strong");
-    worktopLabel.textContent = t("Kresliť pracovnú dosku");
-    worktopButton.append(worktopIcon, worktopLabel);
-    worktopButton.addEventListener("click", () => {
-      if (!args.S.kitchenEditMode) return;
-      args.ensureLayoutMode();
-      args.cancelPlacementIfActive();
-      args.startWorktopDraw();
-    });
-    worktop.appendChild(worktopButton);
-    body.appendChild(worktop);
     host.appendChild(body);
   };
 
@@ -3605,10 +3612,17 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
   };
 
   const mountTopbar = (row: HTMLElement) => {
-    if (args.onBacksplash) {
+    if (args.onBacksplash && args.S.kitchenEditMode && !activeTallStackEditorInstance()) {
       const backsplash = args.tb.addGroup("Zástena", { row });
-      args.tb.toolButton(backsplash, { title: "Zástena · Celá kuchyňa", label: "Celá kuchyňa", iconSvg: args.icons.worktop, onClick: () => args.onBacksplash!(false) });
-      args.tb.toolButton(backsplash, { title: "Zástena · Vybrať stenu", label: "Vybrať stenu", iconSvg: args.icons.worktop, onClick: () => args.onBacksplash!(true) });
+      const addBacksplash = args.tb.toolButton(backsplash, {
+        title: "Pridať zástenu", label: "Pridať zástenu", iconSvg: actionIconMarkup("backsplash"),
+        onClick: () => args.onBacksplash!(false),
+      });
+      addBacksplash.dataset.createBacksplash = "true";
+      args.tb.toolButton(backsplash, {
+        title: "Zástena · Vybrať stenu", label: "Vybrať stenu", iconSvg: actionIconMarkup("backsplashWall"),
+        onClick: () => args.onBacksplash!(true),
+      });
     }
     const groupTools = args.tb.addGroup(t("Kitchen group"), { row });
     const runTopbarIntent = (intent: "accept" | "discard") => {
@@ -4376,6 +4390,7 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
     const selectedWingIndex = selectedWing ? selectedWorktopSegment!.segmentIndex : null;
     args.props.setTitle(selectedWing ? `${t("Kitchen")} - Worktop ${selectedWingIndex! + 1}` : t("Kitchen"));
     const section = args.props.section();
+    section.classList.add("kitchen-properties-panel");
 
     const nameInput = document.createElement("input");
     nameInput.type = "text";
@@ -4423,6 +4438,8 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
       input.type = "number";
       input.step = "1";
       input.value = String(Math.round(value));
+      input.className = "kitchen-properties-panel__number";
+      input.inputMode = "numeric";
       args.props.row(section, label, input);
       const applyValue = (refreshProps: boolean) => {
         const next = Number(String(input.value).trim().replace(",", "."));
@@ -4513,122 +4530,25 @@ export function createKitchenEditMode(args: CreateKitchenEditModeArgs) {
         commitCtx((base) => ({ ...base, tallHeightMm: value }), { refreshProps }),
     );
 
-    const gapBadges = document.createElement("div");
-    gapBadges.style.display = "flex";
-    gapBadges.style.flexWrap = "wrap";
-    gapBadges.style.gap = "4px";
-    for (const badge of buildKitchenRunGapBadges(groupId)) {
-      const chip = document.createElement("span");
-      chip.textContent = `${badge.label}: ${badge.state}`;
-      chip.style.borderRadius = "999px";
-      chip.style.padding = "2px 7px";
-      chip.style.fontSize = "11px";
-      chip.style.fontWeight = "700";
-      chip.style.background = badge.ok ? "#e8f7ef" : "#fff1d6";
-      chip.style.color = badge.ok ? "#166534" : "#92400e";
-      gapBadges.appendChild(chip);
-    }
-    args.props.row(section, "Module gaps", gapBadges);
-
     const makeMaterialLookupInput = (
       family: KitchenMaterialLookupFamily,
       value: string,
       onChange: (id: string) => void,
-    ) => {
-      const wrap = document.createElement("div");
-      wrap.style.display = "grid";
-      wrap.style.gap = "3px";
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = value;
-      input.placeholder = "Exact material ID";
-      input.autocomplete = "off";
-      input.spellcheck = false;
-      const status = document.createElement("div");
-      status.className = "muted";
-      status.style.fontSize = "11px";
-      const renderStatus = () => {
-        const material = findKitchenMaterialByExactId(
-          args.catalog,
-          family,
-          input.value,
-        );
-        status.textContent = material
-          ? material.displayName
-          : "Type exact catalog material ID.";
-        status.style.color = material ? "" : "#92400e";
-      };
-      const commit = async () => {
-        status.textContent = "Looking up exact catalog ID...";
-        status.style.color = "";
-        const material = await lookupKitchenMaterialByExactId(
-          args.catalog,
-          family,
-          input.value,
-        );
-        if (!material) {
-          renderStatus();
-          return;
-        }
-        input.value = material.id;
-        onChange(material.id);
-      };
-      input.addEventListener("change", commit);
-      input.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter") commit();
-      });
-      input.addEventListener("input", renderStatus);
-      renderStatus();
-      wrap.append(input, status);
-      return wrap;
-    };
+    ) => createCatalogNameInput({
+      value,
+      choices: args.catalog.materials.filter(material => matchesKitchenMaterialFamily(material, family)),
+      lookup: id => lookupKitchenMaterialByExactId(args.catalog, family, id),
+      placeholder: "Vyhľadať názov materiálu",
+      onChange,
+    });
 
-    const makeHandleLookupInput = (
-      value: string,
-      onChange: (id: string) => void,
-    ) => {
-      const wrap = document.createElement("div");
-      wrap.style.display = "grid";
-      wrap.style.gap = "3px";
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = value;
-      input.placeholder = "Exact handle component ID";
-      input.autocomplete = "off";
-      input.spellcheck = false;
-      const status = document.createElement("div");
-      status.className = "muted";
-      status.style.fontSize = "11px";
-      const renderStatus = () => {
-        const component = findKitchenHandleByExactId(args.catalog, input.value);
-        status.textContent = component
-          ? component.displayName
-          : "Type exact catalog handle ID.";
-        status.style.color = component ? "" : "#92400e";
-      };
-      const commit = async () => {
-        status.textContent = "Looking up exact catalog ID...";
-        status.style.color = "";
-        const component = await lookupKitchenHandleByExactId(
-          args.catalog,
-          input.value,
-        );
-        if (!component) {
-          renderStatus();
-          return;
-        }
-        input.value = component.id;
-        onChange(component.id);
-      };
-      input.addEventListener("change", commit);
-      input.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter") commit();
-      });
-      input.addEventListener("input", renderStatus);
-      renderStatus();
-      wrap.append(input, status);
-      return wrap;
-    };
+    const makeHandleLookupInput = (value: string, onChange: (id: string) => void) => createCatalogNameInput({
+      value,
+      choices: args.catalog.components.filter(component => component.componentType === "handle" && component.isActive),
+      lookup: id => lookupKitchenHandleByExactId(args.catalog, id),
+      placeholder: "Vyhľadať názov úchytky",
+      onChange,
+    });
 
     args.props.row(
       section,

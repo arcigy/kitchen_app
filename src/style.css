@@ -2931,7 +2931,7 @@ textarea {
 }
 
 .archux-main {
-  grid-template-columns: 78px minmax(640px, 1fr) minmax(292px, 320px) !important;
+  grid-template-columns: 78px minmax(0, 1fr) minmax(292px, 320px) !important;
   grid-template-rows: minmax(0, 1fr) 152px;
   grid-template-areas:
     "nav viewer props"
@@ -4603,6 +4603,33 @@ textarea {
   gap: 8px;
 }
 
+.margins-manufacturing-packaging {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.margins-project-control__editor .margins-manufacturing-packaging > span {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.margins-manufacturing-packaging [data-manufacturing-packaging-currency] {
+  width: 72px;
+  min-width: 72px;
+  min-height: 31px;
+  padding: 4px;
+  border: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
 .margins-project-control {
   min-width: 0;
   display: grid;
@@ -4657,9 +4684,10 @@ textarea {
 
 .margins-preassembly-rates > small { grid-column: 1 / -1; color: var(--muted); }
 .margins-preassembly-rates > button { align-self: end; justify-self: start; }
-.margins-project-control[data-manufacturing-settings] { grid-column: 1 / -1; grid-template-columns: minmax(220px, 1fr) auto auto; }
-.margins-project-control[data-manufacturing-settings] .margins-project-control__editor { grid-template-columns: repeat(2, minmax(110px, 150px)) auto; }
+.margins-project-control[data-manufacturing-settings] { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) auto; }
+.margins-project-control[data-manufacturing-settings] .margins-project-control__editor { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(90px, 120px)) minmax(180px, 1fr) auto; }
 .margins-project-control[data-manufacturing-settings] > label:nth-child(2) { display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.margins-project-control[data-manufacturing-settings] input[type="checkbox"] { flex: 0 0 16px; width: 16px; height: 16px; min-height: 0; margin: 0; }
 .margins-project-control[data-manufacturing-settings] .margins-project-control__editor label { padding-left: 6px; color: var(--muted); font-size: 11px; }
 .margins-project-control[data-manufacturing-settings] > small { grid-column: 1 / -1; color: var(--muted); font-size: 11px; }
 .margins-navigation { flex: 0 0 auto; display: grid; gap: 7px; }
@@ -4706,7 +4734,7 @@ textarea {
 .margins-general-group__control .margins-group-reset { width: 32px; font-size: 18px; padding: 0; }
 .margins-general-group__note { color: var(--muted); font-size: 11px; }
 .margins-phase .margins-group-control button, .margins-phase .margins-item-control button, .margins-phase .margins-project-control__editor button { width: auto; padding: 6px 9px; font-size: 11px; }
-.margins-scope-settings > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.margins-scope-settings > header { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 12px; }
 .margins-scope-settings > header h2 { font-size: 16px; }
 .margins-scope-settings > header p { font-size: 12px; color: var(--muted); }
 .margins-scope-settings > header label { max-width: 45%; min-width: 180px; font-size: 12px; }
@@ -5274,6 +5302,7 @@ textarea {
   .margins-search-tools input { grid-column: 1 / -1; }
   .margins-project-controls { grid-template-columns: minmax(0, 1fr); }
   .margins-project-control[data-manufacturing-settings] { grid-template-columns: minmax(0, 1fr); }
+  .margins-project-control[data-manufacturing-settings] .margins-project-control__editor { grid-template-columns: minmax(0, 1fr); }
   .margins-scope-settings > header { display: grid; }
   .margins-scope-settings > header label { max-width: 100%; }
   .margins-preassembly-rates { grid-template-columns: minmax(0, 1fr); }
@@ -5908,7 +5937,7 @@ textarea {
   grid-area: bottom;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(310px, 1.2fr) minmax(250px, 1fr) 260px 210px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(160px, .85fr) 260px;
   overflow: hidden;
   border-radius: 14px;
   background: rgba(var(--surface-rgb), 0.9);
@@ -5934,7 +5963,7 @@ textarea {
 }
 
 .archux-margins-phase .archux-bottom {
-  grid-template-columns: minmax(0, 1fr) 230px;
+  grid-template-columns: minmax(0, 1fr) 260px;
 }
 
 .archux-margins-phase .archux-bottom > [data-bottom-default] {
@@ -6010,25 +6039,36 @@ textarea {
 
 .archux-activity-list {
   min-height: 0;
-  max-height: 82px;
+  max-height: 100px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
   scrollbar-width: thin;
 }
 
 .archux-activity p {
-  align-items: baseline;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  margin: 8px 0;
+  line-height: 1.35;
 }
 
 .archux-activity p span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  color: var(--text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .archux-activity p b {
-  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .archux-activity-open {
@@ -11018,7 +11058,7 @@ canvas.material-modify-picking {
 }
 
 .archux-main.archux-has-module-catalog {
-  grid-template-columns: 78px 320px minmax(640px, 1fr) minmax(292px, 320px) !important;
+  grid-template-columns: 78px clamp(220px, 22vw, 320px) minmax(0, 1fr) minmax(292px, 320px) !important;
   grid-template-areas:
     "nav catalog viewer props"
     "nav bottom bottom bottom" !important;

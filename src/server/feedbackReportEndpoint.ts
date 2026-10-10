@@ -1,6 +1,7 @@
 import type http from "node:http";
 import type { ClientContext } from "../core/client/client-context";
 import { fetchExternalText } from "./external-http";
+import { normalizeFeedbackText } from "../core/feedback/feedbackText";
 
 const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
 const MAX_SNAPSHOT_BYTES = 20 * 1024 * 1024;
@@ -165,9 +166,9 @@ export async function handleFeedbackReportApi(req: http.IncomingMessage, res: ht
     if (typeof headerId !== "string" || headerId !== submissionId) throw new FeedbackReportError("Chýba platný Idempotency-Key.");
     const kind = text(body.kind, "kind", 40);
     if (!kinds.has(kind) || body.consent !== true) throw new FeedbackReportError("Pred odoslaním potvrďte zdieľanie príloh.");
-    const title = text(body.title, "title", 180);
-    const description = text(body.description, "description", 8_000);
-    const comment = text(body.comment ?? "", "comment", 4_000, false);
+    const feedbackText = normalizeFeedbackText(body.title, body.description, body.comment ?? "");
+    if (!feedbackText) throw new FeedbackReportError("Vyplňte názov alebo opis problému.");
+    const { title, description, comment } = feedbackText;
     const screenshot = validatedPngDataUrl(body.screenshotDataUrl);
     if (jsonBytes(body.projectSnapshot) > MAX_SNAPSHOT_BYTES || jsonBytes(body.diagnostics) > MAX_SNAPSHOT_BYTES) throw new FeedbackReportError("Projektový snapshot je príliš veľký na bezpečné odoslanie.");
     const diagnostics = object(body.diagnostics);

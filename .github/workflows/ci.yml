@@ -110,7 +110,7 @@ jobs:
               chrome_sources+=("$chrome_source")
             fi
           done
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
 
       - name: Start isolated UI runtime
         env:

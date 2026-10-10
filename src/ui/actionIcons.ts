@@ -2,6 +2,8 @@ import actionIconSprite from "./actionIcons.svg?raw";
 
 export const actionIconDetails = {
   select: { title: "Select", description: "Choose an object or return to the selection tool." },
+  backsplashWall: { title: "Zástena · Vybrať stenu", description: "Vybrať jednu stenu otvorenej kuchyne a navrhnúť pre ňu zástenu." },
+  backsplash: { title: "Pridať zástenu", description: "Navrhnúť a vytvoriť dielce zásteny za pracovnou doskou otvorenej kuchyne." },
   wall: { title: "Wall", description: "Start drawing a wall in the active plan." },
   door: { title: "Door", description: "Place or select a door opening." },
   window: { title: "Window", description: "Place or select a window opening." },

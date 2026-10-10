@@ -109,6 +109,58 @@ function buildDelfiMarginsView(
 }
 
 describe("project margin calculation", () => {
+  it("charges the configured packaging rate once for net board area across the project", () => {
+    const board = (id: string, areaM2: number, quantity = 1) => ({
+      ...pricedItem({ id, cost: 0, quantity }),
+      quantity,
+      dimensionsMm: { length: 1000, width: 1000, thickness: 12 },
+      metrics: { areaM2, billableAreaM2: areaM2 * 1.25 }
+    });
+    const entries = [
+      entry({ instanceId: "a", items: [board("thin-back", 4)] }),
+      entry({ instanceId: "b", items: [board("worktop", 6)] })
+    ];
+    const state = initializedState({ manufacturing: {
+      ...createDefaultProjectMarginSettingsState().manufacturing,
+      packagingRatePerM2: { amount: 2.5, currency: "CZK" }
+    } });
+
+    const quote = buildProjectQuoteSummary(entries, state, { currency: "CZK" });
+    expect(quote.packagingCost).toBe(25);
+    expect(quote.materialCost).toBe(25);
+    expect(quote.marginView.groups.find(group => group.category === "packaging")).toMatchObject({ baseCost: 25, marginAmount: 0, finalPrice: 25 });
+    expect(quote.finalPrice).toBe(25);
+    expect(buildProjectQuoteSummary(entries, JSON.parse(JSON.stringify(quote.marginView.settings)), { currency: "CZK" }).packagingCost).toBe(25);
+  });
+
+  it("measures net aggregate and shaped areas once and falls back to dimensions with piece quantity", () => {
+    const items: PortableQuoteBomItem[] = [
+      { ...pricedItem({ id: "aggregate", cost: 0 }), quantity: 3, metrics: { areaM2: 2, billableAreaM2: 9 } },
+      { ...pricedItem({ id: "shaped", cost: 0 }), quantity: 2, pricingQuantityBase: 1.25 },
+      { ...pricedItem({ id: "dimensioned", cost: 0 }), quantity: 3, dimensionsMm: { length: 1000, width: 500, thickness: 3 } },
+      { ...pricedItem({ id: "hardware", cost: 0, itemType: "hardware" }), metrics: { areaM2: 100 } }
+    ];
+    const settings = initializedState({ manufacturing: { ...createDefaultProjectMarginSettingsState().manufacturing, packagingRatePerM2: { amount: 2, currency: "EUR" } } });
+    const quote = buildProjectQuoteSummary([entry({ instanceId: "area-bases", items })], settings);
+    expect(quote.marginView.groups.find(group => group.category === "packaging")?.items[0].quantity).toBe(4.75);
+    expect(quote.packagingCost).toBe(9.5);
+  });
+
+  it("marks unknown packaging area incomplete only when its configured rate is positive", () => {
+    const entries = [entry({ instanceId: "unknown-area", items: [pricedItem({ id: "unmeasured", cost: 0 })] })];
+    const quoteAt = (amount: number) => buildProjectQuoteSummary(entries, initializedState({ manufacturing: {
+      ...createDefaultProjectMarginSettingsState().manufacturing, packagingRatePerM2: { amount, currency: "EUR" }
+    } }));
+    const positive = quoteAt(2.5);
+    expect(positive.marginView.groups.find(group => group.category === "packaging")?.missingPriceCount).toBe(1);
+    expect(positive.marginView.warnings.some(warning => warning.targetId?.includes("packaging-material"))).toBe(true);
+    const zero = quoteAt(0);
+    expect(zero.packagingCost).toBe(0);
+    expect(zero.marginView.groups.find(group => group.category === "packaging")?.missingPriceCount).toBe(0);
+    expect(zero.marginView.warnings.some(warning => warning.targetId?.includes("packaging-material"))).toBe(false);
+    expect(buildProjectQuoteSummary(entries, initializedState()).packagingCost).toBe(0);
+  });
+
   it("leaves the standard margin summary unchanged unless a tenant policy enables the metric", () => {
     const entries = [entry({ instanceId: "a", items: [pricedItem({ id: "board", cost: 100 })] })];
     const view = buildProjectMarginsView(entries, initializedState());

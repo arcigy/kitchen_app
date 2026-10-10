@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppState, LayoutSnapshot } from "../layout/appState";
-import { createRecentActivityController, describeSnapshotActivity } from "./recentActivityController";
+import { createRecentActivityController, describeSnapshotActivity, relativeActivityTime } from "./recentActivityController";
 import { FakeElement } from "./testUtils/propertiesPanelHarness";
 
 const snapshot = (patch: Partial<LayoutSnapshot>): LayoutSnapshot => ({
@@ -70,6 +70,18 @@ describe("describeSnapshotActivity", () => {
   });
 });
 
+describe("relativeActivityTime", () => {
+  it("covers seconds through years and keeps locale-aware wording", () => {
+    const now = new Date(2026, 7, 10, 12).getTime();
+    expect(relativeActivityTime(now - 20_000, now, "en")).toBe("20 seconds ago");
+    expect(relativeActivityTime(now - 3_600_000, now, "en")).toBe("1 hour ago");
+    expect(relativeActivityTime(now - 3 * 86_400_000, now, "en")).toBe("3 days ago");
+    expect(relativeActivityTime(new Date(2026, 6, 10).getTime(), now, "en")).toBe("July");
+    expect(relativeActivityTime(new Date(2025, 6, 10).getTime(), now, "en")).toBe("last year");
+    expect(relativeActivityTime(now - 20_000, now, "sk")).toBe("pred 20 sekundami");
+  });
+});
+
 describe("createRecentActivityController", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -109,7 +121,18 @@ describe("createRecentActivityController", () => {
       onRestore: vi.fn()
     });
 
+    const emptyRow = listEl.children[0];
+    vi.stubGlobal("performance", { now: () => 5000 });
+    controller.syncFromHistory();
+    expect(listEl.children[0]).toBe(emptyRow);
+
     controller.record("Wall W1 added", current, { kind: "wall", id: "w1" });
+    const compactRow = listEl.children[0]!;
+    expect(compactRow.children).toHaveLength(2);
+    expect(compactRow.children[0]!.textContent).toBe("Wall W1 added");
+    expect(compactRow.children[1]!.textContent).toBeTruthy();
+    controller.syncFromHistory();
+    expect(listEl.children[0]).toBe(compactRow);
     countEl.dispatch("click");
 
     const popover = body.children.find((child) => child.className === "archux-activity-history-popover")!;
@@ -122,6 +145,7 @@ describe("createRecentActivityController", () => {
     const entryButton = list.children[0]!;
     expect(entryButton.type).toBe("button");
     expect(entryButton.children[0]!.textContent).toBe("Wall W1 added");
+    expect(entryButton.children).toHaveLength(2);
 
     entryButton.dispatch("click");
 

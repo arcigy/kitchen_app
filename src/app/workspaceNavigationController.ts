@@ -41,6 +41,7 @@ type WorkspaceNavigationControllerArgs = {
   setVisualisationTopbar: () => void;
   setDesignTopbar: () => void;
   selectModuleById?: (instanceId: string) => void;
+  enterKitchenGroup?: (groupId: string, focusInstanceId: string) => void;
   uiScale?: ReturnType<typeof createUiScaleController>;
 };
 
@@ -372,7 +373,20 @@ export function createWorkspaceNavigationController(args: WorkspaceNavigationCon
   });
 
   const openModuleProperties = async (id: string) => { await handleNav("design"); args.selectModuleById?.(id); };
-  return { openDesign: () => handleNav("design"), openModuleProperties, closeOverlay, openSheets, openSchedules, openMaterials, openMargins, leaveMaterialsPhase, leaveMarginsPhase };
+  const openModuleLabor = async (id: string) => {
+    await handleNav("design");
+    const instance = args.S.instances.find(item => item.id === id);
+    if (instance?.kitchenGroupId && args.enterKitchenGroup &&
+        (!args.S.kitchenEditMode || args.S.activeKitchenGroupId !== instance.kitchenGroupId)) {
+      args.enterKitchenGroup(instance.kitchenGroupId, id);
+    } else args.selectModuleById?.(id);
+    window.requestAnimationFrame(() => {
+      const panel = document.querySelector<HTMLElement>("[data-module-labor]");
+      panel?.scrollIntoView({ block: "nearest" });
+      panel?.querySelector<HTMLInputElement>("[data-module-labor-rate]")?.focus();
+    });
+  };
+  return { openDesign: () => handleNav("design"), openModuleProperties, openModuleLabor, closeOverlay, openSheets, openSchedules, openMaterials, openMargins, leaveMaterialsPhase, leaveMarginsPhase };
 }
 
 function escapeHtml(value: string): string {

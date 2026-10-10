@@ -559,6 +559,7 @@ describe("project create/save/encryption", () => {
       manufacturing: {
         ...createDefaultProjectMarginSettingsState().manufacturing,
         pricingMode: "configured" as const,
+        packagingRatePerM2: { amount: 2.5, currency: "CZK" as const },
         boardWastePercent: 10,
         edgeWastePercent: 4,
         preassemblyByInstanceId: { "base-1": 0 },
@@ -606,6 +607,7 @@ describe("project create/save/encryption", () => {
     expect(imported.phases[0].materialAssignments).toEqual(materialAssignments);
     expect(imported.appState.quoteSettings).toEqual(quoteSettings);
     expect(imported.phases[0].quoteSettings).toEqual(quoteSettings);
+    expect((imported.appState.quoteSettings as typeof quoteSettings).manufacturing.packagingRatePerM2).toEqual({ amount: 2.5, currency: "CZK" });
     expect(
       imported.appState.materialAssignments.assignments[0].customValues,
     ).toEqual({

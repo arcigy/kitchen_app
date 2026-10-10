@@ -88,7 +88,7 @@ export function downloadCanvasPng(args: ScopedCanvasPngArgs): void {
   triggerDownload(buildScopedFileName(args.scope, args.prefix, "png"), url);
 }
 
-function downloadBlob(name: string, blob: Blob): void {
+export function downloadBlob(name: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   triggerDownload(name, url, () => URL.revokeObjectURL(url));
 }
@@ -97,8 +97,13 @@ function triggerDownload(name: string, url: string, cleanup?: () => void): void 
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = name;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
   anchor.click();
-  cleanup?.();
+  window.setTimeout(() => {
+    anchor.remove();
+    cleanup?.();
+  }, 30_000);
 }
 
 async function writeHandle(handle: WritableHandle, data: string | Blob): Promise<void> {

@@ -343,6 +343,7 @@ export async function exportMarketingOfferPdf(
     [t("Boards"), formatCurrency(summary.boardsCost, currency, summary.currency ?? "EUR")],
     [t("Edge banding"), formatCurrency(summary.edgesCost, currency, summary.currency ?? "EUR")],
     [t("Components"), formatCurrency(summary.hardwareCost, currency, summary.currency ?? "EUR")],
+    [t("Packaging material"), formatCurrency(summary.packagingCost, currency, summary.currency ?? "EUR")],
     [t("Module labor"), formatCurrency(summary.moduleLaborCost, currency, summary.currency ?? "EUR")],
     [t("Additional project labor"), formatCurrency(summary.additionalLaborCost, currency, summary.currency ?? "EUR")],
     [t("Subtotal before margin"), formatCurrency(summary.subtotalBeforeMargin, currency, summary.currency ?? "EUR")],
