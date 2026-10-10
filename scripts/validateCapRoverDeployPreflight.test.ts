@@ -185,7 +185,11 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).toContain("DATABASE_SCHEMA: dev");
     expect(workflow).toContain("ARCIGY_OBJECT_STORAGE_PREFIX: dev");
     expect(workflow).toContain("setsid node node_modules/tsx/dist/cli.mjs scripts/devLocal.ts");
-    expect(workflow).toContain("curl --fail --silent --show-error http://127.0.0.1:5180/ready");
+    expect(workflow).toContain('BLENDER_WORKER_PORT: "5198"');
+    expect(workflow).toContain('KITCHEN_UI_PORT: "5188"');
+    expect(workflow).toContain("curl --fail --silent --show-error http://127.0.0.1:5188/ready");
+    expect(workflow).toContain("KITCHEN_UI_BASE_URL: http://127.0.0.1:5188/");
+    expect(workflow).toContain("PRICING_UI_BASE_URL: http://127.0.0.1:5188/");
     expect(workflow).toContain("npm run test:ui-regression");
     expect(workflow).toContain("name: Stop isolated UI runtime\n        if: always()");
     expect(workflow).toContain('kill -TERM -- "-${ARCIGY_UI_PID}"');
