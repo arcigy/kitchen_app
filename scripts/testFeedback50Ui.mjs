@@ -75,7 +75,14 @@ async function createProject(label, importPackage = false) {
   await current.waitForFunction(() => !!window.__kitchenDebug);
   const fixture = await current.evaluate(() => window.__kitchenDebug.createKitchenScenario({ path: [{ x: 0, z: 0 }, { x: 4000, z: 0 }], moduleType: 'fwm_catalog_base_drawers', offsetAlongMm: 200 }));
   if (label === 'D') {
-    await current.evaluate(() => window.__kitchenDebug.createWall({ aMm: { x: 0, z: -100 }, bMm: { x: 4000, z: -100 }, thicknessMm: 200 }));
+    // This fixture puts the kitchen at the inner face of a centered 200 mm wall.
+    // Choose that geometry explicitly rather than inheriting the wall tool default.
+    await current.getByRole('button', { name: /^(Stena|Wall)$/ }).click();
+    await current.locator('select').filter({ has: current.locator('option[value="interior"]') }).selectOption('center');
+    await current.keyboard.press('Escape');
+    const wall = await current.evaluate(() => window.__kitchenDebug.createWall({ aMm: { x: 0, z: -100 }, bMm: { x: 4000, z: -100 }, thicknessMm: 200 }));
+    assert(wall && (await snapshot(current)).walls.some(item => item.id === wall.id && item.params.justification === 'center'),
+      'Backsplash fixture creates its centered wall without overlapping the kitchen');
     await current.evaluate(group => window.__kitchenDebug.selectKitchenGroup(group), fixture.group.id);
   }
   await current.getByRole('button', { name: /^(Upraviť kuchyňu|Edit kitchen)$/ }).click();
