@@ -52,7 +52,7 @@ ${command.replaceAll("/etc/apt/sources.list.d", quote(shellPath(sources)))}`;
       const result = spawnSync(bash, ["--noprofile", "--norc", "-c", script], { encoding: "utf8", timeout: 10000 });
       expect(result.error).toBeUndefined();
       expect(result.status, result.stderr).toBe(installerExit);
-      expect(readFileSync(invocation, "utf8").trim().split("\n")).toEqual(["playwright", "install", "--with-deps", "chromium"]);
+      expect(readFileSync(invocation, "utf8").trim().split("\n")).toEqual(["playwright", "install", "--with-deps", "chromium", "webkit"]);
       expect(readdirSync(sources).sort()).toEqual([...sourceNames, "ubuntu.sources"].sort());
       for (const name of sourceNames) expect(readFileSync(path.join(sources, name), "utf8")).toBe(original(name));
       expect(readFileSync(ubuntu, "utf8")).toBe("URIs: http://archive.ubuntu.com/ubuntu\n");

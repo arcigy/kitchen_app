@@ -321,7 +321,7 @@ const EXACT_SK_TEXT: Record<string, string> = {
   Note: "Poznámka",
   "Loading project list…": "Načítavam zoznam projektov…",
   "Project manager is ready.": "Správca projektov je pripravený.",
-  "Please enter the project name, address and contact.": "Vyplňte názov projektu, adresu a kontakt.",
+  "Please enter the project name.": "Vyplňte názov projektu.",
   "Creating project": "Vytváram projekt",
   "Opening blank workspace": "Otváram prázdne pracovisko",
   "Importing project": "Importujem projekt",

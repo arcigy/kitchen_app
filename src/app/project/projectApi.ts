@@ -1,5 +1,6 @@
 import { confirmProjectEdgeGroups, pendingProjectEdgeGroups } from "./projectEdgeGroupBaseline";
 import type { ProjectMetadata, ProjectVersionMetadata } from "../../core/project/project-types";
+import { downloadBlob } from "../../core/filePersistence";
 import type { ProjectSaveFile } from "../../core/project-save/project-save-types";
 import { toSafeProjectFileName } from "../../core/project-save/project-save-file";
 
@@ -53,11 +54,11 @@ async function readJson<T>(response: Response): Promise<T> {
 
 export type CreateProjectRequest = {
   name: string;
-  address: string;
+  address?: string;
   city?: string;
   postalCode?: string;
   country?: string;
-  contactName: string;
+  contactName?: string;
   email?: string;
   phone?: string;
   notes?: string;
@@ -152,12 +153,7 @@ export async function downloadProject(project: ProjectMetadata): Promise<void> {
   const response = await fetch(`/api/projects/${encodeURIComponent(project.projectId)}/download`, { credentials: "include" });
   if (!response.ok) throw new Error(await response.text());
   const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = toSafeProjectFileName(project.name, project.projectId);
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(toSafeProjectFileName(project.name, project.projectId), blob);
 }
 
 export async function importProjectFile(file: File): Promise<ProjectSaveFile> {

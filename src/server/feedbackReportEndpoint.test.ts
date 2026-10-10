@@ -23,7 +23,7 @@ function report(submissionId = "report-1") {
   };
 }
 
-async function send(body: ReturnType<typeof report>, fetchImpl: typeof fetch) {
+async function send(body: Omit<ReturnType<typeof report>, "title" | "description"> & { title?: string; description?: string }, fetchImpl: typeof fetch) {
   const sendJson = vi.fn();
   const handled = await handleFeedbackReportApi(
     { method: "POST", headers: { cookie: "session=yes", "idempotency-key": body.submissionId } } as never,
@@ -123,6 +123,29 @@ describe("feedback report endpoint", () => {
         expect.objectContaining({ ok: false, error: expect.stringContaining("Screenshot") })
       );
     }
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("accepts either meaningful title or description and derives a missing title", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify([requests.length === 1 ? 777 : 1000 + requests.length]), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const titleOnly = await send({ ...report("title-only"), title: " Samostatný názov ", description: undefined }, fetchImpl);
+    const descriptionOnly = await send({ ...report("description-only"), title: undefined, description: "Samostatný opis" }, fetchImpl);
+
+    expect(titleOnly.sendJson).toHaveBeenCalledWith(expect.anything(), 201, expect.objectContaining({ ok: true }));
+    expect(descriptionOnly.sendJson).toHaveBeenCalledWith(expect.anything(), 201, expect.objectContaining({ ok: true }));
+    expect(requests[0]).toEqual(expect.objectContaining({ vals_list: [expect.objectContaining({ name: "[Arcigy bug] Samostatný názov" })] }));
+    expect(requests[4]).toEqual(expect.objectContaining({ vals_list: [expect.objectContaining({ name: "[Arcigy bug] Samostatný opis" })] }));
+  });
+
+  it("rejects whitespace and punctuation in both feedback fields", async () => {
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    const result = await send({ ...report("no-content"), title: " ... ", description: "  " }, fetchImpl);
+    expect(result.sendJson).toHaveBeenCalledWith(expect.anything(), 400, expect.objectContaining({ ok: false }));
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

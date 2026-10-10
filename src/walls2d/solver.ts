@@ -633,8 +633,14 @@ function solvePerpendicularButtJoinNode(node: NodeDraft, solvedEnds: Map<string,
   const throughOut = spineDir(through.wall, through.end);
   const branchOut = spineDir(branch.wall, branch.end);
   const branchOffsets = offsetsM(branch.wall);
-  const throughExtension = Math.max(Math.abs(branchOffsets.left), Math.abs(branchOffsets.right));
-  const throughCapCenter = add(node.p, mul(throughOut, -throughExtension));
+  const branchNormal = leftNormal(branch.wall);
+  // Offset faces can lie entirely on either side of the reference endpoint.
+  // End the through wall at the branch's far face, measured along its own spine.
+  const throughCapOffset = Math.min(
+    dot(mul(branchNormal, branchOffsets.left), throughOut),
+    dot(mul(branchNormal, branchOffsets.right), throughOut)
+  );
+  const throughCapCenter = add(node.p, mul(throughOut, throughCapOffset));
   const throughNormal = leftNormal(through.wall);
   const throughOffsets = offsetsM(through.wall);
   const throughDraft: SolvedEndDraft = {

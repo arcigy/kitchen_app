@@ -19,10 +19,11 @@ async function setup(captureViewport: () => Promise<string | null> = vi.fn(async
   return { trigger, captureViewport, buildProjectSnapshot, getDiagnostics };
 }
 
-async function submit(): Promise<void> {
+async function submit(fields: { title?: string; description?: string; comment?: string } = {}): Promise<void> {
   const form = document.querySelector<HTMLFormElement>("#feedback-report-form")!;
-  (form.elements.namedItem("title") as HTMLInputElement).value = "Nefunguje export";
-  (form.elements.namedItem("description") as HTMLTextAreaElement).value = "Export sa po kliknutí nevytvorí.";
+  (form.elements.namedItem("title") as HTMLInputElement).value = fields.title ?? "Nefunguje export";
+  (form.elements.namedItem("description") as HTMLTextAreaElement).value = fields.description ?? "Export sa po kliknutí nevytvorí.";
+  (form.elements.namedItem("comment") as HTMLTextAreaElement).value = fields.comment ?? "";
   (form.elements.namedItem("consent") as HTMLInputElement).checked = true;
   form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve));
@@ -110,6 +111,31 @@ describe("feedback report controller", () => {
     }));
     expect(buildProjectSnapshot).toHaveBeenCalledOnce();
     expect(getDiagnostics).toHaveBeenCalledOnce();
+  });
+
+  it("accepts a title or a description on its own and allows an empty comment", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ ok: true }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await setup();
+    await submit({ title: "  Samostatný názov  ", description: "   " });
+    const payload = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
+    expect(payload).toMatchObject({ title: "Samostatný názov", description: "", comment: "" });
+
+    document.body.replaceChildren();
+    fetchMock.mockClear();
+    await setup();
+    await submit({ title: "", description: "Samostatný opis" });
+    const descriptionPayload = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
+    expect(descriptionPayload).toMatchObject({ title: "Samostatný opis", description: "Samostatný opis", comment: "" });
+  });
+
+  it("rejects whitespace and punctuation without contacting support", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await setup();
+    await submit({ title: " ... ", description: "   " });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-feedback-status]")?.textContent).toBe("Vyplňte názov alebo opis problému.");
   });
 
   it("keeps only the safe two-minute diagnostic timeline when the report is sent", async () => {

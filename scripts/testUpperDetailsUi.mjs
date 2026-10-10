@@ -10,7 +10,9 @@ const readiness = await readinessResponse.json();
 if (!readinessResponse.ok || readiness.storage !== 'file') {
   throw new Error('Upper details UI requires disposable file storage, never a shared database.');
 }
-const reportDir = 'docs/audits/2026-09-07-upper-details';
+const reportDir = process.env.ARCIGY_TASK_RUNTIME
+  ? `${process.env.ARCIGY_TASK_RUNTIME}/upper-details`
+  : 'docs/audits/2026-09-07-upper-details';
 await mkdir(reportDir, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
@@ -38,6 +40,11 @@ try {
   await page.locator("input[name='contactName']").fill('QA');
   await page.locator('[data-project-manager-form] button[type="submit"]').click();
   await page.waitForFunction(() => !!window.__kitchenDebug);
+  // This fixture measures a room whose 100 mm walls straddle their axes.
+  // Declare that alignment explicitly instead of inheriting the drawing default.
+  await page.getByRole('button', { name: /^(Stena|Wall)$/ }).click();
+  await page.locator('select').filter({ has: page.locator('option[value="interior"]') }).selectOption('center');
+  await page.keyboard.press('Escape');
   const fixture = await page.evaluate(() => window.__kitchenDebug.createKitchenScenario({
     path: [{ x: 0, z: 50 }, { x: 2400, z: 50 }], addModule: false
   }));

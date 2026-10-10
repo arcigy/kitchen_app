@@ -126,6 +126,7 @@ type CreateViewNavigationArgs = {
   setViewerPanActive?: (active: boolean) => void;
   isTypingTarget: (target: EventTarget | null) => boolean;
   isInteractionBlocked: () => boolean;
+  shouldYieldKeyboardEvent?: (event: KeyboardEvent) => boolean;
   isPanInteractionBlocked?: () => boolean;
   focusProvider: NavigationFocusProvider;
   refreshDetailView: () => void;
@@ -705,6 +706,7 @@ export function createViewNavigation(args: CreateViewNavigationArgs) {
   };
 
   const onKeyDown = (ev: KeyboardEvent) => {
+    if (args.shouldYieldKeyboardEvent?.(ev)) return;
     if (!shouldHandleNavigationKeyboardEvent({
       code: ev.code,
       defaultPrevented: ev.defaultPrevented,

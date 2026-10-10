@@ -663,6 +663,7 @@ export function createSelectionController(ctx: SelectionControllerContext) {
   }
 
   function clearSelection() {
+    ctx.kitchenMode?.clearWorktopSegmentSelection?.();
     runClearSelectionCommand({ applySelection });
   }
 

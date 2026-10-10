@@ -67,4 +67,6 @@
   <symbol id="send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 14-7-4 14-3-5-7-2Z"/><path d="m12 14 3-3"/></symbol>
   <symbol id="done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4 4L19 6.5"/></symbol>
   <symbol id="cancel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="m9 9 6 6m0-6-6 6"/></symbol>
+  <symbol id="backsplash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V5h16v13M4 18h16v3H4zM4 12h16M12 5v7M8 12v6M16 12v6"/></symbol>
+  <symbol id="backsplashWall" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V5h16v7M4 12h8M10 5v7M4 18h7M15 12l6 5-3 .5-1.5 3L15 12Z"/></symbol>
 </svg>

@@ -1,3 +1,4 @@
+import type { WallExteriorFlipTarget } from "./wallController";
 import type { ProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
 import * as THREE from "three";
 import { formatMm } from "./sharedUtils";
@@ -8,6 +9,7 @@ import { mountColumnPlacementPropsPanel, mountColumnPropsPanel, mountDoorPlaceme
 import { loadUnderlayToCanvas } from "../ui/loadUnderlay";
 import type { Material } from "../types/material";
 import type { ClientCatalog, MaterialDefinition } from "../core/catalog/catalog-types";
+import type { PriceCurrency } from "../core/pricing/currency";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import type { AppState } from "../layout/appState";
 import type { LedStripPointMm } from "../layout/ledStripTypes";
@@ -44,6 +46,7 @@ type RebuildInstanceOptions = {
 };
 
 type WallDrawState = {
+  active: boolean;
   preview: THREE.Mesh | null;
   a: THREE.Vector3 | null;
   hoverB: THREE.Vector3 | null;
@@ -84,6 +87,7 @@ type UnderlayCalibrationState = {
 };
 
 type PropertiesRouterContext = {
+  flipWallExterior: (target: WallExteriorFlipTarget) => boolean;
   props: PropertiesPanelApi;
   floorEdit: FloorEditState;
   floorDefault: Pick<FloorParams, "heightMm" | "thicknessMm" | "materialId">;
@@ -197,6 +201,7 @@ type PropertiesRouterContext = {
   getAllMaterials: () => Material[];
   getMaterialDefinitionById: (id: string) => MaterialDefinition | null;
   catalog: ClientCatalog;
+  defaultCurrency?: PriceCurrency;
   recordActivity?: (label: string) => void;
   getManufacturingSettings?: () => ProjectManufacturingSettings;
   mountModuleCommercialProperties?: (host: HTMLElement, instanceId: string) => void;
@@ -212,12 +217,12 @@ type PropertiesRouterContext = {
 
 export function createPropertiesRouter(ctx: PropertiesRouterContext) {
   const mountFloorBoundaryProps = () => mountFloorBoundaryPropsPanel({ props: ctx.props, floorEdit: ctx.floorEdit, getAllMaterials: ctx.getAllMaterials, floorDefault: ctx.floorDefault });
-  const mountWallToolProps = () => mountWallToolPropsPanel({ props: ctx.props, wallDefault: ctx.wallDefault, wallDraw: ctx.wallDraw, updateWallMeshWithJustification: ctx.updateWallMeshWithJustification, setUnderlayStatus: ctx.setUnderlayStatus });
+  const mountWallToolProps = () => mountWallToolPropsPanel({ flipWallExterior: ctx.flipWallExterior, props: ctx.props, wallDefault: ctx.wallDefault, wallDraw: ctx.wallDraw, updateWallMeshWithJustification: ctx.updateWallMeshWithJustification, setUnderlayStatus: ctx.setUnderlayStatus });
   const mountKitchenWorktopToolProps = () => mountKitchenWorktopToolPropsPanel({ props: ctx.props, S: ctx.S, kitchenWorktopDraw: ctx.kitchenWorktopDraw, scheduleKitchenWorktopPreviewUpdate: ctx.scheduleKitchenWorktopPreviewUpdate, getMaterialDefinitionById: ctx.getMaterialDefinitionById });
   const mountAlignToolProps = () => mountAlignToolPropsPanel({ props: ctx.props, alignState: ctx.alignState });
   const mountTrimToolProps = () => mountTrimToolPropsPanel({ props: ctx.props, trimState: ctx.trimState });
   const mountMeasureToolProps = () => mountMeasureToolPropsPanel({ props: ctx.props, measureState: ctx.measureState, args: ctx.args, formatMm, clearAllMeasurements: ctx.clearAllMeasurements, setUnderlayStatus: ctx.setUnderlayStatus, mountProps });
-  const mountWallProps = (w?: WallInstance) => mountWallPropsPanel({ props: ctx.props, selectedWallIds: ctx.selectedWallIds, walls: ctx.walls, wallJoinTolMm: ctx.wallJoinTolMm, showNoProps: ctx.showNoProps, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, rebuildWall: ctx.rebuildWall, rebuildWallPlanMesh: ctx.rebuildWallPlanMesh, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, w);
+  const mountWallProps = (w?: WallInstance) => mountWallPropsPanel({ flipWallExterior: ctx.flipWallExterior, props: ctx.props, selectedWallIds: ctx.selectedWallIds, walls: ctx.walls, wallJoinTolMm: ctx.wallJoinTolMm, showNoProps: ctx.showNoProps, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, rebuildWall: ctx.rebuildWall, rebuildWallPlanMesh: ctx.rebuildWallPlanMesh, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, w);
   const mountColumnProps = () => mountColumnPropsPanel({ props: ctx.props, column: ctx.columns.find((x) => x.id === ctx.selectedColumnId) ?? null, showNoProps: ctx.showNoProps, rebuildColumn: ctx.rebuildColumn, commitHistory: ctx.commitHistory, S: ctx.S, mountProps });
   const mountColumnPlacementProps = () => {
     if (!ctx.columnPlacementParams) return ctx.showNoProps();
@@ -231,8 +236,8 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
   const mountFloorProps = (floor: FloorInstance) => mountFloorPropsPanel({ props: ctx.props, getAllMaterials: ctx.getAllMaterials, floorDefault: ctx.floorDefault, rebuildFloor: ctx.rebuildFloor, updateSelectionHighlights: ctx.updateSelectionHighlights, commitHistory: ctx.commitHistory, S: ctx.S, enterFloorBoundaryEdit: ctx.enterFloorBoundaryEdit, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, floor);
   const mountSectionToolProps = () => mountSectionToolPropsPanel({ props: ctx.props, sectionDraw: ctx.sectionDraw, drawOrthoEnabled: ctx.drawOrthoEnabled });
   const mountSectionProps = (id: string) => mountSectionPropsPanel({ props: ctx.props, sections: ctx.sections, showNoProps: ctx.showNoProps, getSectionBasis, updateAllSectionVisuals: ctx.updateAllSectionVisuals, mountProps, commitHistory: ctx.commitHistory, S: ctx.S }, id);
-  const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs, renderModuleCatalogIconSvg: ctx.kitchenMode?.renderModuleCatalogIconSvg, mountModuleCommercialProperties: ctx.mountModuleCommercialProperties, getManufacturingSettings: ctx.getManufacturingSettings }, id);
-  const mountMultiModuleProps = () => mountMultiModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, ctx.selectedInstanceIds);
+  const mountModuleProps = (id: string) => mountModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, defaultCurrency: ctx.defaultCurrency, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs, renderModuleCatalogIconSvg: ctx.kitchenMode?.renderModuleCatalogIconSvg, mountModuleCommercialProperties: ctx.mountModuleCommercialProperties, getManufacturingSettings: ctx.getManufacturingSettings }, id);
+  const mountMultiModuleProps = () => mountMultiModulePropsPanel({ findInstance: ctx.findInstance, showNoProps: ctx.showNoProps, props: ctx.props, commitHistory: ctx.commitHistory, S: ctx.S, mountProps, modulePackages: ctx.modulePackages, args: ctx.args, clientCatalog: ctx.catalog, defaultCurrency: ctx.defaultCurrency, rebuildInstance: ctx.rebuildInstance, appendLinkedMeasureInputs: ctx.appendLinkedMeasureInputs }, ctx.selectedInstanceIds);
   const mountWindowProps = () => mountWindowPropsPanel({
     props: ctx.props,
     windowInst: ctx.windowInst,
@@ -310,7 +315,7 @@ export function createPropertiesRouter(ctx: PropertiesRouterContext) {
     if (ctx.floorEdit.active) return mountFloorBoundaryProps();
     if (ctx.placement.active) return ctx.mountPlacementControls(ctx.S, ctx.placementHelpers);
     if (ctx.isColumnPlacementActive()) return mountColumnPlacementProps();
-    if (ctx.layoutTool === "wall") return mountWallToolProps();
+    if (ctx.layoutTool === "wall" && (ctx.wallDraw.active || ctx.selectedKind !== "wall")) return mountWallToolProps();
     if (ctx.layoutTool === "led" && mountLedStripProps()) return;
     if (ctx.isWindowPlacementActive()) return mountWindowPlacementProps();
     if (ctx.isDoorPlacementActive()) return mountDoorPlacementProps();

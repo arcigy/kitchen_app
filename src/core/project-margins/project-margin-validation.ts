@@ -32,7 +32,7 @@ const MATERIAL_CATEGORIES: readonly MaterialAssignmentCategory[] = [
   "other_component",
   "lighting"
 ];
-const PROJECT_MARGIN_CATEGORIES = new Set<ProjectMarginCategory>([...MATERIAL_CATEGORIES, "labor"]);
+const PROJECT_MARGIN_CATEGORIES = new Set<ProjectMarginCategory>([...MATERIAL_CATEGORIES, "labor", "packaging"]);
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -127,7 +127,7 @@ function validateManufacturing(value: unknown, path: string): void {
   if (!isObject(value)) throw new Error(`${path} must be an object.`);
   assertKnownKeys(value, [
     "schemaVersion", "pricingMode", "boardWastePercent", "edgeWastePercent", "boardWasteByMaterialId", "edgeWasteByMaterialId",
-    "preassemblyByModuleType", "preassemblyByPreset", "preassemblyByInstanceId", "recipeSnapshots"
+    "preassemblyByModuleType", "preassemblyByPreset", "preassemblyByInstanceId", "recipeSnapshots", "packagingRatePerM2"
   ], path);
   if (value.schemaVersion !== PROJECT_MANUFACTURING_SETTINGS_SCHEMA_VERSION) throw new Error(`${path}.schemaVersion is unsupported.`);
   if (value.pricingMode !== "legacy" && value.pricingMode !== "configured") throw new Error(`${path}.pricingMode is unsupported.`);
@@ -139,6 +139,12 @@ function validateManufacturing(value: unknown, path: string): void {
   validateRates(value.preassemblyByPreset, `${path}.preassemblyByPreset`, true);
   validateRates(value.preassemblyByInstanceId, `${path}.preassemblyByInstanceId`, true);
   if (!isObject(value.recipeSnapshots)) throw new Error(`${path}.recipeSnapshots must be an object.`);
+  if (value.packagingRatePerM2 !== undefined) {
+    if (!isObject(value.packagingRatePerM2)) throw new Error(`${path}.packagingRatePerM2 must be an object.`);
+    assertKnownKeys(value.packagingRatePerM2, ["amount", "currency"], `${path}.packagingRatePerM2`);
+    assertNonNegativeNumber(value.packagingRatePerM2.amount, `${path}.packagingRatePerM2.amount`);
+    if (!(["EUR", "CZK"] as const).includes(value.packagingRatePerM2.currency as "EUR" | "CZK")) throw new Error(`${path}.packagingRatePerM2.currency is unsupported.`);
+  }
   for (const [id, recipe] of Object.entries(value.recipeSnapshots)) {
     validateRecipe(recipe, `${path}.recipeSnapshots.${id}`);
     if ((recipe as ManufacturingRecipeSnapshot).id !== id) throw new Error(`${path}.recipeSnapshots key must match recipe id.`);

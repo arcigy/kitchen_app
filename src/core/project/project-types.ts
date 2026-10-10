@@ -75,7 +75,7 @@ export type ProjectVersionMetadata = {
 
 export type CreateProjectInput = {
   name: string;
-  location: ProjectLocation;
-  contact: ProjectContact;
+  location: Omit<ProjectLocation, "address"> & { address?: string };
+  contact: Omit<ProjectContact, "name"> & { name?: string };
   notes?: string;
 };

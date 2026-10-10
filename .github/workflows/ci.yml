@@ -110,11 +110,12 @@ jobs:
               chrome_sources+=("$chrome_source")
             fi
           done
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
 
       - name: Start isolated UI runtime
         env:
-          BLENDER_WORKER_PORT: "5191"
+          BLENDER_WORKER_PORT: "5198"
+          KITCHEN_UI_PORT: "5188"
           KITCHEN_PROJECT_STORAGE: file
           APP_ENV: dev
           DATABASE_SCHEMA: dev
@@ -133,7 +134,7 @@ jobs:
           setsid node node_modules/tsx/dist/cli.mjs scripts/devLocal.ts > "${RUNNER_TEMP}/arcigy-ui.log" 2>&1 &
           echo "ARCIGY_UI_PID=$!" >> "${GITHUB_ENV}"
           for attempt in {1..60}; do
-            if curl --fail --silent --show-error http://127.0.0.1:5180/ready > /dev/null; then
+            if curl --fail --silent --show-error http://127.0.0.1:5188/ready > /dev/null; then
               exit 0
             fi
             sleep 1
@@ -144,8 +145,8 @@ jobs:
       - name: Full UI and accessibility regression
         timeout-minutes: 20
         env:
-          KITCHEN_UI_BASE_URL: http://127.0.0.1:5180/
-          PRICING_UI_BASE_URL: http://127.0.0.1:5180/
+          KITCHEN_UI_BASE_URL: http://127.0.0.1:5188/
+          PRICING_UI_BASE_URL: http://127.0.0.1:5188/
         run: |
           node scripts/prepareUiCatalogFixture.mjs
           npm run test:ui-regression

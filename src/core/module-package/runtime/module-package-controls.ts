@@ -90,6 +90,12 @@ function isInternalSettingsParameter(parameter: ModuleParameterDefinition) {
     ["type", "moduleType", "typeId", "modulePackageId", "packageHash"].includes(parameter.key) || /MaterialGroup$/.test(parameter.key);
 }
 
+// Material assignment is edited once in the commercial Materials and margins panel.
+// Keep these package parameters in snapshots, presets and geometry; omit only their duplicate UI.
+function isMaterialAssignmentParameter(parameter: ModuleParameterDefinition) {
+  return parameter.type === "material" || /Material(Id|Group)$/.test(parameter.key);
+}
+
 function sortedControls(modulePackage: FurnQuoteModulePackage) {
   return [...modulePackage.ui.controls].sort((a, b) => {
     const groupA = modulePackage.ui.groups.find((group) => group.id === a.groupId)?.order ?? 0;
@@ -156,7 +162,7 @@ function withParameterPresetControl(
     if (!args.createParameterPreset) return;
     openCreatePresetDialog({
       host: args.presetDialogHost,
-      currency: catalogLaborCurrency(args.clientCatalog),
+      currency: args.defaultCurrency ?? catalogLaborCurrency(args.clientCatalog),
       laborRate: readModuleLabor(params.moduleLabor) ? effectiveModuleLabor(readModuleLabor(params.moduleLabor)!).rate : null,
       onSave: async ({ name, note, laborRate }) => {
         const result = await args.createParameterPreset?.({
@@ -203,8 +209,9 @@ function openCreatePresetDialog(args: { host?: HTMLElement; currency: PriceCurre
 
   const panel = document.createElement("form");
   panel.style.width = "min(420px, calc(100vw - 32px))";
-  panel.style.background = "#ffffff";
-  panel.style.border = "1px solid rgba(15, 23, 42, 0.12)";
+  panel.style.background = "var(--surface)";
+  panel.style.color = "var(--text)";
+  panel.style.border = "1px solid var(--border-strong)";
   panel.style.borderRadius = "8px";
   panel.style.boxShadow = "0 22px 70px rgba(15, 23, 42, 0.24)";
   panel.style.padding = "18px";
@@ -258,7 +265,7 @@ function openCreatePresetDialog(args: { host?: HTMLElement; currency: PriceCurre
     event.stopPropagation();
     if (event.key === "Escape") { event.preventDefault(); if (!save.disabled) close(); }
     if (event.key === "Tab") {
-      const items = [name, note, labor.input, labor.currency, cancel, save].filter((item) => !item.disabled);
+      const items = [name, note, labor.input, cancel, save].filter((item) => !item.disabled);
       const index = items.indexOf(document.activeElement as typeof name);
       if (event.shiftKey && index <= 0) { event.preventDefault(); items.at(-1)?.focus(); }
       else if (!event.shiftKey && index === items.length - 1) { event.preventDefault(); items[0]?.focus(); }
@@ -355,7 +362,7 @@ export function createModulePackageControls(
   for (const control of controls) {
     const parameter = findParameter(modulePackage, control.parameterKey);
     if (!parameter) continue;
-    if (args.userParametersOnly && isInternalSettingsParameter(parameter)) continue;
+    if (isMaterialAssignmentParameter(parameter) || isInternalSettingsParameter(parameter)) continue;
     const host = control.groupId ? groups.get(control.groupId) ?? container : container;
     const row = document.createElement("label");
     row.className = "module-package-control";
@@ -418,7 +425,7 @@ export function createModulePackageControls(
     sync();
   }
 
-  if (args.userParametersOnly) for (const section of groups.values()) if (!section.querySelector("[data-parameter-key]")) section.remove();
+  for (const section of groups.values()) if (!section.querySelector("[data-parameter-key]")) section.remove();
 
   const api: ModuleControlsApi = {
     syncFromParams: () => records.forEach((record) => record.sync()),
@@ -445,7 +452,7 @@ export function createResolvedModuleControls(
         ? params.type.trim()
         : modulePackage.module.moduleType;
     const descriptor = getModuleDescriptor(moduleType as Parameters<typeof getModuleDescriptor>[0]);
-    if (descriptor) return withParameterPresetControl(container, modulePackage, params, args, descriptor.createControls(container, params as never, args));
+    if (descriptor) return withParameterPresetControl(container, modulePackage, params, args, descriptor.createControls(container, params as never, { ...args, hideMaterialParameters: true }));
   }
   return createModulePackageControls(container, modulePackage, params, args);
 }

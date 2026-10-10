@@ -269,7 +269,7 @@ type PointerInputHandlersDataContext = {
     bBinding: PlanSnapBinding,
     options?: { kind?: AssociativeMeasureKind; distanceMm?: number }
   ) => unknown;
-  addWall: (a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) => WallInstance | null;
+  addWall: (a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number, options?: { joinEndpoints?: boolean }) => WallInstance | null;
   alignState: { ref: AlignPickedLine | null; hover: AlignPickedLine | null; lastA: AlignPickedLine | null; lastB: AlignPickedLine | null; lastUntilMs: number };
   anyOverlap: (moving: LayoutInstance, ignoreId: string | null) => boolean;
   appendKitchenWorktopPoint: (point: FloorBoundaryPoint) => boolean;
@@ -1791,7 +1791,17 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
     }
   });
 
+  let wallSelectionPointer = false;
+  ctx.renderer.domElement.addEventListener("contextmenu", (ev) => {
+    // macOS emits contextmenu for Ctrl + primary click. This gesture already
+    // belongs to wall selection and must not leave a menu owning Space.
+    if (!wallSelectionPointer || !(ev.ctrlKey || ev.metaKey)) return;
+    wallSelectionPointer = false;
+    ev.preventDefault();
+    ev.stopPropagation();
+  });
   ctx.renderer.domElement.addEventListener("pointerdown", (ev) => {
+    wallSelectionPointer = false;
     if (ctx.viewNavigation.handlePointerDown(ev)) {
       return;
     }
@@ -2274,6 +2284,16 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
         const hitPoint = intersectRayPlane(ctx.raycaster, ctx.groundPlane);
         if (!hitPoint) return;
         const rect2 = ctx.renderer.domElement.getBoundingClientRect();
+        if (ev.ctrlKey || ev.metaKey) {
+          wallSelectionPointer = true;
+          const wallId = pickFloorplanWallId(ctx.toMmPoint(hitPoint), pointerClientPointInRect(ev, rect2), rect2);
+          if (wallId) {
+            ctx.setToolSelect();
+            ctx.setSelectedWall(wallId);
+          }
+          ev.preventDefault();
+          return;
+        }
         const snapped = ctx.snapPoint2D(hitPoint, rect2, ctx.cam());
         const shouldAxisSnap = ctx.drawOrthoEnabled && !ev.shiftKey && snapped.kind === "none";
 
@@ -2307,15 +2327,9 @@ export function installPointerInputHandlers(ctx: PointerInputHandlersContext) {
           wallTypedHud: ctx.wallTypedHud,
           snapAxisXZ: ctx.snapAxisXZ,
           addWall: ctx.addWall,
-          autoJoinAtMmPoint: ctx.autoJoinAtMmPoint,
           clearWallDrawState: ctx.clearWallDrawState,
           updateWallMeshWithJustification: ctx.updateWallMeshWithJustification,
           setStatus: ctx.setUnderlayStatus,
-          selectWall: (id) => {
-            ctx.selectedKind = "wall";
-            ctx.selectedWallId = id;
-            ctx.mountProps();
-          }
         });
         return;
       }

@@ -253,14 +253,14 @@ export function updateActiveWallDrawPointerMoveHover(params: {
     hudWallEndAlignmentGuide: params.hudWallEndAlignmentGuide,
     updateHudDashedLine: params.updateHudDashedLine
   });
-  const b = resolveWallDrawHoverPoint({
+  const { end: b } = resolveWallDrawEndPoint({
     a: params.wallDraw.a,
     hitPoint: params.hitPoint,
-    snapPoint: activeSnap ? activeSnap.point : null,
+    snapped: activeSnap ?? { kind: "none", point: params.hitPoint },
     chainStart: params.wallDraw.chainStart,
     segments: params.wallDraw.segments,
     closeToleranceM,
-    allowAxisSnap: params.allowAxisSnap,
+    shouldAxisSnap: params.allowAxisSnap && !activeSnap,
     alignmentSnapPoint,
     snapAxisXZ: params.snapAxisXZ
   });
@@ -393,18 +393,17 @@ export function handleWallDrawStartClick(params: {
     params.wallDefault.justification ?? "center",
     params.wallDefault.exteriorSign ?? 1
   );
-  params.setStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
+  params.setStatus("Wall: second point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Space = flip exterior, Ctrl/Cmd+click = select, Esc = stop)");
   return true;
 }
 
 export function finishWallDrawAfterAddedWall(params: {
-  wall: PointerWallDrawWall;
+  end: THREE.Vector3;
   closes: boolean;
   wallDraw: PointerWallDrawState;
   wallDefault: PointerWallDefault;
   wallTypedHud: { style: { display: string } };
   clearTypedBeforeClose?: boolean;
-  autoJoinAtMmPoint: (point: { x: number; z: number }) => void;
   clearWallDrawState: () => void;
   updateWallMeshWithJustification: (
     preview: THREE.Mesh,
@@ -415,10 +414,7 @@ export function finishWallDrawAfterAddedWall(params: {
     exteriorSign: 1 | -1
   ) => void;
   setStatus: (message: string) => void;
-  selectWall: (id: string) => void;
 }): boolean {
-  params.autoJoinAtMmPoint(params.wall.params.aMm);
-  params.autoJoinAtMmPoint(params.wall.params.bMm);
   params.wallDraw.segments += 1;
 
   if (params.clearTypedBeforeClose) {
@@ -433,7 +429,7 @@ export function finishWallDrawAfterAddedWall(params: {
   }
 
   params.wallDraw.active = true;
-  params.wallDraw.a = new THREE.Vector3(params.wall.params.bMm.x / 1000, 0, params.wall.params.bMm.z / 1000);
+  params.wallDraw.a = params.end.clone();
   params.wallDraw.hoverB = params.wallDraw.a.clone();
   params.wallDraw.typedMm = "";
   params.wallTypedHud.style.display = "none";
@@ -445,8 +441,7 @@ export function finishWallDrawAfterAddedWall(params: {
     params.wallDefault.justification ?? "center",
     params.wallDefault.exteriorSign ?? 1
   );
-  params.setStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Esc = stop)");
-  params.selectWall(params.wall.id);
+  params.setStatus("Wall: next point... (type mm + Enter, Shift = no axis snap, N = precision 1 mm, Space = flip exterior, Ctrl/Cmd+click = select, Esc = stop)");
   return true;
 }
 
@@ -464,8 +459,7 @@ export function handleWallDrawEndClick(params: {
   wallDefault: PointerWallDefault;
   wallTypedHud: { style: { display: string } };
   snapAxisXZ: (a: THREE.Vector3, b: THREE.Vector3, allowDiagonal: boolean) => THREE.Vector3;
-  addWall: (a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number) => PointerWallDrawWall | null;
-  autoJoinAtMmPoint: (point: { x: number; z: number }) => void;
+  addWall: (a: THREE.Vector3, b: THREE.Vector3, thicknessMm: number, options: { joinEndpoints: boolean }) => PointerWallDrawWall | null;
   clearWallDrawState: () => void;
   updateWallMeshWithJustification: (
     preview: THREE.Mesh,
@@ -476,7 +470,6 @@ export function handleWallDrawEndClick(params: {
     exteriorSign: 1 | -1
   ) => void;
   setStatus: (message: string) => void;
-  selectWall: (id: string) => void;
 }): boolean {
   const a = params.wallDraw.a;
   if (!a) return false;
@@ -509,18 +502,17 @@ export function handleWallDrawEndClick(params: {
     snapAxisXZ: params.snapAxisXZ
   });
 
-  const wall = params.addWall(a, end, params.wallDefault.thicknessMm);
+  if (a.distanceToSquared(end) < 1e-12) return false;
+  const wall = params.addWall(a, end, params.wallDefault.thicknessMm, { joinEndpoints: true });
   if (!wall) return false;
   return finishWallDrawAfterAddedWall({
-    wall,
+    end,
     closes,
     wallDraw: params.wallDraw,
     wallDefault: params.wallDefault,
     wallTypedHud: params.wallTypedHud,
-    autoJoinAtMmPoint: params.autoJoinAtMmPoint,
     clearWallDrawState: params.clearWallDrawState,
     updateWallMeshWithJustification: params.updateWallMeshWithJustification,
     setStatus: params.setStatus,
-    selectWall: params.selectWall
   });
 }

@@ -1,3 +1,4 @@
+import type { WallExteriorFlipTarget } from "./wallController";
 import { legacyModuleLaborState } from "./moduleLaborLegacyState";
 import type { ProjectManufacturingSettings } from "../core/project-manufacturing/project-manufacturing-types";
 import { adoptPresetLabor, readModuleLabor, sameLaborPreset } from "../core/project-manufacturing/module-labor";
@@ -5,6 +6,7 @@ import { mountModuleHardwareControls } from "./moduleHardwareControls";
 import type { AppState } from "../layout/appState";
 import { describeFwmModuleHeight } from "../modules/fwmFurniture/heightPresentation";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import type { PriceCurrency } from "../core/pricing/currency";
 import type { ModuleParams } from "../model/cabinetTypes";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import { createResolvedModuleControls, findModulePackageForParams } from "../core/module-package/runtime/module-package-controls";
@@ -59,6 +61,7 @@ type RebuildInstanceOptions = {
 };
 
 type WallPropsContext = {
+  flipWallExterior: (target: WallExteriorFlipTarget) => boolean;
   props: PropertiesPanelApi;
   selectedWallIds: Set<string>;
   walls: WallInstance[];
@@ -218,6 +221,7 @@ type ModulePropsContext = {
   modulePackages: readonly FurnQuoteModulePackage[];
   args: { propertiesEl: HTMLElement };
   clientCatalog: ClientCatalog;
+  defaultCurrency?: PriceCurrency;
   rebuildInstance: (inst: LayoutInstance, opts?: RebuildInstanceOptions) => boolean;
   appendLinkedMeasureInputs: AppendLinkedMeasureInputs;
   renderModuleCatalogIconSvg?: (modulePackage: FurnQuoteModulePackage) => string;
@@ -358,15 +362,7 @@ export function mountWallPropsPanel(ctx: WallPropsContext, w?: WallInstance) {
     const dz = firstWall.params.bMm.z - firstWall.params.aMm.z;
     len.textContent = `Length: ${Math.round(Math.hypot(dx, dz))} mm`;
     s.appendChild(len);
-    flip.addEventListener("click", () => {
-      firstWall.params.exteriorSign = (firstWall.params.exteriorSign ?? 1) === 1 ? -1 : 1;
-      applyToSelectedWalls((wall) => {
-        if (wall.id === firstWall.id) {
-          wall.params.exteriorSign = firstWall.params.exteriorSign;
-          wall.params.typeId = CUSTOM_WALL_TYPE_ID;
-        }
-      });
-    });
+    flip.addEventListener("click", () => ctx.flipWallExterior({ kind: "wall", wallId: firstWall.id }));
 
     const joinsLabel = document.createElement("div");
     joinsLabel.className = "muted";
@@ -1117,6 +1113,7 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
         try {
           const { openModuleSettings } = await import("./moduleSettingsController");
           openModuleSettings({
+            defaultCurrency: ctx.defaultCurrency,
             initialLaborState: () => legacyModuleLaborState(inst, S.kitchenCtx, ctx.clientCatalog, ctx.getManufacturingSettings?.()),
             modulePackage, parameters: inst.params, clientCatalog: ctx.clientCatalog, materialAssignments: S.projectMaterialAssignments, getMaterialAssignments: () => S.projectMaterialAssignments,
             commit: (candidate, baseline, groups, baselineGroups) => commitModuleSettingsToLayout({
@@ -1148,7 +1145,7 @@ export function mountModulePropsPanel(ctx: ModulePropsContext, id: string) {
     editorHost.style.marginTop = "10px";
     s.appendChild(editorHost);
 
-    const worktopArgs = { getWorktopThicknessMm: () => 0, clientCatalog: ctx.clientCatalog };
+    const worktopArgs = { getWorktopThicknessMm: () => 0, clientCatalog: ctx.clientCatalog, defaultCurrency: ctx.defaultCurrency };
     const onChange = (previousParams?: ModuleParams, sourceKey?: string) => {
       const accepted = rebuildInstance(inst, {
         previousParams,
@@ -1256,7 +1253,7 @@ export function mountMultiModulePropsPanel(ctx: ModulePropsContext, ids: Iterabl
     else aggregate[parameter.key] = "";
   }
 
-  const worktopArgs = { getWorktopThicknessMm: () => 0, clientCatalog: ctx.clientCatalog };
+  const worktopArgs = { getWorktopThicknessMm: () => 0, clientCatalog: ctx.clientCatalog, defaultCurrency: ctx.defaultCurrency };
   const onChange = (_previousParams?: ModuleParams, sourceKey?: string) => {
     if (!sourceKey) return false;
     const nextValue = aggregate[sourceKey];

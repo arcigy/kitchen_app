@@ -22,11 +22,13 @@ import { createModuleSettingsViewport } from "./moduleSettingsViewport";
 import { createModuleParameterPresetSaver, createModulePresetLaborApi } from "./moduleParameterPresetService";
 import { t, translateParamLabel } from "../i18n";
 import "./moduleSettings.css";
+import type { PriceCurrency } from "../core/pricing/currency";
 
 export function openModuleSettings(args: {
   modulePackage: FurnQuoteModulePackage;
   parameters: ModuleParams;
   clientCatalog: ClientCatalog;
+  defaultCurrency?: PriceCurrency;
   initialLaborState?: () => ModuleLaborState;
   materialAssignments?: ProjectMaterialAssignmentsState;
   getMaterialAssignments?: () => ProjectMaterialAssignmentsState | undefined;
@@ -259,6 +261,7 @@ export function openModuleSettings(args: {
   }, true);
   const savePreset = createModuleParameterPresetSaver(args.clientCatalog);
   try { controls = createResolvedModuleControls(form, modulePackage, draft, {
+    defaultCurrency: args.defaultCurrency,
     clientCatalog: args.clientCatalog, getWorktopThicknessMm: () => Number(draft.worktopThicknessMm) || 0,
     textInputCommitMode: "explicit", commitBoundary: dialog, presetHost: presets, presetDialogHost: dialog, userParametersOnly: true,
     onChange: (_previous?: ModuleParams, key?: string) => change(draft, key),

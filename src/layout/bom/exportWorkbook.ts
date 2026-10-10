@@ -682,6 +682,10 @@ function buildOverviewSheet(
     { value: "Material spolu", style: "summaryLabel" },
     { value: convertPriceCurrency(summary.materialCost, summary.currency ?? "EUR", currency), style: "summaryCurrency" }
   ]);
+  builder.addRow([
+    { value: "Baliaci materiál", style: "summaryLabel" },
+    { value: convertPriceCurrency(summary.packagingCost, summary.currency ?? "EUR", currency), style: "summaryCurrency" }
+  ]);
   const moduleLaborRow = builder.addRow([
     { value: "Modulova praca", style: "summaryLabel" },
     { value: convertPriceCurrency(summary.moduleLaborCost, summary.currency ?? "EUR", currency), style: "summaryCurrency" }

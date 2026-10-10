@@ -313,6 +313,11 @@ export function createPinoVendorControls(
     }
   });
   rowByKey.set("backMaterialId", backMaterialRow.row);
+  if (args.hideMaterialParameters) {
+    bodyMaterialRow.row.remove();
+    frontMaterialRow.row.remove();
+    backMaterialRow.row.remove();
+  }
 
   const summaryBlock = createMutedBlock(section);
   const notesBlock = createMutedBlock(section);

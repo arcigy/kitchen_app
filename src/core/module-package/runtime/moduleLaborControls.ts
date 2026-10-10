@@ -8,13 +8,25 @@ export function createLaborRateInput(label: string, value: LaborRate | null, def
   const title = document.createElement("span"); title.textContent = label;
   const input = document.createElement("input"); input.type = "number"; input.min = "0"; input.max = "10000000"; input.step = "0.01";
   input.placeholder = "Zdediť sadzbu"; input.value = value ? String(value.amount) : ""; input.setAttribute("aria-label", label);
-  const currency = document.createElement("select"); currency.setAttribute("aria-label", `${label} · mena`);
-  for (const code of ["EUR", "CZK"]) { const option = document.createElement("option"); option.value = code; option.textContent = code; currency.append(option); }
-  currency.value = value?.currency ?? defaultCurrency;
-  host.append(title, input, currency);
-  return { host, input, currency, read(): LaborRate | null {
-    if (!input.value.trim()) { if (input.validity.badInput) throw new Error("Zadajte platnú sumu práce."); return null; }
-    const rate = { amount: Number(input.value), currency: currency.value };
+  const currency = document.createElement("span"); currency.dataset.laborCurrency = defaultCurrency; currency.textContent = defaultCurrency;
+  const note = document.createElement("small"); note.setAttribute("role", "status");
+  let requiresTenantAmount = false;
+  function setValue(rate: LaborRate | null) {
+    requiresTenantAmount = Boolean(rate && rate.currency !== defaultCurrency);
+    input.value = rate && !requiresTenantAmount ? String(rate.amount) : "";
+    note.textContent = requiresTenantAmount ? `Uložená sadzba používa inú menu. Zadajte novú sumu v ${defaultCurrency}.` : "";
+    note.hidden = !requiresTenantAmount;
+  }
+  setValue(value);
+  const editor = document.createElement("div"); editor.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px";
+  editor.append(input, currency);
+  host.append(title, editor, note);
+  return { host, input, setValue, read(): LaborRate | null {
+    if (!input.value.trim()) {
+      if (input.validity.badInput || requiresTenantAmount) throw new Error(`Zadajte platnú sumu práce v ${defaultCurrency}.`);
+      return null;
+    }
+    const rate = { amount: Number(input.value), currency: defaultCurrency };
     validateLaborRate(rate); return rate;
   } };
 }
@@ -25,7 +37,8 @@ export function mountModuleLaborControls(host: HTMLElement, pkg: FurnQuoteModule
   panel.style.display = "grid"; panel.style.gap = "8px";
   const title = document.createElement("strong"); title.textContent = "Práca za modul";
   const summary = document.createElement("div"); summary.dataset.moduleLaborSummary = "true";
-  const own = createLaborRateInput("Vlastná práca za jednu skrinku", initial()?.override ?? null, catalogLaborCurrency(args.clientCatalog));
+  const defaultCurrency = args.defaultCurrency ?? catalogLaborCurrency(args.clientCatalog);
+  const own = createLaborRateInput("Vlastná práca za jednu skrinku", initial()?.override ?? null, defaultCurrency);
   own.input.dataset.moduleLaborRate = "true";
   const status = document.createElement("p"); status.setAttribute("role", "status"); status.style.fontSize = "12px";
   const presetArea = document.createElement("details");
@@ -80,11 +93,12 @@ export function mountModuleLaborControls(host: HTMLElement, pkg: FurnQuoteModule
     const effective = state ? effectiveModuleLabor(state) : null;
     const quantity = Math.max(1, Math.round(Number(params.quantity) || 1));
     if (updateInput) {
-      own.input.value = state?.override ? String(state.override.amount) : "";
-      own.currency.value = state?.override?.currency ?? catalogLaborCurrency(args.clientCatalog);
+      own.setValue(state?.override ?? null);
     }
     const source = effective?.source === "instance" ? "Vlastná hodnota" : effective?.source === "preset" ? `Preset ${state?.preset?.label ?? ""}` : effective?.source === "module" ? "Typ modulu" : effective?.source === "missing" ? "Chýbajúca sadzba" : "Pôvodný výpočet projektu";
-    summary.textContent = effective?.rate ? `${source}: ${effective.rate.amount.toFixed(2)} ${effective.rate.currency} × ${quantity} = ${moduleLaborAmount(effective.rate, quantity, effective.rate.currency).toFixed(2)} ${effective.rate.currency}` : `${source}. ${quantity} ks. ${effective?.source === "missing" ? "Cena zostáva neúplná." : "Aktuálna suma je v rozpise Marže → Práca."}`;
+    summary.textContent = effective?.rate && effective.rate.currency !== defaultCurrency
+      ? `${source}: uložená sadzba používa inú menu. Zadajte vlastnú sumu v ${defaultCurrency}.`
+      : effective?.rate ? `${source}: ${effective.rate.amount.toFixed(2)} ${effective.rate.currency} × ${quantity} = ${moduleLaborAmount(effective.rate, quantity, effective.rate.currency).toFixed(2)} ${effective.rate.currency}` : `${source}. ${quantity} ks. ${effective?.source === "missing" ? "Cena zostáva neúplná." : "Aktuálna suma je v rozpise Marže → Práca."}`;
     presetBody.replaceChildren();
     const ref = state?.preset;
     const preset = ref?.modulePackageId === latest.module.modulePackageId ? latest.parameterPresets?.presets.find(p => p.presetId === ref.presetId) : undefined;
@@ -96,7 +110,7 @@ export function mountModuleLaborControls(host: HTMLElement, pkg: FurnQuoteModule
     const newer = JSON.stringify(captured.inherited) !== JSON.stringify(state?.inherited);
     const notice = document.createElement("small"); notice.textContent = newer ? "V presete je dostupná iná sadzba. Prevzatie zmení iba prácu." : "Firemná sadzba platí pre nové použitia presetu vo všetkých projektoch.";
     presetBody.append(notice);
-    const rateEditor = createLaborRateInput("Práca za jeden modul v presete", preset.laborRate ?? null, catalogLaborCurrency(args.clientCatalog));
+    const rateEditor = createLaborRateInput("Práca za jeden modul v presete", preset.laborRate ?? null, defaultCurrency);
     rateEditor.input.dataset.presetLaborRate = "true"; presetBody.append(rateEditor.host);
     button("Uložiť do presetu", async () => {
       if (!args.presetLaborApi) return;
@@ -107,11 +121,13 @@ export function mountModuleLaborControls(host: HTMLElement, pkg: FurnQuoteModule
       pkg.integrity = structuredClone(latest.integrity);
       refresh(); status.textContent = "Sadzba je uložená vo firemnom presete. Existujúce skrinky sa nezmenili.";
     }, presetBody).disabled = !args.presetLaborApi;
-    button("Prevziať sadzbu z presetu", () => { commit(captured); }, presetBody);
+    const foreignPreset = captured.inherited.rate && captured.inherited.rate.currency !== defaultCurrency;
+    if (foreignPreset) notice.textContent = `Pred prevzatím uložte do presetu novú sumu v ${defaultCurrency}.`;
+    button("Prevziať sadzbu z presetu", () => { commit(captured); }, presetBody).disabled = Boolean(foreignPreset);
     if (args.adoptPresetLaborForProject) button("Prevziať pre všetky skrinky tohto presetu", () => {
       const count = args.adoptPresetLaborForProject!(latest, preset.presetId);
       refresh(); status.textContent = `Aktualizované skrinky: ${count}. Vlastné sadzby zostali zachované.`;
-    }, presetBody);
+    }, presetBody).disabled = Boolean(foreignPreset);
     button("Načítať aktuálny preset", loadLatest, presetBody).disabled = !args.presetLaborApi;
     if (loading) for (const element of presetBody.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>("input, button, select")) element.disabled = true;
   }

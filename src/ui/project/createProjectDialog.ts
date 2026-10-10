@@ -11,6 +11,7 @@ function field(label: string, required = false) {
   span.textContent = required ? `${label} *` : label;
   const input = document.createElement("input");
   input.type = "text";
+  input.required = required;
   wrap.append(span, input);
   return { wrap, input };
 }
@@ -27,11 +28,11 @@ export function openCreateProjectDialog(args: CreateProjectDialogArgs): void {
   panel.appendChild(title);
 
   const name = field("Názov projektu", true);
-  const address = field("Miesto / adresa", true);
+  const address = field("Miesto / adresa");
   const city = field("Mesto");
   const postalCode = field("PSČ");
   const country = field("Krajina");
-  const contactName = field("Kontaktná osoba", true);
+  const contactName = field("Kontaktná osoba");
   const email = field("Email");
   const phone = field("Telefón");
   const notes = field("Poznámka");
@@ -72,8 +73,8 @@ export function openCreateProjectDialog(args: CreateProjectDialogArgs): void {
       phone: phone.input.value,
       notes: notes.input.value
     };
-    if (!input.name.trim() || !input.address.trim() || !input.contactName.trim()) {
-      error.textContent = "Vyplň názov, adresu a kontaktnú osobu.";
+    if (!input.name.trim()) {
+      error.textContent = "Vyplň názov projektu.";
       return;
     }
     submit.disabled = true;

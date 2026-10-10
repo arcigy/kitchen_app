@@ -283,6 +283,7 @@ export function buildProjectPricingPayload(entries: ProjectPricingView[], settin
       boardsCost: summary.boardsCost,
       edgesCost: summary.edgesCost,
       hardwareCost: summary.hardwareCost,
+      packagingCost: summary.packagingCost,
       moduleLaborCost: summary.moduleLaborCost,
       additionalLaborCost: summary.additionalLaborCost,
       laborCost: summary.laborCostTotal,

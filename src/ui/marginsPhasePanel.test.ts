@@ -186,6 +186,7 @@ describe("compact searchable margins", () => {
     view.settings.manufacturing.pricingMode = "configured";
     view.settings.manufacturing.boardWastePercent = 12;
     view.settings.manufacturing.edgeWastePercent = 5;
+    view.settings.manufacturing.packagingRatePerM2 = { amount: 2.5, currency: "CZK" };
     view.settings.manufacturing.preassemblyByInstanceId = { "base-1": 100, second: 200 };
     const panel = searchPanel(view);
     panel.host.querySelector<HTMLInputElement>("[data-margin-default-input]")!.value = "19";
@@ -389,6 +390,29 @@ describe("project margins phase panel", () => {
     expect(moduleHtml).toMatch(/data-margin-item-input="[^"]+"[^>]*disabled/);
   });
 
+  it("preserves a foreign packaging snapshot until a new tenant-currency amount is entered", async () => {
+    const host = document.createElement("section");
+    const view = marginsView({ currency: "CZK" });
+    view.settings.manufacturing.packagingRatePerM2 = { amount: 2.5, currency: "EUR" };
+    const actions = {
+      onCommitDefault: vi.fn(async () => ({ ok: true })), onCommitAdditionalLabor: vi.fn(async () => ({ ok: true })),
+      onCommitManufacturing: vi.fn(async () => ({ ok: true })), onApplyGroup: vi.fn(async () => ({ ok: true })),
+      onResetGroup: vi.fn(async () => ({ ok: true })), onCommitItem: vi.fn(async () => ({ ok: true })), onResetItem: vi.fn(async () => ({ ok: true }))
+    };
+    const handle = mountProjectMarginsPanel(host, view, actions);
+    handle.setInputsDisabled(false);
+    const input = host.querySelector<HTMLInputElement>("[data-manufacturing-packaging-rate]")!;
+    expect(input.value).toBe("");
+    expect(host.querySelector("[data-manufacturing-packaging-currency]")?.textContent).toBe("CZK");
+    host.querySelector<HTMLButtonElement>("[data-manufacturing-save]")!.click();
+    await handle.flushPending();
+    expect(actions.onCommitManufacturing).toHaveBeenLastCalledWith({ manufacturing: expect.objectContaining({ packagingRatePerM2: { amount: 2.5, currency: "EUR" } }) });
+    host.querySelector<HTMLInputElement>("[data-manufacturing-packaging-rate]")!.value = "0";
+    host.querySelector<HTMLButtonElement>("[data-manufacturing-save]")!.click();
+    await handle.flushPending();
+    expect(actions.onCommitManufacturing).toHaveBeenLastCalledWith({ manufacturing: expect.objectContaining({ packagingRatePerM2: { amount: 0, currency: "CZK" } }) });
+  });
+
   it("commits project, group and item edits and resets overrides through stable IDs", async () => {
     const host = document.createElement("section");
     const footer = document.createElement("section");
@@ -396,6 +420,7 @@ describe("project margins phase panel", () => {
     const actions = {
       onCommitDefault: vi.fn(async () => ({ ok: true })),
       onCommitAdditionalLabor: vi.fn(async () => ({ ok: true })),
+      onCommitManufacturing: vi.fn(async () => ({ ok: true })),
       onApplyGroup: vi.fn(async () => ({ ok: true })),
       onResetGroup: vi.fn(async () => ({ ok: true })),
       onCommitItem: vi.fn(async () => ({ ok: true })),
@@ -408,6 +433,15 @@ describe("project margins phase panel", () => {
     expect(host.querySelector(".margins-project-controls")).not.toBeNull();
     expect(footer.querySelector("[data-margin-summary]")?.textContent).toContain("Kč");
     expect(footer.querySelector(".margins-project-controls")).toBeNull();
+    expect(footer.querySelector("[data-manufacturing-settings]")).toBeNull();
+    const packaging = host.querySelector<HTMLInputElement>('[data-margin-project-controls] [data-manufacturing-packaging-rate]')!;
+    expect(packaging).not.toBeNull();
+    expect(host.querySelector("select[data-manufacturing-packaging-currency]")).toBeNull();
+    expect(host.querySelector("[data-manufacturing-packaging-currency]")?.textContent).toBe("CZK");
+    packaging.value = "2.5";
+    host.querySelector<HTMLButtonElement>("[data-manufacturing-save]")!.click();
+    await handle.flushPending();
+    expect(actions.onCommitManufacturing).toHaveBeenCalledWith({ manufacturing: expect.objectContaining({ packagingRatePerM2: { amount: 2.5, currency: "CZK" } }) });
 
     const defaultInput = host.querySelector<HTMLInputElement>("[data-margin-default-input]")!;
     defaultInput.value = "22.5";

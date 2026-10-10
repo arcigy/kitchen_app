@@ -9,7 +9,7 @@ export const PROJECT_MARGIN_SETTINGS_SCHEMA_VERSION = 1 as const;
 export const DEFAULT_PROJECT_MARGIN_PERCENT = 20;
 export const DEFAULT_PROJECT_ADDITIONAL_LABOR_COST = 0;
 
-export type ProjectMarginCategory = MaterialAssignmentCategory | "labor";
+export type ProjectMarginCategory = MaterialAssignmentCategory | "labor" | "packaging";
 
 export type ProjectMarginItemOverride = {
   targetId: string;

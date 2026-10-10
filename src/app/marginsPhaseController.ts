@@ -82,6 +82,7 @@ export type MarginsPhaseControllerArgs = {
   getPhaseId?: () => string | undefined;
   prepareRead?: (signal: AbortSignal) => Promise<void>;
   onViewChanged?: (view: ProjectMarginsView) => void;
+  onOpenModuleLabor?: (instanceId: string) => void | Promise<void>;
   api?: Partial<MarginsPhaseControllerApi>;
 };
 
@@ -145,7 +146,8 @@ export function createMarginsPhaseController(args: MarginsPhaseControllerArgs) {
       onApplyGroup: commitGroup,
       onResetGroup: resetGroup,
       onCommitItem: commitItem,
-      onResetItem: resetItem
+      onResetItem: resetItem,
+      onOpenModuleLabor: args.onOpenModuleLabor
     }, { footerContainer: args.footerContainer });
     return panel;
   };

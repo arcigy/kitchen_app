@@ -4,6 +4,7 @@ import type { ModuleParams, ModuleType } from "../model/cabinetTypes";
 import type { KitchenContext } from "../layout/kitchenContext";
 import type { BOMResult } from "../layout/bom/bomTypes";
 import type { ClientCatalog } from "../core/catalog/catalog-types";
+import type { PriceCurrency } from "../core/pricing/currency";
 import type { FurnQuoteModulePackage } from "../core/module-package/module-package-types";
 import { FWM_FURNITURE_SPECS, type FwmFurnitureSpec } from "./fwmFurniture/definitions";
 import type { FwmFurnitureParams } from "./fwmFurniture/types";
@@ -23,11 +24,13 @@ export type ModuleControlsArgs = {
   onChange: () => void | boolean;
   getWorktopThicknessMm: () => number;
   clientCatalog: ClientCatalog;
+  defaultCurrency?: PriceCurrency;
   textInputCommitMode?: "immediate" | "explicit";
   commitBoundary?: HTMLElement | null;
   presetHost?: HTMLElement;
   presetDialogHost?: HTMLElement;
   userParametersOnly?: boolean;
+  hideMaterialParameters?: boolean;
   initialLaborState?: () => ModuleLaborState;
   presetLaborApi?: {
     load: (modulePackageId: string) => Promise<FurnQuoteModulePackage>;

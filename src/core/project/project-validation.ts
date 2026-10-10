@@ -7,6 +7,10 @@ function assertNonEmpty(value: unknown, message: string): string {
   return value.trim();
 }
 
+function assertString(value: unknown, message: string): void {
+  if (typeof value !== "string") throw new Error(message);
+}
+
 function assertOptionalEmail(value: unknown): void {
   if (value === undefined || value === null || value === "") return;
   if (typeof value !== "string" || !EMAIL_RE.test(value.trim())) throw new Error("project contact email is invalid.");
@@ -14,8 +18,6 @@ function assertOptionalEmail(value: unknown): void {
 
 export function assertValidCreateProjectInput(input: CreateProjectInput): void {
   assertNonEmpty(input.name, "project name is required.");
-  assertNonEmpty(input.location?.address, "project location address is required.");
-  assertNonEmpty(input.contact?.name, "project contact name is required.");
   assertOptionalEmail(input.contact?.email);
 }
 
@@ -23,8 +25,8 @@ export function assertValidProjectMetadata(metadata: ProjectMetadata): void {
   assertNonEmpty(metadata.clientId, "project clientId is required.");
   assertNonEmpty(metadata.projectId, "projectId is required.");
   assertNonEmpty(metadata.name, "project name is required.");
-  assertNonEmpty(metadata.location?.address, "project location address is required.");
-  assertNonEmpty(metadata.contact?.name, "project contact name is required.");
+  assertString(metadata.location?.address, "project location address must be a string.");
+  assertString(metadata.contact?.name, "project contact name must be a string.");
   assertOptionalEmail(metadata.contact?.email);
   assertNonEmpty(metadata.activePhaseId, "activePhaseId is required.");
   if (!Array.isArray(metadata.phases) || !metadata.phases.includes(metadata.activePhaseId)) {

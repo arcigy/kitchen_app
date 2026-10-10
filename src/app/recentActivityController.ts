@@ -7,6 +7,7 @@ import {
 } from "../layout/historyManager";
 import { getModuleDescriptors } from "../modules/registry";
 import { createButtonElement } from "./propsPanelElements";
+import { getCurrentLanguage, localeForLanguage } from "../i18n";
 
 export type RecentActivityTarget = {
   kind: "wall" | "module" | "floor" | "column" | "section" | null;
@@ -189,13 +190,28 @@ export const describeSnapshotActivity = (prev: LayoutSnapshot, next: LayoutSnaps
   };
 };
 
-const relativeTime = (createdAt: number) => {
-  const seconds = Math.max(0, Math.floor((Date.now() - createdAt) / 1000));
-  if (seconds < 5) return "now";
-  if (seconds < 60) return `${seconds}s ago`;
+export const relativeActivityTime = (createdAt: number, now = Date.now(), language = getCurrentLanguage()) => {
+  const locale = localeForLanguage(language);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const seconds = Math.max(0, Math.floor((now - createdAt) / 1000));
+  if (seconds < 5) return language === "en" ? "now" : language === "cs" ? "právě teď" : "teraz";
+  if (seconds < 60) return rtf.format(-seconds, "second");
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  return `${Math.floor(minutes / 60)}h ago`;
+  if (minutes < 60) return rtf.format(-minutes, "minute");
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return rtf.format(-hours, "hour");
+  const days = Math.floor(hours / 24);
+  if (days < 7) return rtf.format(-days, "day");
+  if (days < 30) return rtf.format(-Math.max(1, Math.round(days / 7)), "week");
+  const eventDate = new Date(createdAt);
+  const currentDate = new Date(now);
+  if (eventDate.getFullYear() === currentDate.getFullYear()) {
+    return new Intl.DateTimeFormat(locale, { month: "long" }).format(eventDate);
+  }
+  if (eventDate.getFullYear() === currentDate.getFullYear() - 1) {
+    return language === "en" ? "last year" : language === "cs" ? "loni" : "minulý rok";
+  }
+  return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(eventDate);
 };
 
 export function createRecentActivityController(ctx: RecentActivityControllerContext) {
@@ -205,6 +221,7 @@ export function createRecentActivityController(ctx: RecentActivityControllerCont
   let idCounter = 1;
   let lastSnapshot = ctx.S.history.current;
   let nextRenderAt = 0;
+  let lastCompactSignature = "";
   let previewReturnSnapshot: LayoutSnapshot | null = null;
 
   const renderCompact = (force = false) => {
@@ -212,10 +229,16 @@ export function createRecentActivityController(ctx: RecentActivityControllerCont
     const now = performance.now();
     if (!force && now < nextRenderAt) return;
     nextRenderAt = now + 1000;
+    const visibleEntries = entries.slice(0, 4);
+    const signature = visibleEntries.length > 0
+      ? visibleEntries.map((entry) => `${entry.id}:${entry.label}:${relativeActivityTime(entry.createdAt)}:${entry.createdAt}`).join("|")
+      : "empty";
+    if (signature === lastCompactSignature) return;
+    lastCompactSignature = signature;
     listEl.replaceChildren(
-      ...(entries.length > 0
-        ? entries.slice(0, 4).map((entry) => createRow(entry.label, relativeTime(entry.createdAt)))
-        : [createRow("No recent changes", "now")])
+      ...(visibleEntries.length > 0
+        ? visibleEntries.map((entry) => createRow(entry.label, relativeActivityTime(entry.createdAt)))
+        : [createRow("No recent changes", "")])
     );
     countEl.textContent = `${entries.length} ${entries.length === 1 ? "change" : "changes"}`;
   };
@@ -352,14 +375,14 @@ export function createRecentActivityController(ctx: RecentActivityControllerCont
     };
 
     if (entries.length === 0) {
-      fullList.appendChild(createRow("No recent changes", "now"));
+      fullList.appendChild(createRow("No recent changes", ""));
     } else {
       for (const entry of entries) {
         const button = createButtonElement("");
         const label = document.createElement("span");
         label.textContent = entry.label;
         const time = document.createElement("b");
-        time.textContent = relativeTime(entry.createdAt);
+        time.textContent = relativeActivityTime(entry.createdAt);
         button.append(label, time);
         button.addEventListener("click", () => showConfirm(entry));
         fullList.appendChild(button);
