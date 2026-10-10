@@ -171,7 +171,11 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: arcigy-ui-runtime-log-${{ github.sha }}
-          path: ${{ runner.temp }}/arcigy-ui.log
+          path: |
+            ${{ runner.temp }}/arcigy-ui.log
+            .tmp/feedback-50-ui/failure.txt
+            .tmp/feedback-50-ui/failure-layout.json
+            .tmp/feedback-50-ui/failure.png
           if-no-files-found: warn
           retention-days: 7
 

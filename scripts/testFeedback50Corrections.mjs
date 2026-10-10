@@ -39,6 +39,7 @@ export async function auditFeedback50Corrections({ page, id, snapshot, save, bas
   assert(isDeepStrictEqual((await snapshot(page)).customFurniture.find(item => item.id === created.id).params, created.params),
     'Redo restores exact backsplash parameters and stable board IDs');
   const saved = await save(page);
+  assert(!await page.locator('body.project-save-blocking').count(), 'The save helper waits for the editor to finish the manual save before reload');
   assert(isDeepStrictEqual(saved.appState.layout.snapshot.customFurniture.find(item => item.id === created.id).params, created.params),
     'The project save stores the generated backsplash exactly');
   const envelope = await (await page.request.get(new URL(`/api/projects/${saved.projectId}/download`, baseUrl).toString())).text();
