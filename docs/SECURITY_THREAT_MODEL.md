@@ -44,8 +44,12 @@ operational controls have been enabled.
 - The deployment workflow performs only a read-only unused-image inventory
   inspection. It contains no CapRover `deleteImages` call.
 - CI runs typechecking, tests, build, UI regression, dependency policy, tracked
-  secret scanning, CodeQL, SBOM generation and an isolated PostgreSQL restore
-  drill.
+  secret scanning, CodeQL (only while the repository is public; a private
+  repository on a personal GitHub Pro plan has no code scanning), SBOM
+  generation and an isolated PostgreSQL restore drill.
+- Deployment starts only from a successful CI run on a push to `main` or
+  `develop` (`workflow_run`) and checks out that run's exact commit; it does not
+  repeat the CI checks.
 
 ## Residual risks and required decisions
 

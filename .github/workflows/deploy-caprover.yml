@@ -1,7 +1,16 @@
 name: Deploy to CapRover
 
+# Deploys only after the CI workflow has succeeded for the exact pushed commit.
+# workflow_run always runs this file from the default branch (main) and never
+# waits on a runner while CI is still verifying; the deployed code is checked
+# out from the CI run's head SHA. main deploys to production, develop to the
+# isolated develop app.
 on:
-  push:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
     branches:
       - main
       - develop
@@ -12,58 +21,55 @@ permissions:
   checks: read
 
 concurrency:
-  group: deploy-${{ github.ref_name }}
+  group: deploy-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
-    timeout-minutes: 75
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'develop' }}
+    timeout-minutes: 30
+    environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'production' || 'develop' }}
     env:
       NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     steps:
-      - name: Require verify and CodeQL checks for this exact SHA
+      - name: Require successful CI verify for this exact SHA
         env:
           GH_TOKEN: ${{ github.token }}
-          EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          # The full verify job can run for 45 minutes. Allow 50 minutes for
-          # the exact-SHA checks, leaving at least 25 minutes for deployment.
-          for attempt in $(seq 1 150); do
-            checks="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${EXPECTED_SHA}/check-runs?per_page=100")"
-            verify="$(jq -r --arg sha "$EXPECTED_SHA" '[.check_runs[] | select(.name == "verify" and .head_sha == $sha)] | last // empty | [.status, (.conclusion // "")] | @tsv' <<< "$checks")"
-            codeql="$(jq -r --arg sha "$EXPECTED_SHA" '[.check_runs[] | select(.name == "CodeQL" and .head_sha == $sha)] | last // empty | [.status, (.conclusion // "")] | @tsv' <<< "$checks")"
-
-            if [[ "$verify" == $'completed\tsuccess' && "$codeql" == $'completed\tsuccess' ]]; then
-              echo "verify and CodeQL succeeded for ${EXPECTED_SHA}."
-              exit 0
-            fi
-            if [[ "$verify" == completed$'\t'* && "$verify" != $'completed\tsuccess' ]]; then
-              echo "verify failed for ${EXPECTED_SHA}: ${verify}"
+          case "$DEPLOY_BRANCH" in
+            main|develop) ;;
+            *)
+              echo "Only main and develop are deployed; got ${DEPLOY_BRANCH}."
               exit 1
-            fi
-            if [[ "$codeql" == completed$'\t'* && "$codeql" != $'completed\tsuccess' ]]; then
-              echo "CodeQL failed for ${EXPECTED_SHA}: ${codeql}"
-              exit 1
-            fi
-            echo "Waiting for verify and CodeQL on ${EXPECTED_SHA} (attempt ${attempt}/150)."
-            sleep 20
-          done
-          echo "Timed out waiting for verify and CodeQL on ${EXPECTED_SHA}."
-          exit 1
+              ;;
+          esac
+          # workflow_run already implies a successful CI run. This single check
+          # also guards manual dispatches, without polling or waiting.
+          checks="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${DEPLOY_SHA}/check-runs?per_page=100")"
+          verify="$(jq -r --arg sha "$DEPLOY_SHA" '[.check_runs[] | select(.name == "verify" and .head_sha == $sha)] | last // empty | [.status, (.conclusion // "")] | @tsv' <<< "$checks")"
+          if [[ "$verify" != $'completed\tsuccess' ]]; then
+            echo "CI verify has not succeeded for ${DEPLOY_SHA}: ${verify:-missing}"
+            exit 1
+          fi
+          echo "CI verify succeeded for ${DEPLOY_SHA} on ${DEPLOY_BRANCH}."
 
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
+          ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
 
       - name: Select CapRover app
         id: caprover_app
         run: |
-          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+          if [ "$DEPLOY_BRANCH" = "main" ]; then
             echo "app=$CAPROVER_PRODUCTION_APP" >> "$GITHUB_OUTPUT"
             echo "url=$CAPROVER_PRODUCTION_APP_URL" >> "$GITHUB_OUTPUT"
             echo "app_env=prod" >> "$GITHUB_OUTPUT"
@@ -89,27 +95,13 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        # Needed for the archive manifest and preflight scripts. Typecheck, lint,
+        # tests and build already passed in CI for this exact SHA.
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        # A duplicate deploy gate must never hold the protected develop
-        # deployment indefinitely. The same full suite runs in CI with a
-        # 45-minute job limit; this shorter, explicit step bound leaves time
-        # for a clear failure and preserves the CapRover deploy timeout.
-        timeout-minutes: 15
-        run: npm test -- --maxWorkers=2
-
       - name: Production dependency policy
+        # Re-checked at deploy time so a newly published advisory still blocks.
         run: npm run security:dependencies
-
-      - name: Build
-        run: npm run build
 
       - name: Create deploy archive
         run: |
@@ -220,8 +212,8 @@ jobs:
           payload = {
             "app": os.environ["APP_NAME"],
             "status": os.environ["DEPLOY_STATUS"],
-            "commit": os.environ["GITHUB_SHA"],
-            "branch": os.environ["GITHUB_REF_NAME"],
+            "commit": os.environ["DEPLOY_SHA"],
+            "branch": os.environ["DEPLOY_BRANCH"],
             "repo": os.environ["GITHUB_REPOSITORY"],
             "run_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }
