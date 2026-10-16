@@ -146,9 +146,9 @@ describe("CapRover deployment preflight", () => {
   it("automatically routes main to production and develop to the isolated develop app", async () => {
     const workflow = await readFile(path.join(process.cwd(), ".github", "workflows", "deploy-caprover.yml"), "utf-8");
 
-    expect(workflow).toMatch(/push:\s+branches:\s+- main\s+- develop/m);
-    expect(workflow).toContain("environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'develop' }}");
-    expect(workflow).toContain('if [ "$GITHUB_REF" = "refs/heads/main" ]');
+    expect(workflow).toMatch(/workflow_run:\s+workflows:\s+- CI\s+types:\s+- completed\s+branches:\s+- main\s+- develop/m);
+    expect(workflow).toContain("environment: ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'production' || 'develop' }}");
+    expect(workflow).toContain('if [ "$DEPLOY_BRANCH" = "main" ]');
     expect(workflow).toContain("CAPROVER_PRODUCTION_APP: ${{ vars.CAPROVER_PRODUCTION_APP || 'kitchenapp' }}");
     expect(workflow).toContain("CAPROVER_DEVELOP_APP: ${{ vars.CAPROVER_APP || 'arcigy-kitchen-develop' }}");
     expect(workflow).toContain("CAPROVER_APP: ${{ steps.caprover_app.outputs.app }}");
@@ -201,25 +201,34 @@ describe("CapRover deployment preflight", () => {
     expect(workflow).not.toMatch(/uses:\s+github\/codeql-action\/[^@]+@v\d+/);
   });
 
-  it("allows full verification to finish before the exact-SHA deploy gate expires", async () => {
-    const [ciWorkflow, deployWorkflow] = await Promise.all([
-      readFile(path.join(process.cwd(), ".github", "workflows", "ci.yml"), "utf-8"),
-      readFile(path.join(process.cwd(), ".github", "workflows", "deploy-caprover.yml"), "utf-8")
-    ]);
-    const verifyJobMinutes = Number(ciWorkflow.match(/  verify:\n    runs-on: ubuntu-latest\n    timeout-minutes: (\d+)/)?.[1]);
+  it("deploys only after CI succeeded for the exact pushed SHA, without polling or re-running checks", async () => {
+    const deployWorkflow = await readFile(path.join(process.cwd(), ".github", "workflows", "deploy-caprover.yml"), "utf-8");
+    const deployJobMinutes = Number(deployWorkflow.match(/  deploy:\n(?:    .*\n)*?    timeout-minutes: (\d+)/)?.[1]);
+
+    expect(deployWorkflow).not.toMatch(/^\s+push:/m);
+    expect(deployWorkflow).toContain("github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'");
+    expect(deployWorkflow).toContain("DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}");
+    expect(deployWorkflow).toContain("ref: ${{ env.DEPLOY_SHA }}");
+    expect(deployWorkflow).toContain('select(.name == "verify" and .head_sha == $sha)');
+    expect(deployWorkflow).not.toMatch(/for attempt in \$\(seq 1 \d+\); do\n\s+checks=/);
+    expect(deployWorkflow).not.toContain("name: Require verify and CodeQL checks for this exact SHA");
+    expect(deployWorkflow).not.toContain("- name: Test\n");
+    expect(deployWorkflow).not.toContain("run: npm run build");
+    expect(deployJobMinutes).toBeGreaterThan(0);
+    expect(deployJobMinutes).toBeLessThanOrEqual(30);
+  });
+
+  it("keeps the full UI suite inside the verify job limit and skips CodeQL only while private", async () => {
+    const ciWorkflow = await readFile(path.join(process.cwd(), ".github", "workflows", "ci.yml"), "utf-8");
+    const verifyJobMinutes = Number(ciWorkflow.match(/  verify:\n(?:    .*\n)*?    timeout-minutes: (\d+)/)?.[1]);
     const uiStepMinutes = Number(ciWorkflow.match(/- name: Full UI and accessibility regression\n        timeout-minutes: (\d+)/)?.[1]);
-    const deployJobMinutes = Number(deployWorkflow.match(/  deploy:\n    runs-on: ubuntu-latest\n    timeout-minutes: (\d+)/)?.[1]);
-    const deployTestStep = deployWorkflow.split("- name: Test\n")[1]?.split("\n      - name:")[0] ?? "";
-    const gate = deployWorkflow.split("name: Require verify and CodeQL checks for this exact SHA")[1]?.split("\n      - name:")[0] ?? "";
-    const gateAttempts = Number(gate.match(/for attempt in \$\(seq 1 (\d+)\); do/)?.[1]);
-    const gatePollSeconds = Number(gate.match(/^\s+sleep (\d+)$/m)?.[1]);
-    const gateMinutes = (gateAttempts * gatePollSeconds) / 60;
+    const codeqlJob = ciWorkflow.split("  codeql:\n")[1] ?? "";
 
     expect(uiStepMinutes).toBeGreaterThanOrEqual(20);
     expect(verifyJobMinutes).toBeGreaterThan(uiStepMinutes);
-    expect(gateMinutes).toBeGreaterThan(verifyJobMinutes);
-    expect(deployJobMinutes).toBeGreaterThan(gateMinutes + 15);
-    expect(deployTestStep).toContain("run: npm test -- --maxWorkers=2");
+    expect(codeqlJob).toContain("name: CodeQL");
+    expect(codeqlJob).toContain("if: ${{ !github.event.repository.private }}");
+    expect(ciWorkflow).toContain("types: [opened, synchronize, reopened, ready_for_review]");
   });
 
   it("opens bounded reviewed dependency updates against develop", async () => {
@@ -229,7 +238,8 @@ describe("CapRover deployment preflight", () => {
     expect(config).toMatch(/package-ecosystem:\s*npm/);
     expect(config).toMatch(/package-ecosystem:\s*github-actions/);
     expect(config.match(/target-branch:\s*develop/g)).toHaveLength(2);
-    expect(config.match(/interval:\s*weekly/g)).toHaveLength(2);
+    expect(config.match(/interval:\s*monthly/g)).toHaveLength(2);
+    expect(config.match(/rebase-strategy:\s*disabled/g)).toHaveLength(2);
     expect(config).toContain("timezone: Europe/Bratislava");
     expect(config).toContain("open-pull-requests-limit: 5");
     expect(config).toContain("open-pull-requests-limit: 3");
