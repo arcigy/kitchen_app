@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - develop
       - staging
@@ -20,6 +21,8 @@ concurrency:
 
 jobs:
   verify:
+    # Draft pull requests skip the 20-minute suite; it runs once the PR is ready for review.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -187,6 +190,11 @@ jobs:
 
   codeql:
     name: CodeQL
+    # Code scanning uploads need GitHub Code Security on private repositories,
+    # which a personal GitHub Pro account cannot buy. While the repository is
+    # private the job is skipped (a skipped required check counts as passed);
+    # secret scanning, the dependency policy and the SBOM in verify still run.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

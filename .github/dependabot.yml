@@ -1,17 +1,19 @@
 version: 2
 
+# Monthly, and without automatic rebases: every rebase re-ran the full 20-minute CI.
+# Rebase a Dependabot PR on demand with "@dependabot rebase" when it is about to be merged.
+
 updates:
   - package-ecosystem: npm
     directory: /
     target-branch: develop
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "06:00"
       timezone: Europe/Bratislava
     open-pull-requests-limit: 5
     versioning-strategy: increase-if-necessary
-    rebase-strategy: auto
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     commit-message:
@@ -36,12 +38,11 @@ updates:
     directory: /
     target-branch: develop
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "06:30"
       timezone: Europe/Bratislava
     open-pull-requests-limit: 3
-    rebase-strategy: auto
+    rebase-strategy: disabled
     cooldown:
       default-days: 7
     commit-message:
