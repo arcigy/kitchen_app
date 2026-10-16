@@ -8,10 +8,10 @@ Use this checklist before promoting tested `develop` to `main`.
 - [ ] `npm run security:dependencies` passes with no production `high` or `critical` finding.
 - [ ] Repository secret scan passes with `npm run security:secrets`; findings contain no secret values.
 - [ ] Every GitHub Action uses a reviewed full commit SHA with a readable release-version comment.
-- [ ] CodeQL JavaScript/TypeScript analysis completes and every blocking result is reviewed before release.
+- [ ] While the repository is public, CodeQL JavaScript/TypeScript analysis completes and every blocking result is reviewed before release. While it is private (personal GitHub Pro has no code scanning), the CodeQL job is skipped; review the secret scan, dependency policy and Dependabot alerts instead.
 - [ ] CycloneDX production SBOM artifact exists for the exact release commit and parses successfully.
 - [ ] GitHub secret scanning and push protection are enabled, and every real alert has provider-side revocation/rotation evidence before being resolved.
-- [ ] Dependabot version updates monitor npm and GitHub Actions against `develop`; every generated PR passes `verify` and is reviewed before merge. Dependabot alerts/security updates are enabled separately when approved.
+- [ ] Dependabot version updates monitor npm and GitHub Actions against `develop` monthly, without automatic rebases; every generated PR passes `verify` and is reviewed before merge. Dependabot alerts/security updates are enabled separately when approved.
 - [ ] GitHub dependency graph is enabled and the PR-only dependency review gate rejects newly introduced `high` or `critical` vulnerabilities in runtime, development, and unknown scopes.
 - [ ] Typecheck passes with `npm run typecheck --if-present`.
 - [ ] Lint passes with `npm run lint --if-present`, if configured.
