@@ -3,8 +3,10 @@ import { applyEdgeGroupChanges, parseEdgeGroupChanges } from "../core/edge-bandi
 import type http from "node:http";
 import { clientSessionHeaderFromRequest } from "./requestAuthentication";
 import type { ClientContext } from "../core/client/client-context";
+import type { ClientEventRepository } from "../core/client-events/client-event-repository";
 import { createProjectService } from "../core/project/project-service";
-import type { CreateProjectInput } from "../core/project/project-types";
+import type { CreateProjectInput, ProjectMetadata } from "../core/project/project-types";
+import { randomUUID } from "node:crypto";
 import {
   createProjectWriteIdempotency,
   createProjectWriteIdempotencyForText,
@@ -28,7 +30,28 @@ type ProjectEndpointDeps = {
   getContext: GetContext;
   readJsonBody: ReadJsonBody;
   sendJson: SendJson;
+  clientEvents?: ClientEventRepository;
 };
+
+/** Projects are hard-deleted; the tombstone keeps client metrics (projects created) correct. */
+async function recordProjectDeleted(events: ClientEventRepository | undefined, ctx: ClientContext, project: ProjectMetadata): Promise<void> {
+  if (!events) return;
+  try {
+    await events.record({
+      clientId: ctx.clientId,
+      projectId: project.projectId,
+      eventId: randomUUID(),
+      phaseId: null,
+      actorUserId: ctx.userId,
+      eventType: "project.deleted",
+      data: { projectCreatedAt: project.createdAt, projectCreatedByUserId: project.createdByUserId, status: project.status },
+      createdAt: new Date().toISOString(),
+      idempotencyKey: null
+    });
+  } catch (error) {
+    console.warn("[client-events] project.deleted was not recorded", error instanceof Error ? error.message : error);
+  }
+}
 
 function isProjectRoute(pathname: string): boolean {
   return pathname === "/api/projects" || pathname === "/api/projects/import" || pathname.startsWith("/api/projects/");
@@ -187,7 +210,9 @@ export async function handleProjectApi(
       deps.sendJson(res, 403, { ok: false, error: "Only owners and admins can delete projects." });
       return true;
     }
+    const deletedProject = await service.getProject(ctx, route.projectId);
     await service.deleteProject(ctx, route.projectId);
+    await recordProjectDeleted(deps.clientEvents, ctx, deletedProject);
     deps.sendJson(res, 200, { ok: true });
     return true;
   }

@@ -14,6 +14,9 @@ import { ASSISTANT_CAPABILITY_PACKS } from "../assistant/capabilityDiscovery";
 import { validateAssistantToolCall } from "../assistant/toolValidation";
 import { getAssistantModelAssignments } from "../assistant/openaiResponses";
 import { localeForLanguage, normalizeLanguage } from "../i18n";
+import { runWithAiUsageScope } from "../core/ai-usage/ai-usage-context";
+import type { AiUsageRepository } from "../core/ai-usage/ai-usage-types";
+import { createServerAiUsageRepository } from "./serverRepositories";
 
 type ReadJsonBody = (req: http.IncomingMessage) => Promise<unknown>;
 type SendJson = (res: http.ServerResponse, status: number, data: unknown) => void;
@@ -26,6 +29,7 @@ type AssistantEndpointDeps = {
   getCatalog: GetCatalog;
   readJsonBody: ReadJsonBody;
   sendJson: SendJson;
+  aiUsageRepository?: AiUsageRepository;
 };
 
 function isAssistantRoute(pathname: string): boolean {
@@ -205,7 +209,12 @@ export async function handleAssistantApi(
       query: request.message,
       limit: 6
     });
-    const response = await runAssistantTurn({ ...request, ragChunks, catalog, actorRole: ctx.role });
+    const response = await runWithAiUsageScope({
+      clientId: ctx.clientId,
+      userId: ctx.userId,
+      projectId: request.clientContext.projectId,
+      repository: deps.aiUsageRepository ?? createServerAiUsageRepository()
+    }, () => runAssistantTurn({ ...request, ragChunks, catalog, actorRole: ctx.role }));
     deps.sendJson(res, 200, response);
     return true;
   }

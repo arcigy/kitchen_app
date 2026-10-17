@@ -1,6 +1,7 @@
 import html2canvas from "html2canvas";
+import { FEEDBACK_KINDS, normalizeFeedbackKind, type FeedbackKind } from "../core/feedback/feedback-kinds";
 
-export type FeedbackKind = "bug" | "feature_request" | "improvement" | "question" | "other";
+export type { FeedbackKind } from "../core/feedback/feedback-kinds";
 
 type FeedbackReportControllerContext = {
   trigger: HTMLButtonElement;
@@ -30,14 +31,6 @@ type RecentDiagnosticEvent = RecentAction & { recordedAt: number };
 
 const DIAGNOSTIC_TIMELINE_WINDOW_MS = 2 * 60 * 1000;
 const MAX_DIAGNOSTIC_TIMELINE_EVENTS = 50;
-
-const FEEDBACK_KINDS: ReadonlyArray<{ value: FeedbackKind; label: string }> = [
-  { value: "bug", label: "Chyba" },
-  { value: "feature_request", label: "Nová funkcia" },
-  { value: "improvement", label: "Zlepšenie" },
-  { value: "question", label: "Otázka / podpora" },
-  { value: "other", label: "Iné" }
-];
 
 function submissionId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `feedback_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
@@ -99,14 +92,15 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
         if (parsed) clearDraft();
         return null;
       }
-      if (!["bug", "feature_request", "improvement", "question", "other"].includes(String(parsed.kind))) {
+      const kind = normalizeFeedbackKind(parsed.kind);
+      if (!kind) {
         clearDraft();
         return null;
       }
       return {
         version: 1,
         open: true,
-        kind: parsed.kind as FeedbackKind,
+        kind,
         title: typeof parsed.title === "string" ? parsed.title : "",
         description: typeof parsed.description === "string" ? parsed.description : "",
         comment: typeof parsed.comment === "string" ? parsed.comment : "",
@@ -123,7 +117,7 @@ export function createFeedbackReportController(ctx: FeedbackReportControllerCont
     const draft: FeedbackDraftV1 = {
       version: 1,
       open: true,
-      kind: (data.get("kind") as FeedbackKind) || "bug",
+      kind: normalizeFeedbackKind(data.get("kind")) ?? FEEDBACK_KINDS[0].value,
       title: String(data.get("title") ?? ""),
       description: String(data.get("description") ?? ""),
       comment: String(data.get("comment") ?? ""),

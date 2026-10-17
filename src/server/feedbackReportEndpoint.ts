@@ -1,4 +1,5 @@
 import type http from "node:http";
+import { FEEDBACK_KINDS, normalizeFeedbackKind } from "../core/feedback/feedback-kinds";
 import type { ClientContext } from "../core/client/client-context";
 import { fetchExternalText } from "./external-http";
 
@@ -8,7 +9,7 @@ const MAX_ODOO_RESPONSE_BYTES = 1024 * 1024;
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
-const kinds = new Set(["bug", "feature_request", "improvement", "question", "other"]);
+const kinds = new Set<string>(FEEDBACK_KINDS.map((kind) => kind.value));
 
 type FeedbackDeps = {
   getContext(cookie: string | string[] | undefined): Promise<ClientContext>;
@@ -123,6 +124,19 @@ async function odooCreate(
   return createdIds[0];
 }
 
+/**
+ * The snapshot leaves the app for Odoo, so the client's end-customer data (project name, contact and
+ * address) is replaced; the project ID is enough to find the project.
+ */
+export function withoutEndCustomerData(snapshot: unknown): unknown {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return snapshot;
+  const record = snapshot as Record<string, unknown>;
+  const project = record.project;
+  if (!project || typeof project !== "object" || Array.isArray(project)) return snapshot;
+  const redacted = { redacted: true };
+  return { ...record, project: { ...project, name: redacted, contact: redacted, location: redacted } };
+}
+
 async function deliver(
   state: DeliveryState,
   fetchImpl: typeof fetch,
@@ -139,7 +153,7 @@ async function deliver(
   }
   const attachments = [
     { key: "screenshot.png", name: "screenshot.png", data: report.screenshot.slice("data:image/png;base64,".length), mimetype: "image/png" },
-    { key: "project-snapshot.json", name: "project-snapshot.json", data: Buffer.from(JSON.stringify(report.projectSnapshot, null, 2)).toString("base64"), mimetype: "application/json" },
+    { key: "project-snapshot.json", name: "project-snapshot.json", data: Buffer.from(JSON.stringify(withoutEndCustomerData(report.projectSnapshot), null, 2)).toString("base64"), mimetype: "application/json" },
     { key: "diagnostics.json", name: "diagnostics.json", data: Buffer.from(JSON.stringify({ ...report.diagnostics, reporter: { userId: report.reporter.userId, clientId: report.reporter.clientId } }, null, 2)).toString("base64"), mimetype: "application/json" }
   ];
   for (const attachment of attachments) {
@@ -163,7 +177,8 @@ export async function handleFeedbackReportApi(req: http.IncomingMessage, res: ht
     const submissionId = text(body.submissionId, "submissionId", 120);
     const headerId = req.headers["idempotency-key"];
     if (typeof headerId !== "string" || headerId !== submissionId) throw new FeedbackReportError("Chýba platný Idempotency-Key.");
-    const kind = text(body.kind, "kind", 40);
+    // Older browser bundles still send legacy kinds during a rollout; store the current value.
+    const kind = normalizeFeedbackKind(text(body.kind, "kind", 40)) ?? "";
     if (!kinds.has(kind) || body.consent !== true) throw new FeedbackReportError("Pred odoslaním potvrďte zdieľanie príloh.");
     const title = text(body.title, "title", 180);
     const description = text(body.description, "description", 8_000);

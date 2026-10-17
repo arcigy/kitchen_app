@@ -21,6 +21,8 @@ describe("runtime and injectable worker parity", () => {
       expect(source).toContain("createServerAuthSessionStore");
       expect(source).toContain("createServerReleaseNewsRepository");
       expect(source).toContain("releaseNewsRepository");
+      expect(source).toContain("createServerClientEventRepository");
+      expect(source).toContain("clientEventRepository");
       expect(source).toContain("sessionLookup:");
       expect(source).toContain(".isActive(session)");
       expect(source).not.toContain("registerRequestObservability(req, res)");

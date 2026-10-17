@@ -4,6 +4,7 @@ import type { KitchenWorktopInstance, LayoutInstance } from "../layout/appState"
 import type { CustomFurnitureInstance } from "../layout/customFurnitureTypes";
 import type { ProjectQuoteSettingsInput } from "../layout/bom/projectQuote";
 import type { PriceCurrency } from "../core/pricing/currency";
+import type { PanelOfferTracking } from "../ui/offerSentButton";
 import { mountPricingCatalogPanel } from "../ui/pricingCatalogPanel";
 import { createButtonElement } from "./propsPanelElements";
 
@@ -15,6 +16,7 @@ type BomPanelArgs = {
   catalog: ClientCatalog;
   quoteSettings?: ProjectQuoteSettingsInput;
   displayCurrency?: PriceCurrency;
+  offerTracking?: PanelOfferTracking;
 };
 
 function mountPanelError(container: HTMLElement, message: string) {
@@ -70,7 +72,8 @@ export function openBomPanel(args: BomPanelArgs) {
       mountBomDevPanel(content, args.instances, args.kitchenWorktops, args.customFurniture, args.kitchenCtx, args.catalog, {
         quoteSettings: args.quoteSettings,
         displayCurrency: args.displayCurrency,
-        lockDisplayCurrency: args.displayCurrency !== undefined
+        lockDisplayCurrency: args.displayCurrency !== undefined,
+        offerTracking: args.offerTracking
       });
     })
     .catch(() => mountPanelError(content, "BOM could not be loaded."));

@@ -24,6 +24,10 @@ import type { UserActivityRepository } from "../core/user-activity/user-activity
 import { createInMemoryReleaseNewsRepository } from "../core/release-news/releaseNewsMemoryRepository";
 import { createPostgresReleaseNewsRepository } from "../core/release-news/releaseNewsPostgresRepository";
 import type { ReleaseNewsRepository } from "../core/release-news/releaseNewsRepository";
+import { createInMemoryClientEventRepository, type ClientEventRepository } from "../core/client-events/client-event-repository";
+import { createPostgresClientEventRepository } from "../core/client-events/client-event-postgres-repository";
+import { createInMemoryAiUsageRepository, type AiUsageRepository } from "../core/ai-usage/ai-usage-types";
+import { createPostgresAiUsageRepository } from "../core/ai-usage/ai-usage-postgres-repository";
 
 export function shouldUseDatabase(env: NodeJS.ProcessEnv = process.env): boolean {
   const storage = env.KITCHEN_PROJECT_STORAGE?.toLowerCase();
@@ -63,6 +67,20 @@ export function createServerReleaseNewsRepository(): ReleaseNewsRepository {
   return databaseConfig
     ? createPostgresReleaseNewsRepository(databaseConfig)
     : createInMemoryReleaseNewsRepository();
+}
+
+export function createServerClientEventRepository(): ClientEventRepository {
+  const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  return databaseConfig
+    ? createPostgresClientEventRepository(databaseConfig)
+    : createInMemoryClientEventRepository();
+}
+
+export function createServerAiUsageRepository(): AiUsageRepository {
+  const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  return databaseConfig
+    ? createPostgresAiUsageRepository(databaseConfig)
+    : createInMemoryAiUsageRepository();
 }
 
 export function createServerCatalogRepository(projectRoot: string): ClientCatalogRepository {

@@ -24,6 +24,7 @@ import {
   type PriceDisplayCurrency,
   writePriceDisplayCurrency
 } from "./currencyDisplay";
+import { createOfferSentButton, type PanelOfferTracking } from "./offerSentButton";
 
 export function quoteSettingsStorageKey(catalog: Pick<ClientCatalog, "clientId">, projectId = DEFAULT_PROJECT_ID, phaseId = DEFAULT_PHASE_ID) {
   return `bom.${catalog.clientId}.${projectId}.${phaseId}.projectQuoteSettings`;
@@ -206,6 +207,7 @@ export function mountBomDevPanel(
     quoteSettings?: ProjectQuoteSettingsInput;
     displayCurrency?: PriceDisplayCurrency;
     lockDisplayCurrency?: boolean;
+    offerTracking?: PanelOfferTracking;
   } = {}
 ): void {
   const storageKey = quoteSettingsStorageKey(catalog);
@@ -290,6 +292,7 @@ export function mountBomDevPanel(
     const exportBtn = createButton("Create Sheet");
     exportBtn.addEventListener("click", () => {
       exportProjectPricingWorkbook(entries, summary, displayCurrency);
+      void options.offerTracking?.recordExport("sheet");
     });
     actions.appendChild(exportBtn);
 
@@ -300,12 +303,16 @@ export function mountBomDevPanel(
       pdfBtn.textContent = "Generujem...";
       try {
         await exportMarketingOfferPdf(entries, summary, displayCurrency);
+        void options.offerTracking?.recordExport("pdf");
       } finally {
         pdfBtn.disabled = false;
         pdfBtn.textContent = previous;
       }
     });
     actions.appendChild(pdfBtn);
+
+    const offerSentBtn = options.offerTracking ? createOfferSentButton(options.offerTracking) : null;
+    if (offerSentBtn) actions.appendChild(offerSentBtn);
 
     const copyBtn = createButton("Copy Pricing JSON");
     copyBtn.addEventListener("click", async () => {

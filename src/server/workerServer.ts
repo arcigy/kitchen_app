@@ -7,6 +7,7 @@ import type { UserService } from "../core/auth/user-service";
 import type { AuthSessionStore } from "../core/auth/auth-session-store";
 import type { UserActivityRepository } from "../core/user-activity/user-activity-types";
 import type { ReleaseNewsRepository } from "../core/release-news/releaseNewsRepository";
+import type { ClientEventRepository } from "../core/client-events/client-event-repository";
 import { createStorageService, readScopedStorageFile } from "../core/storage/storageService";
 import { createServerProjectRepository } from "./projectRepository";
 import {
@@ -15,6 +16,7 @@ import {
   createServerModulePackageRepository,
   createServerUserActivityRepository,
   createServerReleaseNewsRepository,
+  createServerClientEventRepository,
   createServerUserService
 } from "./serverRepositories";
 import { runBlenderExport } from "./blender/runBlenderExport";
@@ -33,6 +35,7 @@ import { ClientCatalogBootstrapResponseCache } from "./clientCatalogBootstrapRes
 import { ClientModulePackagesResponseCache } from "./clientModulePackagesResponseCache";
 import { isBlenderDesktopOpenAllowed, openFileInDesktop, resolveTenantBlenderOutputPath } from "./blender/blenderOutputAccess";
 import { startUserActivityReconciliation } from "./userActivityReconciliation";
+import { startCrmExportScheduler } from "./crmExportScheduler";
 
 const DEFAULT_PROJECT_ROOT = process.cwd();
 type WorkerServerDependencies = {
@@ -42,6 +45,7 @@ type WorkerServerDependencies = {
   requestBudget?: HttpRequestBudget;
   userActivityRepository?: UserActivityRepository;
   releaseNewsRepository?: ReleaseNewsRepository;
+  clientEventRepository?: ClientEventRepository;
 };
 
 const readJsonBody = readJsonRequestBody;
@@ -538,7 +542,9 @@ export function startWorkerServer(
   const requestBudget = dependencies.requestBudget ?? createHttpRequestBudget();
   const userActivityRepository = dependencies.userActivityRepository ?? createServerUserActivityRepository();
   const releaseNewsRepository = dependencies.releaseNewsRepository ?? createServerReleaseNewsRepository();
+  const clientEventRepository = dependencies.clientEventRepository ?? createServerClientEventRepository();
   const stopUserActivityReconciliation = startUserActivityReconciliation(userActivityRepository);
+  const stopCrmExportScheduler = startCrmExportScheduler();
   const getClientContext = (cookieHeader: string | string[] | undefined) =>
     getValidatedClientContext(cookieHeader, userService, authSessionStore);
   const server = http.createServer(createWorkerRequestHandler({
@@ -564,6 +570,7 @@ export function startWorkerServer(
       catalogLookupCache,
       userActivityRepository,
       releaseNewsRepository,
+      clientEventRepository,
       createCatalogRepository: () => createServerCatalogRepository(projectRoot),
       createModulePackageRepository: () => createServerModulePackageRepository(projectRoot),
       handleCatalog: (request, response) => handleCatalog(request, response, userService, authSessionStore, projectRoot),
@@ -582,6 +589,7 @@ export function startWorkerServer(
 
   server.once("close", () => {
     stopUserActivityReconciliation();
+    stopCrmExportScheduler();
     catalogLookupCache.dispose();
     clientCatalogBootstrapResponseCache.clear();
     clientModulePackagesResponseCache.clear();

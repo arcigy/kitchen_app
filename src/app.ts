@@ -116,6 +116,7 @@ import type { PhotoPathTracer } from "./rendering/photoPathTracer";
 import { createTopbar } from "./ui/createTopbar";
 import { showComingSoonDialog } from "./ui/comingSoonDialog";
 import { openBomPanel, openPricingCatalog } from "./app/projectPanels";
+import { createOfferTracking } from "./app/project/offerTracking";
 import { createProjectPricingSummaryController } from "./app/projectPricingSummaryController";
 import {
   cloneFloorSegments,
@@ -828,7 +829,8 @@ export function startApp(initialArgs: AppArgs) {
       ...panelArgs,
       catalog: clientCatalog,
       quoteSettings: projectMarginSettings,
-      displayCurrency: args.clientProfile?.defaults.currency
+      displayCurrency: args.clientProfile?.defaults.currency,
+      offerTracking: createOfferTracking(projectActions)
     });
   };
 
