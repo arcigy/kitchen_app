@@ -1,4 +1,5 @@
 import { fetchExternalText } from "../server/external-http";
+import { recordOpenAiUsage } from "../core/ai-usage/ai-usage-context";
 import type { AssistantDebugRecorder } from "./debugTrace";
 
 export type AssistantAgentRole = "communicator" | "orchestrator" | "analyzer" | "escalation";
@@ -196,6 +197,7 @@ export async function callOpenAiStructured<T>(args: {
     const payloadRecord = payload && typeof payload === "object" && !Array.isArray(payload)
       ? payload as Record<string, unknown>
       : {};
+    await recordOpenAiUsage({ feature: `assistant.${args.role}`, model: selected.model ?? "unknown", providerResponse: payloadRecord });
     args.debug?.record({
       stage: args.schemaName,
       actor: { kind: "model", role: args.role, model: selected.model },

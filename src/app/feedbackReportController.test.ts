@@ -101,7 +101,7 @@ describe("feedback report controller", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     const init = fetchMock.mock.calls[0]![1]!;
     const payload = JSON.parse(String(init.body));
-    expect(payload).toMatchObject({ kind: "bug", consent: true, screenshotDataUrl: PNG, projectSnapshot: { project: { id: "project-1" } } });
+    expect(payload).toMatchObject({ kind: "usability_error", consent: true, screenshotDataUrl: PNG, projectSnapshot: { project: { id: "project-1" } } });
     expect(payload.diagnostics).toEqual(expect.objectContaining({
       selection: { id: "wall-1" },
       diagnosticTimeline: { windowSeconds: 120, storage: "in-memory" },

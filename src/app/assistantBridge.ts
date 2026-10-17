@@ -32,6 +32,7 @@ import { buildProjectPricingViews } from "../layout/bom/projectPricing";
 import { buildProjectQuoteSummary } from "../layout/bom/projectQuote";
 import { exportMarketingOfferPdf } from "../layout/bom/exportMarketingPdf";
 import { exportProjectPricingWorkbook } from "../layout/bom/exportWorkbook";
+import { recordOfferExport } from "./project/offerTracking";
 import type { ProjectMarginSettingsState } from "../core/project-margins/project-margin-types";
 import type { DoorInstance, DoorParams, WindowInstance, WindowParams } from "./localTypes";
 import { validateOpeningPlacement } from "./openingPlacementValidation";
@@ -1077,6 +1078,7 @@ async function exportMarketingPdf(ctx: AssistantBridgeContext): Promise<Assistan
   if (entries.length === 0) throw new Error("Marketing PDF requires at least one priced project entity.");
   const quote = buildProjectQuoteSummary(entries, ctx.getProjectMarginSettings());
   const output = await exportMarketingOfferPdf(entries, quote);
+  void recordOfferExport(ctx.projectActions.getState().currentProject?.projectId, "pdf");
   return { ok: true, toolId: "export.marketingPdf", output, stateDeltaSummary: `Started marketing PDF download ${output.fileName}.` };
 }
 
@@ -1133,6 +1135,7 @@ function exportPricingWorkbook(ctx: AssistantBridgeContext): AssistantToolResult
   if (entries.length === 0) throw new Error("Pricing workbook requires at least one priced project entity.");
   const quote = buildProjectQuoteSummary(entries, ctx.getProjectMarginSettings());
   const output = exportProjectPricingWorkbook(entries, quote);
+  void recordOfferExport(ctx.projectActions.getState().currentProject?.projectId, "sheet");
   return { ok: true, toolId: "export.pricingWorkbook", output, stateDeltaSummary: `Started pricing workbook download ${output.fileName}.` };
 }
 

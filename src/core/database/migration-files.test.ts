@@ -57,5 +57,12 @@ describe("database migration files", () => {
     const releaseNewsSql = await readFile(path.join(process.cwd(), "db", "migrations", "0007_release_news_acknowledgements.sql"), "utf-8");
     expect(releaseNewsSql).toContain("PRIMARY KEY (client_id, user_id, notice_id)");
     expect(releaseNewsSql).toContain("acknowledged_at timestamptz NOT NULL");
+
+    const crmSql = await readFile(path.join(process.cwd(), "db", "migrations", "0008_crm_client_metrics.sql"), "utf-8");
+    expect(crmSql).toContain("ALTER TABLE arcigy_project_activity_events ADD COLUMN IF NOT EXISTS idempotency_key text");
+    expect(crmSql).toContain("CREATE TABLE IF NOT EXISTS arcigy_ai_usage_events");
+    expect(crmSql).toContain("CREATE TABLE IF NOT EXISTS arcigy_pdf_proposal_outcomes");
+    expect(crmSql).toContain("CREATE TABLE IF NOT EXISTS arcigy_crm_export_batches");
+    expect(crmSql).not.toMatch(/\bDROP TABLE\b|\bDELETE FROM\b|\bTRUNCATE\b/);
   });
 });

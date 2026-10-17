@@ -42,7 +42,8 @@ function createActions(state: ProjectRuntimeState, save: () => Promise<void>): P
     list: vi.fn(),
     inspectById: vi.fn(),
     loadById: vi.fn(),
-    importFile: vi.fn()
+    importFile: vi.fn(),
+    updateCurrentMetadata: vi.fn()
   };
 }
 

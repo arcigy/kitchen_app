@@ -9,6 +9,7 @@ import {
   createServerCatalogRepository,
   createServerModulePackageRepository,
   createServerReleaseNewsRepository,
+  createServerClientEventRepository,
   createServerUserActivityRepository,
   createServerUserService
 } from "../src/server/serverRepositories";
@@ -34,6 +35,7 @@ import {
   resolveTenantBlenderOutputPath
 } from "../src/server/blender/blenderOutputAccess";
 import { startUserActivityReconciliation } from "../src/server/userActivityReconciliation";
+import { startCrmExportScheduler } from "../src/server/crmExportScheduler";
 
 assertWorkerRuntimeEnvironment();
 const PROJECT_ROOT = process.cwd();
@@ -41,6 +43,7 @@ const serverUserService = createServerUserService();
 const serverAuthSessionStore = createServerAuthSessionStore();
 const serverUserActivityRepository = createServerUserActivityRepository();
 const serverReleaseNewsRepository = createServerReleaseNewsRepository();
+const serverClientEventRepository = createServerClientEventRepository();
 const catalogLookupCache = new CatalogExactLookupCache();
 const DEMOS_PREVIEW_COLOR_CACHE_PATH = path.join(PROJECT_ROOT, "backend/materials/demos_preview_color_cache.json");
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -716,6 +719,7 @@ export function startWorkerServer() {
   const clientCatalogBootstrapResponseCache = new ClientCatalogBootstrapResponseCache();
   const clientModulePackagesResponseCache = new ClientModulePackagesResponseCache();
   const stopUserActivityReconciliation = startUserActivityReconciliation(serverUserActivityRepository);
+  const stopCrmExportScheduler = startCrmExportScheduler();
   const server = http.createServer(createWorkerRequestHandler({
     host,
     port,
@@ -739,6 +743,7 @@ export function startWorkerServer() {
       catalogLookupCache,
       userActivityRepository: serverUserActivityRepository,
       releaseNewsRepository: serverReleaseNewsRepository,
+      clientEventRepository: serverClientEventRepository,
       createCatalogRepository: () => createServerCatalogRepository(PROJECT_ROOT),
       createModulePackageRepository: () => createServerModulePackageRepository(PROJECT_ROOT),
       handleCatalog,
@@ -776,4 +781,5 @@ export function startWorkerServer() {
     console.log(`[blender-worker] listening on http://${host}:${port}`);
   });
   server.once("close", stopUserActivityReconciliation);
+  server.once("close", stopCrmExportScheduler);
 }

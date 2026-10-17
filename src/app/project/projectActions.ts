@@ -28,6 +28,8 @@ export type ProjectActions = {
   inspectById: (projectId: string) => Promise<ProjectSaveFile>;
   loadById: (projectId: string) => Promise<ProjectSaveFile>;
   importFile: (file: File) => Promise<ProjectSaveFile>;
+  /** Applies metadata the server changed outside a save (e.g. offer status) to the open project. */
+  updateCurrentMetadata: (project: ProjectMetadata) => void;
 };
 
 export function createProjectActions(args: {
@@ -122,6 +124,10 @@ export function createProjectActions(args: {
       return save;
     },
     list: () => listProjects(),
+    updateCurrentMetadata(project) {
+      if (state.currentProject?.projectId !== project.projectId) return;
+      setProject(project);
+    },
     inspectById: (projectId) => loadProject(projectId),
     async loadById(projectId) {
       await prepareProjectReplace();

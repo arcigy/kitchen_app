@@ -80,6 +80,7 @@
     "db:set-client-currency": "tsx scripts/setClientCurrency.ts",
     "odoo:feedback:setup": "tsx scripts/setupOdooFeedbackProject.ts --apply",
     "odoo:user-activity:sync": "tsx scripts/userActivityOdooSync.ts",
+    "crm:export": "tsx scripts/crmExport.ts",
     "test:feedback-50-ui": "node scripts/testFeedback50Ui.mjs",
     "test:commercial-loading-ui": "node scripts/testCommercialLoadingUi.mjs",
     "test:materials-feedback-ui": "node scripts/testMaterialsFeedbackUi.mjs"

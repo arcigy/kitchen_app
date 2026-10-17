@@ -20,6 +20,8 @@ import type { ClientModulePackagesResponseCache } from "./clientModulePackagesRe
 import type { UserActivityRepository } from "../core/user-activity/user-activity-types";
 import { handleUserActivityApi } from "./userActivityEndpoint";
 import { handleReleaseNewsApi } from "./releaseNewsEndpoint";
+import { handleOfferEventsApi } from "./offerEventsEndpoint";
+import type { ClientEventRepository } from "../core/client-events/client-event-repository";
 import type { ReleaseNewsRepository } from "../core/release-news/releaseNewsRepository";
 
 type GetClientContext = (cookieHeader: string | string[] | undefined) => Promise<ClientContext>;
@@ -39,6 +41,7 @@ export type WorkerApiRouterContext = {
   catalogLookupCache: CatalogExactLookupCache;
   userActivityRepository: UserActivityRepository;
   releaseNewsRepository?: ReleaseNewsRepository;
+  clientEventRepository?: ClientEventRepository;
   createCatalogRepository(): ClientCatalogRepository;
   createModulePackageRepository(): ModulePackageRepository;
   handleCatalog: DirectRouteHandler;
@@ -170,12 +173,21 @@ export async function handleWorkerApiRequest(
     sendJson: context.sendJson
   })) return;
 
+  if (context.clientEventRepository && await handleOfferEventsApi(req, res, url, {
+    projectRoot: context.projectRoot,
+    getContext: context.getClientContext,
+    readJsonBody: context.readJsonBody,
+    sendJson: context.sendJson,
+    repository: context.clientEventRepository
+  })) return;
+
   if (
     await handleProjectApi(req, res, url, {
       projectRoot: context.projectRoot,
       getContext: context.getClientContext,
       readJsonBody: context.readJsonBody,
-      sendJson: context.sendJson
+      sendJson: context.sendJson,
+      clientEvents: context.clientEventRepository
     })
   ) return;
 
