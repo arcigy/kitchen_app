@@ -6,7 +6,13 @@ import { createLoginRateLimiter } from "../core/auth/login-rate-limit";
 import { createInMemoryAuthSessionStore } from "../core/auth/auth-session-store";
 import { createInMemoryUserRepository, seedAuthUsers } from "../core/auth/user-repository";
 import { createUserService } from "../core/auth/user-service";
-import { parseClientSessionCookie, requireClientContextFromCookie, serializeClientSessionCookie } from "../core/client/session-cookie";
+import {
+  parseClientSessionCookie,
+  parseClientSessionTokenDetailed,
+  requireClientContextFromCookie,
+  serializeClientSessionCookie,
+  serializeClientSessionToken
+} from "../core/client/session-cookie";
 import {
   handleAuthLogin,
   handleAuthLogout,
@@ -482,10 +488,11 @@ describe("auth endpoints", () => {
       issuedAt: now,
       expiresAt: new Date(Date.now() + 60_000).toISOString()
     };
-    const cookie = serializeClientSessionCookie(missingUserSession);
+    const authSessionStore = createInMemoryAuthSessionStore();
+    const cookie = serializeClientSessionCookie(await authSessionStore.issue(missingUserSession));
     const res = mockRes();
 
-    await handleAuthSession(mockReq({ cookie }), res, sendJson, { userService: createTestUserService([]) });
+    await handleAuthSession(mockReq({ cookie }), res, sendJson, { userService: createTestUserService([]), authSessionStore });
 
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({ ok: false, authenticated: false });
@@ -503,10 +510,11 @@ describe("auth endpoints", () => {
       issuedAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 60_000).toISOString()
     };
-    const cookie = serializeClientSessionCookie(inactiveSession);
+    const authSessionStore = createInMemoryAuthSessionStore();
+    const cookie = serializeClientSessionCookie(await authSessionStore.issue(inactiveSession));
     const res = mockRes();
 
-    await handleAuthSession(mockReq({ cookie }), res, sendJson, { userService: createTestUserService([inactive]) });
+    await handleAuthSession(mockReq({ cookie }), res, sendJson, { userService: createTestUserService([inactive]), authSessionStore });
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({ ok: false, authenticated: false });
     expect(String(res.headers["Set-Cookie"])).toContain("Max-Age=0");
@@ -523,16 +531,83 @@ describe("auth endpoints", () => {
       issuedAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 60_000).toISOString()
     };
-    const cookie = serializeClientSessionCookie(session);
+    const authSessionStore = createInMemoryAuthSessionStore();
+    const cookie = serializeClientSessionCookie(await authSessionStore.issue(session));
     const changedUser = { ...user, role: "viewer" as const };
     const res = mockRes();
 
-    await handleAuthSession(mockReq({ cookie }), res, sendJson, { userService: createTestUserService([changedUser]) });
+    await handleAuthSession(mockReq({ cookie }), res, sendJson, { userService: createTestUserService([changedUser]), authSessionStore });
     expect(res.statusCode).toBe(401);
     expect(String(res.headers["Set-Cookie"])).toContain("Max-Age=0");
     await expect(requireClientContextFromCookie(cookie, {
+      sessionLookup: (candidate) => authSessionStore.isActive(candidate),
       userLookup: async () => ({ isActive: true, clientId: user.clientId, role: "viewer" })
     })).rejects.toThrow("Missing authenticated client session.");
+  });
+
+  it("rejects a validly signed session without a server-side session id on every auth path", async () => {
+    const user = seedAuthUsers[0]!;
+    const sessionless = {
+      version: 1 as const,
+      userId: user.userId,
+      clientId: user.clientId,
+      role: user.role,
+      displayName: user.displayName,
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString()
+    };
+    const cookie = serializeClientSessionCookie(sessionless);
+    const userService = createTestUserService();
+    const authSessionStore = createInMemoryAuthSessionStore();
+    expect(parseClientSessionCookie(cookie)?.sessionId).toBeUndefined();
+
+    const browser = mockRes();
+    await handleAuthSession(mockReq({ cookie }), browser, sendJson, { userService, authSessionStore });
+    expect(browser.statusCode).toBe(401);
+    expect(browser.body).toEqual({ ok: false, authenticated: false });
+    expect(String(browser.headers["Set-Cookie"])).toContain("Max-Age=0");
+
+    const extension = mockRes();
+    await handleExtensionAuthSession(
+      mockReq({ authorization: `Bearer ${serializeClientSessionToken(sessionless)}` }),
+      extension,
+      sendJson,
+      { userService, authSessionStore }
+    );
+    expect(extension.statusCode).toBe(401);
+
+    await expect(requireClientContextFromCookie(cookie, {
+      sessionLookup: (candidate) => authSessionStore.isActive(candidate),
+      userLookup: async () => ({ isActive: true, clientId: user.clientId, role: user.role })
+    })).rejects.toThrow("Missing authenticated client session.");
+    await expect(requireClientContextFromCookie(cookie, {
+      sessionLookup: async () => true,
+      userLookup: async () => ({ isActive: true, clientId: user.clientId, role: user.role })
+    })).rejects.toThrow("Missing authenticated client session.");
+  });
+
+  it("rejects a signed session whose lifetime exceeds what a login issues", () => {
+    const now = Date.parse("2026-10-17T12:00:00.000Z");
+    const day = 24 * 60 * 60 * 1000;
+    const base = {
+      version: 1 as const,
+      sessionId: "00000000-0000-4000-8000-000000000000",
+      userId: "user_arcigy_owner",
+      clientId: "client_arcigy_demo",
+      role: "owner" as const,
+      displayName: "Arcigy"
+    };
+    const token = (issuedAt: number, expiresAt: number) => serializeClientSessionToken({
+      ...base,
+      issuedAt: new Date(issuedAt).toISOString(),
+      expiresAt: new Date(expiresAt).toISOString()
+    });
+
+    expect(parseClientSessionTokenDetailed(token(now - day, now + 6 * day), now)).toMatchObject({ ok: true });
+    expect(parseClientSessionTokenDetailed(token(now - day, now + 365 * day), now)).toEqual({ ok: false, reason: "invalid" });
+    expect(parseClientSessionTokenDetailed(token(now + day, now + 2 * day), now)).toEqual({ ok: false, reason: "invalid" });
+    expect(parseClientSessionTokenDetailed(token(now + 4 * 60_000, now + 2 * 60_000), now)).toEqual({ ok: false, reason: "invalid" });
+    expect(parseClientSessionTokenDetailed(token(now - 8 * day, now - day), now)).toEqual({ ok: false, reason: "expired" });
   });
 
   it("rejects tampered clientId/role payload even with a valid structure", () => {

@@ -68,7 +68,7 @@ Unsafe API methods emit `mutation_audit` JSON after completion. The record conta
 
 New logins create a row in `arcigy_auth_sessions`. Every authenticated API request checks that row is unexpired, belongs to the signed user and organization, and is not revoked. Logout revokes the row before clearing the cookie. Session IDs stay inside the signed HttpOnly cookie and are omitted from JSON responses and logs.
 
-Cookies from releases before this server-side control contain no session ID and remain valid only until their existing signed expiry, at most seven days after issue. Do not rotate `AUTH_SESSION_SECRET` merely to accelerate rollout because that immediately signs out every user. Add an approved periodic purge for expired/revoked rows before treating session retention as operationally complete.
+A signed cookie without a session ID is rejected; the former seven-day compatibility window for pre-rollout cookies has ended and its fallback was removed. Revoking a row therefore always ends that login, and rotating `AUTH_SESSION_SECRET` still signs out every user because existing signatures stop verifying. Add an approved periodic purge for expired/revoked rows before treating session retention as operationally complete.
 
 ## Migrations
 

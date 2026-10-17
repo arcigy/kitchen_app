@@ -38,7 +38,7 @@ This document defines the engineering security contract for Arcigy. It is not a 
 | Threat | Current control | Remaining work |
 |---|---|---|
 | Cross-tenant object access | Signed session, live user/tenant/role revalidation, tenant-scoped repositories, composite keys, storage path validation, negative tests | PostgreSQL RLS and least-privilege runtime role |
-| Session theft or stale access | HttpOnly, Secure production cookie, SameSite=Lax, expiry, durable PostgreSQL-backed revocation for new logins, active user/role/tenant revalidation | Re-authentication/MFA for sensitive actions; legacy pre-rollout cookies age out within their existing seven-day expiry |
+| Session theft or stale access | HttpOnly, Secure production cookie, SameSite=Lax, expiry bounded to the seven-day login lifetime, mandatory PostgreSQL-backed session row and revocation for every accepted cookie, active user/role/tenant revalidation | Re-authentication/MFA for sensitive actions |
 | Login abuse | Generic errors, client-IP+username failed-attempt limiter with bounded memory and explicit trusted-proxy hop handling | Shared/distributed limiter and alerting |
 | CSRF, XSS, clickjacking, and foreign origins | Unsafe cookie-authenticated methods validate Origin/Sec-Fetch-Site; token bridge remains separate; enforced CSP limits scripts to same-origin, blocks objects and framing, and `X-Frame-Options: DENY` provides legacy clickjacking defense | Nonce-based styles if the current inline-style product surface is later removed; independent penetration review |
 | Oversized requests | Route-aware JSON limits, early `Content-Length` rejection, streamed overflow rejection, HTTP 413 | Explicit response limits/pagination for every growing list |
@@ -66,7 +66,7 @@ Portable project import derives its decompressed payload ceiling from `PROJECT_F
 
 Every new login creates an opaque session ID and a hash-bound row in `arcigy_auth_sessions`. The signed cookie remains the bearer credential; API authorization additionally requires the matching unexpired, unrevoked database row. Logout revokes that row before clearing the browser cookie. The session ID is not returned in JSON responses.
 
-Signed cookies created before this control have no session ID. They remain accepted only through their already-signed maximum seven-day expiry so a deployment does not unexpectedly sign out every active user. Releasing this change starts that bounded compatibility window; rotating `AUTH_SESSION_SECRET` would end it immediately and therefore requires explicit release approval.
+A valid signature is never sufficient on its own. A cookie or extension bearer token without a session ID is rejected with HTTP 401 on every authenticated path, even when it is correctly signed and unexpired, so possession of `AUTH_SESSION_SECRET` alone cannot mint a working login. The seven-day compatibility window for cookies issued before server-side sessions (release 2026-08-29) has ended and that fallback was removed. The signed payload must also have `issuedAt` no later than the server clock plus five minutes and an `expiresAt` at most seven days after `issuedAt`; anything else is invalid regardless of the database row.
 
 ## Security review triggers
 

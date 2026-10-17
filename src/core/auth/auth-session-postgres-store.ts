@@ -28,7 +28,7 @@ export function createPostgresAuthSessionStore(args: {
     },
 
     async isActive(session, now = new Date()) {
-      if (!session.sessionId) return true;
+      if (!session.sessionId) return false;
       const sessionId = session.sessionId;
       return withSchemaClient(args.connectionString, args.schema, async (client) => {
         const result = await client.query<{ active: boolean }>(

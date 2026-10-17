@@ -38,9 +38,9 @@ export function createInMemoryAuthSessionStore(): AuthSessionStore {
     },
 
     async isActive(session, now = new Date()) {
-      // Cookies issued before server-side sessions were introduced remain valid
-      // until their existing signed seven-day expiry. New logins always get an id.
-      if (!session.sessionId) return true;
+      // A valid signature alone never authenticates: every accepted cookie must
+      // reference a live server-side session row.
+      if (!session.sessionId) return false;
       const stored = sessions.get(session.sessionId);
       return !!stored &&
         stored.sessionTokenHash === hashAuthSessionId(session.sessionId) &&

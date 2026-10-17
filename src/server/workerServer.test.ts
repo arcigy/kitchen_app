@@ -12,6 +12,7 @@ import { createStorageService } from "../core/storage/storageService";
 import { getProjectMetaPath } from "../core/storage/project-ownership";
 import { createInMemoryUserRepository, seedAuthUsers } from "../core/auth/user-repository";
 import { createUserService, type UserService } from "../core/auth/user-service";
+import { createInMemoryAuthSessionStore } from "../core/auth/auth-session-store";
 import { CLIENT_SESSION_COOKIE, serializeClientSessionCookie } from "../core/client/session-cookie";
 import { attachVendorModuleIntent } from "../core/catalog/vendor-module-intent";
 import { createCatalogModuleDefinitionFromPackage } from "../core/module-package/module-package-catalog";
@@ -54,12 +55,16 @@ type WorkerServerController = {
   projectRoot: string;
 };
 
-const makeSessionCookie = (input: {
+// Shared with every worker started by this suite so test cookies carry a real
+// server-side session, exactly like cookies issued by /api/auth/login.
+const testAuthSessionStore = createInMemoryAuthSessionStore();
+
+const makeSessionCookie = async (input: {
   userId: string;
   clientId: string;
   role: "owner" | "admin" | "designer" | "viewer";
 }) => {
-  return serializeClientSessionCookie({
+  return serializeClientSessionCookie(await testAuthSessionStore.issue({
     version: 1,
     userId: input.userId,
     clientId: input.clientId,
@@ -67,7 +72,7 @@ const makeSessionCookie = (input: {
     displayName: input.userId,
     issuedAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 60_000).toISOString()
-  });
+  }));
 };
 
 const makeCookieHeader = (input: {
@@ -153,7 +158,7 @@ const createServer = async (
   userService: UserService,
   requestBudget?: HttpRequestBudget
 ): Promise<WorkerServerController> => {
-  const server = startWorkerServer(0, "127.0.0.1", { userService, projectRoot, requestBudget });
+  const server = startWorkerServer(0, "127.0.0.1", { userService, projectRoot, requestBudget, authSessionStore: testAuthSessionStore });
   const [listening] = await once(server, "listening");
   const address = (server.address() ?? listening) as AddressInfo;
   const port = typeof address.port === "number" ? address.port : Number(process.env.BLENDER_WORKER_PORT);
@@ -261,6 +266,25 @@ describe("multi-client worker isolation", () => {
     expect(response.status).toBe(401);
   });
 
+  it("rejects a validly signed cookie without a server-side session on protected routes", async () => {
+    const sessionlessCookie = serializeClientSessionCookie({
+      version: 1,
+      userId: "user_arcigy_owner",
+      clientId: "client_arcigy_demo",
+      role: "owner",
+      displayName: "user_arcigy_owner",
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString()
+    });
+
+    expect((await requestWorker(controller!.port, "/api/auth/session", { cookie: sessionlessCookie })).status).toBe(401);
+    expect((await requestWorker(controller!.port, "/api/projects", { cookie: sessionlessCookie })).status).toBe(401);
+    expect((await requestWorker(controller!.port, "/api/catalog/bootstrap", { cookie: sessionlessCookie })).status).toBe(401);
+
+    const issuedCookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    expect((await requestWorker(controller!.port, "/api/projects", { cookie: issuedCookie })).status).toBe(200);
+  });
+
   it("returns 413 for a JSON body above the configured route limit", async () => {
     process.env.HTTP_JSON_BODY_MAX_MB = "0.0001";
     try {
@@ -284,7 +308,7 @@ describe("multi-client worker isolation", () => {
       }
     };
     await replaceServer(unavailableUserService);
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
 
     const failedSession = await requestWorker(controller!.port, "/api/auth/session", { cookie });
     expect(failedSession.status).toBe(503);
@@ -303,7 +327,7 @@ describe("multi-client worker isolation", () => {
   });
 
   it("lets the extension login and list only its tenant projects with the issued bearer", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie,
@@ -381,7 +405,7 @@ describe("multi-client worker isolation", () => {
   });
 
   it("accepts authenticated privacy-safe browser runtime signals end to end", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
 
     expect((await requestWorker(controller!.port, "/api/client-metrics", {
       method: "POST",
@@ -423,7 +447,7 @@ describe("multi-client worker isolation", () => {
         maxConcurrent: 2
       }]
     }));
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
 
     expect((await requestWorker(controller!.port, "/api/catalog", { cookie })).status).toBe(200);
     const limited = await requestWorker(controller!.port, "/api/catalog", { cookie });
@@ -435,7 +459,7 @@ describe("multi-client worker isolation", () => {
 
   it("loads client catalog from server session and stores it in the client namespace", async () => {
     const response = await requestWorker(controller!.port, "/api/catalog", {
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" })
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" })
     });
 
     expect(response.status).toBe(200);
@@ -450,7 +474,7 @@ describe("multi-client worker isolation", () => {
   }, 60_000);
 
   it("keeps the full catalog API while serving a lighter browser bootstrap view", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     expect((await requestWorker(controller!.port, "/api/catalog/bootstrap")).status).toBe(401);
     const fullResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
     const bootstrapResponse = await requestWorker(controller!.port, "/api/catalog/bootstrap", { cookie });
@@ -479,7 +503,7 @@ describe("multi-client worker isolation", () => {
   }, 60_000);
 
   it("looks up tenant catalog entities by exact ID, aliases, unit price, and inactive state", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
     const catalog = (catalogResponse.body as {
       catalog?: {
@@ -581,7 +605,7 @@ describe("multi-client worker isolation", () => {
   }, 30_000);
 
   it("rejects retired PINO modules: resolves tenant vendor module lookup inside the current client catalog namespace", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
     const catalog = (catalogResponse.body as { catalog?: { priceList?: { id: string; name: string; currency: "EUR"; isActive: boolean; prices: Record<string, number> } } }).catalog;
     expect(catalog?.priceList?.prices).toBeTruthy();
@@ -647,7 +671,7 @@ describe("multi-client worker isolation", () => {
   }, 30_000);
 
   it("does not restore retired module seeds through tenant catalog lookup", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     await requestWorker(controller!.port, "/api/catalog", { cookie });
 
     const clientCatalogDir = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog");
@@ -702,7 +726,7 @@ describe("multi-client worker isolation", () => {
   }, 30_000);
 
   it("rejects retired PINO modules: returns appliance host incompatibility for oversized PINO appliance side-cabinet lookups", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
     const catalog = (catalogResponse.body as { catalog?: { priceList?: { id: string; name: string; currency: "EUR"; isActive: boolean; prices: Record<string, number> } } }).catalog;
     const clientCatalogDir = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog");
@@ -775,7 +799,7 @@ describe("multi-client worker isolation", () => {
   }, 30_000);
 
   it("lists grouped tenant vendor catalog templates for group -> product -> width browsing", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     await requestWorker(controller!.port, "/api/catalog", { cookie });
 
     const clientCatalogDir = path.join(projectRoot, "storage", "clients", "client_arcigy_demo", "catalog");
@@ -909,8 +933,8 @@ describe("multi-client worker isolation", () => {
   }, 30_000);
 
   it("loads each client's stored catalog without crossing client namespaces", async () => {
-    const clientACookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
-    const clientBCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
+    const clientACookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const clientBCookie = await makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
 
     await requestWorker(controller!.port, "/api/catalog", { cookie: clientACookie });
     await requestWorker(controller!.port, "/api/catalog", { cookie: clientBCookie });
@@ -931,8 +955,8 @@ describe("multi-client worker isolation", () => {
   }, 60_000);
 
   it("registers module package routes in the session-scoped worker API", async () => {
-    const clientACookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
-    const clientBCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
+    const clientACookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const clientBCookie = await makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
     const clientACustomPackage = {
       ...cornerShelfLowerFixture,
       module: {
@@ -971,7 +995,7 @@ describe("multi-client worker isolation", () => {
     });
     expect(badClient.status).toBe(403);
 
-    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
+    const viewerCookie = await makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
     const viewerImport = await requestWorker(controller!.port, "/api/modules/import", {
       method: "POST",
       cookie: viewerCookie,
@@ -1003,7 +1027,7 @@ describe("multi-client worker isolation", () => {
   });
 
   it("creates, saves, loads, and downloads an encrypted tenant project", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const catalogResponse = await requestWorker(controller!.port, "/api/catalog", { cookie });
     const catalog = (catalogResponse.body as {
       catalog: {
@@ -1127,11 +1151,11 @@ describe("multi-client worker isolation", () => {
   }, 15_000);
 
   it("deletes a tenant project with its versions and files only for owners or admins", async () => {
-    const ownerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
-    const adminCookie = makeCookieHeader({ userId: "user_arcigy_admin", clientId: "client_arcigy_demo", role: "admin" });
-    const designerCookie = makeCookieHeader({ userId: "user_arcigy_designer", clientId: "client_arcigy_demo", role: "designer" });
-    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
-    const otherTenantCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
+    const ownerCookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const adminCookie = await makeCookieHeader({ userId: "user_arcigy_admin", clientId: "client_arcigy_demo", role: "admin" });
+    const designerCookie = await makeCookieHeader({ userId: "user_arcigy_designer", clientId: "client_arcigy_demo", role: "designer" });
+    const viewerCookie = await makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
+    const otherTenantCookie = await makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie: ownerCookie,
@@ -1169,8 +1193,8 @@ describe("multi-client worker isolation", () => {
   });
 
   it("keeps generic project saves read-only for material assignments and denies viewers", async () => {
-    const ownerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
-    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
+    const ownerCookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const viewerCookie = await makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie: ownerCookie,
@@ -1281,7 +1305,7 @@ describe("multi-client worker isolation", () => {
   }, 30_000);
 
   it("keeps project material assignments atomic and preserves the committed value after an invalid ID", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie,
@@ -1386,13 +1410,13 @@ describe("multi-client worker isolation", () => {
     const warnings = await requestWorker(controller!.port, `/api/projects/${projectId}/warnings`, { cookie });
     expect(warnings.status).toBe(200);
     const crossTenant = await requestWorker(controller!.port, `/api/projects/${projectId}/materials`, {
-      cookie: makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" })
+      cookie: await makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" })
     });
     expect([403, 404]).toContain(crossTenant.status);
   }, 30_000);
 
   it("persists material clipboard transactions, rejects stale writes, and roundtrips the pasted snapshot through fqp", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", { method: "POST", cookie, body: { name: "Material Clipboard", address: "Test", contactName: "QA" } });
     const project = created.body;
     if (!project || typeof project !== "object" || !("project" in project) || !project.project || typeof project.project !== "object" || !("projectId" in project.project) || typeof project.project.projectId !== "string") throw new Error("Missing created project");
@@ -1434,7 +1458,7 @@ describe("multi-client worker isolation", () => {
   }, 30_000);
 
   it("copies the complete current-project material snapshot only to a live module BOM target", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie,
@@ -1513,7 +1537,7 @@ describe("multi-client worker isolation", () => {
   }, 30_000);
 
   it("runs the supplier bridge assisted session through attachment, idempotent capture and explicit confirmation", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie,
@@ -1741,7 +1765,7 @@ describe("multi-client worker isolation", () => {
   }, 60_000);
 
   it("preserves supplier bridge image colours for every supplier through confirmation and FQP", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", { method: "POST", cookie, body: { name: "Supplier colours", address: "Test", contactName: "Test" } });
     const projectId = (created.body as { project: { projectId: string } }).project.projectId;
     await requestWorker(controller!.port, `/api/projects/${projectId}/save`, { method: "POST", cookie, body: { appState: { layout: { windows: [], doors: [] }, kitchen: {}, modules: [], scene: {} } } });
@@ -1795,14 +1819,14 @@ describe("multi-client worker isolation", () => {
   it("rejects clientId in project create payload", async () => {
     const response = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
       body: { clientId: "client_b_demo", name: "Bad", address: "Main", contactName: "Jane" }
     });
     expect(response.status).toBe(403);
   });
 
   it("keeps viewer project access read-only for create and import operations", async () => {
-    const viewerCookie = makeCookieHeader({
+    const viewerCookie = await makeCookieHeader({
       userId: "user_arcigy_viewer",
       clientId: "client_arcigy_demo",
       role: "viewer"
@@ -1826,7 +1850,7 @@ describe("multi-client worker isolation", () => {
   it("returns a client error for a structurally invalid project JSON body", async () => {
     const response = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
       body: []
     });
 
@@ -1835,7 +1859,7 @@ describe("multi-client worker isolation", () => {
   });
 
   it("rejects foreign encrypted project import", async () => {
-    const clientBCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
+    const clientBCookie = await makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie: clientBCookie,
@@ -1850,15 +1874,15 @@ describe("multi-client worker isolation", () => {
     const downloaded = await requestWorker(controller!.port, `/api/projects/${project.projectId}/download`, { cookie: clientBCookie });
     const response = await requestWorker(controller!.port, "/api/projects/import", {
       method: "POST",
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
       body: { envelope: downloaded.text }
     });
     expect(response.status).toBe(403);
   });
 
   it("keeps project saves, downloads, and version history isolated between clients", async () => {
-    const clientACookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
-    const clientBCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
+    const clientACookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const clientBCookie = await makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
     const projectA = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie: clientACookie,
@@ -1926,9 +1950,9 @@ describe("multi-client worker isolation", () => {
   }, 30_000);
 
   it("keeps project margins tenant-scoped, read-only for viewers, and revision-safe", async () => {
-    const ownerCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
-    const viewerCookie = makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
-    const otherTenantCookie = makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
+    const ownerCookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const viewerCookie = await makeCookieHeader({ userId: "user_arcigy_viewer", clientId: "client_arcigy_demo", role: "viewer" });
+    const otherTenantCookie = await makeCookieHeader({ userId: "user_client_b_owner", clientId: "client_b_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie: ownerCookie,
@@ -2055,10 +2079,10 @@ describe("multi-client worker isolation", () => {
     const previous = process.env.ARCIGY_DELFI_CLIENT_ID;
     if (configuredClientId === undefined) delete process.env.ARCIGY_DELFI_CLIENT_ID;
     else process.env.ARCIGY_DELFI_CLIENT_ID = configuredClientId;
-    const delfiCookie = makeCookieHeader(configuredClientId
+    const delfiCookie = await makeCookieHeader(configuredClientId
       ? { userId: "user_client_b_owner", clientId: configuredClientId, role: "owner" }
       : { userId: "user_delfi_fixture", clientId: "client_delfi", role: "owner" });
-    const otherCookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const otherCookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     try {
       const create = async (cookie: string) => {
         const result = await requestWorker(controller!.port, "/api/projects", {
@@ -2114,7 +2138,7 @@ describe("multi-client worker isolation", () => {
   }, 30_000);
 
   it("imports an encrypted project as a copy when the project already exists", async () => {
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const created = await requestWorker(controller!.port, "/api/projects", {
       method: "POST",
       cookie,
@@ -2145,7 +2169,7 @@ describe("multi-client worker isolation", () => {
     const response = await requestWorker(
       controller!.port,
       "/storage/clients/client_b_demo/projects/project-b/phases/phase-b/renders/b.json",
-      { cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
+      { cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
     );
     expect(response.status).toBe(403);
   }, 15_000);
@@ -2155,7 +2179,7 @@ describe("multi-client worker isolation", () => {
     const response = await requestWorker(
       controller!.port,
       "/storage/clients/client_b_demo/projects/legacy-project-b/phases/legacy-phase-b/renders/b.json",
-      { cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
+      { cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
     );
     expect(response.status).toBe(403);
   });
@@ -2165,7 +2189,7 @@ describe("multi-client worker isolation", () => {
     const response = await requestWorker(
       controller!.port,
       "/storage/clients/client_arcigy_demo/projects/legacy-project-a/phases/legacy-phase-a/renders/a.json",
-      { cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
+      { cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
     );
     expect(response.status).toBe(403);
   });
@@ -2176,7 +2200,7 @@ describe("multi-client worker isolation", () => {
     const response = await requestWorker(
       controller!.port,
       "/storage/clients/client_arcigy_demo/projects/legacy-project-prod/phases/legacy-phase-prod/renders/a.json",
-      { cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
+      { cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
     );
     expect(response.status).toBe(403);
   });
@@ -2187,7 +2211,7 @@ describe("multi-client worker isolation", () => {
     const response = await requestWorker(
       controller!.port,
       "/storage/clients/client_arcigy_demo/projects/legacy-project-a/phases/legacy-phase-a/renders/a.json",
-      { cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
+      { cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
     );
     expect(response.status).toBe(200);
   });
@@ -2198,7 +2222,7 @@ describe("multi-client worker isolation", () => {
     const response = await requestWorker(
       controller!.port,
       "/storage/clients/client_b_demo/projects/legacy-project-b/phases/legacy-phase-b/renders/b.json",
-      { cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
+      { cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
     );
     expect(response.status).toBe(403);
   });
@@ -2206,7 +2230,7 @@ describe("multi-client worker isolation", () => {
   it("rejects unexpected clientId in export request body", async () => {
     const response = await requestWorker(controller!.port, "/api/blender/export", {
       method: "POST",
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
       body: {
         clientId: "client_b_demo",
         projectId: "project-b",
@@ -2223,7 +2247,7 @@ describe("multi-client worker isolation", () => {
   it("does not use clientId from export query parameters", async () => {
     const response = await requestWorker(controller!.port, "/api/blender/export?clientId=client_b_demo", {
       method: "POST",
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
       body: {
         projectId: "query-project",
         phaseId: "query-phase",
@@ -2237,7 +2261,7 @@ describe("multi-client worker isolation", () => {
   });
 
   it("keeps viewer Blender operations read-only", async () => {
-    const viewerCookie = makeCookieHeader({
+    const viewerCookie = await makeCookieHeader({
       userId: "user_arcigy_viewer",
       clientId: "client_arcigy_demo",
       role: "viewer"
@@ -2266,7 +2290,7 @@ describe("multi-client worker isolation", () => {
     const response = await requestWorker(
       controller!.port,
       "/storage/clients/client_arcigy_demo/projects/project-a/phases/phase-a/renders/..%2Ftraversal.json",
-      { cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
+      { cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
     );
     expect(response.status).toBe(403);
   });
@@ -2276,14 +2300,14 @@ describe("multi-client worker isolation", () => {
     const response = await requestWorker(
       controller!.port,
       "/storage/clients/client_arcigy_demo/projects/project-a/phases/phase-a/renders/safe.json?clientId=client_b_demo",
-      { cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
+      { cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }) }
     );
 
     expect(response.status).toBe(200);
   });
 
   it("rejects inactive or malformed session for storage access", async () => {
-    const clientACookie = makeCookieHeader({ userId: "user_client_a_inactive", clientId: "client_a_inactive", role: "viewer" });
+    const clientACookie = await makeCookieHeader({ userId: "user_client_a_inactive", clientId: "client_a_inactive", role: "viewer" });
     const expiredSession = await requestWorker(
       controller!.port,
       "/storage/clients/client_a_inactive/projects/p1/phases/ph1/renders/a.json",
@@ -2300,14 +2324,14 @@ describe("multi-client worker isolation", () => {
   it("rejects export when projectId or phaseId are missing", async () => {
     const noProject = await requestWorker(controller!.port, "/api/blender/export", {
       method: "POST",
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
       body: { phaseId: "phase-a", sceneJson: { objects: [] } }
     });
     expect(noProject.status).toBe(400);
 
     const noPhase = await requestWorker(controller!.port, "/api/blender/export", {
       method: "POST",
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
       body: { projectId: "project-a", sceneJson: { objects: [] } }
     });
     expect(noPhase.status).toBe(400);
@@ -2316,7 +2340,7 @@ describe("multi-client worker isolation", () => {
   it("rejects export when sceneJson is missing", async () => {
     const response = await requestWorker(controller!.port, "/api/blender/export", {
       method: "POST",
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
       body: {
         projectId: "project-a",
         phaseId: "phase-a"
@@ -2336,7 +2360,7 @@ describe("multi-client worker isolation", () => {
         phaseId: "phase-shared",
         sceneJson: { objects: [] }
       },
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" })
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" })
     });
 
     expect(response.status).toBe(200);
@@ -2358,7 +2382,7 @@ describe("multi-client worker isolation", () => {
     );
     const response = await requestWorker(controller!.port, "/api/blender/open-output", {
       method: "POST",
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" }),
       body: { path: clientBFile }
     });
 
@@ -2375,7 +2399,7 @@ describe("multi-client worker isolation", () => {
       "preview.png",
       "user_arcigy_owner"
     );
-    const cookie = makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
+    const cookie = await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" });
     const exported = await requestWorker(controller!.port, "/api/blender/export", {
       method: "POST",
       cookie,
@@ -2407,7 +2431,7 @@ describe("multi-client worker isolation", () => {
         phaseId: "metadata-phase",
         sceneJson: { objects: [] }
       },
-      cookie: makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" })
+      cookie: await makeCookieHeader({ userId: "user_arcigy_owner", clientId: "client_arcigy_demo", role: "owner" })
     });
 
     expect(response.status).toBe(200);
