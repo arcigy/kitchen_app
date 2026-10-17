@@ -6,6 +6,7 @@ import { createClientContext, type ClientContext } from "./client-context";
 export const CLIENT_SESSION_COOKIE = "arcigy_client_session";
 
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+const SESSION_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const DEV_SESSION_SECRET = "arcigy-dev-session-secret-change-me";
 
 export type SessionCookieParseResult =
@@ -20,7 +21,7 @@ export type UserLookup = (userId: string) => Promise<{
 
 export type RequireClientContextOptions = {
   userLookup?: UserLookup;
-  sessionLookup?: (session: AuthenticatedClientSession) => Promise<boolean>;
+  sessionLookup: (session: AuthenticatedClientSession) => Promise<boolean>;
 };
 
 function base64UrlEncode(value: string): string {
@@ -103,7 +104,17 @@ export function parseClientSessionTokenDetailed(rawValue: string | undefined, no
   try {
     const parsed = JSON.parse(base64UrlDecode(encodedPayload)) as unknown;
     if (!isSignedSession(parsed)) return { ok: false, reason: "invalid" };
-    if (Date.parse(parsed.expiresAt) <= now) return { ok: false, reason: "expired" };
+    const issuedAt = Date.parse(parsed.issuedAt);
+    const expiresAt = Date.parse(parsed.expiresAt);
+    if (expiresAt <= now) return { ok: false, reason: "expired" };
+    // A signed payload may never claim a longer life than a login issues.
+    if (
+      issuedAt > now + SESSION_CLOCK_SKEW_MS ||
+      expiresAt <= issuedAt ||
+      expiresAt - issuedAt > SESSION_MAX_AGE_SECONDS * 1000
+    ) {
+      return { ok: false, reason: "invalid" };
+    }
     return { ok: true, session: parsed };
   } catch {
     return { ok: false, reason: "invalid" };
@@ -143,12 +154,12 @@ export function parseClientSessionCookie(cookieHeader: string | string[] | undef
 
 export async function requireClientContextFromCookie(
   cookieHeader: string | string[] | undefined,
-  options: RequireClientContextOptions = {}
+  options: RequireClientContextOptions
 ): Promise<ClientContext> {
   const session = parseClientSessionCookie(cookieHeader);
   if (!session) throw new Error("Missing authenticated client session.");
 
-  if (options.sessionLookup && !(await options.sessionLookup(session))) {
+  if (!session.sessionId || !(await options.sessionLookup(session))) {
     throw new Error("Missing authenticated client session.");
   }
 
