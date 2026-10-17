@@ -28,6 +28,11 @@ import { createInMemoryClientEventRepository, type ClientEventRepository } from 
 import { createPostgresClientEventRepository } from "../core/client-events/client-event-postgres-repository";
 import { createInMemoryAiUsageRepository, type AiUsageRepository } from "../core/ai-usage/ai-usage-types";
 import { createPostgresAiUsageRepository } from "../core/ai-usage/ai-usage-postgres-repository";
+import {
+  createInMemoryPdfProposalOutcomeRepository,
+  createPostgresPdfProposalOutcomeRepository,
+  type PdfProposalOutcomeRepository
+} from "../core/pdf-intake-metrics/pdf-proposal-outcomes";
 
 export function shouldUseDatabase(env: NodeJS.ProcessEnv = process.env): boolean {
   const storage = env.KITCHEN_PROJECT_STORAGE?.toLowerCase();
@@ -81,6 +86,13 @@ export function createServerAiUsageRepository(): AiUsageRepository {
   return databaseConfig
     ? createPostgresAiUsageRepository(databaseConfig)
     : createInMemoryAiUsageRepository();
+}
+
+export function createServerPdfProposalOutcomeRepository(): PdfProposalOutcomeRepository {
+  const databaseConfig = shouldUseDatabase() ? resolveDatabaseConfig() : null;
+  return databaseConfig
+    ? createPostgresPdfProposalOutcomeRepository(databaseConfig)
+    : createInMemoryPdfProposalOutcomeRepository();
 }
 
 export function createServerCatalogRepository(projectRoot: string): ClientCatalogRepository {
